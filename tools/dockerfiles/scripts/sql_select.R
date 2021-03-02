@@ -27,7 +27,7 @@ get_file_type <- function (filename) {
 
 load_and_run_query <- function(location, sql, columns) {
     print(paste("Loading raw data from", location))
-    raw_data <- read.table(location, sep=get_file_type(location), header=TRUE, stringsAsFactors=FALSE)
+    raw_data <- read.table(location, sep=get_file_type(location), header=TRUE, check.names=FALSE, stringsAsFactors=FALSE)
     print(head(raw_data))
     full_sql_query <- paste("SELECT", columns, "FROM raw_data WHERE", sql)
     print(paste("Applying filter", full_sql_query))
