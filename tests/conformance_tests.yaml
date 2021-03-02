@@ -6468,11 +6468,11 @@
       location: genepredtogtf_stderr.log
 
 # ========================================================
-# feature-select
+# feature-select-sql
 # ========================================================
 
-- job: ./feature-select-1.json
-  tool: ../tools/feature-select.cwl
+- job: ./feature-select-sql-1.json
+  tool: ../tools/feature-select-sql.cwl
   output:
     filtered_file:
       class: File
@@ -6484,8 +6484,8 @@
       class: File
       location: sql_select_stderr.log
 
-- job: ./feature-select-2.json
-  tool: ../tools/feature-select.cwl
+- job: ./feature-select-sql-2.json
+  tool: ../tools/feature-select-sql.cwl
   output:
     filtered_file:
       class: File
@@ -6497,8 +6497,8 @@
       class: File
       location: sql_select_stderr.log
 
-- job: ./feature-select-3.json
-  tool: ../tools/feature-select.cwl
+- job: ./feature-select-sql-3.json
+  tool: ../tools/feature-select-sql.cwl
   output:
     filtered_file:
       class: File
@@ -6510,8 +6510,8 @@
       class: File
       location: sql_select_stderr.log
 
-- job: ./feature-select-4.json
-  tool: ../tools/feature-select.cwl
+- job: ./feature-select-sql-4.json
+  tool: ../tools/feature-select-sql.cwl
   output:
     filtered_file:
       class: File

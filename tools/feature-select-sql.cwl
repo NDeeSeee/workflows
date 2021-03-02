@@ -79,11 +79,11 @@ $namespaces:
 $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
-label: "Feature select - filters TSV/CSV files based on the provided query"
-s:name: "Feature select - filters TSV/CSV files based on the provided query"
-s:alternateName: "Feature select - filters TSV/CSV files based on the provided query"
+label: "Feature select - filters TSV/CSV files based on the provided SQL query parameters"
+s:name: "Feature select - filters TSV/CSV files based on the provided SQL query parameters"
+s:alternateName: "Feature select - filters TSV/CSV files based on the provided SQL query parameters"
 
-s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows/master/tools/feature-select.cwl
+s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows/master/tools/feature-select-sql.cwl
 s:codeRepository: https://github.com/Barski-lab/workflows
 s:license: http://www.apache.org/licenses/LICENSE-2.0
 
