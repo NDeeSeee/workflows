@@ -27,6 +27,22 @@ inputs:
     doc: |
       SQL query parameters that will be appended to `SELECT *` statement
 
+  columns:
+    type: string?
+    inputBinding:
+      prefix: "--columns"
+    doc: |
+      Comma-separated list of column to be print in the output.
+      Default: all
+
+  header:
+    type: boolean?
+    inputBinding:
+      prefix: "--header"
+    doc: |
+      Print header in the output.
+      Default: false
+
   output_filename:
     type: string?
     inputBinding:

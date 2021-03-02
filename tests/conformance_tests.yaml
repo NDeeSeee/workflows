@@ -6509,3 +6509,16 @@
     stderr_log:
       class: File
       location: sql_select_stderr.log
+
+- job: ./feature-select-4.json
+  tool: ../tools/feature-select.cwl
+  output:
+    filtered_file:
+      class: File
+      location: t1_1000_filtered.tsv
+    stdout_log:
+      class: File
+      location: sql_select_stdout.log
+    stderr_log:
+      class: File
+      location: sql_select_stderr.log
