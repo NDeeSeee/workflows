@@ -12,6 +12,10 @@ suppressMessages(library(ggrepel))
 
 ##########################################################################################
 #
+# v0.0.22
+#
+# - Column names for RPKM don't include spaces and brackets anymore
+#
 # v0.0.21
 #
 # - Add ggrepel for proper label positioning
@@ -96,7 +100,7 @@ get_file_type <- function (filename) {
 load_isoform_set <- function(filenames, prefixes, read_colname, rpkm_colname, conditions, intersect_by, digits, batch_metadata, collected_data=NULL) {
     for (i in 1:length(filenames)) {
         isoforms <- read.table(filenames[i], sep=get_file_type(filenames[i]), header=TRUE, stringsAsFactors=FALSE)
-        new_read_colname = paste(prefixes[i], " [", conditions, "]", sep="")
+        new_read_colname = paste(prefixes[i], conditions, sep="_")
         colnames(isoforms)[colnames(isoforms) == read_colname] <- new_read_colname
         colnames(isoforms)[colnames(isoforms) == rpkm_colname] <- paste(conditions, i, rpkm_colname, sep=" ")
         if (!is.null(batch_metadata)){
@@ -116,7 +120,7 @@ load_isoform_set <- function(filenames, prefixes, read_colname, rpkm_colname, co
         }
     }
     rpkm_columns = grep(paste("^", conditions, " [0-9]+ ", rpkm_colname, sep=""), colnames(collected_data$collected_isoforms), value = TRUE, ignore.case = TRUE)
-    new_rpkm_colname = paste(rpkm_colname, " [", conditions, "]", sep="")
+    new_rpkm_colname = paste(rpkm_colname, conditions, sep="_")
     collected_data$collected_isoforms[new_rpkm_colname] = format(rowSums(collected_data$collected_isoforms[, rpkm_columns, drop = FALSE]) / length(filenames), digits=digits)
     collected_data$rpkm_colnames = c(collected_data$rpkm_colnames, new_rpkm_colname)
     collected_data$collected_isoforms <- collected_data$collected_isoforms[, !colnames(collected_data$collected_isoforms) %in% rpkm_columns]
