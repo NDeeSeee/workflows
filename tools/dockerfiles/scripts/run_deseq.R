@@ -12,6 +12,10 @@ suppressMessages(library(ggrepel))
 
 ##########################################################################################
 #
+# v0.0.24
+#
+# - Fix bug with pval in DESeq and pvalue in DESeq2. Now all it pvalue
+#
 # v0.0.23
 #
 # - Use RpkmCondition1 and RpkmCondition2 for RPKM columns in the output TSV file
@@ -420,6 +424,7 @@ if (length(args$treated) > 1 && length(args$untreated) > 1){
     mat <- vsd[order(rowMeans(counts(cdsD, normalized=TRUE)), decreasing=TRUE)[1:30],]
 
     DESeqRes <- res[,c(6,7,8)]
+    colnames(DESeqRes)[2] <- "pvalue"  # in DESeq2 it's pvalue, need to use the same here
 }
 
 
@@ -443,7 +448,7 @@ DESeqRes <- format(DESeqRes, digits=args$digits)
 
 # Add metadata columns to the DESeq results
 collected_isoforms <- data.frame(cbind(collected_isoforms[, !colnames(collected_isoforms) %in% read_count_cols], DESeqRes), check.names=F, check.rows=F)
-collected_isoforms[,"'-LOG10(pval)'"] <- format(-log(as.numeric(collected_isoforms$pval), 10), digits=args$digits)
+collected_isoforms[,"'-LOG10(pval)'"] <- format(-log(as.numeric(collected_isoforms$pvalue), 10), digits=args$digits)
 collected_isoforms[,"'-LOG10(padj)'"] <- format(-log(as.numeric(collected_isoforms$padj), 10), digits=args$digits)
 
 
