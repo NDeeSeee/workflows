@@ -6522,3 +6522,37 @@
     stderr_log:
       class: File
       location: sql_select_stderr.log
+
+# ========================================================
+# bedtools-multicov
+# ========================================================
+
+- job: ./bedtools-multicov-1.json
+  tool: ../tools/bedtools-multicov.cwl
+  output:
+    report_file:
+      class: File
+      location: chr4_100_mapped_reads.Aligned.out.tsv
+    stderr_log:
+      class: File
+      location: bedtools_multicov_stderr.log
+
+- job: ./bedtools-multicov-2.json
+  tool: ../tools/bedtools-multicov.cwl
+  output:
+    report_file:
+      class: File
+      location: chr4_100_mapped_reads.Aligned.out.tsv
+    stderr_log:
+      class: File
+      location: bedtools_multicov_stderr.log
+
+- job: ./bedtools-multicov-3.json
+  tool: ../tools/bedtools-multicov.cwl
+  output:
+    report_file:
+      class: File
+      location: report.tsv
+    stderr_log:
+      class: File
+      location: bedtools_multicov_stderr.log
