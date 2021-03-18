@@ -43,7 +43,7 @@ inputs:
       prefix: "--mergeby"
     doc: |
       Column names to merge feature files by.
-      Default: GeneId, Chrom, TxStart, TxEnd, Strand
+      Default: RefseqId, GeneId, Chrom, TxStart, TxEnd, Strand
 
   output_prefix:
     type: string?
