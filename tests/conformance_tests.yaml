@@ -4816,22 +4816,31 @@
   output:
     pca1_vs_pca2_plot:
       class: File
-      location: dummy_001.png
+      location: dummy_pc1_pc2_plot.png
+    pca1_vs_pca2_plot_pdf:
+      class: File
+      location: dummy_pc1_pc2_plot.pdf
     pca2_vs_pca3_plot:
       class: File
-      location: dummy_002.png
+      location: dummy_pc2_pc3_plot.png
+    pca2_vs_pca3_plot_pdf:
+      class: File
+      location: dummy_pc2_pc3_plot.pdf
     variance_plot:
       class: File
-      location: dummy_003.png
-    pca_3d_plot:
+      location: dummy_variance_plot.png
+    variance_plot_pdf:
       class: File
-      location: dummy_004.png
+      location: dummy_variance_plot.pdf
     pca_3d_html:
       class: File
-      location: dummy_pca3d.html
-    pca_file:
+      location: dummy_pca_3d_plot.html
+    pca_scores_file:
       class: File
-      location: dummy_pca.tsv
+      location: dummy_scores.tsv
+    pca_loadings_file:
+      class: File
+      location: dummy_loadings.tsv
     stdout_log:
       class: File
       location: pca_stdout.log
@@ -4844,22 +4853,31 @@
   output:
     pca1_vs_pca2_plot:
       class: File
-      location: dummy_001.png
+      location: report_pc1_pc2_plot.png
+    pca1_vs_pca2_plot_pdf:
+      class: File
+      location: report_pc1_pc2_plot.pdf
     pca2_vs_pca3_plot:
       class: File
-      location: dummy_002.png
+      location: report_pc2_pc3_plot.png
+    pca2_vs_pca3_plot_pdf:
+      class: File
+      location: report_pc2_pc3_plot.pdf
     variance_plot:
       class: File
-      location: dummy_003.png
-    pca_3d_plot:
+      location: report_variance_plot.png
+    variance_plot_pdf:
       class: File
-      location: dummy_004.png
+      location: report_variance_plot.pdf
     pca_3d_html:
       class: File
-      location: dummy_pca3d.html
-    pca_file:
+      location: report_pca_3d_plot.html
+    pca_scores_file:
       class: File
-      location: dummy_pca.tsv
+      location: report_scores.tsv
+    pca_loadings_file:
+      class: File
+      location: report_loadings.tsv
     stdout_log:
       class: File
       location: pca_stdout.log
