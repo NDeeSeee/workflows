@@ -2,16 +2,22 @@
 # Dockerfile
 #
 # Software:         Scidap merge script
-# Software Version: v0.0.2
+# Software Version: v0.0.3
 # Description:      Dockerized version of run_merge.R and
 #                   sql_select.R scripts
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         run_merge.R v0.0.2
 #                   sql_select.R v0.0.1
 # Base Image:       r-base:4.0.4
-# Build Cmd:        docker build --rm -t biowardrobe2/scidap-merge:v0.0.2 -f scidap-merge-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/scidap-merge:v0.0.2
-# Run Cmd:          docker run --rm -ti biowardrobe2/scidap-merge:v0.0.2 /bin/bash
+# Build Cmd:        docker build --rm -t biowardrobe2/scidap-merge:v0.0.3 -f scidap-merge-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/scidap-merge:v0.0.3
+# Run Cmd:          docker run --rm -ti biowardrobe2/scidap-merge:v0.0.3 /bin/bash
+#################################################################
+#
+# v0.0.3
+# run_merge.R (v0.0.2) outputs all columns that are not used for
+# merging. Uses --aliases to prefix columns with the same name
+#
 #################################################################
 
 
