@@ -13,7 +13,7 @@
             "location": "./data/dm3_chr4/generated_inputs/gat/workspace.bed"
         }
     ],
-    "intervals_aliases": ["segments regions", "annotations  regions", "workspace regions"],
+    "intervals_aliases": ["segments [regions]", "annotations  regions", "workspace regions"],
     "overlap_threshold": 10,
     "diagram_type": "pairwise"
 }
