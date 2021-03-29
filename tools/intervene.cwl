@@ -88,7 +88,7 @@ outputs:
     type: File
     outputBinding:
       glob: "./results/intervene*.pdf"
-    doc: "Intervals overlap venn diagram"
+    doc: "Intervals overlap diagram"
 
   stdout_log:
     type: stdout
