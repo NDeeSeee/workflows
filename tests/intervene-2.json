@@ -15,5 +15,7 @@
     ],
     "intervals_aliases": ["segments regions", "annotations  regions", "workspace regions"],
     "overlap_threshold": 10,
-    "diagram_type": "upset"
+    "diagram_type": "upset",
+    "figure_format": "png",
+    "intervals_colors": ["r","b","k"]
 }

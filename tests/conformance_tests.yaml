@@ -6582,7 +6582,7 @@
 - job: ./intervene-1.json
   tool: ../tools/intervene.cwl
   output:
-    diagram_pdf:
+    overlapped_plot:
       class: File
       location: intervene_venn.pdf
     overlapped_intervals_files:
@@ -6604,9 +6604,12 @@
 - job: ./intervene-2.json
   tool: ../tools/intervene.cwl
   output:
-    diagram_pdf:
+    overlapped_plot:
       class: File
-      location: intervene_upset.pdf
+      location: intervene_upset.png
+    overlapped_combinations:
+      class: File
+      location: intervene_upset_combinations.txt
     overlapped_intervals_files:
     - class: File
       location: 101_segments_regions_workspace_regions.bed
@@ -6622,12 +6625,37 @@
 - job: ./intervene-3.json
   tool: ../tools/intervene.cwl
   output:
-    diagram_pdf:
+    overlapped_plot:
       class: File
-      location: intervene_pairwise_frac.pdf
+      location: intervene_pairwise_frac.tiff
+    overlapped_fraction_matrix:
+      class: File
+      location: intervene_pairwise_frac_matrix.txt
     stdout_log:
       class: File
       location: intervene_stdout.log
     stderr_log:
       class: File
-      location: intervene_stderr.log   
+      location: intervene_stderr.log
+
+- job: ./intervene-4.json
+  tool: ../tools/intervene.cwl
+  output:
+    overlapped_plot:
+      class: File
+      location: intervene_venn.png
+    overlapped_intervals_files:
+    - class: File
+      location: 001_workspace.bed
+    - class: File
+      location: 011_annotations_workspace.bed
+    - class: File
+      location: 101_segments_workspace.bed
+    - class: File
+      location: 111_segments_annotations_workspace.bed
+    stdout_log:
+      class: File
+      location: intervene_stdout.log
+    stderr_log:
+      class: File
+      location: intervene_stderr.log
