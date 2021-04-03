@@ -52,7 +52,7 @@ inputs:
 
   tn5_flanking_size:
     type: int?
-    default: 10
+    default: 20
     doc: "Bi-directional Tn5 cut sites extention, bp"
 
   threads:
