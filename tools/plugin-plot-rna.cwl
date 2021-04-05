@@ -188,12 +188,13 @@ doc: |
   Runs R script to produce gene body average tag density plot and RPKM distribution histogram
 
 s:about: |
-  usage: plot_rna.R [-h] --annotation ANNOTATION --bam BAM
-                                  --isoforms ISOFORMS --mapped MAPPED [--pair]
-                                  [--dutp] [--output OUTPUT]
-                                  [--threads THREADS]
+  usage: plugin_plot_rna.R
+        [-h] --annotation ANNOTATION --bam BAM --isoforms ISOFORMS
+        [--minrpkm MINRPKM] [--minlength MINLENGTH] --mapped MAPPED [--pair]
+        [--dutp] [--output OUTPUT] [--threads THREADS]
 
-  Gene body average tag density plot and RPKM distribution histogram
+  Gene body average tag density plot and RPKM distribution histogram for
+  isoforms
 
   optional arguments:
     -h, --help            show this help message and exit
@@ -201,6 +202,11 @@ s:about: |
                           Path to the annotation TSV/CSV file
     --bam BAM             Path to the indexed BAM file
     --isoforms ISOFORMS   Path to the isoforms TSV/CSV file
+    --minrpkm MINRPKM     Ignore isoforms with RPKM smaller than --minrpkm.
+                          Default: 10
+    --minlength MINLENGTH
+                          Ignore isoforms shorter than --minlength. Default:
+                          1000
     --mapped MAPPED       Mapped reads number
     --pair                Run as paired end. Default: false
     --dutp                Run as dUTP. Default: false
