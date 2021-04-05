@@ -27,19 +27,21 @@ get_file_type <- function (filename) {
 }
 
 
-get_coverage <- function(ranges, isoforms, bam_file, is_pair, is_dutp, threads) {
+get_coverage <- function(ranges, isoforms, min_rpkm, min_length, bam_file, is_pair, is_dutp, threads) {
 	plt_len <- 99
 	dummy <- rep(0, plt_len + 1)
-	is_ranges<-sqldf("SELECT ranges.chrom, ranges.txStart, ranges.txEnd, ranges.name, 0, ranges.strand, ranges.cdsStart,
-							 ranges.cdsEnd, 0, ranges.exonCount, ranges.exonStarts, ranges.exonEnds
-					  FROM   ranges, isoforms
-					  WHERE  ranges.chrom=isoforms.Chrom AND
-							 ranges.strand=isoforms.Strand AND
-							 ranges.txStart=isoforms.TxStart AND
-							 ranges.txEnd=isoforms.TxEnd AND
-							 ranges.name=isoforms.RefseqId AND
-							 ranges.txEnd-ranges.txStart > 1000 AND
-							 isoforms.Rpkm > 10")
+	is_ranges<-sqldf(
+        paste("SELECT ranges.chrom, ranges.txStart, ranges.txEnd, ranges.name, 0, ranges.strand, ranges.cdsStart,
+			   ranges.cdsEnd, 0, ranges.exonCount, ranges.exonStarts, ranges.exonEnds
+			   FROM   ranges, isoforms
+			   WHERE  ranges.chrom=isoforms.Chrom AND
+					  ranges.strand=isoforms.Strand AND
+					  ranges.txStart=isoforms.TxStart AND
+					  ranges.txEnd=isoforms.TxEnd AND
+					  ranges.name=isoforms.RefseqId AND
+					  ranges.txEnd-ranges.txStart > ", min_length, " AND
+					  isoforms.Rpkm > ", min_rpkm, sep="")
+    )
 	is_count <- length(is_ranges$exonCount)
 	if(is_count < 5) return(dummy)
 	namesl <- list()
@@ -54,7 +56,7 @@ get_coverage <- function(ranges, isoforms, bam_file, is_pair, is_dutp, threads) 
 		irl <- append(irl, list(ir))
 	}
 	what <- c("pos","strand")
-	which <- RangesList(irl)
+    which <- IRangesList(irl)
 	names(which) <- namesl
 	flags <- scanBamFlag(isProperPair = is_pair,
                          isUnmappedQuery = FALSE,
@@ -103,14 +105,14 @@ get_coverage <- function(ranges, isoforms, bam_file, is_pair, is_dutp, threads) 
 }
 
 
-export_tag_density_plot <- function(data, rootname, width=800, height=800, resolution=72){
+export_tag_density_plot <- function(data, min_rpkm, min_length, rootname, width=800, height=800, resolution=72){
     tryCatch(
         expr = {
 
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             print(
                 ggplot(data, aes(x, y)) +
-                ggtitle("Gene body average tag density") +
+                ggtitle(paste("Gene body average tag density for RPKM < ", min_rpkm, " and transcript length < ", min_length, sep="")) +
                 geom_line() +
                 xlab("Gene body percentile (5' -> 3')") +
                 ylab("Average Tag Density (per percentile)") +
@@ -156,7 +158,7 @@ export_histogram_plot <- function(data, rootname, bins=1000, width=800, height=8
             pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
             print(
                 ggplot(data, aes(y)) +
-                ggtitle("RPKM distribution") +
+                ggtitle("Isoforms RPKM distribution") +
                 geom_histogram(bins=bins) +
                 xlab("RPKM") +
                 ylab("Frequency")
@@ -174,10 +176,12 @@ export_histogram_plot <- function(data, rootname, bins=1000, width=800, height=8
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description='Gene body average tag density plot and RPKM distribution histogram')
+    parser <- ArgumentParser(description='Gene body average tag density plot and RPKM distribution histogram for isoforms')
     parser$add_argument("--annotation", help="Path to the annotation TSV/CSV file", type="character", required="True")
     parser$add_argument("--bam",        help="Path to the indexed BAM file",        type="character", required="True")
     parser$add_argument("--isoforms",   help="Path to the isoforms TSV/CSV file",   type="character", required="True")
+    parser$add_argument("--minrpkm",    help="Ignore isoforms with RPKM smaller than --minrpkm. Default: 10", type="integer", default=10)
+    parser$add_argument("--minlength",  help="Ignore isoforms shorter than --minlength. Default: 1000", type="integer", default=1000)
     parser$add_argument("--mapped",     help="Mapped reads number",                 type="integer",   required="True")
     parser$add_argument("--pair",       help="Run as paired end. Default: false",   action='store_true')
     parser$add_argument("--dutp",       help="Run as dUTP. Default: false",         action='store_true')
@@ -191,7 +195,7 @@ args <- get_args()
 
 ranges <- read.table(args$annotation, sep=get_file_type(args$annotation), header=TRUE, stringsAsFactors=FALSE, check.names=FALSE)
 isoforms <- read.table(args$isoforms, sep=get_file_type(args$isoforms), header=TRUE, stringsAsFactors=FALSE, check.names=FALSE)
-cov_raw <- get_coverage(ranges, isoforms, args$bam, args$pair, args$dutp, args$threads)/(args$mapped/1000000)
+cov_raw <- get_coverage(ranges, isoforms, args$minrpkm, args$minlength, args$bam, args$pair, args$dutp, args$threads)/(args$mapped/1000000)
 coverage_df <- data.frame(x=as.numeric(rownames(as.data.frame(cov_raw)))-1, y=as.numeric(cov_raw))
 
 report_filename <- paste(args$output, "_gene_body_report.tsv", sep="")
@@ -203,9 +207,9 @@ write.table(coverage_df,
             quote=FALSE)
 print(paste("Export report to ", report_filename, sep=""))
 
-export_tag_density_plot(coverage_df, paste(args$output, "_gene_body_plot", sep=""))
+export_tag_density_plot(coverage_df, args$minrpkm, args$minlength, paste(args$output, "_gene_body_plot", sep=""))
 
-rpkms <- isoforms$Rpkm[isoforms$Rpkm>2 & isoforms$Rpkm<500]
+rpkms <- isoforms$Rpkm[isoforms$Rpkm>0 & isoforms$Rpkm<500]
 rpkms_df <- data.frame(x=as.numeric(rownames(as.data.frame(rpkms)))-1, y=as.numeric(rpkms))
 export_histogram_plot(rpkms_df, paste(args$output, "_rpkm_distribution_plot", sep=""))
 
