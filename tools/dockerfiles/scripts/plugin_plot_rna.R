@@ -1,15 +1,34 @@
 #!/usr/bin/env Rscript
 options(warn=-1)
+options("width"=300)
 
-suppressMessages(library(optparse))
+suppressMessages(library(argparse))
 suppressMessages(library(sqldf))
+suppressMessages(library(ggplot2))
 suppressMessages(library(GenomicRanges))
 suppressMessages(library(Rsamtools))
 suppressMessages(library(BiocParallel))
 
+######################################################################
+#
+# v0.0.3
+# - Refactored
+#
+######################################################################
+
+
+get_file_type <- function (filename) {
+    ext = tools::file_ext(filename)
+    separator = ","
+    if (ext == "tsv"){
+        separator = "\t"
+    }
+    return (separator)
+}
+
 
 get_coverage <- function(ranges, isoforms, bam_file, is_pair, is_dutp, threads) {
-	plt_len <- 200
+	plt_len <- 99
 	dummy <- rep(0, plt_len + 1)
 	is_ranges<-sqldf("SELECT ranges.chrom, ranges.txStart, ranges.txEnd, ranges.name, 0, ranges.strand, ranges.cdsStart,
 							 ranges.cdsEnd, 0, ranges.exonCount, ranges.exonStarts, ranges.exonEnds
@@ -83,56 +102,111 @@ get_coverage <- function(ranges, isoforms, bam_file, is_pair, is_dutp, threads) 
     return(Reduce("+", cov) / is_count)
 }
 
-option_list <- list(make_option(c("-a", "--annotation"), type="character", help="Path to annotation file"),
-                    make_option(c("-b", "--bam"),        type="character", help="Path to BAM file (+BAI)"),
-                    make_option(c("-i", "--isoforms"),   type="character", help="Path to isoforms file"),
-                    make_option(c("-s", "--stat"),       type="character", help="Path to statistics file"),
-                    make_option(c("-o", "--output"),     type="character", help="Output file prefix", default="./"),
-                    make_option(c("-p", "--pair"),       type="logical",   help="Is paired end", action="store_true", default = FALSE),
-                    make_option(c("-d", "--dutp"),       type="logical",   help="Is dUTP", action="store_true", default = FALSE),
-                    make_option(c("-t", "--threads"),    type="integer",   help="Threads number", default = 1));
 
-opt_parser <- OptionParser(option_list = option_list);
-args <- parse_args(opt_parser);
+export_tag_density_plot <- function(data, rootname, width=800, height=800, resolution=72){
+    tryCatch(
+        expr = {
 
-png(filename=paste(args$output, "%03d.png", sep=""))
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            print(
+                ggplot(data, aes(x, y)) +
+                ggtitle("Gene body average tag density") +
+                geom_line() +
+                xlab("Gene body percentile (5' -> 3')") +
+                ylab("Average Tag Density (per percentile)") +
+                scale_x_continuous(breaks=seq(0,100,20), labels=seq(0,100,20))
+            )
+            dev.off()
 
-colvar <- 5
-icolor = colorRampPalette(c("#7fc97f","#beaed4","#fdc086","#386cb0","#f0027f"))(colvar)
+            pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+            print(
+                ggplot(data, aes(x, y)) +
+                ggtitle("Gene body average tag density") +
+                geom_line() +
+                xlab("Gene body percentile (5' -> 3')") +
+                ylab("Average Tag Density (per percentile)") +
+                scale_x_continuous(breaks=seq(0,100,20), labels=seq(0,100,20))
+            )
+            dev.off()
 
-ranges <- read.table(args$annotation, sep="\t", header=TRUE, stringsAsFactors=FALSE)
-isoforms <- read.table(args$isoforms, sep=",", header=TRUE, stringsAsFactors=FALSE)
-stat <- read.table(args$stat, sep=" ", header=FALSE, stringsAsFactors=FALSE)
+            cat(paste("\nExport tag density plot to ", rootname, ".(png/pdf)", "\n", sep=""))
+        },
+        error = function(e){
+            dev.off()
+            cat(paste("\nFailed to export tag density plot to ", rootname, ".(png/pdf)", "\n", sep=""))
+        }
+    )
+}
 
-tags_mapped = as.numeric(stat[2])
-cov_norm <- get_coverage(ranges, isoforms, args$bam, args$pair, args$dutp, args$threads)/(tags_mapped/1000000)
-write.table(cov_norm,
-            file = paste(args$output, "cov.tsv", sep=""),
-            sep="\t",
-            row.names=FALSE,
-            col.names=FALSE,
-            quote=FALSE)
-plot(cov_norm,
-     type="l",
-     xaxt = "n",
-     main="Gene body average tag density",
-     ylab="Average Tag Density (per percentile)",
-     xlab="Gene body percentile (5'->3')",
-     lwd=3, col=icolor[floor(runif(1)*colvar)+1])
-axis(1, at=seq(0,200,40), labels=seq(0,100,20), las=1)
 
-rpkm_hist <- hist(isoforms$Rpkm[isoforms$Rpkm>2 & isoforms$Rpkm<500],
-                  main="RPKM distribution",
-                  breaks=1000,
-                  xlab="rpkm>2 & rpkm<500",
-                  col=icolor[floor(runif(1)*colvar)+1])
+export_histogram_plot <- function(data, rootname, bins=1000, width=800, height=800, resolution=72){
+    tryCatch(
+        expr = {
 
-write.table(data.frame(mids=rpkm_hist$mids, counts=rpkm_hist$counts, density=rpkm_hist$density),
-            file = paste(args$output, "rpkm.tsv", sep=""),
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            print(
+                ggplot(data, aes(y)) +
+                ggtitle("RPKM distribution") +
+                geom_histogram(bins=bins) +
+                xlab("RPKM") +
+                ylab("Frequency")
+            )
+            dev.off()
+
+            pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+            print(
+                ggplot(data, aes(y)) +
+                ggtitle("RPKM distribution") +
+                geom_histogram(bins=bins) +
+                xlab("RPKM") +
+                ylab("Frequency")
+            )
+            dev.off()
+
+            cat(paste("\nExport histogram to ", rootname, ".(png/pdf)", "\n", sep=""))
+        },
+        error = function(e){
+            dev.off()
+            cat(paste("\nFailed to export histogram to ", rootname, ".(png/pdf)", "\n", sep=""))
+        }
+    )
+}
+
+
+get_args <- function(){
+    parser <- ArgumentParser(description='Gene body average tag density plot and RPKM distribution histogram')
+    parser$add_argument("--annotation", help="Path to the annotation TSV/CSV file", type="character", required="True")
+    parser$add_argument("--bam",        help="Path to the indexed BAM file",        type="character", required="True")
+    parser$add_argument("--isoforms",   help="Path to the isoforms TSV/CSV file",   type="character", required="True")
+    parser$add_argument("--mapped",     help="Mapped reads number",                 type="integer",   required="True")
+    parser$add_argument("--pair",       help="Run as paired end. Default: false",   action='store_true')
+    parser$add_argument("--dutp",       help="Run as dUTP. Default: false",         action='store_true')
+    parser$add_argument("--output",     help="Output prefix. Default: ./coverage",  type="character", default="./coverage")
+    parser$add_argument("--threads",    help="Threads. Default: 1",                 type="integer",   default=1)
+    return (parser$parse_args(commandArgs(trailingOnly = TRUE)))
+}
+
+
+args <- get_args()
+
+ranges <- read.table(args$annotation, sep=get_file_type(args$annotation), header=TRUE, stringsAsFactors=FALSE, check.names=FALSE)
+isoforms <- read.table(args$isoforms, sep=get_file_type(args$isoforms), header=TRUE, stringsAsFactors=FALSE, check.names=FALSE)
+cov_raw <- get_coverage(ranges, isoforms, args$bam, args$pair, args$dutp, args$threads)/(args$mapped/1000000)
+coverage_df <- data.frame(x=as.numeric(rownames(as.data.frame(cov_raw)))-1, y=as.numeric(cov_raw))
+
+report_filename <- paste(args$output, "_gene_body_report.tsv", sep="")
+write.table(coverage_df,
+            file = report_filename,
             sep="\t",
             row.names=FALSE,
             col.names=TRUE,
             quote=FALSE)
+print(paste("Export report to ", report_filename, sep=""))
 
+export_tag_density_plot(coverage_df, paste(args$output, "_gene_body_plot", sep=""))
+
+rpkms <- isoforms$Rpkm[isoforms$Rpkm>2 & isoforms$Rpkm<500]
+rpkms_df <- data.frame(x=as.numeric(rownames(as.data.frame(rpkms)))-1, y=as.numeric(rpkms))
+export_histogram_plot(rpkms_df, paste(args$output, "_rpkm_distribution_plot", sep=""))
 
 graphics.off()
