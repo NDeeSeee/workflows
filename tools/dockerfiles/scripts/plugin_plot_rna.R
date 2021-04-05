@@ -180,7 +180,7 @@ get_args <- function(){
     parser$add_argument("--annotation", help="Path to the annotation TSV/CSV file", type="character", required="True")
     parser$add_argument("--bam",        help="Path to the indexed BAM file",        type="character", required="True")
     parser$add_argument("--isoforms",   help="Path to the isoforms TSV/CSV file",   type="character", required="True")
-    parser$add_argument("--minrpkm",    help="Ignore isoforms with RPKM smaller than --minrpkm. Default: 10", type="integer", default=10)
+    parser$add_argument("--minrpkm",    help="Ignore isoforms with RPKM smaller than --minrpkm. Default: 10", type="double", default=10)
     parser$add_argument("--minlength",  help="Ignore isoforms shorter than --minlength. Default: 1000", type="integer", default=1000)
     parser$add_argument("--mapped",     help="Mapped reads number",                 type="integer",   required="True")
     parser$add_argument("--pair",       help="Run as paired end. Default: false",   action='store_true')
