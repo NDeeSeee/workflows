@@ -71,10 +71,28 @@ inputs:
     doc: |
       Run as dUTP. Default: false
 
+  minimum_rpkm:
+    type: float?
+    inputBinding:
+      position: 12
+      prefix: "--minrpkm"
+    doc: |
+      Ignore isoforms with RPKM smaller than --minrpkm.
+      Default: 10
+
+  minimum_isoform_length:
+    type: float?
+    inputBinding:
+      position: 13
+      prefix: "--minlength"
+    doc: |
+      Ignore isoforms shorter than --minlength.
+      Default: 1000
+
   threads:
     type: int?
     inputBinding:
-      position: 12
+      position: 14
       prefix: "--threads"
     doc: |
       Threads. Default: 1
