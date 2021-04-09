@@ -2,20 +2,22 @@
 # Dockerfile
 #
 # Software:         Gene body tag density plot
-# Software Version: v0.0.3
+# Software Version: v0.0.4
 # Description:      R script to plot gene body tag density plot
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         plugin_plot_rna.R script
 # Base Image:       r-base:4.0.4
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/plugin-plot-rna:v0.0.3 -f plugin-plot-rna-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/plugin-plot-rna:v0.0.3
-# Run Cmd:          docker run --rm -ti biowardrobe2/plugin-plot-rna:v0.0.3 plot_rna.R --help
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/plugin-plot-rna:v0.0.4 -f plugin-plot-rna-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/plugin-plot-rna:v0.0.4
+# Run Cmd:          docker run --rm -ti biowardrobe2/plugin-plot-rna:v0.0.4 plot_rna.R --help
 #################################################################
 
 
 #################################################################
 # Updates
 #
+# v0.0.4 - support --stranded yes/no/reverse
+#          reverse corresponds to the original dUTP mode
 # v0.0.3 - Refactored. Use r-base:4.0.4
 # v0.0.2 - Export correct RPKM distribution histogram data
 # v0.0.1 - Generate plots, export data to text files
