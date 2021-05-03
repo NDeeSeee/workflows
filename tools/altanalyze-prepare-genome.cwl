@@ -48,7 +48,7 @@ inputs:
           ;;
       esac
       echo "Selected ${SPECIES} and ${ENSEMBL_VERSION}"
-      python ./altanalyze/AltAnalyze.py --species ${SPECIES} --update Official --version ${ENSEMBL_VERSION}
+      python ./altanalyze/AltAnalyze.py --species ${SPECIES} --update Official --version ${ENSEMBL_VERSION} --additional all
       mkdir genome_data
       mv ./altanalyze/AltDatabase/EnsMart* ./genome_data/${ENSEMBL_VERSION}__${SPECIES}
     inputBinding:
