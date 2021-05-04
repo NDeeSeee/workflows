@@ -1,0 +1,17 @@
+{
+    "annotation_file": {
+        "class": "File",
+        "location": "./data/dm3_chr4/generated_inputs/bam_bai/chr4_100_mapped_reads.Aligned.out.bam"
+    },
+    "bambai_pair": {
+        "class": "File",
+        "location": "./data/dm3_chr4/generated_inputs/bam_bai/chr4_100_mapped_reads.Aligned.out.bam"
+    },
+    "isoforms_file": {
+        "class": "File",
+        "location": "./data/dm3_chr4/main_inputs/geep/t1_1000.isoforms.csv"
+    },
+    "mapped_reads_number": 100,
+    "output_prefix": "dummy",
+    "pair": true
+}

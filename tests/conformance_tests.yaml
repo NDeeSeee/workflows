@@ -4823,6 +4823,21 @@
       class: File
       location: gene_body_stderr.log
 
+- job: ./plugin-plot-rna-3.json
+  tool: ../tools/plugin-plot-rna.cwl
+  output:
+    gene_body_report_file: null
+    gene_body_plot_pdf: null
+    gene_body_plot_png: null
+    rpkm_distribution_plot_pdf: null
+    rpkm_distribution_plot_png: null
+    stdout_log:
+      class: File
+      location: gene_body_stdout.log
+    stderr_log:
+      class: File
+      location: gene_body_stderr.log
+
 # ========================================================
 # pca
 # ========================================================
