@@ -27,7 +27,7 @@ requirements:
           {
               "file": "umap.coords.csv",
               "shortLabel": "CellRanger UMAP"
-          }          
+          }
       ]
       markers=[
         {
