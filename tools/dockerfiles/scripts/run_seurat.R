@@ -1,13 +1,15 @@
 #!/usr/bin/env Rscript
 options(warn=-1)
 options("width"=200)
+options(future.globals.maxSize = 1000 * 1024^2)  # 1GB should be good by default
 
 
 suppressMessages(library(dplyr))
 suppressMessages(library(Seurat))
+suppressMessages(library(future))
+suppressMessages(library(ggplot2))
 suppressMessages(library(argparse))
 suppressMessages(library(patchwork))
-suppressMessages(library(ggplot2))
 
 
 load_data <- function(location, mincells, cellnamedelim, cellnamefield) {
@@ -214,6 +216,8 @@ get_args <- function(){
     parser$add_argument("--ribopattern",   help="Regex pattern to identify ribosomal reads. Default: ^Rp[sl]", type="character", default="^Rp[sl]")
     # Export results
     parser$add_argument("--output",        help='Output prefix. Default: ./seurat', type="character", default="./seurat")
+    # Parallelization
+    parser$add_argument("--threads",       help="Threads. Default: 1", type="integer", default=1)
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
     return (args)
 }
@@ -221,8 +225,11 @@ get_args <- function(){
 
 args <- get_args()
 
-# Load data from feature-barcode matrices
-print(paste("Loading data from", args$mex))
+print(paste("Setting parallelizations threads to", args$threads))
+plan("multiprocess", workers=args$threads)
+plan()
+
+print(paste("Loading feature-barcode matrices from", args$mex))
 raw_seurat_data <- load_data(args$mex, args$mincells, args$cellnamedelim, args$cellnamefield)
 head(raw_seurat_data@meta.data, 5)
 
