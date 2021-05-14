@@ -73,9 +73,10 @@ load_condition_data <- function(location, cell_identity_data) {
 }
 
 
-load_seurat_data <- function(location, cell_identity_data, condition_data) {
+load_seurat_data <- function(location, mincells, cell_identity_data, condition_data) {
     seurat_data <- CreateSeuratObject(
         counts=Read10X(data.dir=location),
+        min.cells=mincells,
         names.delim="-",  # to get cell identity index from Cellranger aggr output
         names.field=2
     )
@@ -542,10 +543,11 @@ get_args <- function(){
     parser$add_argument("--identity",      help="Path to the aggregation CSV file to set the initial cell identity classes", type="character", required="True")
     parser$add_argument("--condition",     help="Path to the TSV/CSV file to define datasets conditions for grouping. First column - 'library_id' with values from the --identity file, second column 'condition'. Default: each dataset is assigned to its own biological condition", type="character")
     # Apply QC filters
-    parser$add_argument("--minfeatures",   help="Include cells where at least this many features are detected (applied for each dataset independently). Default: 250", type="integer", default=250)
-    parser$add_argument("--minumi",        help="Include cells where at least this many UMI are detected (applied for each dataset independently). Default: 500", type="integer", default=500)
-    parser$add_argument("--minnovelty",    help="Include cells with the novelty score not lower that this value (calculated as log10(genes)/log10(UMIs) and applied for each dataset independently). Default: 0.8", type="double", default=0.8)
-    parser$add_argument("--maxmt",         help="Include cells with the mitochondrial contamination percentage not bigger that this value (applied for each dataset independently). Default: 5", type="double", default=5)
+    parser$add_argument("--mincells",      help="Include features detected in at least this many cells (applied to thoughout all datasets together). Default: 10", type="integer", default=10)
+    parser$add_argument("--minfeatures",   help="Include cells where at least this many features are detected. Default: 250", type="integer", default=250)
+    parser$add_argument("--minumi",        help="Include cells where at least this many UMI are detected. Default: 500", type="integer", default=500)
+    parser$add_argument("--minnovelty",    help="Include cells with the novelty score not lower that this value (calculated as log10(genes)/log10(UMIs)). Default: 0.8", type="double", default=0.8)
+    parser$add_argument("--maxmt",         help="Include cells with the mitochondrial contamination percentage not bigger that this value. Default: 5", type="double", default=5)
     parser$add_argument("--mitopattern",   help="Regex pattern to identify mitochondrial reads. Default: ^Mt-", type="character", default="^Mt-")
     # Integration and clustering parameters
     parser$add_argument("--highvarcount",  help="Number of higly variable features to detect. Default: 2000", type="integer", default=2000)
@@ -574,7 +576,7 @@ condition_data <- load_condition_data(args$condition, cell_identity_data)
 print(condition_data)
 
 print(paste("Loading feature-barcode matrices from", args$mex))
-seurat_data <- load_seurat_data(args$mex, cell_identity_data, condition_data)
+seurat_data <- load_seurat_data(args$mex, args$mincells, cell_identity_data, condition_data)
 head(seurat_data@meta.data)
 
 print("Adding QC metrics to not filtered seurat data")
