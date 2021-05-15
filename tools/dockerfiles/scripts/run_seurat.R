@@ -33,6 +33,18 @@ get_file_type <- function (filename) {
 }
 
 
+load_cell_cycle_data <- function (location) {
+    cell_cycle_data <- read.table(
+        location,
+        sep=get_file_type(location),
+        header=TRUE,
+        check.names=FALSE,
+        stringsAsFactors=FALSE
+    )
+    return (cell_cycle_data)
+}
+
+
 load_cell_identity_data <- function (location) {
     cell_identity_data <- read.table(
         location,
@@ -107,6 +119,39 @@ apply_filters <- function(seurat_data, minfeatures, minumi, minnovelty, maxmt) {
                  (mito_percentage <= maxmt)
     )
     return (filtered_seurat_data)
+}
+
+
+explore_unwanted_variation <- function(seurat_data, cell_cycle_data) {
+     temp_seurat_data <- NormalizeData(seurat_data, verbose=FALSE)
+     temp_seurat_data <- CellCycleScoring(
+         temp_seurat_data,
+         s.features=as.vector(cell_cycle_data[tolower(cell_cycle_data$phase)=="s", "gene_id"]),
+         g2m.features=as.vector(cell_cycle_data[tolower(cell_cycle_data$phase)=="g2/m", "gene_id"])
+    )
+    mito_quartiles <- quantile(temp_seurat_data@meta.data$mito_percentage, c(0.25, 0.5, 0.75))
+    temp_seurat_data@meta.data$mito_factor <- cut(
+        temp_seurat_data@meta.data$mito_percentage, 
+        breaks=c(-Inf, mito_quartiles[1], mito_quartiles[2], mito_quartiles[3], Inf), 
+        labels=c("Low", "Medium", "Medium high", "High")
+    )
+    temp_seurat_data <- FindVariableFeatures(temp_seurat_data, verbose=FALSE)
+    temp_seurat_data <- ScaleData(temp_seurat_data, verbose=FALSE)
+    temp_seurat_data <- RunPCA(temp_seurat_data, verbose=FALSE)
+    export_dim_plot(
+        data=temp_seurat_data,
+        reduction="pca",
+        split_by="Phase",
+        group_by="Phase",
+        rootname=paste(args$output, "_cell_cycle_effect_pca_plot", sep="")
+    )
+    export_dim_plot(
+        data=temp_seurat_data,
+        reduction="pca",
+        split_by="mito_factor",
+        group_by="mito_factor",
+        rootname=paste(args$output, "_mitochondrial_gene_effect_pca_plot", sep="")
+    )
 }
 
 
@@ -329,7 +374,7 @@ export_variable_feature_plot <- function(data, rootname, width=800, height=800, 
 }
 
 
-export_dim_plot <- function(data, rootname, reduction, split_by=NULL, width=800, height=800, resolution=72){
+export_dim_plot <- function(data, rootname, reduction, split_by=NULL, group_by=NULL, width=800, height=800, resolution=72){
     tryCatch(
         expr = {
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
@@ -337,7 +382,8 @@ export_dim_plot <- function(data, rootname, reduction, split_by=NULL, width=800,
                 DimPlot(
                     data,
                     reduction=reduction,
-                    split.by=split_by
+                    split.by=split_by,
+                    group.by=group_by
                 )
             )
             dev.off()
@@ -346,7 +392,8 @@ export_dim_plot <- function(data, rootname, reduction, split_by=NULL, width=800,
                 DimPlot(
                     data,
                     reduction=reduction,
-                    split.by=split_by
+                    split.by=split_by,
+                    group.by=group_by
                 )
             )
             dev.off()
@@ -539,9 +586,10 @@ export_all_plots <- function(seurat_data, suffix, args){
 get_args <- function(){
     parser <- ArgumentParser(description='Runs Seurat for comparative scRNA-seq analysis of across experimental conditions')
     # Import data from Cellranger Aggregate results
-    parser$add_argument("--mex",           help="Path to the folder with aggregated feature-barcode matrices in MEX format", type="character", required="True")
+    parser$add_argument("--mex",           help="Path to the folder with not normalized not filtered aggregated feature-barcode matrices in MEX format", type="character", required="True")
     parser$add_argument("--identity",      help="Path to the aggregation CSV file to set the initial cell identity classes", type="character", required="True")
-    parser$add_argument("--condition",     help="Path to the TSV/CSV file to define datasets conditions for grouping. First column - 'library_id' with values from the --identity file, second column 'condition'. Default: each dataset is assigned to its own biological condition", type="character")
+    parser$add_argument("--cellcycle",     help="Path to the TSV/CSV file with cell cycle data. First column - 'phase', second column 'gene_id'", type="character", required="True")
+    parser$add_argument("--condition",     help="Path to the TSV/CSV file to define datasets conditions for grouping. First column - 'library_id' with values from the --identity file, second column 'condition'. Default: each dataset is assigned to its own biological condition", type="character")    
     # Apply QC filters
     parser$add_argument("--mincells",      help="Include features detected in at least this many cells (applied to thoughout all datasets together). Default: 10", type="integer", default=10)
     parser$add_argument("--minfeatures",   help="Include cells where at least this many features are detected. Default: 250", type="integer", default=250)
@@ -563,52 +611,39 @@ get_args <- function(){
 
 
 args <- get_args()
-
 print(paste("Setting parallelizations threads to", args$threads))
 set_threads(args$threads)
-
 print(paste("Loading cell identity data from Cellranger aggregation metadata file", args$identity))
 cell_identity_data <- load_cell_identity_data (args$identity)
-print(cell_identity_data)
-
+print(paste("Loading cell cycle data from", args$cellcycle))
+cell_cycle_data <- load_cell_cycle_data(args$cellcycle)
 print("Trying to load condition data")
 condition_data <- load_condition_data(args$condition, cell_identity_data)
-print(condition_data)
-
 print(paste("Loading feature-barcode matrices from", args$mex))
 seurat_data <- load_seurat_data(args$mex, args$mincells, cell_identity_data, condition_data)
-head(seurat_data@meta.data)
-
 print("Adding QC metrics to not filtered seurat data")
 seurat_data <- add_qc_metrics(seurat_data, args$mitopattern)
-head(seurat_data@meta.data)
-
 export_all_plots(seurat_data, "raw", args)
-
 print("Applying QC filters to all datasets at once")
-seurat_data <- apply_filters(
-    seurat_data,
-    args$minfeatures,
-    args$minumi,
-    args$minnovelty,
-    args$maxmt
-)
-head(seurat_data@meta.data)
-
+seurat_data <- apply_filters(seurat_data, args$minfeatures, args$minumi, args$minnovelty, args$maxmt)
 export_all_plots(seurat_data, "filtered", args)
 
+
+print("Evaluating effects of cell cycle and mitochodrial gene expression")
+explore_unwanted_variation(seurat_data, cell_cycle_data)
+
+
+
+
+
+
 print("Running dataset integration splitting by condition")
-seurat_data <- integrate_seurat_data(
-    seurat_data,
-    args$highvarcount
-)
+seurat_data <- integrate_seurat_data(seurat_data, args$highvarcount)
 head(seurat_data@meta.data)
 
 print("Scaling integrated data")
 seurat_data <- ScaleData(seurat_data, verbose=FALSE)
 head(seurat_data@meta.data)
-
-
 
 export_vln_plot(
     data=seurat_data,
@@ -617,13 +652,6 @@ export_vln_plot(
     group_by="condition",
     pt_size=0
 )
-
-
-
-
-
-
-
 
 print("Performing PCA reduction of integrated data. Use all 50 principal components")
 seurat_data <- RunPCA(
