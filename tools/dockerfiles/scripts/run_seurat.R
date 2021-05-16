@@ -7,6 +7,7 @@ suppressMessages(library(dplyr))
 suppressMessages(library(purrr))
 suppressMessages(library(Seurat))
 suppressMessages(library(future))
+suppressMessages(library(tibble))
 suppressMessages(library(ggplot2))
 suppressMessages(library(argparse))
 suppressMessages(library(patchwork))
@@ -17,6 +18,7 @@ suppressMessages(library(sctransform))
 # For details and treshold values look at
 #    https://hbctraining.github.io/scRNA-seq_online/lessons/04_SC_quality_control.html
 #    https://github.com/satijalab/seurat/issues/1679
+#    https://hbctraining.github.io/scRNA-seq/lessons/sc_exercises_integ_marker_identification.html
 ####################################################################################
 
 
@@ -826,7 +828,6 @@ print("Evaluating effects of cell cycle and mitochodrial gene expression")
 explore_unwanted_variation(seurat_data, cell_cycle_data, args)
 print("Running dataset integration")
 seurat_data <- integrate_seurat_data(seurat_data, cell_cycle_data, args$regresscellcycle, args$regressmt, args$highvarcount)
-head(seurat_data@meta.data)
 print("Performing PCA reduction of integrated data. Use all 50 principal components")
 seurat_data <- RunPCA(seurat_data, npcs=50, verbose=FALSE)
 print(paste("Performing UMAP reduction of integrated data using", args$ndim, "principal components"))
@@ -837,14 +838,11 @@ seurat_data <- FindNeighbors(seurat_data, reduction="pca", dims=1:args$ndim)
 seurat_data <- FindClusters(seurat_data, resolution=args$resolution)
 export_all_clustering_plots(seurat_data, "integrated_clustered", args)
 
-
-
-
 print("Identifying conserved markers for all clusters irrespective of condition")
 DefaultAssay(seurat_data) <- "RNA"
 conserved_markers <- map_dfr(
     sort(unique(seurat_data@meta.data$seurat_clusters)),  # need to get all clusters
-    seurat_data,
-    get_conserved_markers
+    get_conserved_markers,
+    seurat_data
 )
 head(conserved_markers)
