@@ -629,6 +629,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
             rootname=paste(args$output, suffix, "umap_plot_split_by_phase_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
+        Idents(seurat_data) <- paste("integrated_snn_res", current_resolution, sep=".")
         export_feature_plot(
             data=seurat_data,
             features=c("nCount_RNA", "nFeature_RNA", "S.Score", "G2M.Score", "mito_percentage", "log10_gene_per_log10_umi"),
@@ -639,6 +640,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
             rootname=paste(args$output, suffix, "umap_feature_plot_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
+        Idents(seurat_data) <- "new.ident"
     }
 }
 
