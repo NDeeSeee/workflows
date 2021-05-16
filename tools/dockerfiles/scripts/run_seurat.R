@@ -184,13 +184,14 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, regresscellcycle
             vars.to.regress=vars_to_regress,
             verbose=FALSE
         )
+        splitted_seurat_data[[i]] <- CellCycleScoring(
+            splitted_seurat_data[[i]],
+            s.features=as.vector(cell_cycle_data[tolower(cell_cycle_data$phase)=="s", "gene_id"]),
+            g2m.features=as.vector(cell_cycle_data[tolower(cell_cycle_data$phase)=="g2/m", "gene_id"]),
+            assay="SCT",
+            verbose=FALSE
+        )
         if (regresscellcycle){
-            splitted_seurat_data[[i]] <- CellCycleScoring(
-                splitted_seurat_data[[i]],
-                s.features=as.vector(cell_cycle_data[tolower(cell_cycle_data$phase)=="s", "gene_id"]),
-                g2m.features=as.vector(cell_cycle_data[tolower(cell_cycle_data$phase)=="g2/m", "gene_id"]),
-                assay="SCT"
-            )
             if (!is.null(vars_to_regress)) {
                 vars_to_regress <- append(vars_to_regress, c("S.Score", "G2M.Score"))
             } else {
@@ -397,6 +398,51 @@ export_vln_plot <- function(data, features, rootname, group_by=NULL, pt_size=NUL
 }
 
 
+export_feature_plot <- function(data, features, rootname, reduction, split_by=NULL, label=FALSE, order=FALSE, min_cutoff=NA, max_cutoff=NA, pt_size=NULL, pdf=FALSE, width=800, height=800, resolution=72){
+    tryCatch(
+        expr = {
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            print(
+                FeaturePlot(
+                    data,
+                    features=features,
+                    pt.size=pt_size,
+                    order=order,
+                    min.cutoff=min_cutoff,
+                    max.cutoff=max_cutoff,
+                    reduction=reduction,
+                    split.by=split_by,
+                    label=label
+                )
+            )
+            dev.off()
+            if (pdf) {
+                pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                print(
+                    FeaturePlot(
+                        data,
+                        features=features,
+                        pt.size=pt_size,
+                        order=order,
+                        min.cutoff=min_cutoff,
+                        max.cutoff=max_cutoff,
+                        reduction=reduction,
+                        split.by=split_by,
+                        label=label
+                    )
+                )
+                dev.off()
+            }
+            cat(paste("\nExport feature plot to ", rootname, ".(png/pdf)", "\n", sep=""))
+        },
+        error = function(e){
+            dev.off()
+            cat(paste("\nFailed to export feature plot to ", rootname, ".(png/pdf)", "\n",  sep=""))
+        }
+    )
+}
+
+
 export_variable_feature_plot <- function(data, rootname, pdf=FALSE, width=800, height=800, resolution=72){
     tryCatch(
         expr = {
@@ -528,6 +574,7 @@ export_pca_loadings_plot <- function(data, rootname, dims=NULL, nfeatures=30, pd
     )
 }
 
+
 export_elbow_plot <- function(data, rootname, ndims=NULL, pdf=FALSE, width=800, height=800, resolution=72){
     tryCatch(
         expr = {
@@ -571,6 +618,25 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
             group_by=paste("integrated_snn_res", current_resolution, sep="."),
             label=TRUE,
             rootname=paste(args$output, suffix, "umap_plot_split_by_condition_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+        export_dim_plot(
+            data=seurat_data,
+            reduction="umap",
+            split_by="Phase",
+            group_by=paste("integrated_snn_res", current_resolution, sep="."),
+            label=TRUE,
+            rootname=paste(args$output, suffix, "umap_plot_split_by_phase_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+        export_feature_plot(
+            data=seurat_data,
+            features=c("nCount_RNA", "nFeature_RNA", "S.Score", "G2M.Score", "mito_percentage", "log10_gene_per_log10_umi"),
+            reduction="umap",
+            label=TRUE,
+            order=TRUE,
+            min_cutoff="q10",
+            rootname=paste(args$output, suffix, "umap_feature_plot_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
     }
