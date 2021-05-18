@@ -304,20 +304,20 @@ explore_unwanted_variation <- function(seurat_data, cell_cycle_data, args) {
         reduction="pca",
         split_by="Phase",
         group_by="Phase",
-        rootname=paste(args$output, "_cell_cycle_effect_pca_plot", sep="")
+        rootname=paste(args$output, "_filt_unint_cell_cycle_eff_pca_plot", sep="")
     )
     export_dim_plot(
         data=temp_seurat_data,
         reduction="pca",
         split_by="mito_factor",
         group_by="mito_factor",
-        rootname=paste(args$output, "_mitochondrial_gene_effect_pca_plot", sep="")
+        rootname=paste(args$output, "_filt_unint_mito_perc_eff_pca_plot", sep="")
     )
     export_dim_plot(
         data=temp_seurat_data,
         reduction="umap",
         split_by="new.ident",
-        rootname=paste(args$output, "_unintegrated_umap_plot_split_by_identity", sep="")
+        rootname=paste(args$output, "_filt_unint_umap_plot_spl_by_ident", sep="")
     )
 }
 
@@ -838,7 +838,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
             split_by="condition",
             group_by=paste("integrated_snn_res", current_resolution, sep="."),
             label=TRUE,
-            rootname=paste(args$output, suffix, "umap_plot_split_by_condition_res", current_resolution, sep="_"),
+            rootname=paste(args$output, suffix, "umap_plot_spl_by_cond_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
         export_dim_plot(
@@ -847,7 +847,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
             split_by="Phase",
             group_by=paste("integrated_snn_res", current_resolution, sep="."),
             label=TRUE,
-            rootname=paste(args$output, suffix, "umap_plot_split_by_phase_res", current_resolution, sep="_"),
+            rootname=paste(args$output, suffix, "umap_plot_spl_by_ph_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
         Idents(seurat_data) <- paste("integrated_snn_res", current_resolution, sep=".")
@@ -858,7 +858,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
             label=TRUE,
             order=TRUE,
             min_cutoff="q10",
-            rootname=paste(args$output, suffix, "umap_feature_plot_res", current_resolution, sep="_"),
+            rootname=paste(args$output, suffix, "umap_qc_metrics_plot_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
         Idents(seurat_data) <- "new.ident"
@@ -897,7 +897,7 @@ export_all_dimensionality_plots <- function(seurat_data, suffix, args) {
         data=seurat_data,
         reduction="umap",
         split_by="new.ident",
-        rootname=paste(args$output, suffix, "umap_plot_split_by_identity", sep="_"),
+        rootname=paste(args$output, suffix, "umap_plot_spl_by_ident", sep="_"),
         pdf=args$pdf
     )
 }
@@ -956,7 +956,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
     )
     export_log10_geom_density_plot(
         data=seurat_data@meta.data,
-        rootname=paste(args$output, suffix, "mitochondrial_gene_percentage_log10_density_plot", sep="_"),
+        rootname=paste(args$output, suffix, "mito_perc_log10_density_plot", sep="_"),
         x_axis="mito_percentage",
         color_by="new.ident",
         x_intercept=args$maxmt,
@@ -981,14 +981,14 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
     export_vln_plot(
         data=seurat_data,
         features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi"),
-        rootname=paste(args$output, suffix, "vln_plot", sep="_"),
+        rootname=paste(args$output, suffix, "qc_metrics_vln_plot", sep="_"),
         pt_size=0,
         pdf=args$pdf
     )
     export_vln_plot(
         data=seurat_data,
         features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi"),
-        rootname=paste(args$output, suffix, "vln_plot_grouped_by_condition", sep="_"),
+        rootname=paste(args$output, suffix, "qc_metrics_vln_plot_gr_by_cond", sep="_"),
         group_by="condition",
         pt_size=0,
         pdf=args$pdf
@@ -1109,7 +1109,7 @@ seurat_data <- add_qc_metrics(seurat_data, args$mitopattern)
 export_all_qc_plots(seurat_data, "raw", args)
 print("Applying QC filters to all datasets at once")
 seurat_data <- apply_filters(seurat_data, args$minfeatures, args$minumi, args$minnovelty, args$maxmt)
-export_all_qc_plots(seurat_data, "filtered", args)
+export_all_qc_plots(seurat_data, "filt", args)
 print("Evaluating effects of cell cycle and mitochodrial gene expression")
 explore_unwanted_variation(seurat_data, cell_cycle_data, args)
 print("Running dataset integration")
@@ -1118,12 +1118,12 @@ print("Performing PCA reduction of integrated data. Use all 50 principal compone
 seurat_data <- RunPCA(seurat_data, npcs=50, verbose=FALSE)
 print(paste("Performing UMAP reduction of integrated data using", args$ndim, "principal components"))
 seurat_data <- RunUMAP(seurat_data, reduction="pca", dims=1:args$ndim, verbose=FALSE)
-export_all_dimensionality_plots(seurat_data, "filtered_integrated", args)
+export_all_dimensionality_plots(seurat_data, "filt_int", args)
 print(paste("Clustering integrated data using", args$ndim, "principal components"))
 seurat_data <- FindNeighbors(seurat_data, reduction="pca", dims=1:args$ndim)
 seurat_data <- FindClusters(seurat_data, resolution=args$resolution)
-export_all_clustering_plots(seurat_data, "filtered_integrated_clustered", args)
-export_rds(seurat_data, paste(args$output, "_filtered_integrated_clustered.rds", sep=""))
+export_all_clustering_plots(seurat_data, "filt_int_cl", args)
+export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
 print("Identifying conserved markers for all clusters and all resolutions irrespective of condition")
 all_conserved_markers <- get_all_conserved_markers(seurat_data, args)
 export_data(all_conserved_markers, paste(args$output, "_conserved_gene_markers.tsv", sep=""))
