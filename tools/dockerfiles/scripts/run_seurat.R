@@ -1075,8 +1075,8 @@ get_args <- function(){
     parser$add_argument("--maxmt",         help="Include cells with the mitochondrial contamination percentage not bigger that this value. Default: 5", type="double", default=5)
     parser$add_argument("--mitopattern",   help="Regex pattern to identify mitochondrial reads. Default: ^Mt-", type="character", default="^Mt-")
     # Integration, clustering, and marker genes identification parameters
-    parser$add_argument("--regresscellcycle", help="Regress cell cycle as a confounding sources of variation. Default: false", action="store_true")
-    parser$add_argument("--regressmt",     help="Regress mitochondrial gene expression as a confounding sources of variation. Default: false", action="store_true")
+    parser$add_argument("--regresscellcycle", help="Regress cell cycle as a confounding source of variation. Default: false", action="store_true")
+    parser$add_argument("--regressmt",     help="Regress mitochondrial gene expression as a confounding source of variation. Default: false", action="store_true")
     parser$add_argument("--highvarcount",  help="Number of higly variable features to detect. Default: 3000", type="integer", default=3000)
     parser$add_argument("--ndim",          help="Number of principal components to use in clustering (1:50). Use Elbow plot to adjust this parameter. Default: 10", type="integer", default=10)
     parser$add_argument("--resolution",    help="Clustering resolution. Can be set as array. Default: 0.4 0.6 0.8 1.0 1.4", type="double", default=c(0.4, 0.6, 0.8, 1.0, 1.4), nargs="*")
