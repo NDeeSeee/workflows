@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 options(warn=-1)
 options("width"=200)
-options(future.globals.maxSize = 4000 * 1024^2)  # 4GB should be good by default
+options(future.globals.maxSize = 8000 * 1024^2)  # 8GB should be good by default
 
 suppressMessages(library(dplyr))
 suppressMessages(library(purrr))
