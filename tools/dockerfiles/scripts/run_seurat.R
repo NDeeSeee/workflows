@@ -11,6 +11,7 @@ suppressMessages(library(tibble))
 suppressMessages(library(ggplot2))
 suppressMessages(library(argparse))
 suppressMessages(library(patchwork))
+suppressMessages(library(data.table))
 suppressMessages(library(reticulate))
 suppressMessages(library(sctransform))
 
@@ -32,9 +33,7 @@ suppressMessages(library(sctransform))
 
 
 writeSparseMatrix <- function (inMat, outFname, sliceSize=1000){
-    require(data.table)
     fnames <- c()
-    setDTthreads(1)
     mat <- inMat
     geneCount <- nrow(mat)
     startIdx <- 1
@@ -48,8 +47,8 @@ writeSparseMatrix <- function (inMat, outFname, sliceSize=1000){
         if (startIdx == 1) { 
             writeHeader <- TRUE
         }
-        sliceFname <- paste0("temp", startIdx,".txt")
-        fwrite(dt, sep="\t", file=sliceFname, quote = FALSE, col.names = writeHeader)
+        sliceFname <- paste0("temp", startIdx, ".txt")
+        fwrite(dt, sep="\t", file=sliceFname, quote=FALSE, col.names=writeHeader)
         fnames <- append(fnames, sliceFname)
         startIdx <- startIdx + sliceSize
     }
@@ -173,6 +172,7 @@ coords=%s'
 set_threads <- function (threads) {
     invisible(capture.output(plan("multiprocess", workers=threads)))
     invisible(capture.output(plan()))
+    invisible(capture.output(setDTthreads(threads)))
 }
 
 
