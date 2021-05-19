@@ -424,7 +424,7 @@ get_conserved_markers <- function(cluster, seurat_data, grouping_var, resolution
     if (nrow(conserved_markers) > 0) {
         conserved_markers <- conserved_markers %>% cbind(resolution=resolution, cluster=cluster, .) 
     } else {
-        conserved_markers <- conserved_markers %>% add_column(resolution=NA, cluster=NA, .before=1)
+        conserved_markers <- conserved_markers %>% add_column(resolution=numeric(), cluster=factor(), .before=1)
     }
     return (conserved_markers)
 }
