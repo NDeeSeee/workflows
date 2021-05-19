@@ -420,7 +420,12 @@ get_conserved_markers <- function(cluster, seurat_data, grouping_var, resolution
         min.pct=min_pct,
         min.diff.pct=min_diff_pct,
         verbose=FALSE
-    ) %>% rownames_to_column(var="gene") %>% cbind(resolution=resolution, cluster=cluster, .)
+    ) %>% rownames_to_column(var="gene")
+    if (nrow(conserved_markers) > 0) {
+        conserved_markers <- conserved_markers %>% cbind(resolution=resolution, cluster=cluster, .) 
+    } else {
+        conserved_markers <- conserved_markers %>% add_column(resolution=NA, cluster=NA, .before=1)
+    }
     return (conserved_markers)
 }
 
