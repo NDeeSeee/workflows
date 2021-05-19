@@ -18,8 +18,8 @@ inputs:
     inputBinding:
       prefix: "--mex"
     doc: |
-      Path to the folder with not normalized not filtered
-      aggregated feature-barcode matrices in MEX format
+      Path to the folder with not normalized aggregated
+      feature-barcode matrices in MEX format
 
   aggregation_metadata:
     type: File

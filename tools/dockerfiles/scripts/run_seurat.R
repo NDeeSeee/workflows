@@ -1063,7 +1063,7 @@ export_data <- function(data, location, row_names=FALSE, col_names=TRUE, quote=F
 get_args <- function(){
     parser <- ArgumentParser(description='Runs Seurat for comparative scRNA-seq analysis of across experimental conditions')
     # Import data from Cellranger Aggregate results
-    parser$add_argument("--mex",           help="Path to the folder with not normalized not filtered aggregated feature-barcode matrices in MEX format", type="character", required="True")
+    parser$add_argument("--mex",           help="Path to the folder with not normalized aggregated feature-barcode matrices in MEX format", type="character", required="True")
     parser$add_argument("--identity",      help="Path to the aggregation CSV file to set the initial cell identity classes", type="character", required="True")
     parser$add_argument("--cellcycle",     help="Path to the TSV/CSV file with cell cycle data. First column - 'phase', second column 'gene_id'", type="character", required="True")
     parser$add_argument("--condition",     help="Path to the TSV/CSV file to define datasets conditions for grouping. First column - 'library_id' with values from the --identity file, second column 'condition'. Default: each dataset is assigned to its own biological condition", type="character")    
