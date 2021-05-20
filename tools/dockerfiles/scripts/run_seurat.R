@@ -418,6 +418,7 @@ get_conserved_markers <- function(cluster, seurat_data, grouping_var, resolution
         seurat_data,
         ident.1=cluster,
         grouping.var=grouping_var,
+        min.cells.group=0,                 # to catch situation when after splitting by grouping.var we got to few cells in a group
         only.pos=only_pos,
         logfc.threshold=logfc_threshold,
         min.pct=min_pct,
