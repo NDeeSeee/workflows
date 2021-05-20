@@ -390,8 +390,10 @@ get_all_conserved_markers <- function(seurat_data, args){
     all_conserved_markers <- NULL
     for (i in 1:length(args$resolution)) {
         resolution <- args$resolution[i]
+        clustering_by <- paste("integrated_snn_res", resolution, sep=".")
+        Idents(seurat_data) <- clustering_by
         conserved_markers <- map_dfr(
-            sort(unique(seurat_data@meta.data[, paste("integrated_snn_res", resolution, sep=".")])),
+            sort(unique(seurat_data@meta.data[, clustering_by])),
             get_conserved_markers,
             seurat_data,
             "condition",
@@ -404,6 +406,7 @@ get_all_conserved_markers <- function(seurat_data, args){
         } else {
             all_conserved_markers <- conserved_markers
         }
+        Idents(seurat_data) <- "new.ident"
     }
     DefaultAssay(seurat_data) <- "SCT"
     return (all_conserved_markers)
