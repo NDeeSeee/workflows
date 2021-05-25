@@ -30,7 +30,7 @@ suppressMessages(library(org.Mm.eg.db))
 
 # To use Garnett classifiers trained with Ensembl gene names
 SPECIES_DATA <- list(
-    "hg"="org.Hs.eg.db",
+    "hs"="org.Hs.eg.db",
     "mm"="org.Mm.eg.db"
 )
 
