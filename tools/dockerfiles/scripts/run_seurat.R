@@ -407,7 +407,8 @@ get_all_conserved_markers <- function(seurat_data, args){
             "condition",
             resolution,
             args$onlypos,
-            args$logfc
+            args$logfc,
+            args$minpct
         )
         if (!is.null(all_conserved_markers)) {
             all_conserved_markers <- rbind(all_conserved_markers, conserved_markers)
@@ -1157,6 +1158,7 @@ get_args <- function(){
     parser$add_argument("--ndim",          help="Number of principal components to use in clustering (1:50). Use Elbow plot to adjust this parameter. Default: 10", type="integer", default=10)
     parser$add_argument("--resolution",    help="Clustering resolution. Can be set as array. Default: 0.4 0.6 0.8 1.0 1.4", type="double", default=c(0.4, 0.6, 0.8, 1.0, 1.4), nargs="*")
     parser$add_argument("--logfc",         help="Log fold change threshold for conserved gene markers identification. Default: 0.25", type="double", default=0.25)
+    parser$add_argument("--minpct",        help="Minimum fraction of cells where genes used for conserved gene markers identification should be detected in either of two tested clusters. Default: 0.1", type="double", default=0.1)
     parser$add_argument("--onlypos",       help="Return only positive markers when running conserved gene markers identification. Default: false", action="store_true")
     parser$add_argument("--species",       help="Select species for gene name conversion when running cell type prediction", type="character", choices=names(SPECIES_DATA), required="True")
     # Export results
