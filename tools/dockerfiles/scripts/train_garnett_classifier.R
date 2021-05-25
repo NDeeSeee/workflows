@@ -5,17 +5,8 @@ options("width"=200)
 suppressMessages(library(dplyr))
 suppressMessages(library(Seurat))
 suppressMessages(library(garnett))
-suppressMessages(library(tidyverse))
 suppressMessages(library(argparse))
-suppressMessages(library(org.Mm.eg.db))
-suppressMessages(library(org.Hs.eg.db))
-
-
-# To use Garnett classifiers trained with Ensembl gene names
-SPECIES_DATA <- list(
-    "Human"="org.Hs.eg.db",
-    "Mouse"="org.Mm.eg.db"
-)
+suppressMessages(library(tidyverse))
 
 
 export_formatted_cell_markers_data <- function(data, location){
@@ -124,7 +115,7 @@ get_args <- function(){
     parser <- ArgumentParser(description="Trains Garnett classifier")
     parser$add_argument("--raw",     help="Path to the raw file from http://biocc.hrbmu.edu.cn/CellMarker/download.jsp", type="character", required="True")
     parser$add_argument("--rds",     help="Path to the Seurat rds file", type="character", required="True")
-    parser$add_argument("--species", help="Select species from --raw for training", type="character", choices=names(SPECIES_DATA), required="True")
+    parser$add_argument("--species", help="Select species from --raw for training", type="character", choices=c("Human", "Mouse"), required="True")
     parser$add_argument("--output",  help="Output prefix. Default: ./garnett", type="character", default="./garnett")
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
     return (args)
@@ -150,9 +141,7 @@ print("Checking markers")
 marker_check <- check_markers(
     monocle_data,
     formatted_cell_markers_location,
-    db=get(as.character(SPECIES_DATA[args$species])),
-    cds_gene_id_type="SYMBOL",
-    marker_file_gene_id_type="SYMBOL"
+    db="none"
 )
 
 export_markers_plot(marker_check, paste(args$output, tolower(args$species), "formatted_markers", sep="_"))
@@ -160,9 +149,7 @@ export_markers_plot(marker_check, paste(args$output, tolower(args$species), "for
 classifier <- train_cell_classifier(
     cds=monocle_data,
     marker_file=formatted_cell_markers_location,
-    db=get(as.character(SPECIES_DATA[args$species])),
-    cds_gene_id_type="SYMBOL",
-    marker_file_gene_id_type="SYMBOL"
+    db="none"
 )
 
 export_rds(classifier,  paste(args$output, tolower(args$species), "classifier.rds", sep="_"))
