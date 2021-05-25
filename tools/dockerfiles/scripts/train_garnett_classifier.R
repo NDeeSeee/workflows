@@ -19,6 +19,7 @@ SPECIES_DATA <- list(
 
 
 export_formatted_cell_markers_data <- function(data, location){
+    file.create(location)
     for(i in 1:nrow(data)) {
         row <- data[i,]
         cat(paste0(">", row[1], "\n"), file=location, append=TRUE)
