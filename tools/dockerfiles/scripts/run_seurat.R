@@ -9,11 +9,14 @@ suppressMessages(library(Seurat))
 suppressMessages(library(future))
 suppressMessages(library(tibble))
 suppressMessages(library(ggplot2))
+suppressMessages(library(garnett))
 suppressMessages(library(argparse))
 suppressMessages(library(patchwork))
 suppressMessages(library(data.table))
 suppressMessages(library(reticulate))
 suppressMessages(library(sctransform))
+suppressMessages(library(org.Hs.eg.db))
+suppressMessages(library(org.Mm.eg.db))
 
 
 ####################################################################################
@@ -25,6 +28,11 @@ suppressMessages(library(sctransform))
 #    https://github.com/satijalab/seurat-wrappers
 ####################################################################################
 
+# To use Garnett classifiers trained with Ensembl gene names
+SPECIES_DATA <- list(
+    "hg"="org.Hs.eg.db",
+    "mm"="org.Mm.eg.db"
+)
 
 ###############################################################################################################
 # Modified code from
@@ -431,6 +439,54 @@ get_conserved_markers <- function(cluster, seurat_data, grouping_var, resolution
         conserved_markers <- conserved_markers %>% add_column(resolution=numeric(), cluster=factor(), .before=1)
     }
     return (conserved_markers)
+}
+
+
+assign_cell_types <- function (seurat_data, classifier, args){
+    for (i in 1:length(args$resolution)) {
+        resolution <- args$resolution[i]
+        monocle_data <- get_monocle_data(
+            seurat_data,
+            features=VariableFeatures(seurat_data, assay="integrated"),
+            cluster_field=paste("integrated_snn_res", resolution, sep=".")
+        )
+        monocle_data <- classify_cells(
+            monocle_data,
+            classifier,
+            db=get(as.character(SPECIES_DATA[args$species])),
+            cluster_extend=TRUE,
+            cds_gene_id_type="SYMBOL"
+        )
+        seurat_data@meta.data[paste("cluster_ext_type_res", resolution, sep=".")] <- monocle_data$cluster_ext_type
+    }
+    return (seurat_data)
+}
+
+
+get_monocle_data <- function (seurat_data, features, cluster_field, assay="RNA", matrix_slot="data") {
+    backup_assay <- DefaultAssay(seurat_data)
+    DefaultAssay(seurat_data) <- assay
+    gene_metadata <- data.frame(
+        "gene_short_name"=features,
+        row.names=features,
+        check.names=FALSE,
+        stringsAsFactors=FALSE
+    )
+    cell_metadata <- data.frame(
+        seurat_data@meta.data,
+        row.names=colnames(seurat_data),
+        check.names=FALSE,
+        stringsAsFactors=FALSE
+    )
+    cell_metadata["garnett_cluster"] <- cell_metadata[cluster_field]
+    expression_matrix <- GetAssayData(seurat_data, slot=matrix_slot)[features, ]
+    monocle_data <- new_cell_data_set(
+        expression_matrix,
+        cell_metadata=cell_metadata,
+        gene_metadata=gene_metadata
+    )
+    DefaultAssay(seurat_data) <- backup_assay
+    return (monocle_data)
 }
 
 
@@ -853,6 +909,14 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
         export_dim_plot(
             data=seurat_data,
             reduction="umap",
+            group_by=paste("cluster_ext_type_res", current_resolution, sep="."),
+            label=TRUE,
+            rootname=paste(args$output, suffix, "umap_ctype_pred_plot_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+        export_dim_plot(
+            data=seurat_data,
+            reduction="umap",
             split_by="Phase",
             group_by=paste("integrated_snn_res", current_resolution, sep="."),
             label=TRUE,
@@ -1017,11 +1081,13 @@ export_cellbrowser_data <- function(seurat_data, assay, matrix_slot, resolution,
                 cluster.field="Identity",
                 meta.fields=c(
                     c("new.ident", "condition", "nCount_RNA", "nFeature_RNA", "log10_gene_per_log10_umi", "mito_percentage", "Phase", "S.Score", "G2M.Score"),
-                    paste("integrated_snn_res", resolution, sep=".")
+                    paste("integrated_snn_res", resolution, sep="."),
+                    paste("cluster_ext_type_res", resolution, sep=".")
                 ),
                 meta.fields.names=c(
                     c("Identity", "Condition", "UMIs/cell", "Genes/cell", "Novelty score", "Mitochondrial %", "Cell Cycle Phase", "S phase score", "G2M phase score"),
-                    paste("Clustering (", resolution, ")", sep="")
+                    paste("Clustering (", resolution, ")", sep=""),
+                    paste("Cell Type Prediction (", resolution, ")", sep="")
                 )
             )
             print(paste("Export UCSC Cellbrowser data to", rootname, sep=" "))
@@ -1075,7 +1141,8 @@ get_args <- function(){
     parser$add_argument("--mex",           help="Path to the folder with not normalized aggregated feature-barcode matrices in MEX format", type="character", required="True")
     parser$add_argument("--identity",      help="Path to the aggregation CSV file to set the initial cell identity classes", type="character", required="True")
     parser$add_argument("--cellcycle",     help="Path to the TSV/CSV file with cell cycle data. First column - 'phase', second column 'gene_id'", type="character", required="True")
-    parser$add_argument("--condition",     help="Path to the TSV/CSV file to define datasets conditions for grouping. First column - 'library_id' with values from the --identity file, second column 'condition'. Default: each dataset is assigned to its own biological condition", type="character")    
+    parser$add_argument("--condition",     help="Path to the TSV/CSV file to define datasets conditions for grouping. First column - 'library_id' with values from the --identity file, second column 'condition'. Default: each dataset is assigned to its own biological condition", type="character")
+    parser$add_argument("--classifier",    help="Path to the Garnett classifier rds file for cell type prediction", type="character", required="True")
     # Apply QC filters
     parser$add_argument("--mincells",      help="Include features detected in at least this many cells (applied to thoughout all datasets together). Default: 10", type="integer", default=10)
     parser$add_argument("--minfeatures",   help="Include cells where at least this many features are detected. Default: 250", type="integer", default=250)
@@ -1083,7 +1150,7 @@ get_args <- function(){
     parser$add_argument("--minnovelty",    help="Include cells with the novelty score not lower that this value (calculated as log10(genes)/log10(UMIs)). Default: 0.8", type="double", default=0.8)
     parser$add_argument("--maxmt",         help="Include cells with the mitochondrial contamination percentage not bigger that this value. Default: 5", type="double", default=5)
     parser$add_argument("--mitopattern",   help="Regex pattern to identify mitochondrial reads. Default: ^Mt-", type="character", default="^Mt-")
-    # Integration, clustering, and marker genes identification parameters
+    # Integration, clustering, and cell types and marker genes identification parameters
     parser$add_argument("--regresscellcycle", help="Regress cell cycle as a confounding source of variation. Default: false", action="store_true")
     parser$add_argument("--regressmt",     help="Regress mitochondrial gene expression as a confounding source of variation. Default: false", action="store_true")
     parser$add_argument("--highvarcount",  help="Number of higly variable features to detect. Default: 3000", type="integer", default=3000)
@@ -1091,6 +1158,7 @@ get_args <- function(){
     parser$add_argument("--resolution",    help="Clustering resolution. Can be set as array. Default: 0.4 0.6 0.8 1.0 1.4", type="double", default=c(0.4, 0.6, 0.8, 1.0, 1.4), nargs="*")
     parser$add_argument("--logfc",         help="Log fold change threshold for conserved gene markers identification. Default: 0.25", type="double", default=0.25)
     parser$add_argument("--onlypos",       help="Return only positive markers when running conserved gene markers identification. Default: false", action="store_true")
+    parser$add_argument("--species",       help="Select species for gene name conversion when running cell type prediction", type="character", choices=names(SPECIES_DATA), required="True")
     # Export results
     parser$add_argument("--pdf",           help="Export plots in PDF. Default: false", action="store_true")
     parser$add_argument("--rds",           help="Save Seurat data to RDS file. Default: false", action="store_true")
@@ -1113,6 +1181,8 @@ print("Trying to load condition data")
 condition_data <- load_condition_data(args$condition, cell_identity_data)
 print(paste("Loading feature-barcode matrices from", args$mex))
 seurat_data <- load_seurat_data(args$mex, args$mincells, cell_identity_data, condition_data)
+print(paste("Loading Garnett classifier from", args$classifier))
+classifier <- readRDS(args$classifier)
 print("Adding QC metrics to not filtered seurat data")
 seurat_data <- add_qc_metrics(seurat_data, args$mitopattern)
 export_all_qc_plots(seurat_data, "raw", args)
@@ -1131,6 +1201,8 @@ export_all_dimensionality_plots(seurat_data, "filt_int", args)
 print(paste("Clustering integrated data using", args$ndim, "principal components"))
 seurat_data <- FindNeighbors(seurat_data, reduction="pca", dims=1:args$ndim)
 seurat_data <- FindClusters(seurat_data, resolution=args$resolution)
+print("Assigning cell types for all clusters and all resolutions using only highly variable genes")
+seurat_data <- assign_cell_types(seurat_data, classifier, args)
 export_all_clustering_plots(seurat_data, "filt_int_cl", args)
 export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
 print("Identifying conserved markers for all clusters and all resolutions irrespective of condition")
