@@ -345,12 +345,19 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
             vars.to.regress=vars_to_regress,
             verbose=FALSE
         )
-        splitted_seurat_data[[i]] <- CellCycleScoring(
-            splitted_seurat_data[[i]],
-            s.features=as.vector(cell_cycle_data[tolower(cell_cycle_data$phase)=="s", "gene_id"]),
-            g2m.features=as.vector(cell_cycle_data[tolower(cell_cycle_data$phase)=="g2/m", "gene_id"]),
-            assay="SCT",
-            verbose=FALSE
+        tryCatch(
+            expr = {
+                splitted_seurat_data[[i]] <- CellCycleScoring(
+                    splitted_seurat_data[[i]],
+                    s.features=as.vector(cell_cycle_data[tolower(cell_cycle_data$phase)=="s", "gene_id"]),
+                    g2m.features=as.vector(cell_cycle_data[tolower(cell_cycle_data$phase)=="g2/m", "gene_id"]),
+                    assay="SCT",
+                    verbose=FALSE
+                )
+            },
+            error = function(e){
+                print("Failed to run cell cycle scoring on SCT normalized data")
+            }
         )
         if (args$regresscellcycle){
             if (!is.null(vars_to_regress)) {
