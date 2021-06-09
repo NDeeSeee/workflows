@@ -43,7 +43,7 @@ inputs:
   exclude_chromosome:
     type: string?
     default: "chrM chrY"
-    doc: "Case-sensitive space-separated chromosome list to be excluded"    
+    doc: "Case-sensitive space-separated chromosome list to be excluded"
 
   trim_adapter_criteria:  # TODO: see what criteria we need to trigger adapter trimming
     type: string?
@@ -200,7 +200,8 @@ steps:
     - html_file                                                       # Will be renamed and returned as workflow output
 
   rename_fastqc_report_fastq_2:
-    doc: Checks if we want to trim adaprters based on FastQC report for fastq file 2
+    doc: |
+      Renames FastQC report for fastq file 2 (technical step)
     run: ../../tools/rename.cwl
     in:
       source_file: run_fastqc_fastq_2/html_file
