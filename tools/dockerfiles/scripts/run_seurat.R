@@ -1282,7 +1282,9 @@ seurat_data <- FindClusters(seurat_data, resolution=args$resolution)
 print("Assigning cell types for all clusters and all resolutions using only highly variable genes")
 seurat_data <- assign_cell_types(seurat_data, classifier, args)
 export_all_clustering_plots(seurat_data, "filt_int_cl", args)
-export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
+if (args$rds){
+    export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
+}
 print("Identifying putative gene markers for all clusters and all resolutions")
 all_putative_markers <- get_all_putative_markers(seurat_data, args)
 export_data(all_putative_markers, paste(args$output, "_putative_gene_markers.tsv", sep=""))
