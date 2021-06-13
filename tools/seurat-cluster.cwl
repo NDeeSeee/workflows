@@ -8,7 +8,7 @@ requirements:
 
 hints:
 - class: DockerRequirement
-  dockerPull: biowardrobe2/seurat:v0.0.2
+  dockerPull: biowardrobe2/seurat:v0.0.3
 
 
 inputs:
@@ -54,6 +54,15 @@ inputs:
       prefix: "--classifier"
     doc: |
       Path to the Garnett classifier rds file for cell type prediction
+
+  barcodes_data:
+    type: File?
+    inputBinding:
+      prefix: "--barcodes"
+    doc: |
+      Path to the headerless TSV/CSV file with selected barcodes
+      (one per line) to prefilter input feature-barcode matrices.
+      Default: use all cells
 
   species:
     type:
@@ -188,6 +197,26 @@ inputs:
       Return only positive markers when running conserved gene markers
       identification.
       Default: false
+
+  test_use:
+    type:
+    - "null"
+    - type: enum
+      symbols:
+      - "wilcox"
+      - "bimod"
+      - "roc"
+      - "t"
+      - "negbinom"
+      - "poisson"
+      - "LR"
+      - "MAST"
+      - "DESeq2"
+    inputBinding:
+      prefix: "--testuse"
+    doc: |
+      Set test type to use for putative and conserved gene marker identification.
+      Default: wilcox
 
   export_pdf_plots:
     type: boolean?
@@ -677,6 +706,14 @@ outputs:
     doc: |
       Conserved gene markers file for all clusters and all resolutions
       irrespective of condition in TSV format
+
+  putative_gene_markers:
+    type: File
+    outputBinding:
+      glob: "*_putative_gene_markers.tsv"
+    doc: |
+      Putative gene markers file for all clusters and all resolutions
+      in TSV format
 
   cellbrowser_config_data:
     type: Directory

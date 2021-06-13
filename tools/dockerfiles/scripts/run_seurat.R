@@ -7,6 +7,7 @@ suppressMessages(library(dplyr))
 suppressMessages(library(purrr))
 suppressMessages(library(Seurat))
 suppressMessages(library(future))
+suppressMessages(library(DESeq2))
 suppressMessages(library(tibble))
 suppressMessages(library(ggplot2))
 suppressMessages(library(garnett))
@@ -246,6 +247,24 @@ load_condition_data <- function(location, cell_identity_data) {
 }
 
 
+load_barcodes_data <- function(location, seurat_data) {
+    default_barcodes_data <- Cells(seurat_data)                               # to include all available cells
+    if (!is.null(location)){
+        barcodes_data <- read.table(
+            location,
+            sep=get_file_type(location),
+            header=FALSE,
+            check.names=FALSE,
+            stringsAsFactors=FALSE
+        )[,1]                                                                 # to get it as vector
+        print(paste("Barcodes data is successfully loaded from ", location))
+        return (barcodes_data)
+    }
+    print("Barcodes data is not provided. Using all cells")
+    return (default_barcodes_data)
+}
+
+
 load_seurat_data <- function(location, mincells, cell_identity_data, condition_data) {
     seurat_data <- CreateSeuratObject(
         counts=Read10X(data.dir=location),
@@ -260,6 +279,12 @@ load_seurat_data <- function(location, mincells, cell_identity_data, condition_d
 }
 
 
+apply_cell_filters <- function(seurat_data, barcodes_data) {
+    filtered_seurat_data <- subset(seurat_data, cells=barcodes_data)
+    return (filtered_seurat_data)
+}
+
+
 add_qc_metrics <- function(seurat_data, mitopattern) {
     # Number of genes detected per UMI: this metric with give us an idea of the
     # complexity of our dataset (more genes detected per UMI, more complex our data)
@@ -271,7 +296,7 @@ add_qc_metrics <- function(seurat_data, mitopattern) {
 }
 
 
-apply_filters <- function(seurat_data, minfeatures, minumi, minnovelty, maxmt) {
+apply_qc_filters <- function(seurat_data, minfeatures, minumi, minnovelty, maxmt) {
     filtered_seurat_data <- subset(
         seurat_data,
         subset = (nFeature_RNA >= minfeatures) & 
@@ -392,6 +417,7 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
         integration_anchors, 
         new.assay.name="integrated",
         normalization.method="SCT",
+        k.weight=min(min(table(Idents(seurat_data))), 100),  # 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
         verbose=FALSE
     )
     DefaultAssay(integrated_seurat_data) <- "integrated"
@@ -400,7 +426,41 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
 }
 
 
-get_all_conserved_markers <- function(seurat_data, args){
+get_all_putative_markers <- function(seurat_data, args, assay="RNA", min_diff_pct=-Inf){
+    backup_assay <- DefaultAssay(seurat_data)
+    DefaultAssay(seurat_data) <- assay
+    all_putative_markers <- NULL
+    for (i in 1:length(args$resolution)) {
+        resolution <- args$resolution[i]
+        Idents(seurat_data) <- paste("integrated_snn_res", resolution, sep=".")
+        markers <- FindAllMarkers(
+            seurat_data,
+            logfc.threshold=args$logfc,
+            min.pct=args$minpct,
+            only.pos=args$onlypos,
+            test.use=args$testuse,
+            min.diff.pct=min_diff_pct,
+            verbose=FALSE
+        ) %>% relocate(cluster, gene, .before=1)
+        if (nrow(markers) > 0) {
+            markers <- markers %>% cbind(resolution=resolution, .)
+        } else {
+            markers <- markers %>% add_column(resolution=numeric(), .before=1)  # safety measure in case markers was empty
+        }
+        if (!is.null(all_putative_markers)) {
+            all_putative_markers <- rbind(all_putative_markers, markers)
+        } else {
+            all_putative_markers <- markers
+        }
+        Idents(seurat_data) <- "new.ident"
+    }
+    DefaultAssay(seurat_data) <- backup_assay
+    return (all_putative_markers)
+}
+
+
+get_all_conserved_markers <- function(seurat_data, args, assay="RNA", min_diff_pct=-Inf){
+    backup_assay <- DefaultAssay(seurat_data)
     DefaultAssay(seurat_data) <- "RNA"
     all_conserved_markers <- NULL
     for (i in 1:length(args$resolution)) {
@@ -415,7 +475,9 @@ get_all_conserved_markers <- function(seurat_data, args){
             resolution,
             args$onlypos,
             args$logfc,
-            args$minpct
+            args$minpct,
+            args$testuse,
+            min_diff_pct
         )
         if (!is.null(all_conserved_markers)) {
             all_conserved_markers <- rbind(all_conserved_markers, conserved_markers)
@@ -424,12 +486,12 @@ get_all_conserved_markers <- function(seurat_data, args){
         }
         Idents(seurat_data) <- "new.ident"
     }
-    DefaultAssay(seurat_data) <- "SCT"
+    DefaultAssay(seurat_data) <- backup_assay
     return (all_conserved_markers)
 }
 
 
-get_conserved_markers <- function(cluster, seurat_data, grouping_var, resolution, only_pos=FALSE, logfc_threshold=0.25, min_pct=0.1, min_diff_pct=-Inf){
+get_conserved_markers <- function(cluster, seurat_data, grouping_var, resolution, only_pos=FALSE, logfc_threshold=0.25, min_pct=0.1, test_use="wilcox", min_diff_pct=-Inf){
     conserved_markers <- FindConservedMarkers(
         seurat_data,
         ident.1=cluster,
@@ -438,6 +500,7 @@ get_conserved_markers <- function(cluster, seurat_data, grouping_var, resolution
         only.pos=only_pos,
         logfc.threshold=logfc_threshold,
         min.pct=min_pct,
+        test.use=test_use,
         min.diff.pct=min_diff_pct,
         verbose=FALSE
     ) %>% rownames_to_column(var="gene")
@@ -1151,6 +1214,7 @@ get_args <- function(){
     parser$add_argument("--cellcycle",     help="Path to the TSV/CSV file with cell cycle data. First column - 'phase', second column 'gene_id'", type="character", required="True")
     parser$add_argument("--condition",     help="Path to the TSV/CSV file to define datasets conditions for grouping. First column - 'library_id' with values from the --identity file, second column 'condition'. Default: each dataset is assigned to its own biological condition", type="character")
     parser$add_argument("--classifier",    help="Path to the Garnett classifier rds file for cell type prediction", type="character", required="True")
+    parser$add_argument("--barcodes",      help="Path to the headerless TSV/CSV file with selected barcodes (one per line) to prefilter input feature-barcode matrices. Default: use all cells", type="character")
     # Apply QC filters
     parser$add_argument("--mincells",      help="Include features detected in at least this many cells (applied to thoughout all datasets together). Default: 10", type="integer", default=10)
     parser$add_argument("--minfeatures",   help="Include cells where at least this many features are detected. Default: 250", type="integer", default=250)
@@ -1167,6 +1231,7 @@ get_args <- function(){
     parser$add_argument("--logfc",         help="Log fold change threshold for conserved gene markers identification. Default: 0.25", type="double", default=0.25)
     parser$add_argument("--minpct",        help="Minimum fraction of cells where genes used for conserved gene markers identification should be detected in either of two tested clusters. Default: 0.1", type="double", default=0.1)
     parser$add_argument("--onlypos",       help="Return only positive markers when running conserved gene markers identification. Default: false", action="store_true")
+    parser$add_argument("--testuse",       help="Set test type to use for putative and conserved gene marker identification. Default: wilcox", type="character", default="wilcox", choices=c("wilcox", "bimod", "roc", "t", "negbinom", "poisson", "LR", "MAST", "DESeq2"))
     parser$add_argument("--species",       help="Select species for gene name conversion when running cell type prediction", type="character", choices=names(SPECIES_DATA), required="True")
     # Export results
     parser$add_argument("--pdf",           help="Export plots in PDF. Default: false", action="store_true")
@@ -1190,13 +1255,17 @@ print("Trying to load condition data")
 condition_data <- load_condition_data(args$condition, cell_identity_data)
 print(paste("Loading feature-barcode matrices from", args$mex))
 seurat_data <- load_seurat_data(args$mex, args$mincells, cell_identity_data, condition_data)
+print("Trying to load barcodes of interest to prefilter feature-barcode matrices by cells")
+barcodes_data <- load_barcodes_data(args$barcodes, seurat_data)
+print("Prefiltering feature-barcode matrices by cells of interest")
+seurat_data <- apply_cell_filters(seurat_data, barcodes_data)
 print(paste("Loading Garnett classifier from", args$classifier))
 classifier <- readRDS(args$classifier)
 print("Adding QC metrics to not filtered seurat data")
 seurat_data <- add_qc_metrics(seurat_data, args$mitopattern)
 export_all_qc_plots(seurat_data, "raw", args)
 print("Applying QC filters to all datasets at once")
-seurat_data <- apply_filters(seurat_data, args$minfeatures, args$minumi, args$minnovelty, args$maxmt)
+seurat_data <- apply_qc_filters(seurat_data, args$minfeatures, args$minumi, args$minnovelty, args$maxmt)
 export_all_qc_plots(seurat_data, "filt", args)
 print("Evaluating effects of cell cycle and mitochodrial gene expression")
 explore_unwanted_variation(seurat_data, cell_cycle_data, args)
@@ -1214,6 +1283,9 @@ print("Assigning cell types for all clusters and all resolutions using only high
 seurat_data <- assign_cell_types(seurat_data, classifier, args)
 export_all_clustering_plots(seurat_data, "filt_int_cl", args)
 export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
+print("Identifying putative gene markers for all clusters and all resolutions")
+all_putative_markers <- get_all_putative_markers(seurat_data, args)
+export_data(all_putative_markers, paste(args$output, "_putative_gene_markers.tsv", sep=""))
 print("Identifying conserved markers for all clusters and all resolutions irrespective of condition")
 all_conserved_markers <- get_all_conserved_markers(seurat_data, args)
 export_data(all_conserved_markers, paste(args$output, "_conserved_gene_markers.tsv", sep=""))
