@@ -55,15 +55,6 @@ inputs:
     doc: |
       Path to the Garnett classifier rds file for cell type prediction
 
-  barcodes_data:
-    type: File?
-    inputBinding:
-      prefix: "--barcodes"
-    doc: |
-      Path to the headerless TSV/CSV file with selected barcodes
-      (one per line) to prefilter input feature-barcode matrices.
-      Default: use all cells
-
   species:
     type:
       type: enum
@@ -75,6 +66,15 @@ inputs:
     doc: |
       Select species for gene name conversion when running cell
       type prediction. Either "hs" or "mm"
+
+  barcodes_data:
+    type: File?
+    inputBinding:
+      prefix: "--barcodes"
+    doc: |
+      Path to the headerless TSV/CSV file with selected barcodes
+      (one per line) to prefilter input feature-barcode matrices.
+      Default: use all cells
 
   minimum_cells:
     type: int?
