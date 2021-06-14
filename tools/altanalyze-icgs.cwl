@@ -160,17 +160,17 @@ outputs:
     outputBinding:
       glob: "altanalyze/userdata/ICGS-NMF/FinalMarkerHeatmap.png"
 
-  # stdout_log:
-  #   type: stdout
+  stdout_log:
+    type: stdout
 
-  # stderr_log:
-  #   type: stderr
+  stderr_log:
+    type: stderr
 
 
 baseCommand: ["bash", "-c"]
 
-# stdout: altanalyze_icgs_stdout.log
-# stderr: altanalyze_icgs_stderr.log
+stdout: altanalyze_icgs_stdout.log
+stderr: altanalyze_icgs_stderr.log
 
 
 $namespaces:
