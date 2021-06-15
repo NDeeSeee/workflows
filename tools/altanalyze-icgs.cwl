@@ -122,6 +122,13 @@ inputs:
       prefix: "--k"
       position: 13
 
+  resolution:
+    type: int?
+    default: 0.4
+    inputBinding:
+      prefix: "--rho"
+      position: 14
+
 
 outputs:
 
