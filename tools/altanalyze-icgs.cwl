@@ -123,7 +123,7 @@ inputs:
       position: 13
 
   resolution:
-    type: int?
+    type: float?
     default: 0.4
     inputBinding:
       prefix: "--rho"
