@@ -9,6 +9,7 @@ suppressMessages(library(Seurat))
 suppressMessages(library(future))
 suppressMessages(library(DESeq2))
 suppressMessages(library(tibble))
+suppressMessages(library(scales))
 suppressMessages(library(ggplot2))
 suppressMessages(library(garnett))
 suppressMessages(library(argparse))
@@ -335,22 +336,34 @@ explore_unwanted_variation <- function(seurat_data, cell_cycle_data, args) {
     export_dim_plot(
         data=temp_seurat_data,
         reduction="pca",
+        plot_title="Split by cell cycle phase PCA of filtered unintegrated datasets",
+        legend_title="Cell cycle phase",
         split_by="Phase",
         group_by="Phase",
-        rootname=paste(args$output, "_filt_unint_cell_cycle_eff_pca_plot", sep="")
+        rootname=paste(args$output, "_fltr_pca_spl_by_ph", sep=""),
+        palette="Paired",
+        pdf=args$pdf
     )
     export_dim_plot(
         data=temp_seurat_data,
         reduction="pca",
+        plot_title="Split by level of mitochondrial gene expression PCA of filtered unintegrated datasets",
+        legend_title="Expression level",
         split_by="mito_factor",
         group_by="mito_factor",
-        rootname=paste(args$output, "_filt_unint_mito_perc_eff_pca_plot", sep="")
+        rootname=paste(args$output, "_fltr_pca_spl_by_mito_perc", sep=""),
+        palette="Paired",
+        pdf=args$pdf
     )
     export_dim_plot(
         data=temp_seurat_data,
         reduction="umap",
+        plot_title="Split by identity UMAP projected PCA of filtered unintegrated datasets",
+        legend_title="Identity",
         split_by="new.ident",
-        rootname=paste(args$output, "_filt_unint_umap_plot_spl_by_ident", sep="")
+        rootname=paste(args$output, "_fltr_umap_spl_by_idnt", sep=""),
+        palette="Paired",
+        pdf=args$pdf
     )
 }
 
@@ -381,7 +394,7 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
                 )
             },
             error = function(e){
-                print("Failed to run cell cycle scoring on SCT normalized data")
+                print(paste("Failed to run cell cycle scoring on SCT normalized data for", Idents(splitted_seurat_data[[i]])[1]))
             }
         )
         if (args$regresscellcycle){
@@ -561,187 +574,163 @@ get_monocle_data <- function (seurat_data, features, cluster_field, assay="RNA",
 }
 
 
-export_geom_bar_plot <- function(data, rootname, x_axis, color_by, x_label, y_label, legend_title, plot_title, pdf=FALSE, width=800, height=800, resolution=72){
+export_geom_bar_plot <- function(data, rootname, x_axis, color_by, x_label, y_label, legend_title, plot_title, palette="Paired", pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
+            plot <- ggplot(data, aes_string(x=x_axis, fill=color_by)) +
+                geom_bar(colour="black") +
+                xlab(x_label) +
+                ylab(y_label) +
+                guides(fill=guide_legend(legend_title), x=guide_axis(angle=45)) +
+                ggtitle(plot_title) +
+                scale_fill_brewer(palette=palette)
+
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
-            suppressMessages(
-                print(
-                    ggplot(data, aes_string(x=x_axis, fill=color_by)) +
-                    geom_bar() +
-                    xlab(x_label) +
-                    ylab(y_label) +
-                    guides(fill=guide_legend(legend_title)) +
-                    ggtitle(plot_title)
-                )
-            )
+            suppressMessages(print(plot))
             dev.off()
+
             if (pdf) {
                 pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
-                suppressMessages(
-                    print(
-                        ggplot(data, aes_string(x=x_axis, fill=color_by)) +
-                        geom_bar() +
-                        xlab(x_label) +
-                        ylab(y_label) +
-                        guides(fill=guide_legend(legend_title)) +
-                        ggtitle(plot_title)
-                    )
-                )
+                suppressMessages(print(plot))
                 dev.off()
             }
-            print(paste("Export bar plot to ", rootname, ".(png/pdf)", sep=""))
+
+            print(paste("Export geom bar plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
-            dev.off()
-            print(paste("Failed to export bar plot to ", rootname, ".(png/pdf)", sep=""))
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export geom bar plot to ", rootname, ".(png/pdf)", sep=""))
         }
     )
 }
 
 
-export_log10_geom_density_plot <- function(data, rootname, x_axis, color_by, x_intercept, x_label, y_label, legend_title, plot_title, alpha=0.2, pdf=FALSE, width=800, height=800, resolution=72){
+export_geom_density_plot <- function(data, rootname, x_axis, color_by, x_intercept, x_label, y_label, legend_title, plot_title, scale_x_log10=FALSE, scale_y_log10=FALSE, facet_by=NULL, alpha=0.9, palette="Paired", pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
-            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
-            suppressMessages(
-                print(
-                    ggplot(data, aes_string(x=x_axis, fill=color_by)) +
+            plot <- ggplot(data, aes_string(x=x_axis, fill=color_by)) +
                     geom_density(alpha=alpha) +
-                    scale_x_log10() +
                     xlab(x_label) +
                     ylab(y_label) +
                     guides(fill=guide_legend(legend_title)) +
                     geom_vline(xintercept=x_intercept, color="red") +
-                    ggtitle(plot_title)
-                )
-            )
+                    ggtitle(plot_title) +
+                    scale_fill_brewer(palette=palette)
+
+            if (scale_x_log10){ plot <- plot + scale_x_log10() }
+            if (scale_y_log10){ plot <- plot + scale_y_log10() }
+            if (!is.null(facet_by)){ plot <- plot + facet_wrap(as.formula(paste("~", facet_by))) }
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(plot))
             dev.off()
+
             if (pdf) {
                 pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
-                suppressMessages(
-                    print(
-                        ggplot(data, aes_string(x=x_axis, fill=color_by)) +
-                        geom_density(alpha=alpha) +
-                        scale_x_log10() +
-                        xlab(x_label) +
-                        ylab(y_label) +
-                        guides(fill=guide_legend(legend_title)) +
-                        geom_vline(xintercept=x_intercept, color="red") +
-                        ggtitle(plot_title)
-                    )
-                )
+                suppressMessages(print(plot))
                 dev.off()
             }
-            print(paste("Export log10 density plot to ", rootname, ".(png/pdf)", sep=""))
+
+            print(paste("Export geom density plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
-            dev.off()
-            print(paste("Failed to export log10 density plot to ", rootname, ".(png/pdf)", sep=""))
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export geom density plot to ", rootname, ".(png/pdf)", sep=""))
         }
     )
 }
 
 
-export_log10_geom_point_plot <- function(data, rootname, x_axis, y_axis, color_by, facet_by, x_intercept, y_intercept, x_label, y_label, legend_title, plot_title, alpha=0.2, pdf=FALSE, width=800, height=800, resolution=72){
+export_geom_point_plot <- function(data, rootname, x_axis, y_axis, x_intercept, y_intercept, color_by, colors, color_limits, color_break, x_label, y_label, legend_title, plot_title, scale_x_log10=FALSE, scale_y_log10=FALSE, facet_by=NULL, alpha=0.2, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
-            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
-            suppressMessages(
-                print(
-                    ggplot(data, aes_string(x=x_axis, y=y_axis, color=color_by)) +
+            plot <- ggplot(data, aes_string(x=x_axis, y=y_axis, color=color_by)) +
                     geom_point(alpha=alpha) +
-                    scale_colour_gradient(low="gray90", high="black") +
+                    scale_colour_gradientn(
+                        colours=c(colors[1], colors),
+                        values=rescale(c(color_limits[1], color_break-0.01*color_break, color_break, color_limits[2])),
+                        breaks=c(color_break),
+                        limits=color_limits
+                    ) +
                     stat_smooth(method=lm) +
-                    scale_x_log10() + 
-                    scale_y_log10() + 
                     geom_vline(xintercept=x_intercept, color="red") +
                     geom_hline(yintercept=y_intercept, color="red") +
-                    facet_wrap(as.formula(paste("~", facet_by))) +
                     xlab(x_label) +
                     ylab(y_label) +
-                    guides(color=guide_legend(legend_title)) +
+                    guides(color=guide_colourbar(legend_title)) +
                     ggtitle(plot_title)
-                )
-            )
+
+            if (scale_x_log10){ plot <- plot + scale_x_log10() }
+            if (scale_y_log10){ plot <- plot + scale_y_log10() }
+            if (!is.null(facet_by)){ plot <- plot + facet_wrap(as.formula(paste("~", facet_by))) }
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(plot))
             dev.off()
+
             if (pdf) {
                 pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
-                suppressMessages(
-                    print(
-                        ggplot(data, aes_string(x=x_axis, y=y_axis, color=color_by)) +
-                        geom_point(alpha=alpha) +
-                        scale_colour_gradient(low="gray90", high="black") +
-                        stat_smooth(method=lm) +
-                        scale_x_log10() + 
-                        scale_y_log10() + 
-                        geom_vline(xintercept=x_intercept, color="red") +
-                        geom_hline(yintercept=y_intercept, color="red") +
-                        facet_wrap(as.formula(paste("~", facet_by))) +
-                        xlab(x_label) +
-                        ylab(y_label) +
-                        guides(color=guide_legend(legend_title)) +
-                        ggtitle(plot_title)
-                    )
-                )
+                suppressMessages(print(plot))
                 dev.off()
             }
-            print(paste("Export log10 point plot to ", rootname, ".(png/pdf)", sep=""))
+
+            print(paste("Export geom point plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
-            dev.off()
-            print(paste("Failed to export log10 point plot to ", rootname, ".(png/pdf)", sep=""))
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export geom point plot to ", rootname, ".(png/pdf)", sep=""))
         }
     )
 }
 
 
-export_vln_plot <- function(data, features, rootname, group_by=NULL, pt_size=NULL, pdf=FALSE, width=800, height=800, resolution=72){
+export_vln_plot <- function(data, features, labels, rootname, plot_title, legend_title, group_by=NULL, pt_size=NULL, palette="Paired", combine_guides=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
+            plots <- VlnPlot(
+                         data,
+                         features=features,
+                         pt.size=pt_size,
+                         group.by=group_by,
+                         combine=FALSE       # to return a list of gglots
+                     )
+            plots <- lapply(seq_along(plots), function(i){
+                plots[[i]] +
+                ggtitle(labels[i]) +
+                theme_gray() +
+                theme(
+                    axis.title.x=element_blank(),
+                    axis.text.x=element_blank()
+                ) +
+                guides(fill=guide_legend(legend_title)) +
+                scale_fill_brewer(palette=palette)
+            })
+            combined_plots <- wrap_plots(plots, guides=combine_guides) + plot_annotation(title=plot_title)
+
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
-            suppressMessages(
-                print(
-                    VlnPlot(
-                        data,
-                        features=features,
-                        pt.size = pt_size,
-                        group.by=group_by
-                    )
-                )
-            )
+            suppressMessages(print(combined_plots))
             dev.off()
+
             if (pdf) {
                 pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
-                suppressMessages(
-                    print(
-                        VlnPlot(
-                            data,
-                            features=features,
-                            pt.size = pt_size,
-                            group.by=group_by
-                        )
-                    )
-                )
+                suppressMessages(print(combined_plots))
                 dev.off()
             }
+
             print(paste("Export violin plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
-            dev.off()
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
             print(paste("Failed to export violin plot to ", rootname, ".(png/pdf)", sep=""))
         }
     )
 }
 
 
-export_feature_plot <- function(data, features, rootname, reduction, split_by=NULL, label=FALSE, order=FALSE, min_cutoff=NA, max_cutoff=NA, pt_size=NULL, pdf=FALSE, width=800, height=800, resolution=72){
+export_feature_plot <- function(data, features, labels, rootname, reduction, plot_title, split_by=NULL, label=FALSE, order=FALSE, min_cutoff=NA, max_cutoff=NA, pt_size=NULL, combine_guides=NULL, alpha=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
-            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
-            suppressMessages(
-                print(
-                    FeaturePlot(
+            plots <- FeaturePlot(
                         data,
                         features=features,
                         pt.size=pt_size,
@@ -750,41 +739,37 @@ export_feature_plot <- function(data, features, rootname, reduction, split_by=NU
                         max.cutoff=max_cutoff,
                         reduction=reduction,
                         split.by=split_by,
-                        label=label
+                        label=label,
+                        combine=FALSE       # to return a list of gglots
                     )
-                )
-            )
+            plots <- lapply(seq_along(plots), function(i){
+                plots[[i]] -> plots[[i]] + ggtitle(labels[i]) + theme_gray()
+                if (!is.null(alpha)) { plots[[i]]$layers[[1]]$aes_params$alpha <- alpha }
+                return (plots[[i]])
+            })
+            combined_plots <- wrap_plots(plots, guides=combine_guides) + plot_annotation(title=plot_title)
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(combined_plots))
             dev.off()
+
             if (pdf) {
                 pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
-                suppressMessages(
-                    print(
-                        FeaturePlot(
-                            data,
-                            features=features,
-                            pt.size=pt_size,
-                            order=order,
-                            min.cutoff=min_cutoff,
-                            max.cutoff=max_cutoff,
-                            reduction=reduction,
-                            split.by=split_by,
-                            label=label
-                        )
-                    )
-                )
+                suppressMessages(print(combined_plots))
                 dev.off()
             }
+
             print(paste("Export feature plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
-            dev.off()
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
             print(paste("Failed to export feature plot to ", rootname, ".(png/pdf)", sep=""))
         }
     )
 }
 
 
-export_variable_feature_plot <- function(data, rootname, pdf=FALSE, width=800, height=800, resolution=72){
+export_variable_feature_plot <- function(data, rootname, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
@@ -798,168 +783,157 @@ export_variable_feature_plot <- function(data, rootname, pdf=FALSE, width=800, h
             print(paste("Export variable feature plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
-            dev.off()
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
             print(paste("Failed to export variable feature plot to ", rootname, ".(png/pdf)", sep=""))
         }
     )
 }
 
 
-export_dim_plot <- function(data, rootname, reduction, split_by=NULL, group_by=NULL, label=FALSE, pdf=FALSE, width=800, height=800, resolution=72){
+export_dim_plot <- function(data, rootname, reduction, plot_title, legend_title, split_by=NULL, group_by=NULL, label=FALSE, palette=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
-            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
-            suppressMessages(
-                print(
-                    DimPlot(
+            plot <- DimPlot(
                         data,
                         reduction=reduction,
                         split.by=split_by,
                         group.by=group_by,
                         label=label
-                    )
-                )
-            )
+                    ) +
+                    theme_gray() +
+                    ggtitle(plot_title) +
+                    guides(color=guide_legend(legend_title, override.aes=list(size=3)))
+
+            if (!is.null(palette)){ plot <- plot + scale_color_brewer(palette=palette) }
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(plot))
             dev.off()
+
             if (pdf) {
                 pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
-                suppressMessages(
-                    print(
-                        DimPlot(
-                            data,
-                            reduction=reduction,
-                            split.by=split_by,
-                            group.by=group_by,
-                            label=label
-                        )
-                    )
-                )
+                suppressMessages(print(plot))
                 dev.off()
             }
-            print(paste("Export Dim plot to ", rootname, ".(png/pdf)", sep=""))
+
+            print(paste("Export dim plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
-            dev.off()
-            print(paste("Failed to export Dim plot to ", rootname, ".(png/pdf)", sep=""))
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export dim plot to ", rootname, ".(png/pdf)", sep=""))
         }
     )
 }
 
 
-export_pca_heatmap <- function(data, rootname, dims=NULL, nfeatures=30, cells=500, pdf=FALSE, width=800, height=800, resolution=72){
+export_pca_heatmap <- function(data, rootname, plot_title, x_label, y_label, dims=NULL, cells=500, nfeatures=30, ncol=NULL, combine_guides=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
-            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
-            suppressMessages(
-                print(
-                    DimHeatmap(
+            plots <- DimHeatmap(
                         data,
                         dims=dims,
                         nfeatures=nfeatures,
                         reduction="pca",
                         cells=cells,
-                        balanced=TRUE
+                        balanced=TRUE,
+                        fast=FALSE,
+                        combine=FALSE
                     )
-                )
-            )
+            plots <- lapply(seq_along(plots), function(i){
+                plots[[i]] +
+                ggtitle(paste("PC", i, sep=" ")) +
+                theme_gray() +
+                xlab(x_label) +
+                ylab(y_label) +
+                theme(axis.text.x=element_blank(), axis.ticks = element_blank())
+            })
+            combined_plots <- wrap_plots(plots, guides=combine_guides, ncol=ncol) + plot_annotation(title=plot_title)
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(combined_plots))
             dev.off()
+
             if (pdf) {
                 pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
-                suppressMessages(
-                    print(
-                        DimHeatmap(
-                            data,
-                            dims=dims,
-                            nfeatures=nfeatures,
-                            reduction="pca",
-                            cells=cells,
-                            balanced=TRUE
-                        )
-                    )
-                )
+                suppressMessages(print(combined_plots))
                 dev.off()
             }
+
             print(paste("Export PCA heatmap to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
-            dev.off()
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
             print(paste("Failed to export PCA heatmap to ", rootname, ".(png/pdf)", sep=""))
         }
     )
 }
 
 
-export_pca_loadings_plot <- function(data, rootname, dims=NULL, nfeatures=30, pdf=FALSE, width=800, height=800, resolution=72){
+export_pca_loadings_plot <- function(data, rootname, plot_title, x_label, y_label, dims=NULL, nfeatures=30, ncol=NULL, combine_guides=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
-            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
-            suppressMessages(
-                print(
-                    VizDimLoadings(
+            plots <- VizDimLoadings(
                         data,
                         dims=dims,
                         nfeatures=nfeatures,
-                        reduction="pca"
+                        reduction="pca",
+                        combine=FALSE
                     )
-                )
-            )
+            plots <- lapply(seq_along(plots), function(i){
+                plots[[i]] +
+                ggtitle(paste("PC", i, sep=" ")) +
+                theme_gray() +
+                xlab(x_label) +
+                ylab(y_label)
+            })
+            combined_plots <- wrap_plots(plots, guides=combine_guides, ncol=ncol) + plot_annotation(title=plot_title)
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(combined_plots))
             dev.off()
+
             if (pdf) {
                 pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
-                suppressMessages(
-                    print(
-                        VizDimLoadings(
-                            data,
-                            dims=dims,
-                            nfeatures=nfeatures,
-                            reduction="pca"
-                        )
-                    )
-                )
+                suppressMessages(print(combined_plots))
                 dev.off()
             }
+
             print(paste("Export PCA loadings plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
-            dev.off()
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
             print(paste("Failed to export PCA loadings plot to ", rootname, ".(png/pdf)", sep=""))
         }
     )
 }
 
 
-export_elbow_plot <- function(data, rootname, ndims=NULL, pdf=FALSE, width=800, height=800, resolution=72){
+export_elbow_plot <- function(data, rootname, plot_title, ndims=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
-            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
-            suppressMessages(
-                print(
-                    ElbowPlot(
+            plot <- ElbowPlot(
                         data,
                         ndims=ndims,
                         reduction="pca"
-                    )
-                )
-            )
+                    ) +
+                    theme_gray() +
+                    ggtitle(plot_title)
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(plot))
             dev.off()
+
             if (pdf) {
                 pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
-                suppressMessages(
-                    print(
-                        ElbowPlot(
-                            data,
-                            ndims=ndims,
-                            reduction="pca"
-                        )
-                    )
-                )
+                suppressMessages(print(plot))
                 dev.off()
             }
-            print(paste("Export Elbow plot to ", rootname, ".(png/pdf)", sep=""))
+
+            print(paste("Export elbow plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
-            dev.off()
-            print(paste("Failed to export Elbow plot to ", rootname, ".(png/pdf)", sep=""))
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export elbow plot to ", rootname, ".(png/pdf)", sep=""))
         }
     )
 }
@@ -971,38 +945,56 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
         export_dim_plot(
             data=seurat_data,
             reduction="umap",
+            plot_title="Clustered UMAP projected PCA of filtered integrated datasets",
+            legend_title="Cluster",
+            group_by=paste("integrated_snn_res", current_resolution, sep="."),
+            label=TRUE,
+            rootname=paste(args$output, suffix, "umap_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+        export_dim_plot(
+            data=seurat_data,
+            reduction="umap",
+            plot_title="Split by condition clustered UMAP projected PCA of filtered integrated datasets",
+            legend_title="Cluster",
             split_by="condition",
             group_by=paste("integrated_snn_res", current_resolution, sep="."),
             label=TRUE,
-            rootname=paste(args$output, suffix, "umap_plot_spl_by_cond_res", current_resolution, sep="_"),
+            rootname=paste(args$output, suffix, "umap_spl_by_cond_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
         export_dim_plot(
             data=seurat_data,
             reduction="umap",
+            plot_title="Grouped by predicted cell types UMAP projected PCA of filtered integrated datasets",
+            legend_title="Cell type prediction",
             group_by=paste("cluster_ext_type_res", current_resolution, sep="."),
             label=TRUE,
-            rootname=paste(args$output, suffix, "umap_ctype_pred_plot_res", current_resolution, sep="_"),
+            rootname=paste(args$output, suffix, "umap_ctype_pred_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
         export_dim_plot(
             data=seurat_data,
             reduction="umap",
+            plot_title="Split by cell cycle phase clustered UMAP projected PCA of filtered integrated datasets",
+            legend_title="Cluster",
             split_by="Phase",
             group_by=paste("integrated_snn_res", current_resolution, sep="."),
             label=TRUE,
-            rootname=paste(args$output, suffix, "umap_plot_spl_by_ph_res", current_resolution, sep="_"),
+            rootname=paste(args$output, suffix, "umap_spl_by_ph_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
         Idents(seurat_data) <- paste("integrated_snn_res", current_resolution, sep=".")
         export_feature_plot(
             data=seurat_data,
             features=c("nCount_RNA", "nFeature_RNA", "S.Score", "G2M.Score", "mito_percentage", "log10_gene_per_log10_umi"),
+            labels=c("UMIs", "Genes", "S score", "G to M score", "Mitochondrial %", "Novelty score"),
             reduction="umap",
+            plot_title="QC metrics for clustered UMAP projected PCA of filtered integrated datasets",
             label=TRUE,
-            order=TRUE,
-            min_cutoff="q10",
-            rootname=paste(args$output, suffix, "umap_qc_metrics_plot_res", current_resolution, sep="_"),
+            alpha=0.4,
+            rootname=paste(args$output, suffix, "qc_mtrcs_res", current_resolution, sep="_"),
+            combine_guides="keep",
             pdf=args$pdf
         )
         Idents(seurat_data) <- "new.ident"
@@ -1014,34 +1006,54 @@ export_all_dimensionality_plots <- function(seurat_data, suffix, args) {
     export_elbow_plot(
         data=seurat_data,
         ndims=50,
-        rootname=paste(args$output, suffix, "elbow_plot", sep="_"),
+        rootname=paste(args$output, suffix, "elbow", sep="_"),
+        plot_title="Elbow plot from PCA of filtered integrated datasets",
         pdf=args$pdf
     )
     export_dim_plot(
         data=seurat_data,
         reduction="pca",
-        rootname=paste(args$output, suffix, "pca_plot", sep="_"),
+        plot_title="PCA of filtered integrated datasets",
+        legend_title="Identity",
+        rootname=paste(args$output, suffix, "pca", sep="_"),
+        palette="Paired",
         pdf=args$pdf
     )
     export_pca_heatmap(
         data=seurat_data,
         dims=1:50,
         rootname=paste(args$output, suffix, "pca_heatmap", sep="_"),
-        height=4200,
+        plot_title="Genes per cells expression heatmap sorted by their PC scores from PCA of filtered integrated datasets",
+        x_label="Cells",
+        y_label="Genes",
+        cells=500,
+        nfeatures=30,
+        ncol=3,
+        height=6500,
+        combine_guides="collect",
         pdf=args$pdf
     )
     export_pca_loadings_plot(
         data=seurat_data,
         dims=1:50,
-        rootname=paste(args$output, suffix, "pca_loadings_plot", sep="_"),
-        height=4200,
+        rootname=paste(args$output, suffix, "pca_loadings", sep="_"),
+        plot_title="PC scores of the most variant genes from PCA of filtered integrated datasets",
+        x_label="PC scores",
+        y_label="Genes",
+        nfeatures=30,
+        ncol=3,
+        height=6500,
+        combine_guides="collect",
         pdf=args$pdf
     )
     export_dim_plot(
         data=seurat_data,
         reduction="umap",
+        plot_title="Split by identity UMAP projected PCA of filtered integrated datasets",
+        legend_title="Identity",
         split_by="new.ident",
-        rootname=paste(args$output, suffix, "umap_plot_spl_by_ident", sep="_"),
+        rootname=paste(args$output, suffix, "umap_spl_by_idnt", sep="_"),
+        palette="Paired",
         pdf=args$pdf
     )
 }
@@ -1050,7 +1062,7 @@ export_all_dimensionality_plots <- function(seurat_data, suffix, args) {
 export_all_qc_plots <- function(seurat_data, suffix, args){
     export_geom_bar_plot(
         data=seurat_data@meta.data,
-        rootname=paste(args$output, suffix, "cell_count_plot", sep="_"),
+        rootname=paste(args$output, suffix, "cell_count", sep="_"),
         x_axis="new.ident",
         color_by="new.ident",
         x_label="Identity",
@@ -1059,82 +1071,101 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         plot_title=paste("Number of cells per dataset (", suffix, ")", sep=""),
         pdf=args$pdf
     )
-    export_log10_geom_density_plot(
+    export_geom_density_plot(
         data=seurat_data@meta.data,
-        rootname=paste(args$output, suffix, "umi_log10_density_plot", sep="_"),
+        rootname=paste(args$output, suffix, "umi_dnst_spl_by_cond", sep="_"),
         x_axis="nCount_RNA",
         color_by="new.ident",
         x_intercept=args$minumi,
-        x_label="UMI's per cell",
-        y_label="Density (log10)",
+        x_label="UMIs per cell",
+        y_label="Density",
         legend_title="Identity",
-        plot_title=paste("UMI density per cell (", suffix, ")", sep=""),
+        plot_title=paste("Split by condition UMI density per cell (", suffix, ")", sep=""),
+        scale_x_log10=TRUE,
+        facet_by="condition",
         pdf=args$pdf
     )
-    export_log10_geom_density_plot(
+    export_geom_density_plot(
         data=seurat_data@meta.data,
-        rootname=paste(args$output, suffix, "gene_log10_density_plot", sep="_"),
+        rootname=paste(args$output, suffix, "gene_dnst_spl_by_cond", sep="_"),
         x_axis="nFeature_RNA",
         color_by="new.ident",
         x_intercept=args$minfeatures,
         x_label="Genes per cell",
-        y_label="Density (log10)",
+        y_label="Density",
         legend_title="Identity",
-        plot_title=paste("Gene density per cell (", suffix, ")", sep=""),
+        plot_title=paste("Split by condition gene density per cell (", suffix, ")", sep=""),
+        scale_x_log10=TRUE,
+        facet_by="condition",
         pdf=args$pdf
     )
-    export_log10_geom_point_plot(
+    export_geom_point_plot(
         data=seurat_data@meta.data,
-        rootname=paste(args$output, suffix, "gene_umi_log10_correlation_plot", sep="_"),
+        rootname=paste(args$output, suffix, "gene_umi_corr_spl_by_ident", sep="_"),
         x_axis="nCount_RNA",
         y_axis="nFeature_RNA",
-        color_by="mito_percentage",
-        facet_by="new.ident",
         x_intercept=args$minumi,
         y_intercept=args$minfeatures,
-        x_label="UMI's (log10)",
-        y_label="Genes (log10)",
+        color_by="mito_percentage",
+        colors=c("lightslateblue", "red", "yellow"),
+        color_limits=c(0, 100),
+        color_break=args$maxmt,
+        x_label="UMIs per cell",
+        y_label="Genes per cell",
         legend_title="Mitochondrial %",
-        plot_title=paste("Gene vs UMI correlation (", suffix, ")", sep=""),
+        plot_title=paste("Split by identity genes vs UMIs per cell correlation (", suffix, ")", sep=""),
+        scale_x_log10=TRUE,
+        scale_y_log10=TRUE,
+        facet_by="new.ident",
         pdf=args$pdf
     )
-    export_log10_geom_density_plot(
+    export_geom_density_plot(
         data=seurat_data@meta.data,
-        rootname=paste(args$output, suffix, "mito_perc_log10_density_plot", sep="_"),
+        rootname=paste(args$output, suffix, "mito_perc_dnst_spl_by_cond", sep="_"),
         x_axis="mito_percentage",
         color_by="new.ident",
         x_intercept=args$maxmt,
         x_label="Mitochondrial gene percentage per cell",
-        y_label="Density (log10)",
+        y_label="Density",
         legend_title="Identity",
-        plot_title=paste("Mitochondrial gene percentage density per cell (", suffix, ")", sep=""),
+        plot_title=paste("Split by condition mitochondrial gene percentage density per cell (", suffix, ")", sep=""),
+        facet_by="condition",
         pdf=args$pdf
     )
-    export_log10_geom_density_plot(
+    export_geom_density_plot(
         data=seurat_data@meta.data,
-        rootname=paste(args$output, suffix, "novelty_score_log10_density_plot", sep="_"),
+        rootname=paste(args$output, suffix, "nvlt_score_dnst_spl_by_cond", sep="_"),
         x_axis="log10_gene_per_log10_umi",
         color_by="new.ident",
         x_intercept=args$minnovelty,
-        x_label="log10 Gene / log10 UMI per cell",
-        y_label="Density (log10)",
+        x_label="log10 Genes / log10 UMIs per cell",
+        y_label="Density",
         legend_title="Identity",
-        plot_title=paste("Novelty score (log10Gene/log10UMI) density per cell (", suffix, ")", sep=""),
+        plot_title=paste("Split by condition novelty score density per cell (", suffix, ")", sep=""),
+        facet_by="condition",
         pdf=args$pdf
     )
     export_vln_plot(
         data=seurat_data,
         features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi"),
-        rootname=paste(args$output, suffix, "qc_metrics_vln_plot", sep="_"),
+        labels=c("UMIs", "Genes", "Mitochondrial %", "Novelty score"),
+        rootname=paste(args$output, suffix, "qc_mtrcs", sep="_"),
+        plot_title=paste("QC metrics densities per cell (", suffix, ")", sep=""),
+        legend_title="Identity",
         pt_size=0,
+        combine_guides="collect",
         pdf=args$pdf
     )
     export_vln_plot(
         data=seurat_data,
         features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi"),
-        rootname=paste(args$output, suffix, "qc_metrics_vln_plot_gr_by_cond", sep="_"),
+        labels=c("UMIs", "Genes", "Mitochondrial %", "Novelty score"),
+        rootname=paste(args$output, suffix, "qc_mtrcs_gr_by_cond", sep="_"),
+        plot_title=paste("Grouped by condition QC metrics densities per cell (", suffix, ")", sep=""),
+        legend_title="Condition",
         group_by="condition",
         pt_size=0,
+        combine_guides="collect",
         pdf=args$pdf
     )
 }
@@ -1156,7 +1187,7 @@ export_cellbrowser_data <- function(seurat_data, assay, matrix_slot, resolution,
                     paste("cluster_ext_type_res", resolution, sep=".")
                 ),
                 meta.fields.names=c(
-                    c("Identity", "Condition", "UMIs/cell", "Genes/cell", "Novelty score", "Mitochondrial %", "Cell Cycle Phase", "S phase score", "G2M phase score"),
+                    c("Identity", "Condition", "UMIs", "Genes", "Novelty score", "Mitochondrial %", "Cell cycle phase", "S score", "G to M score"),
                     paste("Clustering (", resolution, ")", sep=""),
                     paste("Cell Type Prediction (", resolution, ")", sep="")
                 )
@@ -1245,8 +1276,15 @@ get_args <- function(){
 
 
 args <- get_args()
+
+cat("Step 0: Runtime configuration\n")
+print("Used parameters")
+print(args)
 print(paste("Setting parallelizations threads to", args$threads))
 set_threads(args$threads)
+
+cat("\n\nStep 1: Loading raw datasets\n")
+
 print(paste("Loading cell identity data from Cellranger aggregation metadata file", args$identity))
 cell_identity_data <- load_cell_identity_data (args$identity)
 print(paste("Loading cell cycle data from", args$cellcycle))
@@ -1261,35 +1299,56 @@ print("Prefiltering feature-barcode matrices by cells of interest")
 seurat_data <- apply_cell_filters(seurat_data, barcodes_data)
 print(paste("Loading Garnett classifier from", args$classifier))
 classifier <- readRDS(args$classifier)
+
+cat("\n\nStep 2: Filtering raw datasets\n")
+
 print("Adding QC metrics to not filtered seurat data")
 seurat_data <- add_qc_metrics(seurat_data, args$mitopattern)
-export_all_qc_plots(seurat_data, "raw", args)
+export_all_qc_plots(seurat_data, "raw", args)                                                                  # <--- raw
 print("Applying QC filters to all datasets at once")
 seurat_data <- apply_qc_filters(seurat_data, args$minfeatures, args$minumi, args$minnovelty, args$maxmt)
-export_all_qc_plots(seurat_data, "filt", args)
+export_all_qc_plots(seurat_data, "fltr", args)                                                                 # <--- fltr
 print("Evaluating effects of cell cycle and mitochodrial gene expression")
 explore_unwanted_variation(seurat_data, cell_cycle_data, args)
+
+cat("\n\nStep 3: Integrating filtered datasets\n")
+
 print("Running dataset integration")
 seurat_data <- integrate_seurat_data(seurat_data, cell_cycle_data, args)
+
+cat("\n\nStep 4: Reducing dimensionality of intergrated datasets\n")
+
 print("Performing PCA reduction of integrated data. Use all 50 principal components")
 seurat_data <- RunPCA(seurat_data, npcs=50, verbose=FALSE)
 print(paste("Performing UMAP reduction of integrated data using", args$ndim, "principal components"))
 seurat_data <- RunUMAP(seurat_data, reduction="pca", dims=1:args$ndim, verbose=FALSE)
-export_all_dimensionality_plots(seurat_data, "filt_int", args)
+export_all_dimensionality_plots(seurat_data, "ntgr", args)                                                     # <--- ntgr
+
+cat("\n\nStep 5: Clustering and cell type assignment of intergrated datasets with reduced dimensionality\n")
+
 print(paste("Clustering integrated data using", args$ndim, "principal components"))
-seurat_data <- FindNeighbors(seurat_data, reduction="pca", dims=1:args$ndim)
+seurat_data <- FindNeighbors(seurat_data, reduction="pca", dims=1:args$ndim, verbose=FALSE)
 seurat_data <- FindClusters(seurat_data, resolution=args$resolution)
 print("Assigning cell types for all clusters and all resolutions using only highly variable genes")
 seurat_data <- assign_cell_types(seurat_data, classifier, args)
-export_all_clustering_plots(seurat_data, "filt_int_cl", args)
-if (args$rds){
-    export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
-}
+export_all_clustering_plots(seurat_data, "clst", args)                                                         # <--- clst
+
+cat("\n\nStep 6: Identifying gene markers\n")
+
 print("Identifying putative gene markers for all clusters and all resolutions")
 all_putative_markers <- get_all_putative_markers(seurat_data, args)
-export_data(all_putative_markers, paste(args$output, "_putative_gene_markers.tsv", sep=""))
-print("Identifying conserved markers for all clusters and all resolutions irrespective of condition")
+print("Identifying conserved gene markers for all clusters and all resolutions")
 all_conserved_markers <- get_all_conserved_markers(seurat_data, args)
-export_data(all_conserved_markers, paste(args$output, "_conserved_gene_markers.tsv", sep=""))
+
+cat("\n\nStep 7: Exporting results\n")
+
+print("Exporting putative gene markers")
+export_data(all_putative_markers, paste(args$output, "_clst_pttv_gene_markers.tsv", sep=""))
+print("Exporting conserved gene markers")
+export_data(all_conserved_markers, paste(args$output, "_clst_csrvd_gene_markers.tsv", sep=""))
 print("Exporting UCSC Cellbrowser data")
 export_cellbrowser_data(seurat_data, assay="RNA", matrix_slot="data", resolution=args$resolution, rootname=paste(args$output, "_cellbrowser", sep=""))
+if (args$rds){
+    print("Exporting Seurat object into RDS file")
+    export_rds(seurat_data, paste(args$output, "_clst_data.rds", sep=""))
+}
