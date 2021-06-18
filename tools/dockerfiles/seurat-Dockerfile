@@ -14,6 +14,7 @@
 #
 # v0.0.4
 # - Unified color theme of all produced plots. Refactored R script
+# - Updated base image to use the latest 4.0.3 Seurat
 #
 # v0.0.3
 # - added DESeq2 to be able to choose test type for gene marker
@@ -28,7 +29,7 @@
 #################################################################
 
 ### Base Image
-FROM satijalab/seurat:4.0.1
+FROM satijalab/seurat:4.0.3
 LABEL maintainer="misha.kotliar@gmail.com"
 ENV DEBIAN_FRONTEND noninteractive
 
