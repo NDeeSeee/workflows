@@ -216,6 +216,7 @@ load_cell_identity_data <- function (location) {
         check.names=FALSE,
         stringsAsFactors=FALSE
     )
+    print(cell_identity_data)
     return (cell_identity_data)
 }
 
@@ -273,6 +274,7 @@ load_seurat_data <- function(location, mincells, cell_identity_data, condition_d
         names.delim="-",  # to get cell identity index from Cellranger aggr output
         names.field=2
     )
+    print(head(seurat_data@meta.data))
     seurat_data[["new.ident"]] <- cell_identity_data$library_id[Idents(seurat_data)]
     seurat_data[["condition"]] <- condition_data$condition[match(seurat_data$new.ident, condition_data$library_id)]
     Idents(seurat_data) <- "new.ident"
@@ -579,6 +581,7 @@ export_geom_bar_plot <- function(data, rootname, x_axis, color_by, x_label, y_la
         expr = {
             plot <- ggplot(data, aes_string(x=x_axis, fill=color_by)) +
                 geom_bar(colour="black") +
+                geom_text(stat="count", aes(label=..count..), vjust=-1) +
                 xlab(x_label) +
                 ylab(y_label) +
                 guides(fill=guide_legend(legend_title), x=guide_axis(angle=45)) +
