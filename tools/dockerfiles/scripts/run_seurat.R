@@ -216,7 +216,6 @@ load_cell_identity_data <- function (location) {
         check.names=FALSE,
         stringsAsFactors=FALSE
     )
-    print(cell_identity_data)
     return (cell_identity_data)
 }
 
@@ -274,8 +273,8 @@ load_seurat_data <- function(location, mincells, cell_identity_data, condition_d
         names.delim="-",  # to get cell identity index from Cellranger aggr output
         names.field=2
     )
-    print(head(seurat_data@meta.data))
-    seurat_data[["new.ident"]] <- cell_identity_data$library_id[Idents(seurat_data)]
+    idents <- as.numeric(as.character(Idents(seurat_data)))              # need to properly convert factor to numeric vector
+    seurat_data[["new.ident"]] <- cell_identity_data$library_id[idents]
     seurat_data[["condition"]] <- condition_data$condition[match(seurat_data$new.ident, condition_data$library_id)]
     Idents(seurat_data) <- "new.ident"
     return (seurat_data)
