@@ -624,7 +624,7 @@ export_geom_density_plot <- function(data, rootname, x_axis, color_by, x_interce
             if (!is.null(facet_by)){ plot <- plot + facet_wrap(as.formula(paste("~", facet_by))) }
             if (zoom_on_intercept) {
                 zoomed_plot <- ggplot(data, aes_string(x=x_axis, color=color_by)) +
-                               geom_density(alpha=alpha, show.legend=FALSE) +
+                               geom_density(show.legend=FALSE, size=1) +
                                xlab(x_label) +
                                ylab(y_label) +
                                geom_vline(xintercept=x_intercept, color="red") +
