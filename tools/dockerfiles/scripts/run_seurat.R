@@ -703,6 +703,8 @@ export_vln_plot <- function(data, features, labels, rootname, plot_title, legend
                     axis.text.x=element_blank()
                 ) +
                 guides(fill=guide_legend(legend_title)) +
+                stat_boxplot(width=0.15, geom="errorbar") +
+                geom_boxplot(width=0.15, outlier.alpha=0) +
                 scale_fill_brewer(palette=palette)
             })
             combined_plots <- wrap_plots(plots, guides=combine_guides) + plot_annotation(title=plot_title)
