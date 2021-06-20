@@ -607,7 +607,7 @@ export_geom_bar_plot <- function(data, rootname, x_axis, color_by, x_label, y_la
 }
 
 
-export_geom_density_plot <- function(data, rootname, x_axis, color_by, x_intercept, x_label, y_label, legend_title, plot_title, scale_x_log10=FALSE, scale_y_log10=FALSE, facet_by=NULL, alpha=0.9, palette="Paired", pdf=FALSE, width=1200, height=800, resolution=100){
+export_geom_density_plot <- function(data, rootname, x_axis, color_by, x_intercept, x_label, y_label, legend_title, plot_title, scale_x_log10=FALSE, scale_y_log10=FALSE, zoom_on_intercept=FALSE, facet_by=NULL, alpha=0.9, palette="Paired", pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
             plot <- ggplot(data, aes_string(x=x_axis, fill=color_by)) +
@@ -622,6 +622,18 @@ export_geom_density_plot <- function(data, rootname, x_axis, color_by, x_interce
             if (scale_x_log10){ plot <- plot + scale_x_log10() }
             if (scale_y_log10){ plot <- plot + scale_y_log10() }
             if (!is.null(facet_by)){ plot <- plot + facet_wrap(as.formula(paste("~", facet_by))) }
+            if (zoom_on_intercept) {
+                zoomed_plot <- ggplot(data, aes_string(x=x_axis, color=color_by)) +
+                               geom_density(alpha=alpha, show.legend=FALSE) +
+                               xlab(x_label) +
+                               ylab(y_label) +
+                               geom_vline(xintercept=x_intercept, color="red") +
+                               scale_color_brewer(palette=palette) +
+                               coord_cartesian(xlim=c(NA, x_intercept))
+                if (scale_x_log10){ zoomed_plot <- zoomed_plot + scale_x_log10() }
+                if (scale_y_log10){ zoomed_plot <- zoomed_plot + scale_y_log10() }
+                plot <- plot / zoomed_plot
+            }
 
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             suppressMessages(print(plot))
@@ -1086,6 +1098,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         legend_title="Identity",
         plot_title=paste("Split by condition UMI density per cell (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
+        zoom_on_intercept=TRUE,
         facet_by="condition",
         pdf=args$pdf
     )
@@ -1100,6 +1113,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         legend_title="Identity",
         plot_title=paste("Split by condition gene density per cell (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
+        zoom_on_intercept=TRUE,
         facet_by="condition",
         pdf=args$pdf
     )
@@ -1133,6 +1147,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         y_label="Density",
         legend_title="Identity",
         plot_title=paste("Split by condition mitochondrial gene percentage density per cell (", suffix, ")", sep=""),
+        zoom_on_intercept=TRUE,
         facet_by="condition",
         pdf=args$pdf
     )
@@ -1146,6 +1161,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         y_label="Density",
         legend_title="Identity",
         plot_title=paste("Split by condition novelty score density per cell (", suffix, ")", sep=""),
+        zoom_on_intercept=TRUE,
         facet_by="condition",
         pdf=args$pdf
     )
