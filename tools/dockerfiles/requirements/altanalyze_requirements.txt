@@ -44,3 +44,4 @@ Werkzeug==1.0.1
 wheel==0.35.1
 pycairo==1.18.2
 h5py==2.10.0
+python-louvain==0.11

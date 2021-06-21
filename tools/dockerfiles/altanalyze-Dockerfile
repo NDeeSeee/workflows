@@ -2,15 +2,15 @@
 # Dockerfile
 #
 # Software:         AltAnalyze
-# Software Version: v0.0.5
+# Software Version: v0.0.6
 # Description:      An automated cross-platform workflow for
 #                   RNA-Seq gene, splicing and pathway analysis
 # Website:          http://www.altanalyze.org
 # Provides:         AltAnalyze (ef5eb90215ea0d40327d8d92380abfcde19ab98e)
 # Base Image:       python:2.7
-# Build Cmd:        docker build --rm -t biowardrobe2/altanalyze:v0.0.5 -f altanalyze-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/altanalyze:v0.0.5
-# Run Cmd:          docker run --rm -ti biowardrobe2/altanalyze:v0.0.5 /bin/bash
+# Build Cmd:        docker build --rm -t biowardrobe2/altanalyze:v0.0.6 -f altanalyze-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/altanalyze:v0.0.6
+# Run Cmd:          docker run --rm -ti biowardrobe2/altanalyze:v0.0.6 /bin/bash
 #################################################################
 
 
@@ -20,10 +20,10 @@ ENV DEBIAN_FRONTEND noninteractive
 
 WORKDIR /tmp
 
-ENV ALTA_VERSION "ef5eb90215ea0d40327d8d92380abfcde19ab98e"
+ENV ALTA_VERSION "77957cd1a59ace5d8a144ce517c8013b4081640e"
 ENV ALTA_URL "https://github.com/nsalomonis/altanalyze.git"
 
-ENV BIOC_VERSION 1.30.10
+ENV BIOC_VERSION 1.30.16
 ENV BIOC_URL "https://cran.r-project.org/src/contrib/BiocManager_${BIOC_VERSION}.tar.gz"
 
 COPY ./requirements/altanalyze_requirements.txt altanalyze_requirements.txt
