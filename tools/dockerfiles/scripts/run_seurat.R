@@ -608,7 +608,7 @@ export_geom_bar_plot <- function(data, rootname, x_axis, color_by, x_label, y_la
 }
 
 
-export_geom_density_plot <- function(data, rootname, x_axis, color_by, x_left_intercept, x_label, y_label, legend_title, plot_title, x_right_intercept=NULL,  scale_x_log10=FALSE, scale_y_log10=FALSE, zoom_on_intercept=FALSE, facet_by=NULL, alpha=0.9, palette="Paired", pdf=FALSE, width=1200, height=800, resolution=100){
+export_geom_density_plot <- function(data, rootname, x_axis, color_by, x_left_intercept, x_label, y_label, legend_title, plot_title, x_right_intercept=NULL,  scale_x_log10=FALSE, scale_y_log10=FALSE, zoom_on_intercept=FALSE, facet_by=NULL, alpha=0.9, show_ranked=FALSE, ranked_x_label="Ranked cells", palette="Paired", pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
             plot <- ggplot(data, aes_string(x=x_axis, fill=color_by)) +
@@ -642,7 +642,19 @@ export_geom_density_plot <- function(data, rootname, x_axis, color_by, x_left_in
                 if (scale_y_log10){ zoomed_plot <- zoomed_plot + scale_y_log10() }
                 plot <- plot / zoomed_plot
             }
-
+            if (show_ranked) {
+                ranked_plot <- data %>%
+                               arrange(get(color_by), get(x_axis)) %>%
+                               ggplot(aes_string(x=seq_along(data[[x_axis]]), y=x_axis, color=color_by)) +
+                               geom_point(show.legend=FALSE, size=0.5) +
+                               xlab(ranked_x_label) +
+                               ylab(x_label) +
+                               scale_y_log10() +
+                               geom_hline(yintercept=x_left_intercept, color="red") +
+                               scale_color_brewer(palette=palette)
+                ranked_plot <- ranked_plot + scale_y_log10()
+                plot <- plot / ranked_plot
+            }
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             suppressMessages(print(plot))
             dev.off()
@@ -1125,6 +1137,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         plot_title=paste("Split by condition gene density per cell (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
         zoom_on_intercept=TRUE,
+        show_ranked=TRUE,
         facet_by="condition",
         pdf=args$pdf
     )
