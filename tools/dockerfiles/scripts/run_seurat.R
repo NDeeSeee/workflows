@@ -298,13 +298,14 @@ add_qc_metrics <- function(seurat_data, mitopattern) {
 }
 
 
-apply_qc_filters <- function(seurat_data, minfeatures, minumi, minnovelty, maxmt) {
+apply_qc_filters <- function(seurat_data, args) {
     filtered_seurat_data <- subset(
         seurat_data,
-        subset = (nFeature_RNA >= minfeatures) & 
-                 (nCount_RNA >= minumi) &
-                 (log10_gene_per_log10_umi >= minnovelty) &
-                 (mito_percentage <= maxmt)
+        subset = (nFeature_RNA >= args$minfeatures) &
+                 (nFeature_RNA <= args$maxfeatures) &
+                 (nCount_RNA >= args$minumi) &
+                 (log10_gene_per_log10_umi >= args$minnovelty) &
+                 (mito_percentage <= args$maxmt)
     )
     return (filtered_seurat_data)
 }
@@ -607,7 +608,7 @@ export_geom_bar_plot <- function(data, rootname, x_axis, color_by, x_label, y_la
 }
 
 
-export_geom_density_plot <- function(data, rootname, x_axis, color_by, x_intercept, x_label, y_label, legend_title, plot_title, scale_x_log10=FALSE, scale_y_log10=FALSE, zoom_on_intercept=FALSE, facet_by=NULL, alpha=0.9, palette="Paired", pdf=FALSE, width=1200, height=800, resolution=100){
+export_geom_density_plot <- function(data, rootname, x_axis, color_by, x_left_intercept, x_label, y_label, legend_title, plot_title, x_right_intercept=NULL,  scale_x_log10=FALSE, scale_y_log10=FALSE, zoom_on_intercept=FALSE, facet_by=NULL, alpha=0.9, palette="Paired", pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
             plot <- ggplot(data, aes_string(x=x_axis, fill=color_by)) +
@@ -615,10 +616,11 @@ export_geom_density_plot <- function(data, rootname, x_axis, color_by, x_interce
                     xlab(x_label) +
                     ylab(y_label) +
                     guides(fill=guide_legend(legend_title)) +
-                    geom_vline(xintercept=x_intercept, color="red") +
+                    geom_vline(xintercept=x_left_intercept, color="red") +
                     ggtitle(plot_title) +
                     scale_fill_brewer(palette=palette)
 
+            if (!is.null(x_right_intercept)){ plot <- plot + geom_vline(xintercept=x_right_intercept, color="green") }
             if (scale_x_log10){ plot <- plot + scale_x_log10() }
             if (scale_y_log10){ plot <- plot + scale_y_log10() }
             if (!is.null(facet_by)){ plot <- plot + facet_wrap(as.formula(paste("~", facet_by))) }
@@ -627,9 +629,15 @@ export_geom_density_plot <- function(data, rootname, x_axis, color_by, x_interce
                                geom_density(show.legend=FALSE, size=1) +
                                xlab(x_label) +
                                ylab(y_label) +
-                               geom_vline(xintercept=x_intercept, color="red") +
-                               scale_color_brewer(palette=palette) +
-                               coord_cartesian(xlim=c(NA, x_intercept))
+                               geom_vline(xintercept=x_left_intercept, color="red") +
+                               scale_color_brewer(palette=palette)
+                if (!is.null(x_right_intercept)) {
+                    zoomed_plot <- zoomed_plot +
+                                   geom_vline(xintercept=x_right_intercept, color="green") +
+                                   coord_cartesian(xlim=c(x_left_intercept, x_right_intercept))
+                } else {
+                    zoomed_plot <- zoomed_plot + coord_cartesian(xlim=c(NA, x_left_intercept))
+                }
                 if (scale_x_log10){ zoomed_plot <- zoomed_plot + scale_x_log10() }
                 if (scale_y_log10){ zoomed_plot <- zoomed_plot + scale_y_log10() }
                 plot <- plot / zoomed_plot
@@ -655,7 +663,7 @@ export_geom_density_plot <- function(data, rootname, x_axis, color_by, x_interce
 }
 
 
-export_geom_point_plot <- function(data, rootname, x_axis, y_axis, x_intercept, y_intercept, color_by, colors, color_limits, color_break, x_label, y_label, legend_title, plot_title, scale_x_log10=FALSE, scale_y_log10=FALSE, facet_by=NULL, alpha=0.2, pdf=FALSE, width=1200, height=800, resolution=100){
+export_geom_point_plot <- function(data, rootname, x_axis, y_axis, x_left_intercept, y_low_intercept, color_by, colors, color_limits, color_break, x_label, y_label, legend_title, plot_title, y_high_intercept=NULL, scale_x_log10=FALSE, scale_y_log10=FALSE, facet_by=NULL, alpha=0.2, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
             plot <- ggplot(data, aes_string(x=x_axis, y=y_axis, color=color_by)) +
@@ -667,13 +675,14 @@ export_geom_point_plot <- function(data, rootname, x_axis, y_axis, x_intercept, 
                         limits=color_limits
                     ) +
                     stat_smooth(method=lm) +
-                    geom_vline(xintercept=x_intercept, color="red") +
-                    geom_hline(yintercept=y_intercept, color="red") +
+                    geom_vline(xintercept=x_left_intercept, color="red") +
+                    geom_hline(yintercept=y_low_intercept, color="red") +
                     xlab(x_label) +
                     ylab(y_label) +
                     guides(color=guide_colourbar(legend_title)) +
                     ggtitle(plot_title)
 
+            if (!is.null(y_high_intercept)){ plot <- plot + geom_hline(yintercept=y_high_intercept, color="green") }
             if (scale_x_log10){ plot <- plot + scale_x_log10() }
             if (scale_y_log10){ plot <- plot + scale_y_log10() }
             if (!is.null(facet_by)){ plot <- plot + facet_wrap(as.formula(paste("~", facet_by))) }
@@ -698,7 +707,7 @@ export_geom_point_plot <- function(data, rootname, x_axis, y_axis, x_intercept, 
 }
 
 
-export_vln_plot <- function(data, features, labels, rootname, plot_title, legend_title, group_by=NULL, pt_size=NULL, palette="Paired", combine_guides=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
+export_vln_plot <- function(data, features, labels, rootname, plot_title, legend_title, log=FALSE, group_by=NULL, pt_size=NULL, palette="Paired", combine_guides=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
             plots <- VlnPlot(
@@ -706,6 +715,7 @@ export_vln_plot <- function(data, features, labels, rootname, plot_title, legend
                          features=features,
                          pt.size=pt_size,
                          group.by=group_by,
+                         log=log,
                          combine=FALSE       # to return a list of gglots
                      )
             plots <- lapply(seq_along(plots), function(i){
@@ -1092,7 +1102,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         rootname=paste(args$output, suffix, "umi_dnst_spl_by_cond", sep="_"),
         x_axis="nCount_RNA",
         color_by="new.ident",
-        x_intercept=args$minumi,
+        x_left_intercept=args$minumi,
         x_label="UMIs per cell",
         y_label="Density",
         legend_title="Identity",
@@ -1107,7 +1117,8 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         rootname=paste(args$output, suffix, "gene_dnst_spl_by_cond", sep="_"),
         x_axis="nFeature_RNA",
         color_by="new.ident",
-        x_intercept=args$minfeatures,
+        x_left_intercept=args$minfeatures,
+        x_right_intercept=args$maxfeatures,
         x_label="Genes per cell",
         y_label="Density",
         legend_title="Identity",
@@ -1122,10 +1133,11 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         rootname=paste(args$output, suffix, "gene_umi_corr_spl_by_ident", sep="_"),
         x_axis="nCount_RNA",
         y_axis="nFeature_RNA",
-        x_intercept=args$minumi,
-        y_intercept=args$minfeatures,
+        x_left_intercept=args$minumi,
+        y_low_intercept=args$minfeatures,
+        y_high_intercept=args$maxfeatures,
         color_by="mito_percentage",
-        colors=c("lightslateblue", "red", "yellow"),
+        colors=c("lightslateblue", "red", "green"),
         color_limits=c(0, 100),
         color_break=args$maxmt,
         x_label="UMIs per cell",
@@ -1142,7 +1154,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         rootname=paste(args$output, suffix, "mito_perc_dnst_spl_by_cond", sep="_"),
         x_axis="mito_percentage",
         color_by="new.ident",
-        x_intercept=args$maxmt,
+        x_left_intercept=args$maxmt,
         x_label="Mitochondrial gene percentage per cell",
         y_label="Density",
         legend_title="Identity",
@@ -1156,7 +1168,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         rootname=paste(args$output, suffix, "nvlt_score_dnst_spl_by_cond", sep="_"),
         x_axis="log10_gene_per_log10_umi",
         color_by="new.ident",
-        x_intercept=args$minnovelty,
+        x_left_intercept=args$minnovelty,
         x_label="log10 Genes / log10 UMIs per cell",
         y_label="Density",
         legend_title="Identity",
@@ -1269,9 +1281,10 @@ get_args <- function(){
     # Apply QC filters
     parser$add_argument("--mincells",      help="Include features detected in at least this many cells (applied to thoughout all datasets together). Default: 10", type="integer", default=10)
     parser$add_argument("--minfeatures",   help="Include cells where at least this many features are detected. Default: 250", type="integer", default=250)
+    parser$add_argument("--maxfeatures",   help="Include cells with the number of features not bigger than this value. Default: 5000", type="integer", default=5000)
     parser$add_argument("--minumi",        help="Include cells where at least this many UMI are detected. Default: 500", type="integer", default=500)
-    parser$add_argument("--minnovelty",    help="Include cells with the novelty score not lower that this value (calculated as log10(genes)/log10(UMIs)). Default: 0.8", type="double", default=0.8)
-    parser$add_argument("--maxmt",         help="Include cells with the mitochondrial contamination percentage not bigger that this value. Default: 5", type="double", default=5)
+    parser$add_argument("--minnovelty",    help="Include cells with the novelty score not lower than this value (calculated as log10(genes)/log10(UMIs)). Default: 0.8", type="double", default=0.8)
+    parser$add_argument("--maxmt",         help="Include cells with the mitochondrial contamination percentage not bigger than this value. Default: 5", type="double", default=5)
     parser$add_argument("--mitopattern",   help="Regex pattern to identify mitochondrial reads. Default: ^Mt-", type="character", default="^Mt-")
     # Integration, clustering, and cell types and marker genes identification parameters
     parser$add_argument("--regresscellcycle", help="Regress cell cycle as a confounding source of variation. Default: false", action="store_true")
@@ -1326,7 +1339,7 @@ print("Adding QC metrics to not filtered seurat data")
 seurat_data <- add_qc_metrics(seurat_data, args$mitopattern)
 export_all_qc_plots(seurat_data, "raw", args)                                                                  # <--- raw
 print("Applying QC filters to all datasets at once")
-seurat_data <- apply_qc_filters(seurat_data, args$minfeatures, args$minumi, args$minnovelty, args$maxmt)
+seurat_data <- apply_qc_filters(seurat_data, args)
 export_all_qc_plots(seurat_data, "fltr", args)                                                                 # <--- fltr
 print("Evaluating effects of cell cycle and mitochodrial gene expression")
 explore_unwanted_variation(seurat_data, cell_cycle_data, args)
