@@ -652,7 +652,7 @@ export_geom_density_plot <- function(data, rootname, x_axis, color_by, x_left_in
                                scale_y_log10() +
                                geom_hline(yintercept=x_left_intercept, color="red") +
                                scale_color_brewer(palette=palette)
-                ranked_plot <- ranked_plot + scale_y_log10()
+                if (!is.null(x_right_intercept)){ ranked_plot <- ranked_plot + geom_hline(yintercept=x_right_intercept, color="green") }
                 plot <- plot / ranked_plot
             }
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
