@@ -33,7 +33,8 @@ suppressMessages(library(org.Mm.eg.db))
 # To use Garnett classifiers trained with Ensembl gene names
 SPECIES_DATA <- list(
     "hs"="org.Hs.eg.db",
-    "mm"="org.Mm.eg.db"
+    "mm"="org.Mm.eg.db",
+    "none"="none"          # Garnett will not check/convert gene IDs, so your CDS and marker file must have the same gene ID type
 )
 
 ###############################################################################################################
@@ -230,7 +231,7 @@ load_cell_identity_data <- function (location) {
 load_condition_data <- function(location, cell_identity_data) {
     default_condition_data <- data.frame(
         library_id=cell_identity_data$library_id,
-        condition=rownames(cell_identity_data),
+        condition=cell_identity_data$library_id,
         check.names=FALSE,
         stringsAsFactors=FALSE
     )
@@ -285,6 +286,17 @@ load_seurat_data <- function(location, mincells, cell_identity_data, condition_d
     seurat_data[["condition"]] <- condition_data$condition[match(seurat_data$new.ident, condition_data$library_id)]
     Idents(seurat_data) <- "new.ident"
     return (seurat_data)
+}
+
+
+load_classifier <- function(location) {
+    if (!is.null(location)){
+        classifier <- readRDS(location)
+        print(paste("Classifier is successfully loaded from ", location))
+        return (classifier)
+    }
+    print("Classifier is not provided. Skip cell type prediction")
+    return (NULL)
 }
 
 
@@ -552,19 +564,26 @@ get_conserved_markers <- function(cluster, seurat_data, grouping_var, resolution
 assign_cell_types <- function (seurat_data, classifier, args){
     for (i in 1:length(args$resolution)) {
         resolution <- args$resolution[i]
-        monocle_data <- get_monocle_data(
-            seurat_data,
-            features=VariableFeatures(seurat_data, assay="integrated"),
-            cluster_field=paste("integrated_snn_res", resolution, sep=".")
+        tryCatch(
+            expr = {
+                monocle_data <- get_monocle_data(
+                    seurat_data,
+                    features=VariableFeatures(seurat_data, assay="integrated"),
+                    cluster_field=paste("integrated_snn_res", resolution, sep=".")
+                )
+                monocle_data <- classify_cells(
+                    monocle_data,
+                    classifier,
+                    db=get(as.character(SPECIES_DATA[args$species])),
+                    cluster_extend=TRUE,
+                    cds_gene_id_type="SYMBOL"
+                )
+                seurat_data@meta.data[paste("cluster_ext_type_res", resolution, sep=".")] <- monocle_data$cluster_ext_type
+            },
+            error = function(e){
+                print(paste("Failed to make cell type prediction for clusters with resolution ", resolution, sep=""))
+            }
         )
-        monocle_data <- classify_cells(
-            monocle_data,
-            classifier,
-            db=get(as.character(SPECIES_DATA[args$species])),
-            cluster_extend=TRUE,
-            cds_gene_id_type="SYMBOL"
-        )
-        seurat_data@meta.data[paste("cluster_ext_type_res", resolution, sep=".")] <- monocle_data$cluster_ext_type
     }
     return (seurat_data)
 }
@@ -1309,8 +1328,8 @@ get_args <- function(){
     parser$add_argument("--mex",           help="Path to the folder with not normalized aggregated feature-barcode matrices in MEX format", type="character", required="True")
     parser$add_argument("--identity",      help="Path to the aggregation CSV file to set the initial cell identity classes", type="character", required="True")
     parser$add_argument("--condition",     help="Path to the TSV/CSV file to define datasets conditions for grouping. First column - 'library_id' with values from the --identity file, second column 'condition'. Default: each dataset is assigned to its own biological condition", type="character")
-    parser$add_argument("--classifier",    help="Path to the Garnett classifier rds file for cell type prediction", type="character", required="True")
-    parser$add_argument("--cellcycle",     help="Path to the TSV/CSV file with cell cycle data. First column - 'phase', second column 'gene_id'. Default: cell cycle phase is not used", type="character")
+    parser$add_argument("--classifier",    help="Path to the Garnett classifier rds file for cell type prediction. Default: skip cell type prediction", type="character")
+    parser$add_argument("--cellcycle",     help="Path to the TSV/CSV file with cell cycle data. First column - 'phase', second column 'gene_id'. Default: skip cell cycle score assignment", type="character")
     parser$add_argument("--barcodes",      help="Path to the headerless TSV/CSV file with selected barcodes (one per line) to prefilter input feature-barcode matrices. Default: use all cells", type="character")
     # Apply QC filters
     parser$add_argument("--mincells",      help="Include features detected in at least this many cells (applied to thoughout all datasets together). Default: 10", type="integer", default=10)
@@ -1330,7 +1349,7 @@ get_args <- function(){
     parser$add_argument("--minpct",        help="Minimum fraction of cells where genes used for conserved gene markers identification should be detected in either of two tested clusters. Default: 0.1", type="double", default=0.1)
     parser$add_argument("--onlypos",       help="Return only positive markers when running conserved gene markers identification. Default: false", action="store_true")
     parser$add_argument("--testuse",       help="Set test type to use for putative and conserved gene marker identification. Default: wilcox", type="character", default="wilcox", choices=c("wilcox", "bimod", "roc", "t", "negbinom", "poisson", "LR", "MAST", "DESeq2"))
-    parser$add_argument("--species",       help="Select species for gene name conversion when running cell type prediction", type="character", choices=names(SPECIES_DATA), required="True")
+    parser$add_argument("--species",       help="Select species for gene name conversion when running cell type prediction with Garnett classifier. Default: do not convert gene names", type="character", choices=names(SPECIES_DATA), default="none")
     # Export results
     parser$add_argument("--pdf",           help="Export plots in PDF. Default: false", action="store_true")
     parser$add_argument("--rds",           help="Save Seurat data to RDS file. Default: false", action="store_true")
@@ -1364,8 +1383,8 @@ print("Trying to load barcodes of interest to prefilter feature-barcode matrices
 barcodes_data <- load_barcodes_data(args$barcodes, seurat_data)
 print("Prefiltering feature-barcode matrices by cells of interest")
 seurat_data <- apply_cell_filters(seurat_data, barcodes_data)
-print(paste("Loading Garnett classifier from", args$classifier))
-classifier <- readRDS(args$classifier)
+print("Trying to load Garnett classifier")
+classifier <- load_classifier(args$classifier)
 
 cat("\n\nStep 2: Filtering raw datasets\n")
 

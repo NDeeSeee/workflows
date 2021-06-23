@@ -16,7 +16,8 @@
 # - Unified color theme of all produced plots. Refactored R script
 # - Add --maxfeatures input to R script
 # - Updated base image to use the latest 4.0.3 Seurat
-# - make --cellcycle input optional
+# - make --cellcycle, --classifier and --species inputs optional
+# - if --condition is not provided, use library_id as condition
 #
 # v0.0.3
 # - added DESeq2 to be able to choose test type for gene marker

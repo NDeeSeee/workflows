@@ -30,7 +30,7 @@ inputs:
       cell identity classes
 
   conditions_data:
-    type: File
+    type: File?
     inputBinding:
       prefix: "--condition"    
     doc: |
@@ -41,23 +41,27 @@ inputs:
       condition
 
   classifier_rds:
-    type: File
+    type: File?
     inputBinding:
       prefix: "--classifier"
     doc: |
-      Path to the Garnett classifier rds file for cell type prediction
+      Path to the Garnett classifier rds file for cell type prediction.
+      Default: skip cell type prediction
 
   species:
     type:
-      type: enum
+    - "null"
+    - type: enum
       symbols:
       - "hs"
       - "mm"
+      - "none"
     inputBinding:
       prefix: "--species"
     doc: |
-      Select species for gene name conversion when running cell
-      type prediction. Either "hs" or "mm"
+      Select species for gene name conversion when running cell type prediction
+      with Garnett classifier.
+      Default: the same as "none" - do not convert gene names
 
   cell_cycle_data:
     type: File?
@@ -66,7 +70,7 @@ inputs:
     doc: |
       Path to the TSV/CSV file with cell cycle data.
       First column - 'phase', second column 'gene_id'.
-      Default: cell cycle phase is not used
+      Default: skip cell cycle score assignment
 
   barcodes_data:
     type: File?
