@@ -874,8 +874,8 @@ doc: |
  
 s:about: |
   usage: run_seurat.R
-        [-h] --mex MEX --identity IDENTITY --cellcycle CELLCYCLE
-        [--condition CONDITION] --classifier CLASSIFIER [--barcodes BARCODES]
+        [-h] --mex MEX --identity IDENTITY [--condition CONDITION]
+        [--classifier CLASSIFIER] [--cellcycle CELLCYCLE] [--barcodes BARCODES]
         [--mincells MINCELLS] [--minfeatures MINFEATURES]
         [--maxfeatures MAXFEATURES] [--minumi MINUMI] [--minnovelty MINNOVELTY]
         [--maxmt MAXMT] [--mitopattern MITOPATTERN] [--regresscellcycle]
@@ -883,7 +883,8 @@ s:about: |
         [--resolution [RESOLUTION [RESOLUTION ...]]] [--logfc LOGFC]
         [--minpct MINPCT] [--onlypos]
         [--testuse {wilcox,bimod,roc,t,negbinom,poisson,LR,MAST,DESeq2}]
-        --species {hs,mm} [--pdf] [--rds] [--output OUTPUT] [--threads THREADS]
+        [--species {hs,mm,none}] [--pdf] [--rds] [--output OUTPUT]
+        [--threads THREADS]
 
   Runs Seurat for comparative scRNA-seq analysis of across experimental
   conditions
@@ -894,9 +895,6 @@ s:about: |
                           feature-barcode matrices in MEX format
     --identity IDENTITY   Path to the aggregation CSV file to set the initial
                           cell identity classes
-    --cellcycle CELLCYCLE
-                          Path to the TSV/CSV file with cell cycle data. First
-                          column - 'phase', second column 'gene_id'
     --condition CONDITION
                           Path to the TSV/CSV file to define datasets conditions
                           for grouping. First column - 'library_id' with values
@@ -905,7 +903,11 @@ s:about: |
                           biological condition
     --classifier CLASSIFIER
                           Path to the Garnett classifier rds file for cell type
-                          prediction
+                          prediction. Default: skip cell type prediction
+    --cellcycle CELLCYCLE
+                          Path to the TSV/CSV file with cell cycle data. First
+                          column - 'phase', second column 'gene_id'. Default:
+                          skip cell cycle score assignment
     --barcodes BARCODES   Path to the headerless TSV/CSV file with selected
                           barcodes (one per line) to prefilter input feature-
                           barcode matrices. Default: use all cells
@@ -953,8 +955,10 @@ s:about: |
     --testuse {wilcox,bimod,roc,t,negbinom,poisson,LR,MAST,DESeq2}
                           Set test type to use for putative and conserved gene
                           marker identification. Default: wilcox
-    --species {hs,mm}     Select species for gene name conversion when running
-                          cell type prediction
+    --species {hs,mm,none}
+                          Select species for gene name conversion when running
+                          cell type prediction with Garnett classifier. Default:
+                          do not convert gene names
     --pdf                 Export plots in PDF. Default: false
     --rds                 Save Seurat data to RDS file. Default: false
     --output OUTPUT       Output prefix. Default: ./seurat
