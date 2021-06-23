@@ -136,9 +136,11 @@ ExportToCellbrowser <- function(
     for (i in 1:length(meta.fields)){
         field <- meta.fields[i]
         name <- meta.fields.names[i]
-        df[[name]] <- meta[[field]]
-        if (!is.numeric(df[[name]])) {
-            enum.fields <- c(enum.fields, name)
+        if (field %in% colnames(meta)){
+            df[[name]] <- meta[[field]]
+            if (!is.numeric(df[[name]])) {
+                enum.fields <- c(enum.fields, name)
+            }
         }
     }
     df <- data.frame(Cell=rownames(df), df, check.names=FALSE)
@@ -197,14 +199,19 @@ get_file_type <- function (filename) {
 
 
 load_cell_cycle_data <- function (location) {
-    cell_cycle_data <- read.table(
-        location,
-        sep=get_file_type(location),
-        header=TRUE,
-        check.names=FALSE,
-        stringsAsFactors=FALSE
-    )
-    return (cell_cycle_data)
+    if (!is.null(location)){
+        cell_cycle_data <- read.table(
+            location,
+            sep=get_file_type(location),
+            header=TRUE,
+            check.names=FALSE,
+            stringsAsFactors=FALSE
+        )
+        print(paste("Cell cycle data is successfully loaded from ", location))
+        return (cell_cycle_data)
+    }
+    print("Cell cycle data is not provided")
+    return (NULL)
 }
 
 
@@ -312,11 +319,18 @@ apply_qc_filters <- function(seurat_data, args) {
 
 
 explore_unwanted_variation <- function(seurat_data, cell_cycle_data, args) {
-     temp_seurat_data <- NormalizeData(seurat_data, verbose=FALSE)
-     temp_seurat_data <- CellCycleScoring(
-         temp_seurat_data,
-         s.features=as.vector(cell_cycle_data[tolower(cell_cycle_data$phase)=="s", "gene_id"]),
-         g2m.features=as.vector(cell_cycle_data[tolower(cell_cycle_data$phase)=="g2/m", "gene_id"])
+    temp_seurat_data <- NormalizeData(seurat_data, verbose=FALSE)
+    tryCatch(
+        expr = {
+            temp_seurat_data <- CellCycleScoring(
+                temp_seurat_data,
+                s.features=as.vector(cell_cycle_data[tolower(cell_cycle_data$phase)=="s", "gene_id"]),
+                g2m.features=as.vector(cell_cycle_data[tolower(cell_cycle_data$phase)=="g2/m", "gene_id"])
+            )
+        },
+        error = function(e){
+            print("Failed to run cell cycle scoring when exploring cell cycle phase as a source of unwanted variation")
+        }
     )
     mito_quartiles <- quantile(temp_seurat_data@meta.data$mito_percentage, c(0.25, 0.5, 0.75))
     temp_seurat_data@meta.data$mito_factor <- cut(
@@ -405,14 +419,21 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
             } else {
                 vars_to_regress <- c("S.Score", "G2M.Score")
             }
-            splitted_seurat_data[[i]] <- SCTransform(
-                splitted_seurat_data[[i]],
-                assay="RNA",
-                new.assay.name="SCT",
-                variable.features.n=args$highvarcount,
-                vars.to.regress=vars_to_regress,
-                verbose=FALSE
-            )            
+            tryCatch(
+                expr = {
+                    splitted_seurat_data[[i]] <- SCTransform(
+                        splitted_seurat_data[[i]],
+                        assay="RNA",
+                        new.assay.name="SCT",
+                        variable.features.n=args$highvarcount,
+                        vars.to.regress=vars_to_regress,
+                        verbose=FALSE
+                    )
+                },
+                error = function(e){
+                    print(paste("Failed to regress cell cycle phase as a confounding source of variation for", Idents(splitted_seurat_data[[i]])[1]))
+                }
+            )
         }
     }
     set_threads(1)  # need to use one thread, otherwise gets stuck
@@ -1287,9 +1308,9 @@ get_args <- function(){
     # Import data from Cellranger Aggregate results
     parser$add_argument("--mex",           help="Path to the folder with not normalized aggregated feature-barcode matrices in MEX format", type="character", required="True")
     parser$add_argument("--identity",      help="Path to the aggregation CSV file to set the initial cell identity classes", type="character", required="True")
-    parser$add_argument("--cellcycle",     help="Path to the TSV/CSV file with cell cycle data. First column - 'phase', second column 'gene_id'", type="character", required="True")
     parser$add_argument("--condition",     help="Path to the TSV/CSV file to define datasets conditions for grouping. First column - 'library_id' with values from the --identity file, second column 'condition'. Default: each dataset is assigned to its own biological condition", type="character")
     parser$add_argument("--classifier",    help="Path to the Garnett classifier rds file for cell type prediction", type="character", required="True")
+    parser$add_argument("--cellcycle",     help="Path to the TSV/CSV file with cell cycle data. First column - 'phase', second column 'gene_id'. Default: cell cycle phase is not used", type="character")
     parser$add_argument("--barcodes",      help="Path to the headerless TSV/CSV file with selected barcodes (one per line) to prefilter input feature-barcode matrices. Default: use all cells", type="character")
     # Apply QC filters
     parser$add_argument("--mincells",      help="Include features detected in at least this many cells (applied to thoughout all datasets together). Default: 10", type="integer", default=10)
@@ -1333,7 +1354,7 @@ cat("\n\nStep 1: Loading raw datasets\n")
 
 print(paste("Loading cell identity data from Cellranger aggregation metadata file", args$identity))
 cell_identity_data <- load_cell_identity_data (args$identity)
-print(paste("Loading cell cycle data from", args$cellcycle))
+print("Trying to load cell cycle data")
 cell_cycle_data <- load_cell_cycle_data(args$cellcycle)
 print("Trying to load condition data")
 condition_data <- load_condition_data(args$condition, cell_identity_data)
