@@ -8,7 +8,7 @@ requirements:
 
 hints:
 - class: DockerRequirement
-  dockerPull: biowardrobe2/seurat:v0.0.4
+  dockerPull: biowardrobe2/seurat:v0.0.5
 
 
 inputs:
@@ -139,6 +139,17 @@ inputs:
     doc: |
       Regex pattern to identify mitochondrial reads.
       Default: ^Mt-
+
+  selected_features:
+    type:
+    - "null"
+    - string
+    - string[]
+    inputBinding:
+      prefix: "--features"
+    doc: |
+      Features to explore in the clustered filtered integrated datasets.
+      Default: do not highlight any features
 
   regress_cellcycle:
     type: boolean?
@@ -698,24 +709,24 @@ outputs:
       Split by condition clustered UMAP projected PCA of filtered integrated datasets.
       PDF format
 
-  clst_umap_ctype_pred_res_plot_png:
+  clst_umap_ctype_res_plot_png:
     type:
     - "null"
     - type: array
       items: File
     outputBinding:
-      glob: "*_clst_umap_ctype_pred_res_*.png"
+      glob: "*_clst_umap_ctype_res_*.png"
     doc: |
       Grouped by predicted cell types UMAP projected PCA of filtered integrated datasets.
       PNG format
 
-  clst_umap_ctype_pred_res_plot_pdf:
+  clst_umap_ctype_res_plot_pdf:
     type:
     - "null"
     - type: array
       items: File
     outputBinding:
-      glob: "*_clst_umap_ctype_pred_res_*.pdf"
+      glob: "*_clst_umap_ctype_res_*.pdf"
     doc: |
       Grouped by predicted cell types UMAP projected PCA of filtered integrated datasets.
       PDF format
@@ -764,6 +775,181 @@ outputs:
       QC metrics for clustered UMAP projected PCA of filtered integrated datasets.
       PDF format
 
+  expr_avg_per_clst_res_plot_png:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_expr_avg_per_clst_res_*.png"
+    doc: |
+      Scaled average gene expression per cluster of filtered integrated datasets.
+      PNG format
+
+  expr_avg_per_clst_res_plot_pdf:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_expr_avg_per_clst_res_*.pdf"
+    doc: |
+      Scaled average gene expression per cluster of filtered integrated datasets.
+      PDF format      
+
+  expr_per_clst_cell_res_plot_png:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_expr_per_clst_cell_res_*.png"
+    doc: |
+      Log normalized gene expression per cell of clustered filtered integrated datasets.
+      PNG format
+
+  expr_per_clst_cell_res_plot_pdf:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_expr_per_clst_cell_res_*.pdf"
+    doc: |
+      Log normalized gene expression per cell of clustered filtered integrated datasets.
+      PDF format
+
+  expr_clst_heatmap_res_plot_png:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_expr_clst_heatmap_res_*.png"
+    doc: |
+      Log normalized gene expression heatmap of clustered filtered integrated datasets.
+      PNG format
+
+  expr_clst_heatmap_res_plot_pdf:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_expr_clst_heatmap_res_*.pdf"
+    doc: |
+      Log normalized gene expression heatmap of clustered filtered integrated datasets.
+      PDF format
+
+  expr_dnst_per_clst_res_plot_png:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_expr_dnst_per_clst_res_*.png"
+    doc: |
+      Log normalized gene expression densities per cluster of filtered integrated datasets.
+      PNG format
+
+  expr_dnst_per_clst_res_plot_pdf:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_expr_dnst_per_clst_res_*.pdf"
+    doc: |
+      Log normalized gene expression densities per cluster of filtered integrated datasets.
+      PDF format
+
+  expr_avg_per_ctype_res_plot_png:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_expr_avg_per_ctype_res_*.png"
+    doc: |
+      Scaled average gene expression per predicted cell type of filtered integrated datasets.
+      PNG format
+
+  expr_avg_per_ctype_res_plot_pdf:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_expr_avg_per_ctype_res_*.pdf"
+    doc: |
+      Scaled average gene expression per predicted cell type of filtered integrated datasets.
+      PDF format
+
+  expr_per_ctype_cell_res_plot_png:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_expr_per_ctype_cell_res_*.png"
+    doc: |
+      Log normalized gene expression per cell of clustered filtered integrated datasets with predicted cell types.
+      PNG format
+
+  expr_per_ctype_cell_res_plot_pdf:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_expr_per_ctype_cell_res_*.pdf"
+    doc: |
+      Log normalized gene expression per cell of clustered filtered integrated datasets with predicted cell types.
+      PDF format
+
+  expr_ctype_heatmap_res_plot_png:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_expr_ctype_heatmap_res_*.png"
+    doc: |
+      Log normalized gene expression heatmap of clustered filtered integrated datasets with predicted cell types.
+      PNG format
+
+  expr_ctype_heatmap_res_plot_pdf:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_expr_ctype_heatmap_res_*.pdf"
+    doc: |
+      Log normalized gene expression heatmap of clustered filtered integrated datasets with predicted cell types.
+      PDF format
+
+  expr_dnst_per_ctype_res_plot_png:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_expr_dnst_per_ctype_res_*.png"
+    doc: |
+      Log normalized gene expression densities per predicted cell type of filtered integrated datasets.
+      PNG format
+
+  expr_dnst_per_ctype_res_plot_pdf:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_expr_dnst_per_ctype_res_*.pdf"
+    doc: |
+      Log normalized gene expression densities per predicted cell type of filtered integrated datasets.
+      PDF format
 
   clst_pttv_gene_markers:
     type: File
