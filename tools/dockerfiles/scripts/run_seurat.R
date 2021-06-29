@@ -17,6 +17,7 @@ suppressMessages(library(patchwork))
 suppressMessages(library(data.table))
 suppressMessages(library(reticulate))
 suppressMessages(library(sctransform))
+suppressMessages(library(RColorBrewer))
 suppressMessages(library(org.Hs.eg.db))
 suppressMessages(library(org.Mm.eg.db))
 
@@ -566,7 +567,7 @@ assign_cell_types <- function (seurat_data, classifier, args){
         resolution <- args$resolution[i]
         tryCatch(
             expr = {
-                monocle_data <- get_monocle_data(
+                monocle_data <- get_monocle_data(                                     # inside uses "RNA" assay
                     seurat_data,
                     features=VariableFeatures(seurat_data, assay="integrated"),
                     cluster_field=paste("integrated_snn_res", resolution, sep=".")
@@ -759,7 +760,7 @@ export_geom_point_plot <- function(data, rootname, x_axis, y_axis, x_left_interc
 }
 
 
-export_vln_plot <- function(data, features, labels, rootname, plot_title, legend_title, log=FALSE, group_by=NULL, pt_size=NULL, palette="Paired", combine_guides=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
+export_vln_plot <- function(data, features, labels, rootname, plot_title, legend_title, log=FALSE, group_by=NULL, hide_x_text=FALSE, pt_size=NULL, palette=NULL, combine_guides=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
             plots <- VlnPlot(
@@ -771,17 +772,17 @@ export_vln_plot <- function(data, features, labels, rootname, plot_title, legend
                          combine=FALSE       # to return a list of gglots
                      )
             plots <- lapply(seq_along(plots), function(i){
-                plots[[i]] +
-                ggtitle(labels[i]) +
-                theme_gray() +
-                theme(
-                    axis.title.x=element_blank(),
-                    axis.text.x=element_blank()
-                ) +
-                guides(fill=guide_legend(legend_title)) +
-                stat_boxplot(width=0.15, geom="errorbar") +
-                geom_boxplot(width=0.15, outlier.alpha=0) +
-                scale_fill_brewer(palette=palette)
+                plots[[i]] <- plots[[i]] +
+                              ggtitle(labels[i]) +
+                              theme_gray() +
+                              theme(axis.title.x=element_blank()) +
+                              guides(fill=guide_legend(legend_title)) +
+                              stat_boxplot(width=0.15, geom="errorbar") +
+                              geom_boxplot(width=0.15, outlier.alpha=0) +
+                              RotatedAxis()
+                if (!is.null(palette)){ plots[[i]] <- plots[[i]] + scale_fill_brewer(palette=palette) }
+                if (hide_x_text){ plots[[i]] <- plots[[i]] + theme(axis.text.x=element_blank()) }
+                return (plots[[i]])
             })
             combined_plots <- wrap_plots(plots, guides=combine_guides) + plot_annotation(title=plot_title)
 
@@ -805,6 +806,84 @@ export_vln_plot <- function(data, features, labels, rootname, plot_title, legend
 }
 
 
+export_dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, cluster_idents=FALSE, min_pct=0.01, col_min=-2.5, col_max=2.5, pdf=FALSE, width=1200, height=800, resolution=100){
+    tryCatch(
+        expr = {
+            plot <- DotPlot(
+                        data,
+                        features=features,
+                        cluster.idents=cluster_idents,
+                        dot.min=min_pct,
+                        col.min=col_min,
+                        col.max=col_max,
+                        scale=TRUE,
+                        scale.by="size"  # for optimal perception
+                    ) +
+                    xlab(x_label) +
+                    ylab(y_label) +
+                    theme_gray() +
+                    ggtitle(plot_title) +
+                    scale_color_gradient2(low="blue", mid="white", high="red", midpoint=0, limits=c(col_min, col_max))
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(plot))
+            dev.off()
+
+            if (pdf) {
+                pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                suppressMessages(print(plot))
+                dev.off()
+            }
+
+            print(paste("Export dot plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export dot plot to ", rootname, ".(png/pdf)", sep=""))
+        }
+    )
+}
+
+
+export_expr_heatmap <- function(data, features, rootname, plot_title, matrix_slot="data", palette=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
+    tryCatch(
+        expr = {
+            plot <- DoHeatmap(
+                        data,
+                        features=features,
+                        slot=matrix_slot
+                    ) +
+                    theme_gray() +
+                    ggtitle(plot_title) +
+                    theme(
+                        axis.title.x=element_blank(),
+                        axis.text.x=element_blank(),
+                        axis.ticks=element_blank()
+                    ) +
+                    NoLegend()
+          
+            if (!is.null(palette)){ plot <- plot + scale_fill_gradientn(colors=palette) }
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(plot))
+            dev.off()
+
+            if (pdf) {
+                pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                suppressMessages(print(plot))
+                dev.off()
+            }
+
+            print(paste("Export expression heatmap to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export expression heatmap to ", rootname, ".(png/pdf)", sep=""))
+        }
+    )
+}
+
+
 export_feature_plot <- function(data, features, labels, rootname, reduction, plot_title, split_by=NULL, label=FALSE, order=FALSE, min_cutoff=NA, max_cutoff=NA, pt_size=NULL, combine_guides=NULL, alpha=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
@@ -821,7 +900,7 @@ export_feature_plot <- function(data, features, labels, rootname, reduction, plo
                         combine=FALSE       # to return a list of gglots
                     )
             plots <- lapply(seq_along(plots), function(i){
-                plots[[i]] -> plots[[i]] + ggtitle(labels[i]) + theme_gray()
+                plots[[i]] <- plots[[i]] + ggtitle(labels[i]) + theme_gray()
                 if (!is.null(alpha)) { plots[[i]]$layers[[1]]$aes_params$alpha <- alpha }
                 return (plots[[i]])
             })
@@ -1048,7 +1127,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
             legend_title="Cell type prediction",
             group_by=paste("cluster_ext_type_res", current_resolution, sep="."),
             label=TRUE,
-            rootname=paste(args$output, suffix, "umap_ctype_pred_res", current_resolution, sep="_"),
+            rootname=paste(args$output, suffix, "umap_ctype_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
         export_dim_plot(
@@ -1077,6 +1156,107 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
         )
         Idents(seurat_data) <- "new.ident"
     }
+}
+
+
+export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") {
+    backup_assay <- DefaultAssay(seurat_data)
+    DefaultAssay(seurat_data) <- assay
+    for (i in 1:length(args$resolution)) {
+        current_resolution <- args$resolution[i]
+        Idents(seurat_data) <- paste("integrated_snn_res", current_resolution, sep=".")
+        export_dot_plot(
+            data=seurat_data,
+            features=args$features,
+            plot_title="Scaled average gene expression per cluster of filtered integrated datasets",
+            x_label="Genes",
+            y_label="Clusters",
+            cluster_idents=TRUE,
+            rootname=paste(args$output, suffix, "avg_per_clst_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+        export_feature_plot(
+            data=seurat_data,
+            features=args$features,
+            labels=args$features,
+            reduction="umap",
+            plot_title="Log normalized gene expression per cell of clustered filtered integrated datasets",
+            label=TRUE,
+            order=TRUE,
+            rootname=paste(args$output, suffix, "per_clst_cell_res", current_resolution, sep="_"),
+            combine_guides="keep",
+            pdf=args$pdf
+        )
+        export_expr_heatmap(
+            data=seurat_data,
+            features=args$features,
+            plot_title="Log normalized gene expression heatmap of clustered filtered integrated datasets",
+            matrix_slot="data",  # LogNormalized version of the raw counts
+            palette=c("black", "orange"),
+            rootname=paste(args$output, suffix, "clst_heatmap_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+        export_vln_plot(
+            data=seurat_data,
+            features=args$features,
+            labels=args$features,
+            plot_title="Log normalized gene expression densities per cluster of filtered integrated datasets",
+            legend_title="Cluster",
+            log=TRUE,
+            pt_size=0,
+            combine_guides="collect",
+            rootname=paste(args$output, suffix, "dnst_per_clst_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+        if (paste("cluster_ext_type_res", current_resolution, sep=".") %in% colnames(seurat_data@meta.data)){
+            Idents(seurat_data) <- paste("cluster_ext_type_res", current_resolution, sep=".")
+            export_dot_plot(
+                data=seurat_data,
+                features=args$features,
+                plot_title="Scaled average gene expression per predicted cell type of filtered integrated datasets",
+                x_label="Genes",
+                y_label="Cell types",
+                cluster_idents=FALSE,  # no need to cluster cell types together
+                rootname=paste(args$output, suffix, "avg_per_ctype_res", current_resolution, sep="_"),
+                pdf=args$pdf
+            )
+            export_feature_plot(
+                data=seurat_data,
+                features=args$features,
+                labels=args$features,
+                reduction="umap",
+                plot_title="Log normalized gene expression per cell of clustered filtered integrated datasets with predicted cell types",
+                label=TRUE,
+                order=TRUE,
+                rootname=paste(args$output, suffix, "per_ctype_cell_res", current_resolution, sep="_"),
+                combine_guides="keep",
+                pdf=args$pdf
+            )
+            export_expr_heatmap(
+                data=seurat_data,
+                features=args$features,
+                plot_title="Log normalized gene expression heatmap of clustered filtered integrated datasets with predicted cell types",
+                matrix_slot="data",  # LogNormalized version of the raw counts
+                palette=c("black", "orange"),
+                rootname=paste(args$output, suffix, "ctype_heatmap_res", current_resolution, sep="_"),
+                pdf=args$pdf
+            )
+            export_vln_plot(
+                data=seurat_data,
+                features=args$features,
+                labels=args$features,
+                plot_title="Log normalized gene expression densities per predicted cell type of filtered integrated datasets",
+                legend_title="Cell type",
+                log=TRUE,
+                pt_size=0,
+                combine_guides="collect",
+                rootname=paste(args$output, suffix, "dnst_per_ctype_res", current_resolution, sep="_"),
+                pdf=args$pdf
+            )
+        }
+        Idents(seurat_data) <- "new.ident"
+    }
+    DefaultAssay(seurat_data) <- backup_assay
 }
 
 
@@ -1237,7 +1417,9 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         rootname=paste(args$output, suffix, "qc_mtrcs", sep="_"),
         plot_title=paste("QC metrics densities per cell (", suffix, ")", sep=""),
         legend_title="Identity",
+        hide_x_text=TRUE,
         pt_size=0,
+        palette="Paired",
         combine_guides="collect",
         pdf=args$pdf
     )
@@ -1248,8 +1430,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         rootname=paste(args$output, suffix, "qc_mtrcs_gr_by_cond", sep="_"),
         plot_title=paste("Grouped by condition QC metrics densities per cell (", suffix, ")", sep=""),
         legend_title="Condition",
+        hide_x_text=TRUE,
         group_by="condition",
         pt_size=0,
+        palette="Paired",
         combine_guides="collect",
         pdf=args$pdf
     )
@@ -1340,6 +1524,7 @@ get_args <- function(){
     parser$add_argument("--maxmt",         help="Include cells with the mitochondrial contamination percentage not bigger than this value. Default: 5", type="double", default=5)
     parser$add_argument("--mitopattern",   help="Regex pattern to identify mitochondrial reads. Default: ^Mt-", type="character", default="^Mt-")
     # Integration, clustering, and cell types and marker genes identification parameters
+    parser$add_argument("--features",      help="Features to explore in the clustered filtered integrated datasets. Default: do not highlight any features", type="character", nargs="*")
     parser$add_argument("--regresscellcycle", help="Regress cell cycle as a confounding source of variation. Default: false", action="store_true")
     parser$add_argument("--regressmt",     help="Regress mitochondrial gene expression as a confounding source of variation. Default: false", action="store_true")
     parser$add_argument("--highvarcount",  help="Number of higly variable features to detect. Default: 3000", type="integer", default=3000)
@@ -1400,24 +1585,25 @@ explore_unwanted_variation(seurat_data, cell_cycle_data, args)
 cat("\n\nStep 3: Integrating filtered datasets\n")
 
 print("Running dataset integration")
-seurat_data <- integrate_seurat_data(seurat_data, cell_cycle_data, args)
+seurat_data <- integrate_seurat_data(seurat_data, cell_cycle_data, args)                                       # sets "integrated" as a default assay
 
 cat("\n\nStep 4: Reducing dimensionality of intergrated datasets\n")
 
 print("Performing PCA reduction of integrated data. Use all 50 principal components")
-seurat_data <- RunPCA(seurat_data, npcs=50, verbose=FALSE)
+seurat_data <- RunPCA(seurat_data, npcs=50, verbose=FALSE)                                                     # runs on "integrated" assay
 print(paste("Performing UMAP reduction of integrated data using", args$ndim, "principal components"))
-seurat_data <- RunUMAP(seurat_data, reduction="pca", dims=1:args$ndim, verbose=FALSE)
+seurat_data <- RunUMAP(seurat_data, reduction="pca", dims=1:args$ndim, verbose=FALSE)                          # runs on "integrated" assay
 export_all_dimensionality_plots(seurat_data, "ntgr", args)                                                     # <--- ntgr
 
 cat("\n\nStep 5: Clustering and cell type assignment of intergrated datasets with reduced dimensionality\n")
 
 print(paste("Clustering integrated data using", args$ndim, "principal components"))
-seurat_data <- FindNeighbors(seurat_data, reduction="pca", dims=1:args$ndim, verbose=FALSE)
+seurat_data <- FindNeighbors(seurat_data, reduction="pca", dims=1:args$ndim, verbose=FALSE)                    # runs on "integrated" assay
 seurat_data <- FindClusters(seurat_data, resolution=args$resolution)
 print("Assigning cell types for all clusters and all resolutions using only highly variable genes")
-seurat_data <- assign_cell_types(seurat_data, classifier, args)
+seurat_data <- assign_cell_types(seurat_data, classifier, args)                                                # uses variable features from "integrated" assay, but gene expression from "RNA" assay
 export_all_clustering_plots(seurat_data, "clst", args)                                                         # <--- clst
+export_all_expression_plots(seurat_data, "expr", args)                                                         # <--- expr
 
 cat("\n\nStep 6: Identifying gene markers\n")
 
