@@ -24,7 +24,7 @@ inputs:
   aggregation_metadata:
     type: File
     inputBinding:
-      prefix: "--identity"    
+      prefix: "--identity"
     doc: |
       Path to the aggregation CSV file to set the initial
       cell identity classes
@@ -32,7 +32,7 @@ inputs:
   conditions_data:
     type: File?
     inputBinding:
-      prefix: "--condition"    
+      prefix: "--condition"
     doc: |
       Path to the TSV/CSV file to define datasets conditions
       for grouping. First column - 'library_id' with values
@@ -112,7 +112,7 @@ inputs:
       prefix: "--minumi"
     doc: |
       Include cells where at least this many UMI are detected.
-      Default: 500  
+      Default: 500
 
   minimum_novelty_score:
     type: float?
@@ -158,7 +158,7 @@ inputs:
     doc: |
       Regress cell cycle as a confounding source of variation.
       Default: false
-      
+
   regress_mito_perc:
     type: boolean?
     inputBinding:
@@ -603,7 +603,7 @@ outputs:
   ntgr_pca_plot_png:
     type: File?
     outputBinding:
-      glob: "*_ntgr_pca.png"    
+      glob: "*_ntgr_pca.png"
     doc: |
       PCA of filtered integrated datasets.
       PNG format
@@ -619,7 +619,7 @@ outputs:
   ntgr_pca_heatmap_png:
     type: File?
     outputBinding:
-      glob: "*_ntgr_pca_heatmap.png"        
+      glob: "*_ntgr_pca_heatmap.png"
     doc: |
       Genes per cells expression heatmap sorted by their PC scores from PCA of filtered integrated datasets.
       PNG format
@@ -627,7 +627,7 @@ outputs:
   ntgr_pca_heatmap_pdf:
     type: File?
     outputBinding:
-      glob: "*_ntgr_pca_heatmap.pdf"        
+      glob: "*_ntgr_pca_heatmap.pdf"
     doc: |
       Genes per cells expression heatmap sorted by their PC scores from PCA of filtered integrated datasets.
       PDF format
@@ -635,7 +635,7 @@ outputs:
   ntgr_pca_loadings_plot_png:
     type: File?
     outputBinding:
-      glob: "*_ntgr_pca_loadings.png"   
+      glob: "*_ntgr_pca_loadings.png"
     doc: |
       PC scores of the most variant genes from PCA of filtered integrated datasets.
       PNG format
@@ -795,7 +795,7 @@ outputs:
       glob: "*_expr_avg_per_clst_res_*.pdf"
     doc: |
       Scaled average gene expression per cluster of filtered integrated datasets.
-      PDF format      
+      PDF format
 
   expr_per_clst_cell_res_plot_png:
     type:
@@ -957,8 +957,8 @@ outputs:
       glob: "*_clst_pttv_gene_markers.tsv"
     doc: |
       Putative gene markers file for all clusters and all resolutions.
-      TSV format      
-  
+      TSV format
+
   clst_csrvd_gene_markers:
     type: File
     outputBinding:
@@ -966,7 +966,7 @@ outputs:
     doc: |
       Conserved gene markers file for all clusters and all resolutions.
       TSV format
-      
+
   seurat_clst_data_rds:
     type: File?
     outputBinding:
@@ -1057,14 +1057,15 @@ s:creator:
 doc: |
   Runs Seurat for comparative scRNA-seq analysis of across experimental conditions
 
- 
+
 s:about: |
   usage: run_seurat.R
         [-h] --mex MEX --identity IDENTITY [--condition CONDITION]
         [--classifier CLASSIFIER] [--cellcycle CELLCYCLE] [--barcodes BARCODES]
         [--mincells MINCELLS] [--minfeatures MINFEATURES]
         [--maxfeatures MAXFEATURES] [--minumi MINUMI] [--minnovelty MINNOVELTY]
-        [--maxmt MAXMT] [--mitopattern MITOPATTERN] [--regresscellcycle]
+        [--maxmt MAXMT] [--mitopattern MITOPATTERN]
+        [--features [FEATURES [FEATURES ...]]] [--regresscellcycle]
         [--regressmt] [--highvarcount HIGHVARCOUNT] [--ndim NDIM]
         [--resolution [RESOLUTION [RESOLUTION ...]]] [--logfc LOGFC]
         [--minpct MINPCT] [--onlypos]
@@ -1117,6 +1118,10 @@ s:about: |
     --mitopattern MITOPATTERN
                           Regex pattern to identify mitochondrial reads.
                           Default: ^Mt-
+    --features [FEATURES [FEATURES ...]]
+                          Features to explore in the clustered filtered
+                          integrated datasets. Default: do not highlight any
+                          features
     --regresscellcycle    Regress cell cycle as a confounding source of
                           variation. Default: false
     --regressmt           Regress mitochondrial gene expression as a confounding
