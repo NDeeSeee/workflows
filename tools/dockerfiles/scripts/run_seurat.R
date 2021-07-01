@@ -87,6 +87,7 @@ ExportToCellbrowser <- function(
     matrix.slot,
     dir,
     cluster.field,
+    features,
     meta.fields,
     meta.fields.names
 ) {
@@ -153,6 +154,16 @@ ExportToCellbrowser <- function(
         quote=FALSE,
         row.names=FALSE
     )
+    if (!is.null(features)){
+        write.table(
+            features,
+            sep="\t",
+            file=file.path(dir, "quickGenes.tsv"),
+            quote=FALSE,
+            row.names=FALSE,
+            col.names=FALSE
+        )
+    }
     config <- '
 name="cellbrowser"
 shortLabel="cellbrowser"
@@ -172,6 +183,9 @@ coords=%s'
         enum.string,
         coords.string
     )
+    if (!is.null(features)){
+        config <- paste(config, 'quickGenesFile="quickGenes.tsv"', sep="\n")
+    }
     confPath = file.path(dir, "cellbrowser.conf")
     cat(config, file=confPath)
     cb.dir <- paste(dir, "html_data", sep="/")
@@ -823,7 +837,7 @@ export_dot_plot <- function(data, features, rootname, plot_title, x_label, y_lab
                     ylab(y_label) +
                     theme_gray() +
                     ggtitle(plot_title) +
-                    scale_color_gradient2(low="blue", mid="white", high="red", midpoint=0, limits=c(col_min, col_max))
+                    scale_color_gradient2(low="black", mid="yellow", high="red", midpoint=0, limits=c(col_min, col_max))
 
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             suppressMessages(print(plot))
@@ -1440,7 +1454,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
 }
 
 
-export_cellbrowser_data <- function(seurat_data, assay, matrix_slot, resolution, rootname){
+export_cellbrowser_data <- function(seurat_data, assay, matrix_slot, resolution, features, rootname){
     tryCatch(
         expr = {
             backup_assay <- DefaultAssay(seurat_data)
@@ -1450,6 +1464,7 @@ export_cellbrowser_data <- function(seurat_data, assay, matrix_slot, resolution,
                 matrix.slot=matrix_slot,
                 dir=rootname,
                 cluster.field="Identity",
+                features=features,
                 meta.fields=c(
                     c("new.ident", "condition", "nCount_RNA", "nFeature_RNA", "log10_gene_per_log10_umi", "mito_percentage", "Phase", "S.Score", "G2M.Score"),
                     paste("integrated_snn_res", resolution, sep="."),
@@ -1619,7 +1634,7 @@ export_data(all_putative_markers, paste(args$output, "_clst_pttv_gene_markers.ts
 print("Exporting conserved gene markers")
 export_data(all_conserved_markers, paste(args$output, "_clst_csrvd_gene_markers.tsv", sep=""))
 print("Exporting UCSC Cellbrowser data")
-export_cellbrowser_data(seurat_data, assay="RNA", matrix_slot="data", resolution=args$resolution, rootname=paste(args$output, "_cellbrowser", sep=""))
+export_cellbrowser_data(seurat_data, assay="RNA", matrix_slot="data", resolution=args$resolution, features=args$features, rootname=paste(args$output, "_cellbrowser", sep=""))
 if (args$rds){
     print("Exporting Seurat object into RDS file")
     export_rds(seurat_data, paste(args$output, "_clst_data.rds", sep=""))
