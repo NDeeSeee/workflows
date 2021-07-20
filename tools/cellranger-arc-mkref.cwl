@@ -50,7 +50,6 @@ inputs:
     type: File
     doc: |
       GTF annotation file.
-      Note, all records with duplicated gene_id should be grouped together.
 
   exclude_chr:
     type:
@@ -161,6 +160,8 @@ doc: |
 
   Notes:
   - `input_motifs` parameter in the `config.txt` file is not implemented
+  - if GTF file provided in `annotation_gtf_file` has duplicate gene_id, they should be
+    grouped together. Applicable to to USCS RefGene annotations.
 
 
 s:about: |
