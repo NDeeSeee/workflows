@@ -836,8 +836,7 @@ export_dot_plot <- function(data, features, rootname, plot_title, x_label, y_lab
                     xlab(x_label) +
                     ylab(y_label) +
                     theme_gray() +
-                    ggtitle(plot_title) +
-                    scale_color_gradient2(low="black", mid="yellow", high="red", midpoint=0, limits=c(col_min, col_max))
+                    ggtitle(plot_title)
 
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             suppressMessages(print(plot))
@@ -1185,7 +1184,7 @@ export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") 
             plot_title="Scaled average gene expression per cluster of filtered integrated datasets",
             x_label="Genes",
             y_label="Clusters",
-            cluster_idents=TRUE,
+            cluster_idents=FALSE,
             rootname=paste(args$output, suffix, "avg_per_clst_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
@@ -1197,6 +1196,7 @@ export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") 
             plot_title="Log normalized gene expression per cell of clustered filtered integrated datasets",
             label=TRUE,
             order=TRUE,
+            max_cutoff="q99", # to prevent cells with overexpressed gene from distoring the color bar
             rootname=paste(args$output, suffix, "per_clst_cell_res", current_resolution, sep="_"),
             combine_guides="keep",
             pdf=args$pdf
@@ -1242,6 +1242,7 @@ export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") 
                 plot_title="Log normalized gene expression per cell of clustered filtered integrated datasets with predicted cell types",
                 label=TRUE,
                 order=TRUE,
+                max_cutoff="q99", # to prevent cells with overexpressed gene from distoring the color bar
                 rootname=paste(args$output, suffix, "per_ctype_cell_res", current_resolution, sep="_"),
                 combine_guides="keep",
                 pdf=args$pdf
