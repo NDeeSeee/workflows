@@ -1331,7 +1331,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
         export_dim_plot(
             data=seurat_data,
             reduction="umap",
-            plot_title="Clustered UMAP projected PCA of filtered integrated/scaled datasets",
+            plot_title=paste("Clustered UMAP projected PCA of filtered integrated/scaled datasets. Resolution", current_resolution),
             legend_title="Cluster",
             group_by=paste(paste(cluster_prefix, "snn_res", sep="_"), current_resolution, sep="."),
             label=TRUE,
@@ -1341,7 +1341,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
         export_dim_plot(
             data=seurat_data,
             reduction="umap",
-            plot_title="Split by condition clustered UMAP projected PCA of filtered integrated/scaled datasets",
+            plot_title=paste("Split by condition clustered UMAP projected PCA of filtered integrated/scaled datasets. Resolution", current_resolution),
             legend_title="Cluster",
             split_by="condition",
             group_by=paste(paste(cluster_prefix, "snn_res", sep="_"), current_resolution, sep="."),
@@ -1352,7 +1352,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
         export_dim_plot(
             data=seurat_data,
             reduction="umap",
-            plot_title="Grouped by predicted cell types UMAP projected PCA of filtered integrated/scaled datasets",
+            plot_title=paste("Grouped by predicted cell types UMAP projected PCA of filtered integrated/scaled datasets. Resolution", current_resolution),
             legend_title="Cell type prediction",
             group_by=paste("cluster_ext_type_res", current_resolution, sep="."),
             label=TRUE,
@@ -1362,7 +1362,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
         export_dim_plot(
             data=seurat_data,
             reduction="umap",
-            plot_title="Split by cell cycle phase clustered UMAP projected PCA of filtered integrated/scaled datasets",
+            plot_title=paste("Split by cell cycle phase clustered UMAP projected PCA of filtered integrated/scaled datasets. Resolution", current_resolution),
             legend_title="Cluster",
             split_by="Phase",
             group_by=paste(paste(cluster_prefix, "snn_res", sep="_"), current_resolution, sep="."),
@@ -1376,7 +1376,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
             features=c("nCount_RNA", "nFeature_RNA", "S.Score", "G2M.Score", "mito_percentage", "log10_gene_per_log10_umi"),
             labels=c("UMIs", "Genes", "S score", "G to M score", "Mitochondrial %", "Novelty score"),
             reduction="umap",
-            plot_title="QC metrics for clustered UMAP projected PCA of filtered integrated/scaled datasets",
+            plot_title=paste("QC metrics for clustered UMAP projected PCA of filtered integrated/scaled datasets. Resolution", current_resolution),
             label=TRUE,
             alpha=0.4,
             rootname=paste(args$output, suffix, "qc_mtrcs_res", current_resolution, sep="_"),
@@ -1401,7 +1401,7 @@ export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") 
         export_dot_plot(
             data=seurat_data,
             features=args$features,
-            plot_title="Scaled average log normalized gene expression per cluster of filtered integrated/scaled datasets",
+            plot_title=paste("Scaled average log normalized gene expression per cluster of filtered integrated/scaled datasets. Resolution", current_resolution),
             x_label="Genes",
             y_label="Clusters",
             cluster_idents=FALSE,
@@ -1413,7 +1413,7 @@ export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") 
             features=args$features,
             labels=args$features,
             reduction="umap",
-            plot_title="Log normalized gene expression per cell of clustered filtered integrated/scaled datasets",
+            plot_title=paste("Log normalized gene expression per cell of clustered filtered integrated/scaled datasets. Resolution", current_resolution),
             label=TRUE,
             order=TRUE,
             max_cutoff="q99",  # to prevent cells with overexpressed gene from distoring the color bar
@@ -1424,7 +1424,7 @@ export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") 
         export_expr_heatmap(
             data=seurat_data,
             features=args$features,
-            plot_title="Log normalized gene expression heatmap of clustered filtered integrated/scaled datasets",
+            plot_title=paste("Log normalized gene expression heatmap of clustered filtered integrated/scaled datasets. Resolution", current_resolution),
             matrix_slot="data",  # LogNormalized version of the raw counts
             palette=c("black", "orange"),
             rootname=paste(args$output, suffix, "clst_heatmap_res", current_resolution, sep="_"),
@@ -1434,7 +1434,7 @@ export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") 
             data=seurat_data,
             features=args$features,
             labels=args$features,
-            plot_title="Log normalized gene expression densities per cluster of filtered integrated/scaled datasets",
+            plot_title=paste("Log normalized gene expression densities per cluster of filtered integrated/scaled datasets. Resolution", current_resolution),
             legend_title="Cluster",
             log=TRUE,
             pt_size=0,
@@ -1447,7 +1447,7 @@ export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") 
             export_dot_plot(
                 data=seurat_data,
                 features=args$features,
-                plot_title="Scaled average log normalized gene expression per predicted cell type of filtered integrated/scaled datasets",
+                plot_title=paste("Scaled average log normalized gene expression per predicted cell type of filtered integrated/scaled datasets. Resolution", current_resolution),
                 x_label="Genes",
                 y_label="Cell types",
                 cluster_idents=FALSE,  # no need to cluster cell types together
@@ -1459,7 +1459,7 @@ export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") 
                 features=args$features,
                 labels=args$features,
                 reduction="umap",
-                plot_title="Log normalized gene expression per cell of clustered filtered integrated/scaled datasets with predicted cell types",
+                plot_title=paste("Log normalized gene expression per cell of clustered filtered integrated/scaled datasets with predicted cell types. Resolution", current_resolution),
                 label=TRUE,
                 order=TRUE,
                 max_cutoff="q99",  # to prevent cells with overexpressed gene from distorting the color bar
@@ -1470,7 +1470,7 @@ export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") 
             export_expr_heatmap(
                 data=seurat_data,
                 features=args$features,
-                plot_title="Log normalized gene expression heatmap of clustered filtered integrated/scaled datasets with predicted cell types",
+                plot_title=paste("Log normalized gene expression heatmap of clustered filtered integrated/scaled datasets with predicted cell types. Resolution", current_resolution),
                 matrix_slot="data",  # LogNormalized version of the raw counts
                 palette=c("black", "orange"),
                 rootname=paste(args$output, suffix, "ctype_heatmap_res", current_resolution, sep="_"),
@@ -1480,7 +1480,7 @@ export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") 
                 data=seurat_data,
                 features=args$features,
                 labels=args$features,
-                plot_title="Log normalized gene expression densities per predicted cell type of filtered integrated/scaled datasets",
+                plot_title=paste("Log normalized gene expression densities per predicted cell type of filtered integrated/scaled datasets. Resolution", current_resolution),
                 legend_title="Cell type",
                 log=TRUE,
                 pt_size=0,
