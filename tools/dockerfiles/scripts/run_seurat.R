@@ -2021,6 +2021,7 @@ if (!is.null(args$features)){
     print("Check genes of interest to include only those that are present in the datasets")
     backup_assay <- DefaultAssay(seurat_data)
     DefaultAssay(seurat_data) <- "RNA"
+    args$features <- unique(args$features)
     args$features <- args$features[args$features %in% as.vector(as.character(rownames(seurat_data)))]
     print(args$features)
     DefaultAssay(seurat_data) <- backup_assay
