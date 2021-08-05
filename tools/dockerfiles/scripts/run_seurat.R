@@ -1172,7 +1172,7 @@ export_variable_feature_plot <- function(data, rootname, pdf=FALSE, width=1200, 
 }
 
 
-export_dim_plot <- function(data, rootname, reduction, plot_title, legend_title, split_by=NULL, group_by=NULL, label=FALSE, palette=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
+export_dim_plot <- function(data, rootname, reduction, plot_title, legend_title, split_by=NULL, group_by=NULL, perc_split_by=NULL, perc_group_by=NULL, label=FALSE, palette=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
             plot <- DimPlot(
@@ -1187,6 +1187,31 @@ export_dim_plot <- function(data, rootname, reduction, plot_title, legend_title,
                     guides(color=guide_legend(legend_title, override.aes=list(size=3)))
 
             if (!is.null(palette)){ plot <- plot + scale_color_brewer(palette=palette) }
+
+            if(!is.null(perc_split_by) && !is.null(perc_group_by)){
+                width <- 2 * width
+                perc_data <- data@meta.data %>%
+                             dplyr::group_by(across(all_of(perc_split_by)), across(all_of(perc_group_by))) %>%
+                             summarise(counts=n(), .groups="drop_last") %>%               # drop the perc_group_by grouping level so we can get only groups defined by perc_split_by
+                             mutate(freq=counts/sum(counts)*100) %>%                      # sum is taken for the group defined by perc_split_by
+                             arrange(all_of(perc_split_by), all_of(perc_group_by))        # sort for consistency
+                label_data <- data@meta.data %>%
+                              dplyr::group_by(across(all_of(perc_split_by))) %>%
+                              summarise(counts=n(), .groups="drop_last") %>%              # drops all grouping as we have only one level
+                              arrange(all_of(perc_split_by))                              # sort for consistency
+                perc_plot <- ggplot(perc_data, aes_string(x=perc_split_by, y="freq", fill=perc_group_by)) +
+                             geom_col(position="dodge", width=0.9, linetype="solid", color="black", show.legend=FALSE) +
+                             xlab("") +
+                             ylab("Cells percentage") +
+                             theme_gray() +
+                             geom_label_repel(
+                                label_data, mapping=aes(y=-Inf, label=counts),
+                                color="black", fill="white", segment.colour=NA,
+                                direction="y", size=3, show.legend=FALSE
+                             ) +
+                             RotatedAxis()
+                plot <- plot + perc_plot
+            }
 
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             suppressMessages(print(plot))
@@ -1334,6 +1359,8 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
             plot_title=paste("Clustered UMAP projected PCA of filtered integrated/scaled datasets. Resolution", current_resolution),
             legend_title="Cluster",
             group_by=paste(paste(cluster_prefix, "snn_res", sep="_"), current_resolution, sep="."),
+            perc_split_by="new.ident",
+            perc_group_by=paste(paste(cluster_prefix, "snn_res", sep="_"), current_resolution, sep="."),
             label=TRUE,
             rootname=paste(args$output, suffix, "umap_res", current_resolution, sep="_"),
             pdf=args$pdf
@@ -1345,6 +1372,8 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
             legend_title="Cluster",
             split_by="condition",
             group_by=paste(paste(cluster_prefix, "snn_res", sep="_"), current_resolution, sep="."),
+            perc_split_by="condition",
+            perc_group_by=paste(paste(cluster_prefix, "snn_res", sep="_"), current_resolution, sep="."),            
             label=TRUE,
             rootname=paste(args$output, suffix, "umap_spl_by_cond_res", current_resolution, sep="_"),
             pdf=args$pdf
