@@ -2,6 +2,7 @@
 options(warn=-1)
 options("width"=200)
 options(future.globals.maxSize = 8000 * 1024^2)  # 8GB should be good by default
+options(ggrepel.max.overlaps=Inf)
 
 suppressMessages(library(dplyr))
 suppressMessages(library(purrr))
@@ -136,7 +137,9 @@ export_volcano_plot <- function(data, rootname, x_axis, y_axis, x_cutoff, y_cuto
                         labFace="bold",
                         labCol="red4",
                         colAlpha=0.6,
-                        col=c("grey30", "forestgreen", "royalblue", "red")
+                        col=c("grey30", "forestgreen", "royalblue", "red"),
+                        drawConnectors=TRUE,
+                        widthConnectors=0.2
                     ) +
                     scale_y_log10() +
                     theme_gray() +
@@ -358,7 +361,12 @@ export_volcano_plot(
     plot_title="Differentially expressed genes",
     plot_subtitle=paste0(
         args$first, " vs ", args$second, " for cells split by ", args$splitby,
-        " (log2FC >= ", args$minlogfc, ", Padj <= ", args$maxpvadj, ")"
+        " (log2FC >= ", args$minlogfc, ", Padj <= ", args$maxpvadj, ")",
+        ifelse(
+            is.null(args$genes),
+            paste0(". Highlight ", 2*args$topn, " genes with the highest abs(log2FC)"),
+            ""
+        )
     ),
     caption=paste(
         nrow(diff_expr_genes), "genes",
