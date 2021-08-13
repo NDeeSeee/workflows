@@ -26,10 +26,10 @@ set_threads <- function (threads) {
 get_filtered_data <- function(seurat_data, args){
     if (!is.null(args$groupby) && !is.null(args$select)){
         print(
-            paste(
-                "Filtering Seurat data to include only",
-                paste(args$select, collapse=" "), "values from",
-                args$groupby, "metadata column"
+            paste0(
+                "Filtering Seurat data to include only '",
+                paste(args$select, collapse=" "), "' values from ",
+                args$groupby, " metadata column"
             )
         )
         backup_idents <- Idents(seurat_data)
@@ -38,6 +38,22 @@ get_filtered_data <- function(seurat_data, args){
         Idents(seurat_data) <- backup_idents
     }
     return (seurat_data)
+}
+
+
+get_avg_expr_data <- function(seurat_data, args, assay="RNA", slot="data"){
+    backup_assay <- DefaultAssay(seurat_data)
+    DefaultAssay(seurat_data) <- assay         # need to explicitely set RNA as scaling is run only on active assay
+    avg_expr_data <- AverageExpression(
+        seurat_data,
+        assays=assay,                          # need only RNA assay
+        slot=slot,                             # for slot="data" averaging is done in non-log space
+        group.by=args$splitby,
+        return.seurat=TRUE,                    # for slot="data" averaged values are saved in "counts", log-normalized - in "data", and scaled - in "scale.data"
+        verbose=FALSE
+    )
+    DefaultAssay(seurat_data) <- backup_assay
+    return (avg_expr_data)
 }
 
 
@@ -64,33 +80,67 @@ get_diff_expr_genes <- function(seurat_data, args, assay="RNA", slot="data", min
 }
 
 
+export_cell_scatter_plot <- function(data, rootname, x_axis, y_axis, plot_title, highlight=NULL, alpha=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
+    tryCatch(
+        expr = {
+            plot <- CellScatter(
+                        data,
+                        cell1=x_axis,
+                        cell2=y_axis,
+                        pt.size=2,
+                        highlight=highlight
+                    ) +
+                    ggtitle(plot_title) +
+                    theme_gray()
+
+            if (!is.null(highlight)){ plot <- LabelPoints(plot=plot, points=highlight, color="red4", fontface="bold", repel=TRUE) }
+            if (!is.null(alpha)) { plot$layers[[1]]$aes_params$alpha <- alpha }
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(plot))
+            dev.off()
+
+            if (pdf) {
+                pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                suppressMessages(print(plot))
+                dev.off()
+            }
+
+            print(paste("Export cell scatter plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export cell scatter plot to ", rootname, ".(png/pdf)", sep=""))
+        }
+    )
+}
+
+
 export_volcano_plot <- function(data, rootname, x_axis, y_axis, x_cutoff, y_cutoff, x_label, y_label, plot_title, plot_subtitle, caption, genes=NULL, label_column="gene", pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
             plot <- EnhancedVolcano(
-                data,
-                lab=data[,label_column],
-                x=x_axis,
-                y=y_axis,
-                FCcutoff=x_cutoff,
-                pCutoff=y_cutoff,
-                xlab=x_label,
-                ylab=y_label,
-                selectLab=genes,
-                title=plot_title,
-                subtitle=plot_subtitle,
-                caption=caption,
-                labFace="bold",
-                labCol="black",
-                # boxedLabels=TRUE,
-                # drawConnectors=TRUE,
-                # widthConnectors=0.2,
-                # endsConnectors="last",
-                # typeConnectors="open"
-            ) +
-            scale_y_log10() +
-            theme_gray() +
-            NoLegend()
+                        data,
+                        lab=data[,label_column],
+                        x=x_axis,
+                        y=y_axis,
+                        FCcutoff=x_cutoff,
+                        pCutoff=y_cutoff,
+                        xlab=x_label,
+                        ylab=y_label,
+                        selectLab=genes,
+                        title=plot_title,
+                        subtitle=plot_subtitle,
+                        caption=caption,
+                        labSize=4,
+                        labFace="bold",
+                        labCol="red4",
+                        colAlpha=0.6,
+                        col=c("grey30", "forestgreen", "royalblue", "red")
+                    ) +
+                    scale_y_log10() +
+                    theme_gray() +
+                    NoLegend()
 
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             suppressMessages(print(plot))
@@ -253,63 +303,52 @@ get_args <- function(){
 
 args <- get_args()
 
-cat("Step 0: Runtime configuration\n")
-
 print("Used parameters")
 print(args)
 print(paste("Setting parallelizations threads to", args$threads))
 set_threads(args$threads)
 
-cat("\n\nStep 1: Loading data\n")
-
 print(paste("Loading Seurat data from", args$rds))
 seurat_data <- readRDS(args$rds)
 
-cat("\n\nStep 2: Running differential expression analysis\n")
-
-filtered_seurat_data <- get_filtered_data(seurat_data, args)
-diff_expr_genes <- get_diff_expr_genes(filtered_seurat_data, args) %>%
+print(
+    paste0(
+        "Identifying differentially expressed genes between ", args$first, " and ", args$second,
+        " for cells split by ", args$splitby, " (log2FC >= ", args$minlogfc, ", Padj <= ", args$maxpvadj, ")"
+    )
+)
+seurat_data <- get_filtered_data(seurat_data, args)
+diff_expr_genes <- get_diff_expr_genes(seurat_data, args) %>%
                    filter(.$p_val_adj<=args$maxpvadj) %>%
                    arrange(desc(avg_log2FC))
-topn_diff_expr_genes <- diff_expr_genes %>%
-                        filter(row_number() > max(row_number()) - all_of(args$topn) | row_number() <= all_of(args$topn))
-topn_diff_expr_genes <- unique(as.vector(as.character(topn_diff_expr_genes[, "gene"])))
 
-highlight_genes <- topn_diff_expr_genes
-if ( !is.null(args$genes) ){
-    highlight_genes <- args$genes 
+topn_diff_expr_genes <- diff_expr_genes %>% filter(row_number() > max(row_number()) - all_of(args$topn) | row_number() <= all_of(args$topn))
+highlight_genes <- as.vector(as.character(topn_diff_expr_genes[, "gene"]))  # default genes to highlight
+if (!is.null(args$genes)){
+    print("Check genes of interest to include only those that are differentially expressed")
+    args$genes <- unique(args$genes)
+    args$genes <- args$genes[args$genes %in% as.vector(as.character(diff_expr_genes[, "gene"]))]
+    highlight_genes <- args$genes
 }
+print(paste("Genes to highlight", paste(highlight_genes, collapse=", ")))
 
-# print("Exporting differentially expressed genes heatmaps")
-# conditions <- c(ident_1, ident_2)
-# for (i in 1:length(conditions)){
-#     Idents(seurat_data) <- "condition"
-#     condition <- conditions[i]
-#     cells <- WhichCells(seurat_data, idents=condition)
-#     Idents(seurat_data) <- "new.ident"
-#     backup_assay <- DefaultAssay(seurat_data)
-#     DefaultAssay(seurat_data) <- "RNA"
-#     for (i in 1:length(args$resolution)) {
-#         resolution <- args$resolution[i]
-#         Idents(seurat_data) <- paste("integrated_snn_res", resolution, sep=".")
-#         export_expr_heatmap(
-#             data=seurat_data,
-#             features=diff_expr_markers$gene,
-#             cells=cells,
-#             plot_title="Log normalized gene expression heatmap of clustered filtered integrated datasets",
-#             matrix_slot="data",
-#             palette=c("black", "orange"),
-#             rootname=paste(args$output, condition, "expr_heatmap_res", resolution, sep="_"),
-#             pdf=args$pdf
-#         )
-#     }
-#     Idents(seurat_data) <- "new.ident"
-#     DefaultAssay(seurat_data) <- backup_assay
-# }
+paste("Calculating average gene expression for cells split by", args$splitby)
+avg_expr_data <- get_avg_expr_data(seurat_data, args)  # includes only RNA assay. Average normalized expression is saved in "data" slot
+
+export_cell_scatter_plot(                              # uses "data" slot from RNA assay
+    data=avg_expr_data,
+    rootname=paste(args$output, "avg_gene_expr", sep="_"),
+    x_axis=args$first,
+    y_axis=args$second,
+    highlight=highlight_genes,
+    alpha=0.6,
+    plot_title=paste("Split by", args$splitby, "log normalized average gene expression"),
+    pdf=args$pdf
+)
 
 export_volcano_plot(
     data=diff_expr_genes,
-    rootname=paste(args$output, "_diff_expr_genes", sep=""),
+    rootname=paste(args$output, "diff_expr_genes", sep="_"),
     x_axis="avg_log2FC",
     y_axis="p_val_adj",
     x_cutoff=args$minlogfc,
@@ -325,12 +364,12 @@ export_volcano_plot(
         nrow(diff_expr_genes), "genes",
         ifelse(
             (!is.null(args$groupby) && !is.null(args$select)),
-            paste("from", paste(args$select, collapse=" "), "subset(s) of", args$groupby, "metadata column"),
+            paste0("from '", paste(args$select, collapse=" "), "' subset(s) of ", args$groupby, " metadata column"),
             ""
         )
     ),
     genes=highlight_genes
 )
 
-print("Exporting filtered differentially expressed genes")
-export_data(diff_expr_genes, paste(args$output, "_diff_expr_genes.tsv", sep=""))
+print("Exporting differentially expressed genes")
+export_data(diff_expr_genes, paste(args$output, "diff_expr_genes.tsv", sep="_"))
