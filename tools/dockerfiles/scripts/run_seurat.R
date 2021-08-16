@@ -1384,6 +1384,8 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
             plot_title=paste("Grouped by predicted cell types UMAP projected PCA of filtered integrated/scaled datasets. Resolution", current_resolution),
             legend_title="Cell type prediction",
             group_by=paste("cluster_ext_type_res", current_resolution, sep="."),
+            perc_split_by="new.ident",
+            perc_group_by=paste("cluster_ext_type_res", current_resolution, sep="."),
             label=TRUE,
             rootname=paste(args$output, suffix, "umap_ctype_res", current_resolution, sep="_"),
             pdf=args$pdf
@@ -1942,6 +1944,36 @@ get_args <- function(){
         type="integer", default=10
     )
     parser$add_argument(
+        "--spread",
+        help=paste(
+            "The effective scale of embedded points on UMAP. In combination with mindist",
+            "this determines how clustered/clumped the embedded points are.",
+            "Default: 1"
+        ),
+        type="double", default=1
+    )
+    parser$add_argument(
+        "--mindist",
+        help=paste(
+            "Controls how tightly the embedding is allowed compress points together on UMAP.",
+            "Larger values ensure embedded points are moreevenly distributed, while smaller",
+            "values allow the algorithm to optimise more accurately with regard to local structure.",
+            "Sensible values are in the range 0.001 to 0.5.",
+            "Default:  0.3"
+        ),
+        type="double", default= 0.3
+    )
+    parser$add_argument(
+        "--nneighbors",
+        help=paste(
+            "Determines the number of neighboring points used in UMAP. Larger values will result",
+            "in more global structure being preserved at the loss of detailed local structure.",
+            "In general this parameter should often be in the range 5 to 50.",
+            "Default: 30"
+        ),
+        type="integer", default=30
+    )
+    parser$add_argument(
         "--resolution",
         help="Clustering resolution. Can be set as an array. Default: 0.4 0.6 0.8 1.0 1.4",
         type="double", default=c(0.4, 0.6, 0.8, 1.0, 1.4), nargs="*"
@@ -2083,7 +2115,11 @@ cat("\n\nStep 4: Reducing dimensionality of intergrated/scaled datasets\n")
 print("Performing PCA reduction of integrated/scaled data. Use all 50 principal components")
 seurat_data <- RunPCA(seurat_data, npcs=50, verbose=FALSE)                                                     # runs on "integrated" assay for integrated data, and on "RNA" assay for scaled data
 print(paste("Performing UMAP reduction of integrated/scaled data using", args$ndim, "principal components"))
-seurat_data <- RunUMAP(seurat_data, reduction="pca", dims=1:args$ndim, verbose=FALSE)                          # runs on "integrated" assay for integrated data, and on "RNA" assay for scaled data
+seurat_data <- RunUMAP(                                                                                        # runs on "integrated" assay for integrated data, and on "RNA" assay for scaled data
+    seurat_data,
+    spread=args$spread, min.dist=args$mindist, n.neighbors=args$nneighbors,
+    reduction="pca", dims=1:args$ndim, verbose=FALSE
+)
 export_all_dimensionality_plots(seurat_data, "ntgr", args)                                                     # <--- ntgr
 
 cat("\n\nStep 5: Clustering and cell type assignment of intergrated/scaled datasets with reduced dimensionality\n")
