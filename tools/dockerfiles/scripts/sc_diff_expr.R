@@ -84,6 +84,9 @@ get_diff_expr_genes <- function(seurat_data, args, assay="RNA", slot="data", min
 export_cell_scatter_plot <- function(data, rootname, x_axis, y_axis, plot_title, highlight=NULL, alpha=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
+            data <- RenameCells(data, new.names=gsub("\\s|\\t|-|\\.|,|\\*|/", "_", Cells(data)))  # otherwise ggplot will fails
+            x_axis <- gsub("\\s|\\t|-|\\.|,|\\*|/", "_", x_axis)
+            y_axis <- gsub("\\s|\\t|-|\\.|,|\\*|/", "_", y_axis)
             plot <- CellScatter(
                         data,
                         cell1=x_axis,
@@ -243,7 +246,11 @@ get_args <- function(){
     )
     parser$add_argument(
         "--genes",
-        help="Genes of interest to label on the generated plots. Default: None",
+        help=paste(
+            "Genes of interest to label on the generated plots.",
+            "Default: --topn N genes with the highest and the",
+            "lowest log2 fold change expression values."
+        ),
         type="character", nargs="*"
     )
     parser$add_argument(
