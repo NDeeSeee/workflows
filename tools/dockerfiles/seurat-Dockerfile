@@ -60,7 +60,7 @@ COPY ./scripts/sc_diff_expr.R /usr/local/bin/sc_diff_expr.R
 
 ### Installing dependencies
 RUN apt-get update && \
-    apt-get install libgcc-10-dev python3-dev python3-pip libxml2-dev libcurl4-openssl-dev libssl-dev pandoc libudunits2-dev libgdal-dev -y && \
+    apt-get install libgcc-10-dev python3-dev python3-pip libxml2-dev libcurl4-openssl-dev libssl-dev pandoc libudunits2-dev libgdal-dev libcairo2-dev libharfbuzz-dev libfribidi-dev -y && \
     pip3 install scipy && \
     pip3 install cellbrowser==${CB_VERSION} && \
     R -e 'install.packages("devtools", repo = "https://cloud.r-project.org/")' && \
