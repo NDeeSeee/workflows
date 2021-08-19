@@ -331,6 +331,14 @@ seurat_data <- get_filtered_data(seurat_data, args)
 diff_expr_genes <- get_diff_expr_genes(seurat_data, args) %>%
                    filter(.$p_val_adj<=args$maxpvadj) %>%
                    arrange(desc(avg_log2FC))
+max_log2FC <- max(diff_expr_genes$avg_log2FC[is.finite(diff_expr_genes$avg_log2FC)])
+min_log2FC <- min(diff_expr_genes$avg_log2FC[is.finite(diff_expr_genes$avg_log2FC)])
+diff_expr_genes <- diff_expr_genes %>%                                                     # replace all Inf and -Inf with numbers
+                   mutate("avg_log2FC"=ifelse(
+                       .$avg_log2FC==Inf, max_log2FC+0.05*abs(max_log2FC), ifelse(
+                           .$avg_log2FC==-Inf, min_log2FC-0.05*abs(min_log2FC), .$avg_log2FC)
+                       )
+                   )
 
 topn_diff_expr_genes <- diff_expr_genes %>% filter(row_number() > max(row_number()) - all_of(args$topn) | row_number() <= all_of(args$topn))
 highlight_genes <- as.vector(as.character(topn_diff_expr_genes[, "gene"]))  # default genes to highlight
