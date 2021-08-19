@@ -383,7 +383,8 @@ export_volcano_plot(
             ""
         )
     ),
-    genes=highlight_genes
+    genes=highlight_genes,
+    pdf=args$pdf
 )
 
 print("Exporting differentially expressed genes")
