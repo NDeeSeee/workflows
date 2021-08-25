@@ -627,25 +627,32 @@ get_all_putative_markers <- function(seurat_data, args, assay="RNA", min_diff_pc
     for (i in 1:length(args$resolution)) {
         resolution <- args$resolution[i]
         Idents(seurat_data) <- paste(paste(cluster_prefix, "snn_res", sep="_"), resolution, sep=".")
-        markers <- FindAllMarkers(
-            seurat_data,
-            logfc.threshold=args$logfc,
-            min.pct=args$minpct,
-            only.pos=args$onlypos,
-            test.use=args$testuse,
-            min.diff.pct=min_diff_pct,
-            verbose=FALSE
-        ) %>% relocate(cluster, gene, .before=1)
-        if (nrow(markers) > 0) {
-            markers <- markers %>% cbind(resolution=resolution, .)
-        } else {
-            markers <- markers %>% add_column(resolution=numeric(), .before=1)  # safety measure in case markers was empty
-        }
-        if (!is.null(all_putative_markers)) {
-            all_putative_markers <- rbind(all_putative_markers, markers)
-        } else {
-            all_putative_markers <- markers
-        }
+        tryCatch(
+            expr = {
+                markers <- FindAllMarkers(
+                    seurat_data,
+                    logfc.threshold=args$logfc,
+                    min.pct=args$minpct,
+                    only.pos=args$onlypos,
+                    test.use=args$testuse,
+                    min.diff.pct=min_diff_pct,
+                    verbose=FALSE
+                ) %>% relocate(cluster, gene, .before=1)
+                if (nrow(markers) > 0) {
+                    markers <- markers %>% cbind(resolution=resolution, .)
+                } else {
+                    markers <- markers %>% add_column(resolution=numeric(), .before=1)  # safety measure in case markers was empty
+                }
+                if (!is.null(all_putative_markers)) {
+                    all_putative_markers <- rbind(all_putative_markers, markers)
+                } else {
+                    all_putative_markers <- markers
+                }
+            },
+            error = function(e){
+                print(paste("Failed find putative gene markers for resolution", resolution, "due to", e))
+            }
+        )
         Idents(seurat_data) <- "new.ident"
     }
     DefaultAssay(seurat_data) <- backup_assay
@@ -665,23 +672,30 @@ get_all_conserved_markers <- function(seurat_data, args, assay="RNA", min_diff_p
         resolution <- args$resolution[i]
         clustering_by <- paste(paste(cluster_prefix, "snn_res", sep="_"), resolution, sep=".")
         Idents(seurat_data) <- clustering_by
-        conserved_markers <- map_dfr(
-            sort(unique(seurat_data@meta.data[, clustering_by])),
-            get_conserved_markers,
-            seurat_data,
-            "condition",
-            resolution,
-            args$onlypos,
-            args$logfc,
-            args$minpct,
-            args$testuse,
-            min_diff_pct
+        tryCatch(
+            expr = {
+                conserved_markers <- map_dfr(
+                    sort(unique(seurat_data@meta.data[, clustering_by])),
+                    get_conserved_markers,
+                    seurat_data,
+                    "condition",
+                    resolution,
+                    args$onlypos,
+                    args$logfc,
+                    args$minpct,
+                    args$testuse,
+                    min_diff_pct
+                )
+                if (!is.null(all_conserved_markers)) {
+                    all_conserved_markers <- rbind(all_conserved_markers, conserved_markers)
+                } else {
+                    all_conserved_markers <- conserved_markers
+                }
+            },
+            error = function(e){
+                print(paste("Failed find conserved gene markers for resolution", resolution, "due to", e))
+            }
         )
-        if (!is.null(all_conserved_markers)) {
-            all_conserved_markers <- rbind(all_conserved_markers, conserved_markers)
-        } else {
-            all_conserved_markers <- conserved_markers
-        }
         Idents(seurat_data) <- "new.ident"
     }
     DefaultAssay(seurat_data) <- backup_assay
