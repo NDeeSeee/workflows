@@ -481,7 +481,7 @@ explore_unwanted_variation <- function(seurat_data, cell_cycle_data, args) {
     export_dim_plot(
         data=temp_seurat_data,
         reduction="pca",
-        plot_title="Split by level of mitochondrial gene expression PCA of filtered unintegrated/scaled datasets",
+        plot_title="Split by level of transcripts mapped to mitochondrial genes PCA of filtered unintegrated/scaled datasets",
         legend_title="Expression level",
         split_by="mito_factor",
         group_by="mito_factor",
@@ -1828,9 +1828,9 @@ get_args <- function(){
         "--condition",
         help=paste(
             "Path to the TSV/CSV file to define datasets grouping. First column -",
-            "'library_id' with the values provided in the correspondent column of the",
-            "--identity file, second column 'condition'. Default: each dataset is",
-            "assigned to a separate group."
+            "'library_id' with the values provided in the same order as in the",
+            "correspondent column of the --identity file, second column 'condition'.",
+            "Default: each dataset is assigned to a separate group."
         ),
         type="character"
     )
