@@ -63,11 +63,14 @@ get_diff_expr_genes <- function(seurat_data, args, assay="RNA", slot="data", min
     backup_idents <- Idents(seurat_data)
     DefaultAssay(seurat_data) <- assay
     Idents(seurat_data) <- args$splitby
+    all_features <- as.vector(as.character(rownames(seurat_data)))
+    selected_features <- all_features[!all_features %in% args$exgenes]
     diff_expr_markers <- FindMarkers(
         seurat_data,
         slot=slot,
         ident.1=args$first,
         ident.2=args$second,
+        features=selected_features,
         logfc.threshold=args$minlogfc,
         min.pct=args$minpct,
         test.use=args$testuse,
@@ -250,6 +253,16 @@ get_args <- function(){
             "Genes of interest to label on the generated plots.",
             "Default: --topn N genes with the highest and the",
             "lowest log2 fold change expression values."
+        ),
+        type="character", nargs="*"
+    )
+    parser$add_argument(
+        "--exgenes",
+        help=paste(
+            "Genes to be excluded from the differential expression analysis.",
+            "Excluded genes will be still present in the dataset, but they won't",
+            "be used in the FindMarkers function.",
+            "Default: include all genes"
         ),
         type="character", nargs="*"
     )
