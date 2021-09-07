@@ -559,8 +559,6 @@ export_fragments_hist <- function(data, rootname, plot_title, group_by_value=NUL
 }
 
 
-
-
 export_all_qc_plots <- function(seurat_data, suffix, args){
     export_geom_bar_plot(
         data=seurat_data@meta.data,
@@ -1109,8 +1107,6 @@ seurat_data <- RunUMAP(
     reduction.key="ATACUMAP_",
     verbose=FALSE
 )
-print(seurat_data)
-print(head(seurat_data@meta.data))
 DefaultAssay(seurat_data) <- backup_assay
 
 cat("\n\nStep 6: Running WNN analysis\n")
@@ -1129,8 +1125,6 @@ seurat_data <- RunUMAP(
     reduction.key="WNNUMAP_",
     verbose=FALSE
 )
-print(seurat_data)
-print(head(seurat_data@meta.data))
 seurat_data <- FindClusters(
     seurat_data,
     graph.name="wsnn",
@@ -1138,8 +1132,5 @@ seurat_data <- FindClusters(
     resolution=args$resolution,
     verbose=FALSE
 )
-
-print(seurat_data)
-print(head(seurat_data@meta.data))
 
 export_all_clustering_plots(seurat_data, "clst", args)
