@@ -19,6 +19,7 @@ suppressMessages(library(patchwork))
 suppressMessages(library(data.table))
 suppressMessages(library(reticulate))
 suppressMessages(library(sctransform))
+suppressMessages(library(rtracklayer))
 suppressMessages(library(RColorBrewer))
 suppressMessages(library(org.Hs.eg.db))
 suppressMessages(library(org.Mm.eg.db))
@@ -33,7 +34,7 @@ set_threads <- function (threads) {
 }
 
 
-add_qc_metrics <- function(seurat_data, args) {
+add_qc_metrics <- function(seurat_data, blacklisted_data, args) {
     backup_assay <- DefaultAssay(seurat_data)
 
     DefaultAssay(seurat_data) <- "RNA"
@@ -56,8 +57,41 @@ add_qc_metrics <- function(seurat_data, args) {
     #   Poor ATAC-seq experiments typically will have a low TSS enrichment score. We can compute this
     #   metric for each cell with the TSSEnrichment() function, and the results are stored in metadata
     #   under the column name TSS.enrichment.
-    seurat_data <- TSSEnrichment(seurat_data, verbose=FALSE)
+    seurat_data <- TSSEnrichment(seurat_data, fast=FALSE, verbose=FALSE)  # set fast=FALSE, because we want to build TSS Enrichment plot later
 
+    # Fraction of fragments in peaks.
+    #   Represents the fraction of all fragments that fall within ATAC-seq peaks. Cells with low values
+    #   (i.e. <15-20%) often represent low-quality cells or technical artifacts that should be removed.
+    #   Note that this value can be sensitive to the set of peaks used.
+    fragments_data <- CountFragments(
+        fragments=args$fragments,
+        cells=colnames(seurat_data),           # limit it to only those cells that are present in seurat_data
+        verbose=FALSE
+    ) %>% column_to_rownames("CB")             # for easy access to cell barcodes
+    seurat_data$fragments <- fragments_data[colnames(seurat_data), "frequency_count"]  # select by rownames to make sure the cells order wasn't accidentally changed
+    seurat_data <- FRiP(
+        seurat_data,
+        assay="ATAC",                          # FRiP can't take the default assay, so we set it explicitly
+        total.fragments="fragments",
+        col.name="frip",
+        verbose=FALSE
+    )
+
+    # Ratio reads in genomic blacklist regions.
+    #   The ENCODE project has provided a list of blacklist regions, representing reads which are often
+    #   associated with artefactual signal. Cells with a high proportion of reads mapping to these areas
+    #   often represent technical artifacts and should be removed.
+    if (!is.null(blacklisted_data)){
+        seurat_data$blacklisted_fraction <- FractionCountsInRegion(
+            seurat_data, 
+            assay="ATAC",
+            regions=blacklisted_data
+        )
+    } else {
+        seurat_data$blacklisted_fraction <- 0  # blacklisted regions file wasn't provided, so we set everything to 0
+    }
+
+    print(head(seurat_data@meta.data))
     DefaultAssay(seurat_data) <- backup_assay
     return (seurat_data)
 }
@@ -78,15 +112,16 @@ get_scaled_norm_seurat_data <- function(seurat_data, args) {
 apply_qc_filters <- function(seurat_data, args) {
     filtered_seurat_data <- subset(
         seurat_data,
-        subset=(nFeature_RNA >= args$minfeatures) &
-               (nFeature_RNA <= args$maxfeatures) &
+        subset=(nFeature_RNA >= args$mingenes) &
+               (nFeature_RNA <= args$maxgenes) &
                (nCount_RNA >= args$gexminumi) &
                (log10_gene_per_log10_umi >= args$minnovelty) &
                (mito_percentage <= args$maxmt) &
                (nCount_ATAC >= args$atacminumi) &
-               (nCount_ATAC <= args$atacmaxumi) &
-               (nucleosome_signal <= args$maxnucl) &
-               (TSS.enrichment >= args$mintss)
+               (nucleosome_signal <= args$maxnuclsignal) &
+               (frip >= args$minfrip) &
+               (TSS.enrichment >= args$mintssenrich) &
+               (blacklisted_fraction <= args$maxblacklisted)
     )
     return (filtered_seurat_data)
 }
@@ -443,6 +478,89 @@ export_elbow_plot <- function(data, rootname, plot_title, ndims=NULL, pdf=FALSE,
 }
 
 
+export_tss_plot <- function(data, rootname, plot_title, group_by_value=NULL, idents=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
+    tryCatch(
+        expr = {
+            group_by <- NULL
+            if (!is.null(group_by_value)){
+                data$tss_group_by <- ifelse(
+                    data$TSS.enrichment >= group_by_value ,
+                    paste("High ", "(bigger or equal to ", group_by_value, ")", sep=""),
+                    paste("Low ", "(smaller than ", group_by_value, ")", sep="")
+                )
+                group_by <- "tss_group_by"
+            }
+            plot <- TSSPlot(
+                        data,
+                        group.by=group_by,
+                        idents=idents
+                    ) +
+                    theme_gray() +
+                    ggtitle(plot_title) +
+                    NoLegend()
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(plot))
+            dev.off()
+
+            if (pdf) {
+                pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                suppressMessages(print(plot))
+                dev.off()
+            }
+
+            print(paste("Export TSS Enrichment plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export TSS Enrichment plot to ", rootname, ".(png/pdf)", sep=""))
+        }
+    )
+}
+
+
+export_fragments_hist <- function(data, rootname, plot_title, group_by_value=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
+    tryCatch(
+        expr = {
+            group_by <- NULL
+            if (!is.null(group_by_value)){
+                data$ns_group_by <- ifelse(
+                    data$nucleosome_signal >= group_by_value ,
+                    paste("High nucleosome signal ", "(bigger or equal to ", group_by_value, ")", sep=""),
+                    paste("Low nucleosome signal", "(smaller than ", group_by_value, ")", sep="")
+                )
+                group_by <- "ns_group_by"
+            }
+            plot <- FragmentHistogram(
+                        data,
+                        group.by=group_by
+                    ) +
+                    theme_gray() +
+                    ggtitle(plot_title) +
+                    NoLegend()
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(plot))
+            dev.off()
+
+            if (pdf) {
+                pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                suppressMessages(print(plot))
+                dev.off()
+            }
+
+            print(paste("Export fragments length histogram to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export fragments length histogram to ", rootname, ".(png/pdf)", sep=""))
+        }
+    )
+}
+
+
+
+
 export_all_qc_plots <- function(seurat_data, suffix, args){
     export_geom_bar_plot(
         data=seurat_data@meta.data,
@@ -477,7 +595,6 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         color_by="orig.ident",
         facet_by="orig.ident",
         x_left_intercept=args$atacminumi,
-        x_right_intercept=args$atacmaxumi,
         x_label="UMIs per cell",
         y_label="Density",
         legend_title="Identity",
@@ -492,8 +609,8 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         x_axis="nFeature_RNA",
         color_by="orig.ident",
         facet_by="orig.ident",
-        x_left_intercept=args$minfeatures,
-        x_right_intercept=args$maxfeatures,
+        x_left_intercept=args$mingenes,
+        x_right_intercept=args$maxgenes,
         x_label="Genes per cell",
         y_label="Density",
         legend_title="Identity",
@@ -510,16 +627,49 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         color_by="orig.ident",
         facet_by="orig.ident",
         x_left_intercept=0,
-        # x_right_intercept=args$maxfeatures,
+        # x_right_intercept=args$maxgenes,
         x_label="Peaks per cell",
         y_label="Density",
         legend_title="Identity",
         plot_title=paste("Peak density per cell (", suffix, ")", sep=""),
-        scale_x_log10=TRUE,
+        scale_x_log10=FALSE,
         zoom_on_intercept=TRUE,
         show_ranked=TRUE,
         pdf=args$pdf
-    )    
+    )
+    export_geom_density_plot(
+        data=seurat_data@meta.data,
+        rootname=paste(args$output, suffix, "bl_cnts_dnst", sep="_"),
+        x_axis="blacklisted_fraction",
+        color_by="orig.ident",
+        facet_by="orig.ident",
+        x_left_intercept=args$maxblacklisted,
+        x_label="Fraction of reads within blacklisted regions per cell",
+        y_label="Density",
+        legend_title="Identity",
+        plot_title=paste("Density of fraction of reads within blacklisted regions per cell (", suffix, ")", sep=""),
+        scale_x_log10=FALSE,
+        zoom_on_intercept=TRUE,
+        show_ranked=TRUE,
+        pdf=args$pdf
+    )
+    backup_assay <- DefaultAssay(seurat_data)
+    DefaultAssay(seurat_data) <- "ATAC"
+    export_tss_plot(
+        data=seurat_data,
+        group_by_value=args$mintssenrich,
+        rootname=paste(args$output, suffix, "tss_enrch", sep="_"),
+        plot_title=paste("TSS Enrichment Score (", suffix, ")", sep=""),
+        pdf=args$pdf
+    )
+    export_fragments_hist(
+        data=seurat_data,
+        group_by_value=args$maxnuclsignal,
+        rootname=paste(args$output, suffix, "frg_len_hist", sep="_"),
+        plot_title=paste("Fragments Length Histogram (", suffix, ")", sep=""),
+        pdf=args$pdf
+    )
+    DefaultAssay(seurat_data) <- backup_assay
     export_geom_point_plot(
         data=seurat_data@meta.data,
         rootname=paste(args$output, suffix, "gene_umi_corr", sep="_"),
@@ -527,8 +677,8 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         y_axis="nFeature_RNA",
         facet_by="orig.ident",
         x_left_intercept=args$gexminumi,
-        y_low_intercept=args$minfeatures,
-        y_high_intercept=args$maxfeatures,
+        y_low_intercept=args$mingenes,
+        y_high_intercept=args$maxgenes,
         color_by="mito_percentage",
         colors=c("lightslateblue", "red", "green"),
         color_limits=c(0, 100),
@@ -571,8 +721,8 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
     )
     export_vln_plot(
         data=seurat_data,
-        features=c("nCount_RNA", "nFeature_RNA", "nCount_ATAC", "nFeature_ATAC", "mito_percentage", "log10_gene_per_log10_umi", "TSS.enrichment", "nucleosome_signal"),
-        labels=c("GEX UMIs", "Genes", "ATAC UMIs", "Peaks", "Mitochondrial %", "Novelty score", "TSS enrichment", "Nucleosome signal"),
+        features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "nFeature_ATAC", "TSS.enrichment",        "nucleosome_signal", "frip", "blacklisted_fraction"),
+        labels=c(  "GEX UMIs",   "Genes",        "Mitochondrial %", "Novelty score",            "ATAC UMIs",   "Peaks",         "TSS enrichment score",  "Nucleosome signal", "FRiP", "Fr. of reads in bl-ted reg."),
         rootname=paste(args$output, suffix, "qc_mtrcs", sep="_"),
         plot_title=paste("QC metrics densities per cell (", suffix, ")", sep=""),
         legend_title="Identity",
@@ -695,6 +845,18 @@ load_seurat_data <- function(args) {
 }
 
 
+load_blacklisted_data <- function(location) {
+    default_blacklisted_data <- NULL
+    if (!is.null(location)){
+        blacklisted_data <- rtracklayer::import(location, format="BED")
+        print(paste("Blacklisted regions data is successfully loaded from ", location))
+        return (blacklisted_data)
+    }
+    print("Blacklisted regions data is not provided. Cells won't be filtered by --maxblacklisted")
+    return (default_blacklisted_data)
+}
+
+
 get_args <- function(){
     parser <- ArgumentParser(description='Runs Seurat for comparative scRNA-seq analysis of across experimental conditions')
     # Loading data
@@ -721,74 +883,125 @@ get_args <- function(){
         help="Not yet used",
         type="character", required="True"
     )
+    parser$add_argument(
+        "--blacklisted",
+        help="Blacklisted regions BED file",
+        type="character"
+    )
     # Filtering
     parser$add_argument(
         "--gexmincells",
         help=paste(
-            "Include only genes detected in at least this many cells.",
+            "Include only GEX genes detected in at least this many cells.",
             "Default: 5"
         ),
         type="integer", default=5
     )
     parser$add_argument(
-        "--atacmincells",            # maybe we don't need it, because we want to call peaks by ourselves with MACS2?
-        help="",
-        type="integer", default=5
-    )
-    parser$add_argument(
-        "--mitopattern",
-        help="",
-        type="character", default="^Mt-"
-    )
-    parser$add_argument(
-        "--maxmt",
-        help="",
-        type="double", default=5
-    )
-    parser$add_argument(
-        "--minfeatures",
-        help="",
+        "--mingenes",
+        help=paste(
+            "Include cells where at least this many GEX genes are detected.",
+            "Default: 250"
+        ),
         type="integer", default=250
     )
     parser$add_argument(
-        "--maxfeatures",
-        help="",
+        "--maxgenes",
+        help=paste(
+            "Include cells with the number of GEX genes not bigger than this value.",
+            "Default: 5000"
+        ),
         type="integer", default=5000
     )
     parser$add_argument(
         "--gexminumi",
-        help="",
+        help=paste(
+            "Include cells where at least this many GEX UMIs (transcripts) are detected.",
+            "Default: 500"
+        ),
         type="integer", default=500
     )
     parser$add_argument(
+        "--mitopattern",
+        help="Regex pattern to identify mitochondrial GEX genes. Default: '^Mt-'",
+        type="character", default="^Mt-"
+    )
+    parser$add_argument(
+        "--maxmt",
+        help=paste(
+            "Include cells with the percentage of transcripts mapped to mitochondrial",
+            "GEX genes not bigger than this value.",
+            "Default: 5"
+        ),
+        type="double", default=5
+    )
+    parser$add_argument(
         "--minnovelty",
-        help="",
+        help=paste(
+            "Include cells with the novelty score not lower than this value,",
+            "calculated for GEX as log10(genes)/log10(UMIs).",
+            "Default: 0.8"
+        ),
         type="double", default=0.8
+    )
+
+    parser$add_argument(
+        "--atacmincells",
+        help=paste(
+            "Include only peaks detected in at least this many cells.",
+            "Default: 5"
+        ),
+        type="integer", default=5
     )
     parser$add_argument(
         "--atacminumi",
-        help="",
+        help=paste(
+            "Include cells where at least this many ATAC UMIs (transcripts) are detected.",
+            "Default: 500"
+        ),
         type="integer", default=1000
     )
     parser$add_argument(
-        "--atacmaxumi",
-        help="",
-        type="integer", default=100000
+        "--maxnuclsignal",
+        help=paste(
+            "Include cells with the nucleosome signal not bigger than this value.",
+            "Nucleosome signal quantifies the approximate ratio of mononucleosomal",
+            "to nucleosome-free fragments.",
+            "Default: 4"
+        ),
+        type="double", default=4
     )
     parser$add_argument(
-        "--maxnucl",
-        help="",
+        "--mintssenrich",
+        help=paste(
+            "Include cells with the TSS enrichment score not lower than this value.",
+            "Score is calculated based on the ratio of fragments centered at the TSS",
+            "to fragments in TSS-flanking regions.",
+            "Default: 2"
+        ),
         type="double", default=2
     )
     parser$add_argument(
-        "--mintss",
-        help="",
-        type="double", default=1
+        "--minfrip",
+        help=paste(
+            "Include cells with the FRiP not lower than this value.",
+            "Default: 0.15"
+        ),
+        type="double", default=0.15
+    )
+    parser$add_argument(
+        "--maxblacklisted",
+        help=paste(
+            "Include cells with the ratio of reads in genomic blacklist regions",
+            "not bigger than this value.",
+            "Default: 0.05"
+        ),
+        type="double", default=0.05
     )
     parser$add_argument(
         "--callpeaks",
         help=paste(
-            "Call peaks with MACS2 instead of provided ones by Cell Ranger.",
+            "Call peaks with MACS2 instead of those that are provided by Cell Ranger.",
             "Default: false"
         ),
         action="store_true"
@@ -811,7 +1024,7 @@ get_args <- function(){
     parser$add_argument(
         "--resolution",
         help="",
-        type="double", default=c(0.1, 0.3, 0.5, 1), nargs="*"
+        type="double", default=c(0.3), nargs="*"
     )
     # Export results
     parser$add_argument(
@@ -853,26 +1066,18 @@ set_threads(args$threads)
 
 
 cat("\n\nStep 1: Loading raw datasets\n")
-
-
 print(paste("Loading gene/peak-barcode matrices from", args$mex))
 print(paste("Loading fragments from", args$fragments))
 print(paste("Loading annotations from from", args$annotations))
 seurat_data <- load_seurat_data(args)
-
+blacklisted_data <- load_blacklisted_data(args$blacklisted)
+print("Adding QC metrics to raw seurat data")
+seurat_data <- add_qc_metrics(seurat_data, blacklisted_data, args)
+export_all_qc_plots(seurat_data, "raw", args)
 
 cat("\n\nStep 2: Filtering raw datasets\n")
-
-print("Adding QC metrics to not filtered seurat data")
-seurat_data <- add_qc_metrics(seurat_data, args)
-print(seurat_data)
-print(head(seurat_data@meta.data))
-export_all_qc_plots(seurat_data, "raw", args)
-print(seurat_data)
 seurat_data <- apply_qc_filters(seurat_data, args)
 export_all_qc_plots(seurat_data, "fltr", args)
-print(seurat_data)
-print(head(seurat_data@meta.data))
 
 cat("\n\nStep 3: Running GEX analysis\n")
 backup_assay <- DefaultAssay(seurat_data)
@@ -887,16 +1092,14 @@ seurat_data <- RunUMAP(
     reduction.key="RNAUMAP_",
     verbose=FALSE
 )
-print(seurat_data)
-print(head(seurat_data@meta.data))
 export_all_dimensionality_plots(seurat_data, "ntgr", args)
 DefaultAssay(seurat_data) <- backup_assay
 
 cat("\n\nStep 4: Running ATAC analysis\n")
 backup_assay <- DefaultAssay(seurat_data)
 DefaultAssay(seurat_data) <- "ATAC"
-seurat_data <- RunTFIDF(seurat_data, verbose=FALSE)
-seurat_data <- FindTopFeatures(seurat_data, min.cutoff="q0", verbose=FALSE)
+seurat_data <- RunTFIDF(seurat_data, verbose=FALSE)                        # normalizes across cells to correct for differences in cellular sequencing depth, and across peaks to give higher values to more rare peaks
+seurat_data <- FindTopFeatures(seurat_data, min.cutoff=50, verbose=FALSE)
 seurat_data <- RunSVD(seurat_data, verbose=FALSE)
 seurat_data <- RunUMAP(
     seurat_data,
