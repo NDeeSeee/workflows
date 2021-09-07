@@ -274,7 +274,7 @@ export_geom_density_plot <- function(data, rootname, x_axis, color_by, facet_by,
 }
 
 
-export_geom_point_plot <- function(data, rootname, x_axis, y_axis, facet_by, x_left_intercept, y_low_intercept, y_high_intercept, color_by, colors, color_limits, color_break, x_label, y_label, legend_title, plot_title, scale_x_log10=FALSE, scale_y_log10=FALSE, alpha=0.2, palette="Paired", pdf=FALSE, width=1200, height=800, resolution=100){
+export_geom_point_plot <- function(data, rootname, x_axis, y_axis, facet_by, x_left_intercept, y_low_intercept, color_by, colors, color_limits, color_break, x_label, y_label, legend_title, plot_title, y_high_intercept=NULL, scale_x_log10=FALSE, scale_y_log10=FALSE, alpha=0.2, alpha_intercept=0.5, palette="Paired", pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
             palette_colors <- RColorBrewer::brewer.pal(99, palette)  # use 99 to get all available colors. As we added LETTERS, the order will be correct
@@ -282,7 +282,11 @@ export_geom_point_plot <- function(data, rootname, x_axis, y_axis, facet_by, x_l
                               dplyr::select(all_of(facet_by)) %>%
                               distinct() %>%
                               arrange(all_of(facet_by)) %>%
-                              add_column(color=palette_colors[1:nrow(.)], x_left=x_left_intercept, y_low=y_low_intercept, y_high=y_high_intercept)
+                              add_column(color=palette_colors[1:nrow(.)], x_left=x_left_intercept, y_low=y_low_intercept)
+
+            if (!is.null(y_high_intercept)){
+                intercept_data <- intercept_data %>% add_column(y_high=y_high_intercept)
+            }
 
             plot <- ggplot(data, aes_string(x=x_axis, y=y_axis, color=color_by)) +
                     geom_point(alpha=alpha) +
@@ -298,24 +302,28 @@ export_geom_point_plot <- function(data, rootname, x_axis, y_axis, facet_by, x_l
                     guides(color=guide_colourbar(legend_title)) +
                     ggtitle(plot_title) +
                     facet_wrap(as.formula(paste("~", facet_by))) +
-                    geom_vline(intercept_data, mapping=aes(xintercept=x_left), color=intercept_data$color, alpha=0.5) +
-                    geom_hline(intercept_data, mapping=aes(yintercept=y_low), color=intercept_data$color, alpha=0.5) +
-                    geom_hline(intercept_data, mapping=aes(yintercept=y_high), color=intercept_data$color, alpha=0.5) +
+                    geom_vline(intercept_data, mapping=aes(xintercept=x_left), color=intercept_data$color, alpha=alpha_intercept) +
+                    geom_hline(intercept_data, mapping=aes(yintercept=y_low), color=intercept_data$color, alpha=alpha_intercept) +
                     geom_label_repel(
                         intercept_data, mapping=aes(x=x_left, y=Inf, label=x_left),
-                        color="black", fill=intercept_data$color, alpha=0.5, direction="y", size=3,
+                        color="black", fill=intercept_data$color, alpha=alpha_intercept, direction="y", size=3,
                         show.legend=FALSE
                     ) +
                     geom_label_repel(
                         intercept_data, mapping=aes(x=Inf, y=y_low, label=y_low),
-                        color="black", fill=intercept_data$color, alpha=0.5, direction="x", size=3,
-                        show.legend=FALSE
-                    ) +
-                    geom_label_repel(
-                        intercept_data, mapping=aes(x=Inf, y=y_high, label=y_high),
-                        color="black", fill=intercept_data$color, alpha=0.5, direction="x", size=3,
+                        color="black", fill=intercept_data$color, alpha=alpha_intercept, direction="x", size=3,
                         show.legend=FALSE
                     )
+
+            if (!is.null(y_high_intercept)){
+                plot <- plot +
+                        geom_hline(intercept_data, mapping=aes(yintercept=y_high), color=intercept_data$color, alpha=alpha_intercept) +
+                        geom_label_repel(
+                            intercept_data, mapping=aes(x=Inf, y=y_high, label=y_high),
+                            color="black", fill=intercept_data$color, alpha=alpha_intercept, direction="x", size=3,
+                            show.legend=FALSE
+                        )
+            }
 
             if (scale_x_log10){ plot <- plot + scale_x_log10() }
             if (scale_y_log10){ plot <- plot + scale_y_log10() }
@@ -649,6 +657,27 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         scale_x_log10=FALSE,
         zoom_on_intercept=TRUE,
         show_ranked=TRUE,
+        pdf=args$pdf
+    )
+    export_geom_point_plot(
+        data=seurat_data@meta.data,
+        rootname=paste(args$output, suffix, "gex_atac_umi_corr", sep="_"),
+        facet_by="orig.ident",
+        x_axis="nCount_ATAC",
+        x_label="ATAC UMIs per cell",
+        y_axis="nCount_RNA",
+        y_label="GEX UMIs per cell",
+        x_left_intercept=args$atacminumi,
+        y_low_intercept=args$gexminumi,
+        alpha_intercept=1,
+        color_by="mito_percentage",
+        colors=c("lightslateblue", "red", "green"),
+        color_limits=c(0, 100),
+        color_break=args$maxmt,
+        legend_title="Mitochondrial %",
+        plot_title=paste("GEX vs ATAC UMIs per cell correlation (", suffix, ")", sep=""),
+        scale_x_log10=TRUE,
+        scale_y_log10=TRUE,
         pdf=args$pdf
     )
     backup_assay <- DefaultAssay(seurat_data)
@@ -1096,8 +1125,8 @@ DefaultAssay(seurat_data) <- backup_assay
 cat("\n\nStep 4: Running ATAC analysis\n")
 backup_assay <- DefaultAssay(seurat_data)
 DefaultAssay(seurat_data) <- "ATAC"
-seurat_data <- RunTFIDF(seurat_data, verbose=FALSE)                        # normalizes across cells to correct for differences in cellular sequencing depth, and across peaks to give higher values to more rare peaks
-seurat_data <- FindTopFeatures(seurat_data, min.cutoff=50, verbose=FALSE)
+seurat_data <- RunTFIDF(seurat_data, verbose=FALSE)                           # normalizes across cells to correct for differences in cellular sequencing depth, and across peaks to give higher values to more rare peaks
+seurat_data <- FindTopFeatures(seurat_data, min.cutoff="q75", verbose=FALSE)
 seurat_data <- RunSVD(seurat_data, verbose=FALSE)
 seurat_data <- RunUMAP(
     seurat_data,
