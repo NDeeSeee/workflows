@@ -15,6 +15,7 @@ suppressMessages(library(ggrepel))
 suppressMessages(library(garnett))
 suppressMessages(library(argparse))
 suppressMessages(library(patchwork))
+suppressMessages(library(tidyverse))
 suppressMessages(library(data.table))
 suppressMessages(library(reticulate))
 suppressMessages(library(sctransform))
@@ -1208,6 +1209,11 @@ export_dim_plot <- function(data, rootname, reduction, plot_title, legend_title,
                              dplyr::group_by(across(all_of(perc_split_by)), across(all_of(perc_group_by))) %>%
                              summarise(counts=n(), .groups="drop_last") %>%               # drop the perc_group_by grouping level so we can get only groups defined by perc_split_by
                              mutate(freq=counts/sum(counts)*100) %>%                      # sum is taken for the group defined by perc_split_by
+                             ungroup() %>%
+                             complete(
+                                 (!!as.symbol(perc_split_by)), (!!as.symbol(perc_group_by)),
+                                 fill=list(counts=0, freq=0)
+                             ) %>%
                              arrange(all_of(perc_split_by), all_of(perc_group_by))        # sort for consistency
                 label_data <- data@meta.data %>%
                               dplyr::group_by(across(all_of(perc_split_by))) %>%

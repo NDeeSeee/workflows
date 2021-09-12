@@ -33,10 +33,9 @@ get_filtered_data <- function(seurat_data, args){
                 args$groupby, " metadata column"
             )
         )
-        backup_idents <- Idents(seurat_data)
         Idents(seurat_data) <- args$groupby
         seurat_data <- subset(seurat_data, idents=args$select)
-        Idents(seurat_data) <- backup_idents
+        Idents(seurat_data) <- "new.ident"
     }
     return (seurat_data)
 }
@@ -60,7 +59,6 @@ get_avg_expr_data <- function(seurat_data, args, assay="RNA", slot="data"){
 
 get_diff_expr_genes <- function(seurat_data, args, assay="RNA", slot="data", min_diff_pct=-Inf){
     backup_assay <- DefaultAssay(seurat_data)
-    backup_idents <- Idents(seurat_data)
     DefaultAssay(seurat_data) <- assay
     Idents(seurat_data) <- args$splitby
     all_features <- as.vector(as.character(rownames(seurat_data)))
@@ -78,7 +76,7 @@ get_diff_expr_genes <- function(seurat_data, args, assay="RNA", slot="data", min
         base=2,                      # to make sure we use log2 scale
         verbose=FALSE
     ) %>% rownames_to_column(var="gene")
-    Idents(seurat_data) <- backup_idents
+    Idents(seurat_data) <- "new.ident"
     DefaultAssay(seurat_data) <- backup_assay
     return (diff_expr_markers)
 }
