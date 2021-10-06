@@ -1994,6 +1994,39 @@ get_args <- function(){
         type="integer", default=30
     )
     parser$add_argument(
+        "--umetric",
+        help=paste(
+            "The metric to use to compute distances in high dimensional space for UMAP.",
+            "Default: cosine"
+        ),
+        type="character", default="cosine",
+        choices=c(
+            "euclidean", "manhattan", "chebyshev", "minkowski", "canberra", "braycurtis",
+            "mahalanobis", "wminkowski", "seuclidean", "cosine", "correlation", "haversine",
+            "hamming", "jaccard", "dice", "russelrao", "kulsinski", "ll_dirichlet", "hellinger",
+            "rogerstanimoto", "sokalmichener", "sokalsneath", "yule"
+        )
+    )
+    parser$add_argument(
+        "--umethod",
+        help=paste(
+            "UMAP implementation to run. Default: uwot"
+        ),
+        type="character", default="uwot",
+        choices=c("uwot", "uwot-learn", "umap-learn")
+    )
+    parser$add_argument(
+        "--ametric",
+        help=paste(
+            "Distance metric used by the nearest neighbors algorithm when running clustering.",
+            "Default: cosine"
+        ),
+        type="character", default="cosine",
+        choices=c(
+            "euclidean", "cosine", "manhattan", "hamming"
+        )
+    )
+    parser$add_argument(
         "--resolution",
         help="Clustering resolution. Can be set as an array. Default: 0.4 0.6 0.8 1.0 1.4",
         type="double", default=c(0.4, 0.6, 0.8, 1.0, 1.4), nargs="*"
@@ -2138,6 +2171,8 @@ print(paste("Performing UMAP reduction of integrated/scaled data using", args$nd
 seurat_data <- RunUMAP(                                                                                        # runs on "integrated" assay for integrated data, and on "RNA" assay for scaled data
     seurat_data,
     spread=args$spread, min.dist=args$mindist, n.neighbors=args$nneighbors,
+    metric=args$umetric,
+    umap.method=args$umethod,
     reduction="pca", dims=1:args$ndim, verbose=FALSE
 )
 export_all_dimensionality_plots(seurat_data, "ntgr", args)                                                     # <--- ntgr
@@ -2145,8 +2180,17 @@ export_all_dimensionality_plots(seurat_data, "ntgr", args)                      
 cat("\n\nStep 5: Clustering and cell type assignment of intergrated/scaled datasets with reduced dimensionality\n")
 
 print(paste("Clustering integrated/scaled data using", args$ndim, "principal components"))
-seurat_data <- FindNeighbors(seurat_data, reduction="pca", dims=1:args$ndim, verbose=FALSE)                    # runs on "integrated" assay for integrated data, and on "RNA" assay for scaled data
-seurat_data <- FindClusters(seurat_data, resolution=args$resolution)
+seurat_data <- FindNeighbors(                                                                                  # runs on "integrated" assay for integrated data, and on "RNA" assay for scaled data
+    seurat_data,
+    annoy.metric=args$ametric,
+    reduction="pca",
+    dims=1:args$ndim,
+    verbose=FALSE
+)
+seurat_data <- FindClusters(
+    seurat_data,
+    resolution=args$resolution
+)
 print("Assigning cell types for all clusters and all resolutions using only highly variable genes")
 seurat_data <- assign_cell_types(seurat_data, classifier, "RNA", "counts", args)                               # uses all features from "counts" slot of "RNA" assay
 export_all_clustering_plots(seurat_data, "clst", args)                                                         # <--- clst
