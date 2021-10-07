@@ -539,6 +539,61 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
             verbose=FALSE
         )
         return (scaled_norm_seurat_data)
+    } else if (args$nosct) {
+        print("Skipping SCTransform and running standard integration algorithm")
+        for (i in 1:length(splitted_seurat_data)) {
+            splitted_seurat_data[[i]] <- NormalizeData(splitted_seurat_data[[i]], verbose=FALSE)
+            tryCatch(
+                expr = {
+                    splitted_seurat_data[[i]] <- CellCycleScoring(
+                        splitted_seurat_data[[i]],
+                        s.features=as.vector(cell_cycle_data[tolower(cell_cycle_data$phase)=="s", "gene_id"]),
+                        g2m.features=as.vector(cell_cycle_data[tolower(cell_cycle_data$phase)=="g2/m", "gene_id"]),
+                        assay="SCT",
+                        verbose=FALSE
+                    )
+                },
+                error = function(e){
+                    print(paste("Failed to run cell cycle scoring on SCT normalized data for", Idents(splitted_seurat_data[[i]])[1]))
+                }
+            )
+            splitted_seurat_data[[i]] <- FindVariableFeatures(
+                splitted_seurat_data[[i]],
+                nfeatures=args$highvarcount,
+                verbose=FALSE
+            )
+        }
+        set_threads(1)  # need to use one thread, otherwise gets stuck
+        integration_features <- SelectIntegrationFeatures(
+            splitted_seurat_data,
+            nfeatures=args$highvarcount,
+            verbose=FALSE
+        )
+        integration_anchors <- FindIntegrationAnchors(
+            splitted_seurat_data,
+            normalization.method="LogNormalize",
+            anchor.features=integration_features,
+            verbose=FALSE
+        )
+        integrated_seurat_data <- IntegrateData(
+            integration_anchors, 
+            new.assay.name="integrated",
+            normalization.method="LogNormalize",
+            k.weight=min(min(table(Idents(seurat_data))), 100),  # 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
+            verbose=FALSE
+        )
+        vars_to_regress <- NULL
+        if (args$regressmt){ vars_to_regress <- c("mito_percentage") }
+        if (args$regresscellcycle){ vars_to_regress <- c("S.Score", "G2M.Score") }
+        if (args$regressmt && args$regresscellcycle){ vars_to_regress <- c("mito_percentage", "S.Score", "G2M.Score") }
+        integrated_seurat_data <- ScaleData(
+            integrated_seurat_data,
+            vars.to.regress=vars_to_regress,
+            verbose=FALSE
+        )
+        DefaultAssay(integrated_seurat_data) <- "integrated"
+        set_threads(args$threads)
+        return (integrated_seurat_data)
     } else {
         for (i in 1:length(splitted_seurat_data)) {
             vars_to_regress <- NULL
@@ -591,7 +646,11 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
             }
         }
         set_threads(1)  # need to use one thread, otherwise gets stuck
-        integration_features <- SelectIntegrationFeatures(splitted_seurat_data, nfeatures=args$highvarcount)
+        integration_features <- SelectIntegrationFeatures(
+            splitted_seurat_data,
+            nfeatures=args$highvarcount,
+            verbose=FALSE
+        )
         splitted_seurat_data <- PrepSCTIntegration(
             splitted_seurat_data, 
             anchor.features=integration_features,
@@ -2054,6 +2113,14 @@ get_args <- function(){
         action="store_true"
     )
     parser$add_argument(
+        "--nosct",
+        help=paste(
+            "Do not use SCTransform when running datasets integration.",
+            "Use LogNormalize instead. Default: false"
+        ),
+        action="store_true"
+    )
+    parser$add_argument(
         "--testuse",
         help="Statistical test to use for gene markers identification. Default: wilcox",
         type="character", default="wilcox",
@@ -2198,7 +2265,7 @@ export_all_clustering_plots(seurat_data, "clst", args)                          
 cat("\n\nStep 6: Running gene expression analysis\n")
 
 if ("integrated" %in% names(seurat_data@assays)) {                                                             # if we run integration, our counts and data slots in RNA assay remain the same, so we need to normalize counts first
-    print("Normalizing counts in RNA assay")
+    print("Normalizing counts in RNA assay")                                                                   # in case is was already normalized, it's safe to run it again, as it uses counts and overwrites data slots
     backup_assay <- DefaultAssay(seurat_data)
     DefaultAssay(seurat_data) <- "RNA"
     seurat_data <- NormalizeData(seurat_data, verbose=FALSE)
