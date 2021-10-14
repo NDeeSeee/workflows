@@ -29,7 +29,7 @@ set_threads <- function (threads) {
 
 
 extend_metadata <- function(seurat_data, args) {
-    if (!is.null(location)){
+    if (!is.null(args$condition)){
         extra_metadata <- read.table(
             args$condition,
             sep=get_file_type(args$condition),
