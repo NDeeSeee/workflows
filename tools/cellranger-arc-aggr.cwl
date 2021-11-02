@@ -8,7 +8,7 @@ requirements:
   - var get_label = function(i) {
         var rootname = inputs.gex_molecule_info_h5[i].basename.split('.').slice(0,-1).join('.');
         rootname = (rootname=="")?inputs.gex_molecule_info_h5[i].basename:rootname;
-        return inputs.gem_well_labels?inputs.gem_well_labels[i].replace(/,/g, "_"):rootname;
+        return inputs.gem_well_labels?inputs.gem_well_labels[i].replace(/\t|\s|\[|\]|\>|\<|,|\./g, "_"):rootname;
     };
 - class: InitialWorkDirRequirement
   listing: |
