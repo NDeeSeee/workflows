@@ -121,12 +121,12 @@ outputs:
     doc: |
       Aggregated run summary metrics and charts in HTML format
 
-  metrics_summary_report_json:
+  metrics_summary_report:
     type: File
     outputBinding:
-      glob: "aggregated/outs/summary.json"
+      glob: "aggregated/outs/summary.csv"
     doc: |
-      Aggregated run summary metrics in JSON format
+      Aggregated run summary metrics in CSV format
 
   atac_fragments_file:
     type: File
