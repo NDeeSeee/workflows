@@ -20,6 +20,14 @@ suppressMessages(library(BiocParallel))
 suppressMessages(library(EnhancedVolcano))
 
 
+# v0.0.14
+# - fixed critical bug - by mistake previously used only highly
+#   variable genes instead of all genes
+# - when running pseudobulk with DESeq2 all NA are now discarded
+# - updated plots (correct way to calcute cells percentage, added
+#   captions, etc)
+
+
 set_threads <- function (threads) {
     invisible(capture.output(plan("multiprocess", workers=threads)))
     invisible(capture.output(plan()))
@@ -44,7 +52,7 @@ extend_metadata <- function(seurat_data, args) {
             print(extra_metadata)
             for (i in 2:length(colnames(extra_metadata))){  # skip the first column as it should be library_id
                 current_column <- colnames(extra_metadata)[i]
-                print(paste0("  Adding/replacing values in the '", current_column, "' column"))
+                print(paste0("Adding/replacing values in the '", current_column, "' column"))
                 seurat_data[[current_column]] <- extra_metadata[[current_column]][match(seurat_data$new.ident, extra_metadata$library_id)]
             }
             return (seurat_data)
@@ -70,11 +78,13 @@ get_filtered_data <- function(seurat_data, args){
                 args$splitby, "' column."
             )
         )
+        print(paste("Cells before filtering", nrow(seurat_data@meta.data)))
         Idents(seurat_data) <- args$groupby
         seurat_data <- subset(seurat_data, idents=args$select)
         Idents(seurat_data) <- args$splitby
         seurat_data <- subset(seurat_data, idents=c(args$first, args$second))
         Idents(seurat_data) <- "new.ident"
+        print(paste("Cells after filtering", nrow(seurat_data@meta.data)))
     }
     return (seurat_data)
 }
@@ -114,9 +124,17 @@ get_coldata <- function(seurat_data, args){
 
 
 get_diff_expr_data <- function(seurat_data, args, min_diff_pct=-Inf){
+    backup_assay <- DefaultAssay(seurat_data)
+    DefaultAssay(seurat_data) <- "RNA"                                  # need to switch to RNA to use all genes for defining all_features
     all_features <- as.vector(as.character(rownames(seurat_data)))
     selected_features <- all_features[!all_features %in% args$exgenes]
-    excluded_features <- all_features[all_features %in% args$exgenes]   # not used elsewhere
+    excluded_features <- all_features[all_features %in% args$exgenes]   # not used elsewhere, only to print to the console
+    DefaultAssay(seurat_data) <- backup_assay
+    print(
+        paste(
+            "Number of genes selected for differential expression analysis:", length(selected_features)
+        )
+    )
     if (length(excluded_features) > 0){
         print(
             paste(
@@ -186,17 +204,20 @@ get_diff_expr_data <- function(seurat_data, args, min_diff_pct=-Inf){
             parallel=TRUE
         )
         print(mcols(diff_expr_genes))
-        diff_expr_genes$log2FoldChange[is.na(diff_expr_genes$log2FoldChange)] <- 0.001         # we can't set it to 0, because it's log2
-        diff_expr_genes$pvalue[is.na(diff_expr_genes$pvalue)] <- 1
-        diff_expr_genes$padj[is.na(diff_expr_genes$padj)] <- 1
         diff_expr_genes <- as.data.frame(diff_expr_genes) %>%
-                           dplyr::rename("avg_log2FC"="log2FoldChange") %>%
+                           na.omit() %>%                                                       # eclude all rows where NA is found in any column
+                           dplyr::rename("avg_log2FC"="log2FoldChange") %>%                    # rename for consistency with FindMarkers output
                            dplyr::rename("p_val"="pvalue") %>%
                            dplyr::rename("p_val_adj"="padj") %>%
                            rownames_to_column(var="gene") %>%
                            add_column(pct.1=0) %>%                                             # add pct.1 for consistency with Seurat's FindMarkers output
                            add_column(pct.2=0) %>%                                             # add pct.2 for consistency with Seurat's FindMarkers output
-                           dplyr::select(gene, p_val, avg_log2FC, pct.1, pct.2, p_val_adj)
+                           dplyr::select(gene, p_val, avg_log2FC, pct.1, pct.2, p_val_adj)     # select only those columns that are present in FindMarkers output
+        print(
+            paste(
+                "Number of differentially expressed genes after excluding 'NA':", nrow(diff_expr_genes)
+            )
+        )
         return (list(diff_expr_genes=diff_expr_genes, data=deseq_data))
     } else {
         print(paste0(
@@ -272,7 +293,7 @@ export_volcano_plot <- function(data, rootname, x_axis, y_axis, x_cutoff, y_cuto
 }
 
 
-export_counts_plot <- function(data, col_data, from_deseq, features, rootname, splitby, batchby, x_label, y_label, legend_title, plot_title, combine_guides=NULL, palette="Paired", alpha=1, pdf=FALSE, width=1200, height=800, resolution=100){
+export_counts_plot <- function(data, col_data, from_deseq, features, captions, rootname, splitby, batchby, x_label, y_label, legend_title, plot_title, plot_subtitle, combine_guides=NULL, palette="Paired", alpha=1, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
             plots = list()
@@ -309,6 +330,7 @@ export_counts_plot <- function(data, col_data, from_deseq, features, rootname, s
                                  column_to_rownames("Row.names")
             for (i in 1:length(features)){
                 current_feature <- features[i]
+                current_caption <- captions[i]
                 counts <- normalized_counts[, c(current_feature, colnames(col_data)), drop=FALSE] %>%
                           dplyr::rename("count"=all_of(current_feature))
                 plots[[i]] <- ggplot(
@@ -317,12 +339,13 @@ export_counts_plot <- function(data, col_data, from_deseq, features, rootname, s
                               ) +
                               geom_point(alpha=alpha) +
                               stat_summary(fun=mean, geom="line") +
-                              ggtitle(current_feature) +
+                              ggtitle(current_feature, subtitle=current_caption) +
                               theme_gray() +
                               xlab(x_label) +
-                              ylab(y_label)
+                              ylab(y_label) +
+                              theme(plot.subtitle=element_text(size=8, face="italic", color="gray30"))
             }
-            combined_plots <- wrap_plots(plots, guides=combine_guides) + plot_annotation(title=plot_title)
+            combined_plots <- wrap_plots(plots, guides=combine_guides) + plot_annotation(title=plot_title, subtitle=plot_subtitle)
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             suppressMessages(print(combined_plots))
             dev.off()
@@ -343,13 +366,23 @@ export_counts_plot <- function(data, col_data, from_deseq, features, rootname, s
 }
 
 
-export_dim_plot <- function(data, rootname, reduction, plot_title, legend_title, perc_legend_title, split_by=NULL, group_by=NULL, perc_split_by=NULL, perc_group_by=NULL, label=FALSE, palette=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
+export_dim_plot <- function(data, rootname, reduction, plot_title, legend_title, perc_legend_title, split_by=NULL, group_by=NULL, highlight_group=NULL, perc_split_by=NULL, perc_group_by=NULL, label=FALSE, palette=NULL, pdf=FALSE, width=1600, height=1200, resolution=100){
     tryCatch(
         expr = {
+            highlight_cells <- NULL
+            if (!is.null(group_by) && !is.null(highlight_group)){
+                Idents(data) <- group_by
+                highlight_cells <- WhichCells(
+                    data,
+                    idents=highlight_group                               # highlight_group can be also set as a vector
+                )
+                Idents(data) <- "new.ident"                              # need to set back to our default identity
+            }
             plot <- DimPlot(
                         data,
                         reduction=reduction,
                         split.by=split_by,
+                        cells.highlight=if(is.null(highlight_cells)) NULL else list(Selected=highlight_cells),  # need to use this trick because ifelse doesn't return NULL, 'Selected' is just a name to display on the plot
                         group.by=group_by,
                         label=label
                     ) +
@@ -360,33 +393,65 @@ export_dim_plot <- function(data, rootname, reduction, plot_title, legend_title,
             if (!is.null(palette)){ plot <- plot + scale_color_brewer(palette=palette) }
 
             if(!is.null(perc_split_by) && !is.null(perc_group_by)){
-                width <- 2 * width
-                perc_data <- data@meta.data %>%
-                             dplyr::group_by(across(all_of(perc_split_by)), across(all_of(perc_group_by))) %>%
-                             summarise(counts=n(), .groups="drop") %>%               # drop the perc_group_by grouping level so we can get only groups defined by perc_split_by
-                             mutate(freq=counts/sum(counts)*100) %>%                 # sum is taken for the group defined by perc_split_by
-                             ungroup() %>%
-                             complete(
-                                 (!!as.symbol(perc_split_by)), (!!as.symbol(perc_group_by)),
-                                 fill=list(counts=0, freq=0)
-                             ) %>%
-                             mutate(caption=paste0(counts, " (", round(freq, digits=2), "%)")) %>%
-                             arrange(all_of(perc_split_by), all_of(perc_group_by))        # sort for consistency
+
+                get_perc_data <- function(meta_data, perc_split_by, perc_group_by){
+                    perc_data <- meta_data %>%
+                                 dplyr::group_by(across(all_of(perc_split_by)), across(all_of(perc_group_by))) %>%
+                                 summarise(counts=n(), .groups="drop") %>%                               # drop - all levels of grouping are dropped
+                                 mutate(freq=counts/sum(counts)*100) %>%                                 # sum is taken for all rows as all groups are dropped
+                                 ungroup() %>%
+                                 complete(
+                                     (!!as.symbol(perc_split_by)), (!!as.symbol(perc_group_by)),
+                                     fill=list(counts=0, freq=0)
+                                 ) %>%
+                                 mutate(caption=paste0(round(freq, digits=2), "% (", counts, ")")) %>%
+                                 arrange(all_of(perc_split_by), all_of(perc_group_by))                   # sort for consistency
+                    return (perc_data)
+                }
+
+                perc_data <- get_perc_data(data@meta.data, perc_split_by, perc_group_by)
+
+                if (!is.null(group_by) && !is.null(highlight_group)){                                    # changing the way we calculate frequencies as we want to show only the percentage of highlighted groups
+                    Idents(data) <- group_by
+                    data <- subset(data, idents=highlight_group)                                         # subsetting to only include groups to highlight
+                    Idents(data) <- "new.ident"                                                          # set back to our default identities
+                    filtered_perc_data <- get_perc_data(data@meta.data, perc_split_by, perc_group_by)    # includes only highlighted groups
+                    perc_data <- perc_data %>%                                                           # recalculating percentage table
+                                 inner_join(                                                             # safe to use inner_join as we call complete in the _get_perc_data function
+                                     filtered_perc_data,
+                                     by=c(names(perc_data)[1], names(perc_data)[2])                      # always columns created by perc_split_by and perc_group_by grouping
+                                 ) %>%
+                                 mutate(counts=counts.y) %>%                                             # counts.y - counts from filtered_perc_data
+                                 mutate(freq=counts.y/counts.x*100) %>%                                  # counts.x - counts from not filtered percent data
+                                 mutate(caption=paste0(counts, " (", round(freq, digits=2), "%)")) %>%
+                                 dplyr::select(all_of(perc_split_by), any_of(perc_group_by), counts, freq, caption) %>%
+                                 arrange(all_of(perc_split_by), all_of(perc_group_by))                   # sort for consistency
+                }
+
                 perc_data[[perc_group_by]] <- as.factor(perc_data[[perc_group_by]])
-                label_data <- data@meta.data %>%
+                label_data <- data@meta.data %>%                                          # this can be either full or filtered data
                               dplyr::group_by(across(all_of(perc_split_by))) %>%
                               summarise(counts=n(), .groups="drop_last") %>%              # drops all grouping as we have only one level
                               arrange(all_of(perc_split_by))                              # sort for consistency
                 perc_plot <- ggplot(perc_data, aes_string(x=perc_split_by, y="freq", fill=perc_group_by)) +
-                             geom_col(position="dodge", width=0.98, linetype="solid", color="black", show.legend=TRUE) +
+                             geom_col(position="dodge", width=0.7, linetype="solid", color="black", show.legend=TRUE) +
                              geom_label(
                                 aes(label=caption),
-                                position=position_dodge(0.98),
+                                position=position_dodge(0.7),
                                 color="white", size=4, show.legend=FALSE
                              ) +
                              guides(fill=guide_legend(perc_legend_title)) +
                              xlab("") +
-                             ylab("Cells percentage") +
+                             ylab(
+                                 paste0(
+                                    "Cells percentage",
+                                    ifelse(
+                                        (!is.null(group_by) && !is.null(highlight_group)),
+                                        " (selected cells per dataset)",
+                                        " (portion of each dataset)"
+                                    )
+                                 )
+                             ) +
                              theme_gray() +
                              geom_label_repel(
                                 label_data, mapping=aes(y=-Inf, label=counts),
@@ -427,9 +492,12 @@ get_file_type <- function (filename) {
 }
 
 
-export_data <- function(data, location, row_names=FALSE, col_names=TRUE, quote=FALSE){
+export_data <- function(data, location, row_names=FALSE, col_names=TRUE, quote=FALSE, digits=NULL){
     tryCatch(
         expr = {
+            if (!is.null(digits)){
+                data <- format(data, digits=digits)
+            }
             write.table(
                 data,
                 file=location,
@@ -648,13 +716,17 @@ seurat_data <- readRDS(args$rds)
 print("Extending Seurat object with the extra metadata fields")
 seurat_data <- extend_metadata(seurat_data, args)
 
-print("Filtering Seurat object to include only required cells")
-seurat_data <- get_filtered_data(seurat_data, args)
-
 export_dim_plot(
     data=seurat_data,
     reduction="umap",
-    plot_title=paste0("Split by '", args$splitby, "' clustered UMAP of filtered datasets"),
+    plot_title=paste0(
+        "Split by '", args$splitby, "' clustered UMAP",
+        ifelse(
+            (!is.null(args$groupby) && !is.null(args$select)),
+            paste0(" with selected '", paste(args$select, collapse=" "), "' subset(s) of '", args$groupby, "' metadata column"),
+            ""
+        )
+    ),
     legend_title=ifelse(
         is.null(args$groupby),
         args$splitby,
@@ -666,13 +738,17 @@ export_dim_plot(
         args$splitby,
         args$groupby
     ),
+    highlight_group=args$select,
     perc_split_by=args$splitby,
-    perc_group_by=if(is.null(args$batchby)) args$groupby else args$batchby,                           # need to use this trick because ifelse doesn't return NULL
+    perc_group_by=if(is.null(args$batchby)) args$groupby else args$batchby,        # need to use this trick because ifelse doesn't return NULL
     perc_legend_title=if(is.null(args$batchby)) args$groupby else args$batchby,    # need to use this trick because ifelse doesn't return NULL
     label=ifelse(is.null(args$groupby), FALSE, TRUE),
     rootname=paste(args$output, "umap", sep="_"),
     pdf=args$pdf
 )
+
+print("Filtering Seurat object to include only required cells")
+seurat_data <- get_filtered_data(seurat_data, args)
 
 print(
     paste0(
@@ -683,7 +759,7 @@ print(
 
 diff_expr_data <- get_diff_expr_data(seurat_data, args)
 
-diff_expr_genes <- diff_expr_data$diff_expr_genes %>%
+diff_expr_genes <- diff_expr_data$diff_expr_genes %>%                                      # filtered by p_val_adj differentially expressed genes
                    filter(.$p_val_adj<=args$maxpvadj) %>%
                    arrange(desc(avg_log2FC))
 
@@ -734,7 +810,7 @@ export_volcano_plot(
         "Padj <= ", args$maxpvadj, ")",
         ifelse(
             is.null(args$genes),
-            paste0(". Highlight ", 2*args$topn, " genes with the highest abs(log2FC)"),
+            paste0(". Select ", 2*args$topn, " genes with the highest abs(log2FC)"),
             ""
         )
     ),
@@ -750,11 +826,18 @@ export_volcano_plot(
     pdf=args$pdf
 )
 
+captions <- diff_expr_genes %>%
+            filter(.$gene %in% highlight_genes) %>%
+            mutate("caption" = paste0("log2FC=", round(.$avg_log2FC, 2)))
+captions <- captions[match(highlight_genes, captions$gene), ] %>%          # to guarantee that the order of captions will correspond to the order of highlight_genes
+            pull(caption)
+
 export_counts_plot(
     data=diff_expr_data$data,
     col_data=get_coldata(seurat_data, args),
     from_deseq=args$pseudo,                                               # when we use --pseudo the diff_expr_data$data comes from DESeq2
     features=highlight_genes,
+    captions=captions,
     rootname=paste(args$output, "counts", sep="_"),
     splitby=args$splitby,
     batchby=ifelse(is.null(args$batchby), args$splitby, args$batchby),
@@ -766,9 +849,35 @@ export_counts_plot(
         ifelse(args$pseudo, "rlog-", "log-"),
         "normalized counts"
     ),
+    plot_subtitle=paste0(
+        args$second, " vs ", args$first, " for ",
+        ifelse(
+            args$pseudo,
+            "pseudobulk RNA-Seq samples",
+            "cells"
+        ),
+        " split by ",
+        args$splitby,
+        " (",
+        ifelse(
+            args$pseudo,
+            "",
+            paste0("log2FC >= ", args$minlogfc, ", ")
+        ),
+        "Padj <= ", args$maxpvadj, ")",
+        ifelse(
+            is.null(args$genes),
+            paste0(". Select ", 2*args$topn, " genes with the highest abs(log2FC)"),
+            ""
+        )
+    ),
     combine_guides="collect",
     pdf=args$pdf
 )
 
 print("Exporting differentially expressed genes")
-export_data(diff_expr_genes, paste(args$output, "diff_expr_genes.tsv", sep="_"))
+export_data(
+    diff_expr_genes,
+    location=paste(args$output, "diff_expr_genes.tsv", sep="_"),
+    digits=4
+)
