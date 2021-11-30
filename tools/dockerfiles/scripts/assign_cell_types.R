@@ -603,7 +603,7 @@ if (!is.null(args$features)){
 }
 
 print("Saving results")
-# export_rds(seurat_data, paste(args$output, "_ctype_data.rds", sep=""))
+export_rds(seurat_data, paste(args$output, "_ctype_data.rds", sep=""))
 export_all_clustering_plots(seurat_data, "clst", args)
 if (!is.null(args$features)){
     export_all_expression_plots(seurat_data, "expr", args, assay="RNA")
