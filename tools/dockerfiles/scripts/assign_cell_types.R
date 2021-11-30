@@ -488,7 +488,7 @@ export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") 
         x_label="Genes",
         y_label="Cell types",
         cluster_idents=FALSE,  # no need to cluster cell types together
-        rootname=paste(args$output, suffix, "avg_per_ctype_res", sep="_"),
+        rootname=paste(args$output, suffix, "avg_per_ctype", sep="_"),
         pdf=args$pdf
     )
     export_feature_plot(
@@ -500,7 +500,7 @@ export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") 
         label=TRUE,
         order=TRUE,
         max_cutoff="q99",  # to prevent cells with overexpressed gene from distorting the color bar
-        rootname=paste(args$output, suffix, "per_ctype_cell_res", sep="_"),
+        rootname=paste(args$output, suffix, "per_ctype_cell", sep="_"),
         combine_guides="keep",
         pdf=args$pdf
     )
@@ -513,7 +513,7 @@ export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") 
         log=TRUE,
         pt_size=0,
         combine_guides="collect",
-        rootname=paste(args$output, suffix, "dnst_per_ctype_res", sep="_"),
+        rootname=paste(args$output, suffix, "dnst_per_ctype", sep="_"),
         pdf=args$pdf
     )
     Idents(seurat_data) <- "new.ident"
@@ -522,7 +522,7 @@ export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") 
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description='Assigns cell types to clusters')
+    parser <- ArgumentParser(description="Assigns cell types to clusters")
     parser$add_argument(
         "--rds",
         help=paste(
