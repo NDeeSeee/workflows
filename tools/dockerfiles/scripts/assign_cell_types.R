@@ -9,6 +9,7 @@ suppressMessages(library(future))
 suppressMessages(library(ggplot2))
 suppressMessages(library(ggrepel))
 suppressMessages(library(argparse))
+suppressMessages(library(patchwork))
 suppressMessages(library(tidyverse))
 suppressMessages(library(data.table))
 suppressMessages(library(reticulate))
@@ -208,15 +209,13 @@ coords=%s'
 
 
 export_cellbrowser_data <- function(seurat_data, suffix, args, assay="RNA", matrix_slot="data"){
-    # tryCatch(
-    #     expr = {
+    tryCatch(
+        expr = {
             backup_assay <- DefaultAssay(seurat_data)
             DefaultAssay(seurat_data) <- assay
             meta_fields <- c("nCount_RNA", "nFeature_RNA", "log10_gene_per_log10_umi", "mito_percentage", "Phase", "S.Score", "G2M.Score")
             meta_fields_names <- c("UMIs", "Genes", "Novelty score", "Mitochondrial %", "Cell cycle phase", "S score", "G to M score")
-            cluster_field <- "Cluster"
             if ("integrated" %in% names(seurat_data@assays)) {
-                cluster_field <- "Identity"
                 meta_fields <- c(c("new.ident", "condition"), meta_fields)
                 meta_fields_names <- c(c("Identity", "Condition"), meta_fields_names)
             }
@@ -235,20 +234,20 @@ export_cellbrowser_data <- function(seurat_data, suffix, args, assay="RNA", matr
                 seurat_data,
                 matrix.slot=matrix_slot,
                 dir=rootname,
-                cluster.field=cluster_field,
+                cluster.field="Cell Type",
                 features=args$features,
                 meta.fields=meta_fields,
                 meta.fields.names=meta_fields_names
             )
             print(paste("Export UCSC Cellbrowser data to", rootname, sep=" "))
-    #     },
-    #     error = function(e){
-    #         print(paste("Failed to export UCSC Cellbrowser data to", rootname, sep=" "))
-    #     },
-    #     finally = {
-    #         DefaultAssay(seurat_data) <- backup_assay
-    #     }
-    # )
+        },
+        error = function(e){
+            print(paste("Failed to export UCSC Cellbrowser data to", rootname, sep=" "))
+        },
+        finally = {
+            DefaultAssay(seurat_data) <- backup_assay
+        }
+    )
 }
 
 
@@ -351,6 +350,133 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
 }
 
 
+export_vln_plot <- function(data, features, labels, rootname, plot_title, legend_title, log=FALSE, group_by=NULL, hide_x_text=FALSE, pt_size=NULL, palette=NULL, combine_guides=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
+    tryCatch(
+        expr = {
+            plots <- VlnPlot(
+                         data,
+                         features=features,
+                         pt.size=pt_size,
+                         group.by=group_by,
+                         log=log,
+                         combine=FALSE       # to return a list of gglots
+                     )
+            plots <- lapply(seq_along(plots), function(i){
+                plots[[i]] <- plots[[i]] +
+                              ggtitle(labels[i]) +
+                              theme_gray() +
+                              theme(axis.title.x=element_blank()) +
+                              guides(fill=guide_legend(legend_title)) +
+                              stat_boxplot(width=0.15, geom="errorbar") +
+                              geom_boxplot(width=0.15, outlier.alpha=0) +
+                              RotatedAxis()
+                if (!is.null(palette)){ plots[[i]] <- plots[[i]] + scale_fill_brewer(palette=palette) }
+                if (hide_x_text){ plots[[i]] <- plots[[i]] + theme(axis.text.x=element_blank()) }
+                return (plots[[i]])
+            })
+            combined_plots <- wrap_plots(plots, guides=combine_guides) + plot_annotation(title=plot_title)
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(combined_plots))
+            dev.off()
+
+            if (pdf) {
+                pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                suppressMessages(print(combined_plots))
+                dev.off()
+            }
+
+            print(paste("Export violin plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export violin plot to ", rootname, ".(png/pdf)", sep=""))
+        }
+    )
+}
+
+
+export_feature_plot <- function(data, features, labels, rootname, reduction, plot_title, split_by=NULL, label=FALSE, order=FALSE, min_cutoff=NA, max_cutoff=NA, pt_size=NULL, combine_guides=NULL, alpha=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
+    tryCatch(
+        expr = {
+            plots <- FeaturePlot(
+                        data,
+                        features=features,
+                        pt.size=pt_size,
+                        order=order,
+                        min.cutoff=min_cutoff,
+                        max.cutoff=max_cutoff,
+                        reduction=reduction,
+                        split.by=split_by,
+                        label=label,
+                        combine=FALSE       # to return a list of gglots
+                    )
+            plots <- lapply(seq_along(plots), function(i){
+                plots[[i]] <- plots[[i]] + ggtitle(labels[i]) + theme_gray()
+                if (!is.null(alpha)) { plots[[i]]$layers[[1]]$aes_params$alpha <- alpha }
+                return (plots[[i]])
+            })
+            combined_plots <- wrap_plots(plots, guides=combine_guides) + plot_annotation(title=plot_title)
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(combined_plots))
+            dev.off()
+
+            if (pdf) {
+                pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                suppressMessages(print(combined_plots))
+                dev.off()
+            }
+
+            print(paste("Export feature plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export feature plot to ", rootname, ".(png/pdf)", sep=""))
+        }
+    )
+}
+
+
+export_dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, cluster_idents=FALSE, min_pct=0.01, col_min=-2.5, col_max=2.5, pdf=FALSE, width=1200, height=800, resolution=100){
+    tryCatch(
+        expr = {
+            plot <- DotPlot(
+                        data,
+                        features=features,
+                        cluster.idents=cluster_idents,
+                        dot.min=min_pct,
+                        col.min=col_min,
+                        col.max=col_max,
+                        scale=TRUE,
+                        scale.by="size"  # for optimal perception
+                    ) +
+                    xlab(x_label) +
+                    ylab(y_label) +
+                    theme_gray() +
+                    ggtitle(plot_title) +
+                    RotatedAxis()
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(plot))
+            dev.off()
+
+            if (pdf) {
+                pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                suppressMessages(print(plot))
+                dev.off()
+            }
+
+            print(paste("Export dot plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export dot plot to ", rootname, ".(png/pdf)", sep=""))
+        }
+    )
+}
+
+
 export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") {
     backup_assay <- DefaultAssay(seurat_data)
     DefaultAssay(seurat_data) <- assay
@@ -376,15 +502,6 @@ export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") 
         max_cutoff="q99",  # to prevent cells with overexpressed gene from distorting the color bar
         rootname=paste(args$output, suffix, "per_ctype_cell_res", sep="_"),
         combine_guides="keep",
-        pdf=args$pdf
-    )
-    export_expr_heatmap(
-        data=seurat_data,
-        features=args$features,
-        plot_title="Log normalized gene expression heatmap of clustered filtered integrated/scaled datasets with predicted cell types",
-        matrix_slot="data",  # LogNormalized version of the raw counts
-        palette=c("black", "orange"),
-        rootname=paste(args$output, suffix, "ctype_heatmap_res", sep="_"),
         pdf=args$pdf
     )
     export_vln_plot(
