@@ -210,8 +210,8 @@ $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
 
-label: "Single-cell Cell Type Annotation"
-s:name: "Single-cell Cell Type Annotation"
+label: "Single-cell Assign Cell Types"
+s:name: "Single-cell Assign Cell Types"
 s:alternateName: "Assigns cell types to Seurat clusters"
 
 s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows/master/tools/sc-assign-cell-types.cwl
@@ -250,7 +250,7 @@ s:creator:
 
 
 doc: |
-  Single-cell Cell Type Annotation
+  Single-cell Assign Cell Types
   ================================
   Assigns cell types to Seurat clusters
 
