@@ -2,15 +2,18 @@
 # Dockerfile
 #
 # Software:         Seurat script
-# Software Version: v0.0.14
+# Software Version: v0.0.15
 # Description:      Dockerized version of Seurat script
 # Website:          https://satijalab.org/seurat/index.html
 # Provides:         Seurat script
 # Base Image:       satijalab/seurat:4.0.3
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat:v0.0.14 -f seurat-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/seurat:v0.0.14
-# Run Cmd:          docker run --rm -ti biowardrobe2/seurat:v0.0.14 /bin/bash
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat:v0.0.15 -f seurat-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/seurat:v0.0.15
+# Run Cmd:          docker run --rm -ti biowardrobe2/seurat:v0.0.15 /bin/bash
 #################################################################
+#
+# v0.0.15
+# - Added assign_cell_types.R script
 #
 # v0.0.14
 # - Updated sc_diff_expr.R script to support pseudobulk differential
@@ -79,6 +82,7 @@ ENV CB_VERSION "1.0.1"
 
 COPY ./scripts/run_seurat.R /usr/local/bin/run_seurat.R
 COPY ./scripts/sc_diff_expr.R /usr/local/bin/sc_diff_expr.R
+COPY ./scripts/assign_cell_types.R /usr/local/bin/assign_cell_types.R
 
 ### Installing dependencies
 RUN apt-get update && \
@@ -93,9 +97,10 @@ RUN apt-get update && \
     R -e "devtools::install_github('cole-trapnell-lab/monocle3')" && \
     R -e "BiocManager::install(c('org.Hs.eg.db', 'org.Mm.eg.db'))" && \
     R -e "devtools::install_github('cole-trapnell-lab/garnett', ref='monocle3')" && \
-### Installing run_seurat.R and sc_diff_expr.R scripts
+### Installing run_seurat.R, sc_diff_expr.R, and assign_cell_types.R scripts
     chmod +x /usr/local/bin/run_seurat.R && \
     chmod +x /usr/local/bin/sc_diff_expr.R && \
+    chmod +x /usr/local/bin/assign_cell_types.R && \
 ### Cleaning
     apt-get clean && \
     apt-get purge && \
