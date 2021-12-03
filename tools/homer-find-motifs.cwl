@@ -27,7 +27,7 @@ requirements:
                   "entry": inputs.background_fasta_file,
                   "entryname": "background.fa",
                   "writable": true
-                }                
+                }
               ]
     }
 
