@@ -5,6 +5,6 @@
   },
   "background_fasta_file": {
     "class": "File",
-    "location":  "./data/dm3_chr4/main_inputs/fasta/meme.fa"
+    "location":  "./data/dm3_chr4/main_inputs/fasta/meme_copy.fa"
   }
 }
