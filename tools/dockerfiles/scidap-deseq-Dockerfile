@@ -2,12 +2,13 @@
 # Dockerfile
 #
 # Software:         BioWardrobe DESeq/DESeq2 script
-# Software Version: v0.0.24
+# Software Version: v0.0.25
 # Description:      Dockerized version of DESeq/DESeq2 script from BioWardrobe
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         run_deseq.R
 #                   run_deseq_lrt.R
-#                   get_gene_n_tss.R 
+#                   get_gene_n_tss.R
+#                   run_deseq_manual.R
 #                   BiocManager       1.30.10
 #                   BiocParallel      1.22.0
 #                   DESeq             1.39.0
@@ -15,10 +16,14 @@
 #                   argparse          latest
 #                   pheatmap          latest
 # Base Image:       r-base:4.0.4
-# Build Cmd:        docker build --rm -t biowardrobe2/scidap-deseq:v0.0.24 -f scidap-deseq-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/scidap-deseq:v0.0.24
-# Run Cmd:          docker run --rm -ti biowardrobe2/scidap-deseq:v0.0.24 /bin/bash
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/scidap-deseq:v0.0.25 -f scidap-deseq-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/scidap-deseq:v0.0.25
+# Run Cmd:          docker run --rm -ti biowardrobe2/scidap-deseq:v0.0.25 /bin/bash
 #################################################################
+#
+# v0.0.25
+#
+# - Added run_deseq_manual.R script
 #
 # v0.0.24
 #
@@ -145,12 +150,13 @@ ENV DEBIAN_FRONTEND noninteractive
 
 WORKDIR /tmp
 
-ENV VERSION_BIOCMANAGER 1.30.10
+ENV VERSION_BIOCMANAGER 1.30.16
 ENV URL_BIOCMANAGER "https://cran.r-project.org/src/contrib/BiocManager_${VERSION_BIOCMANAGER}.tar.gz"
 
 COPY ./scripts/install_from_source.R /tmp/install_from_source.R
 COPY ./scripts/run_deseq.R /usr/local/bin/run_deseq.R
 COPY ./scripts/run_deseq_lrt.R /usr/local/bin/run_deseq_lrt.R
+COPY ./scripts/run_deseq_lrt.R /usr/local/bin/run_deseq_manual.R
 COPY ./scripts/get_gene_n_tss.R /usr/local/bin/get_gene_n_tss.R
 
 ### Installing python3, pip3 and argparse
@@ -165,9 +171,10 @@ RUN apt-get update && \
     R -e 'install.packages("data.table", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("pheatmap", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("ggrepel", repo = "https://cloud.r-project.org/")' && \
-### Installing run_deseq.R, get_gene_n_tss.R and run_deseq_lrt.R scripts
+### Installing run_deseq.R, get_gene_n_tss.R, run_deseq_lrt.R, run_deseq_manual.R scripts
     chmod +x /usr/local/bin/run_deseq.R && \
     chmod +x /usr/local/bin/run_deseq_lrt.R && \
+    chmod +x /usr/local/bin/run_deseq_manual.R && \
     chmod +x /usr/local/bin/get_gene_n_tss.R && \
 ### Cleaning
     apt-get clean && \
