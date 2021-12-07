@@ -156,7 +156,7 @@ ENV URL_BIOCMANAGER "https://cran.r-project.org/src/contrib/BiocManager_${VERSIO
 COPY ./scripts/install_from_source.R /tmp/install_from_source.R
 COPY ./scripts/run_deseq.R /usr/local/bin/run_deseq.R
 COPY ./scripts/run_deseq_lrt.R /usr/local/bin/run_deseq_lrt.R
-COPY ./scripts/run_deseq_lrt.R /usr/local/bin/run_deseq_manual.R
+COPY ./scripts/run_deseq_manual.R /usr/local/bin/run_deseq_manual.R
 COPY ./scripts/get_gene_n_tss.R /usr/local/bin/get_gene_n_tss.R
 
 ### Installing python3, pip3 and argparse
