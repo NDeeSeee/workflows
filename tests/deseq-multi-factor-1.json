@@ -32,7 +32,7 @@
   },
   "design_formula": "~condition+time+condition:time",
   "contrast": "KO - WT",
-  "base": ["day 5", "WT"],
+  "base": ["day5", "WT"],
   "feature_type": "transcript",
   "minimum_counts": 0,
   "use_wald": true,
