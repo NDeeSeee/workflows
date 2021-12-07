@@ -5736,3 +5736,32 @@
     stderr_log:
       class: File
       location: intervene_stderr.log
+
+# ========================================================
+# deseq-multi-factor
+# ========================================================
+
+- job: ./deseq-multi-factor-1.json
+  tool: ../tools/deseq-multi-factor.cwl
+  output:
+    counts_plot_pdf: null
+    counts_plot_png:
+      class: File
+      location: deseq_counts_plot.png
+    pca_plot_pdf: null
+    pca_plot_png:
+      class: File
+      location: deseq_pca_plot.png
+    volcano_plot_pdf: null
+    volcano_plot_png:
+      class: File
+      location: deseq_volcano_plot.png
+    diff_expr_features:
+      class: File
+      location: deseq_diff_expr_features.tsv
+    stdout_log:
+      class: File
+      location: deseq_multi_factor_stdout.log
+    stderr_log:
+      class: File
+      location: deseq_multi_factor_stderr.log

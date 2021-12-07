@@ -364,7 +364,7 @@ export_pca_plot <- function(data, rootname, intgroup, plot_title, plot_subtitle,
             pca_data <- plotPCA(
                 rlog_data,
                 intgroup=intgroup,
-                ntop=ntop,               # ntop the most variable genes
+                ntop=ntop,               # ntop the most variable features
                 returnData=TRUE
             )
             percentVar <- round(100 * attr(pca_data, "percentVar"))
@@ -647,7 +647,7 @@ captions <- diff_expr_data$features %>%                                         
                     "log2FC=", round(.$log2FoldChange, 5), "\npvalue=", round(.$pvalue, 5), "\npadj=", round(.$padj, 5)
                 )
             )
-captions <- captions[match(highlight_features, captions$feature), ] %>%           # to guarantee that the order of captions will correspond to the order of highlight_genes
+captions <- captions[match(highlight_features, captions$feature), ] %>%           # to guarantee that the order of captions will correspond to the order of highlight_features
             pull(caption)
 
 args$splitby <- ifelse(is.null(args$splitby), colnames(metadata)[1], args$splitby)
@@ -679,16 +679,14 @@ export_pca_plot(
     rootname=paste(args$output, "pca_plot", sep="_"),
     intgroup=colnames(metadata),
     plot_title="PCA plot of rlog-normalized counts",
-    plot_subtitle=paste(
-        "Based on the top", 500, "genes selected by the highest row variance"
-    ),
+    plot_subtitle="Based on the top 500 features selected by the highest row variance",
     ntop=500,
     pdf=args$pdf
 )
 
-print("Exporting differentially expressed genes")
+print("Exporting differentially expressed features")
 export_data(
     diff_expr_data$features,                                        # this is not filtered differentially expressed features
-    location=paste(args$output, "diff_expr_genes.tsv", sep="_"),
+    location=paste(args$output, "diff_expr_features.tsv", sep="_"),
     digits=5
 )
