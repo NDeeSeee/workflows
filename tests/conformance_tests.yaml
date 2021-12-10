@@ -5765,3 +5765,72 @@
     stderr_log:
       class: File
       location: deseq_multi_factor_stderr.log
+
+# ========================================================
+# mixcr-shotgun
+# ========================================================
+
+- job: ./mixcr-shotgun-1.json
+  tool: ../tools/mixcr-shotgun.cwl
+  output:
+    alignment_file:
+      class: File
+      location: "upstream.vdjca"
+    assembled_clonotypes_file:
+      class: File
+      location: "upstream.clns"
+    all_clonotypes_file:
+      class: File
+      location: "upstream.clonotypes.ALL.txt"
+    other_clonotypes_files:
+    - class: File
+      location: "upstream.clonotypes.IGH.txt"
+    - class: File
+      location: "upstream.clonotypes.IGK.txt"
+    - class: File
+      location: "upstream.clonotypes.IGL.txt"
+    - class: File
+      location: "upstream.clonotypes.TRA.txt"
+    - class: File
+      location: "upstream.clonotypes.TRB.txt"
+    - class: File
+      location: "upstream.clonotypes.TRD.txt"
+    - class: File
+      location: "upstream.clonotypes.TRG.txt"
+    report_file:
+      class: File
+      location: "upstream.report"
+
+- job: ./mixcr-shotgun-2.json
+  tool: ../tools/mixcr-shotgun.cwl
+  output:
+    alignment_file:
+      class: File
+      location: "upstream.vdjca"
+    assembled_clonotypes_file:
+      class: File
+      location: "upstream.clns"
+    all_clonotypes_file: null
+    other_clonotypes_files:
+    - class: File
+      location: "upstream.clonotypes.IGH.txt"
+    report_file:
+      class: File
+      location: "upstream.report"
+
+- job: ./mixcr-shotgun-3.json
+  tool: ../tools/mixcr-shotgun.cwl
+  output:
+    alignment_file:
+      class: File
+      location: "results.vdjca"
+    assembled_clonotypes_file:
+      class: File
+      location: "results.clns"
+    all_clonotypes_file: null
+    other_clonotypes_files:
+    - class: File
+      location: "results.clonotypes.IGH.txt"
+    report_file:
+      class: File
+      location: "results.report"
