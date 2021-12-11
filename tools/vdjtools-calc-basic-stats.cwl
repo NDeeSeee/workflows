@@ -34,7 +34,7 @@ inputs:
 outputs:
   
   basic_stats_file:
-    type: File?
+    type: File
     outputBinding:
       glob: "*"
 

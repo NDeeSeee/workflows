@@ -1,0 +1,8 @@
+{
+    "vdj_file": {
+      "class": "File",
+      "location": "./data/dm3_chr4/generated_inputs/vdjtools/results.clonotypes.ALL.txt.gz"
+    },
+    "top": 5,
+    "output_prefix": "res"
+}

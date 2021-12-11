@@ -5944,3 +5944,27 @@
     fancy_spectratype_plot:
       class: File
       location: "res.fancyspectra.pdf"
+
+# ========================================================
+# vdjtools-plot-quantile-stats
+# ========================================================
+
+- job: ./vdjtools-plot-quantile-stats-1.json
+  tool: ../tools/vdjtools-plot-quantile-stats.cwl
+  output:
+    quantile_stats_file:
+      class: File
+      location: "qstat.txt"
+    quantile_stats_plot:
+      class: File
+      location: "qstat.pdf"
+
+- job: ./vdjtools-plot-quantile-stats-2.json
+  tool: ../tools/vdjtools-plot-quantile-stats.cwl
+  output:
+    quantile_stats_file:
+      class: File
+      location: "res.qstat.txt"
+    quantile_stats_plot:
+      class: File
+      location: "res.qstat.pdf"

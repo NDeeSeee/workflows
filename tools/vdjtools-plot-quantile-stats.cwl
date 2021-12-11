@@ -18,9 +18,6 @@ inputs:
     inputBinding:
       prefix: "--top"
       position: 5
-    doc: |
-      Number of top clonotypes to visualize. Should not exceed 20.
-      Default: 10
 
   vdj_file:
     type: File
@@ -35,19 +32,19 @@ inputs:
 
 
 outputs:
-  
-  fancy_spectratype_file:
+
+  quantile_stats_file:
     type: File
     outputBinding:
       glob: "*.txt"
 
-  fancy_spectratype_plot:
+  quantile_stats_plot:
     type: File
     outputBinding:
       glob: "*.pdf"
 
 
-baseCommand: ["vdjtools", "PlotFancySpectratype"]
+baseCommand: ["vdjtools", "PlotQuantileStats"]
 
 
 $namespaces:
@@ -56,11 +53,11 @@ $namespaces:
 $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
-label: "VDJtools Plot Spectratype"
-s:name: "VDJtools Plot Spectratype"
-s:alternateName: "Plots a spectratype that displays CDR3 lengths for top N clonotypes in a given sample"
+label: "VDJtools Plot Quantile Stats"
+s:name: "VDJtools Plot Quantile Stats"
+s:alternateName: "Plots a three-layer donut chart to visualize the repertoire clonality"
 
-s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows/master/tools/vdjtools-plot-fancy-spectratype.cwl
+s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows/master/tools/vdjtools-plot-quantile-stats.cwl
 s:codeRepository: https://github.com/Barski-lab/workflows
 s:license: http://www.apache.org/licenses/LICENSE-2.0
 
@@ -101,8 +98,17 @@ doc: |
   is able to perform various forms of cross-sample analysis. Both comprehensive tabular output
   and publication-ready plots are provided.
   
-  Plots a spectratype that also displays CDR3 lengths for top N clonotypes in a given sample.
-  This plot allows to detect the highly-expanded clonotypes.
+  Plots a three-layer donut chart to visualize the repertoire clonality.
+  - First layer (“set”) includes the frequency of singleton (“1”, met once), doubleton
+    (“2”, met twice) and high-order (“3+”, met three or more times) clonotypes. Singleton and
+    doubleton frequency is an important factor in estimating the total repertoire diversity,
+    e.g. Chao1 diversity estimator (see Colwell et al). We have also recently shown that in
+    whole blood samples, singletons have very nice correlation with the number of naive T-cells,
+    which are the backbone of immune repertoire diversity.
+  - The second layer (“quantile”), displays the abundance of top 20% (“Q1”), next 20% (“Q2”), ...
+    (up to “Q5”) clonotypes for clonotypes from “3+” set. In our experience this quantile plot is
+    a simple and efficient way to display repertoire clonality.
+  - The last layer (“top”) displays the individual abundances of top N clonotypes.
 
 
 s:about: |
