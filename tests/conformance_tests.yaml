@@ -5852,3 +5852,23 @@
     vdj_file:
       class: File
       location: "res.results.clonotypes.ALL.txt.gz"
+
+# ========================================================
+# vdjtools-calc-basic-stats
+# ========================================================
+
+- job: ./vdjtools-calc-basic-stats-1.json
+  tool: ../tools/vdjtools-calc-basic-stats.cwl
+  output:
+    basic_stats_file:
+      class: File
+      location: "basicstats.txt"
+
+- job: ./vdjtools-calc-basic-stats-2.json
+  tool: ../tools/vdjtools-convert-mixcr.cwl
+  output:
+    basic_stats_file:
+      class: File
+      location: "results.basicstats.txt"
+
+      
