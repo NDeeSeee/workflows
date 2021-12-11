@@ -5888,3 +5888,35 @@
     diversity_stats_file:
       class: File
       location: "res.diversity.ntV.exact.txt"
+
+# ========================================================
+# vdjtools-calc-spectratype
+# ========================================================
+
+- job: ./vdjtools-calc-spectratype-1.json
+  tool: ../tools/vdjtools-calc-spectratype.cwl
+  output:
+    spectratype_insert_wt_file:
+      class: File
+      location: "spectratype.insert.wt.txt"
+    spectratype_ndn_wt_file:
+      class: File
+      location: "spectratype.ndn.wt.txt"
+    spectratype_aa_wt_file: null
+    spectratype_nt_wt_file:
+      class: File
+      location: "spectratype.nt.wt.txt"
+
+- job: ./vdjtools-calc-spectratype-2.json
+  tool: ../tools/vdjtools-calc-spectratype.cwl
+  output:
+    spectratype_insert_wt_file:
+      class: File
+      location: "spectratype.insert.wt.txt"
+    spectratype_ndn_wt_file:
+      class: File
+      location: "spectratype.ndn.wt.txt"
+    spectratype_aa_wt_file:
+      class: File
+      location: "res.spectratype.aa.wt.txt"
+    spectratype_nt_wt_file: null
