@@ -5920,3 +5920,27 @@
       class: File
       location: "res.spectratype.aa.wt.txt"
     spectratype_nt_wt_file: null
+
+# ========================================================
+# vdjtools-plot-fancy-spectratype
+# ========================================================
+
+- job: ./vdjtools-plot-fancy-spectratype-1.json
+  tool: ../tools/vdjtools-plot-fancy-spectratype.cwl
+  output:
+    fancy_spectratype_file:
+      class: File
+      location: "fancyspectra.txt"
+    fancy_spectratype_plot:
+      class: File
+      location: "fancyspectra.pdf"
+
+- job: ./vdjtools-plot-fancy-spectratype-2.json
+  tool: ../tools/vdjtools-plot-fancy-spectratype.cwl
+  output:
+    fancy_spectratype_file:
+      class: File
+      location: "res.fancyspectra.txt"
+    fancy_spectratype_plot:
+      class: File
+      location: "res.fancyspectra.pdf"
