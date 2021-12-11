@@ -2,5 +2,7 @@
     "vdj_file": {
       "class": "File",
       "location": "./data/dm3_chr4/generated_inputs/vdjtools/results.clonotypes.ALL.txt.gz"
-    }
+    },
+    "intersect_type": "ntV",
+    "output_prefix": "res"
 }

@@ -5871,4 +5871,20 @@
       class: File
       location: "results.basicstats.txt"
 
-      
+# ========================================================
+# vdjtools-calc-diversity-stats
+# ========================================================
+
+- job: ./vdjtools-calc-diversity-stats-1.json
+  tool: ../tools/vdjtools-calc-diversity-stats.cwl
+  output:
+    diversity_stats_file:
+      class: File
+      location: "diversity.strict.exact.txt"
+
+- job: ./vdjtools-calc-diversity-stats-2.json
+  tool: ../tools/vdjtools-calc-diversity-stats.cwl
+  output:
+    diversity_stats_file:
+      class: File
+      location: "res.diversity.ntV.exact.txt"
