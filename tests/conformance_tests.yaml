@@ -5834,3 +5834,21 @@
     report_file:
       class: File
       location: "results.report"
+
+# ========================================================
+# vdjtools-convert-mixcr
+# ========================================================
+
+- job: ./vdjtools-convert-mixcr-1.json
+  tool: ../tools/vdjtools-convert-mixcr.cwl
+  output:
+    vdj_file:
+      class: File
+      location: "results.clonotypes.ALL.txt.gz"
+
+- job: ./vdjtools-convert-mixcr-2.json
+  tool: ../tools/vdjtools-convert-mixcr.cwl
+  output:
+    vdj_file:
+      class: File
+      location: "res.results.clonotypes.ALL.txt.gz"

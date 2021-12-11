@@ -1,0 +1,7 @@
+{
+  "clonotypes_file": {
+    "class": "File",
+    "location": "./data/dm3_chr4/main_inputs/vdjtools/results.clonotypes.ALL.txt"
+  },
+  "output_prefix": "res"
+}
