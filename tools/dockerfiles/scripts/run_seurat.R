@@ -10,6 +10,7 @@ suppressMessages(library(future))
 suppressMessages(library(DESeq2))
 suppressMessages(library(tibble))
 suppressMessages(library(scales))
+suppressMessages(library(flexmix))
 suppressMessages(library(ggplot2))
 suppressMessages(library(ggrepel))
 suppressMessages(library(garnett))
@@ -22,6 +23,7 @@ suppressMessages(library(sctransform))
 suppressMessages(library(RColorBrewer))
 suppressMessages(library(org.Hs.eg.db))
 suppressMessages(library(org.Mm.eg.db))
+suppressMessages(library(SeuratWrappers))
 
 
 ####################################################################################
@@ -378,13 +380,43 @@ apply_cell_filters <- function(seurat_data, barcodes_data) {
 }
 
 
-add_qc_metrics <- function(seurat_data, mitopattern) {
+add_qc_metrics <- function(seurat_data, args) {
     # Number of genes detected per UMI: this metric with give us an idea of the
     # complexity of our dataset (more genes detected per UMI, more complex our data)
     # Mitochondrial percentage: this metric will give us a percentage of cell reads
     # originating from the mitochondrial genes
     seurat_data$log10_gene_per_log10_umi <- log10(seurat_data$nFeature_RNA) / log10(seurat_data$nCount_RNA)
-    seurat_data$mito_percentage <- PercentageFeatureSet(seurat_data, pattern=mitopattern) 
+    seurat_data$mito_percentage <- PercentageFeatureSet(seurat_data, pattern=args$mitopattern)
+    print("Trying to evaluate a threshold for the percentage of transcripts mapped to mitochondrial genes using MiQC")
+    tryCatch(
+        expr = {
+            Idents(seurat_data) <- "new.ident"                                      # safety measure
+            identities <- unique(as.vector(as.character(Idents(seurat_data))))
+            merged_seurat_data <- NULL
+            for (i in 1:length(identities)) {
+                current_identity <- identities[i]
+                filtered_seurat_data <- subset(seurat_data, idents=current_identity)
+                filtered_seurat_data <- RunMiQC(
+                    filtered_seurat_data,
+                    percent.mt="mito_percentage",
+                    nFeature_RNA="nFeature_RNA",
+                    model.type="linear",
+                    posterior.cutoff=0.75,
+                    model.slot="flexmix_model",
+                    verbose=FALSE
+                )
+                if (is.null(merged_seurat_data)){
+                    merged_seurat_data <- filtered_seurat_data
+                } else {
+                    merged_seurat_data <- merge(merged_seurat_data, y=filtered_seurat_data)
+                }
+            }
+            seurat_data <- merged_seurat_data
+        },
+        error = function(e){
+            print(paste(" ", "Failed running MiQC due to", e))
+        }
+    )
     return (seurat_data)
 }
 
@@ -1078,6 +1110,13 @@ export_vln_plot <- function(data, features, labels, rootname, plot_title, legend
                               guides(fill=guide_legend(legend_title)) +
                               stat_boxplot(width=0.15, geom="errorbar") +
                               geom_boxplot(width=0.15, outlier.alpha=0) +
+                            #   stat_summary(
+                            #       aes(label=sprintf("%.0f", ..y..)),
+                            #       geom="text",
+                            #       fun.y = function(y) boxplot.stats(y)$stats,
+                            #       position=position_nudge(x=0.5),
+                            #       size=2.5
+                            #   ) +
                               RotatedAxis()
                 if (!is.null(palette)){ plots[[i]] <- plots[[i]] + scale_fill_brewer(palette=palette) }
                 if (hide_x_text){ plots[[i]] <- plots[[i]] + theme(axis.text.x=element_blank()) }
@@ -1100,6 +1139,59 @@ export_vln_plot <- function(data, features, labels, rootname, plot_title, legend
         error = function(e){
             tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
             print(paste("Failed to export violin plot to ", rootname, ".(png/pdf)", sep=""))
+        }
+    )
+}
+
+
+export_feature_scatter_plot <- function(data, rootname, x_axis, y_axis, x_label, y_label, split_by, color_by, plot_title, legend_title, combine_guides=NULL, palette=NULL, alpha=NULL, jitter=FALSE, pdf=FALSE, width=1200, height=800, resolution=100){
+    tryCatch(
+        expr = {
+            Idents(data) <- split_by
+            identities <- unique(as.vector(as.character(Idents(data))))
+            plots <- list()
+            for (i in 1:length(identities)) {
+                current_identity <- identities[i]
+                filtered_data <- subset(data, idents=current_identity)
+                plots[[current_identity]] <- FeatureScatter(
+                    filtered_data,
+                    feature1=x_axis,
+                    feature2=y_axis,
+                    group.by=color_by,
+                    plot.cor=FALSE,         # will be overwritten by title anyway
+                    jitter=jitter
+                )
+            }
+            Idents(data) <- "new.ident"
+            plots <- lapply(seq_along(plots), function(i){
+                plots[[i]] <- plots[[i]] +
+                              ggtitle(identities[i]) +
+                              xlab(x_label) +
+                              ylab(y_label) +
+                              guides(color=guide_legend(legend_title)) +
+                              theme_gray()
+                if (!is.null(palette)) { plots[[i]] <- plots[[i]] + scale_color_manual(values=palette) }
+                if (!is.null(alpha)) { plots[[i]]$layers[[1]]$aes_params$alpha <- alpha }
+                return (plots[[i]])
+            })
+            combined_plots <- wrap_plots(plots, guides=combine_guides) + plot_annotation(title=plot_title)
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(combined_plots))
+            dev.off()
+
+            if (pdf) {
+                pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                suppressMessages(print(combined_plots))
+                dev.off()
+            }
+
+            print(paste("Export feature scatter plot to ", rootname, ".(png/pdf)", sep=""))
+
+        },
+        error = function(e){
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export feature scatter plot to ", rootname, ".(png/pdf)", sep=""))
         }
     )
 }
@@ -1768,6 +1860,22 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         combine_guides="collect",
         pdf=args$pdf
     )
+    export_feature_scatter_plot(
+        data=seurat_data,
+        x_axis="nFeature_RNA",
+        y_axis="mito_percentage",
+        x_label="Genes",
+        y_label="Mitochondrial %",
+        split_by="new.ident",
+        color_by="miQC.keep",
+        alpha=0.1,
+        palette=c("keep"="lightslateblue", "discard"="red"),
+        plot_title=paste("MiQC evaluation of the compromised cells level (", suffix, ")", sep=""),
+        legend_title="Category",
+        combine_guides="collect",
+        rootname=paste(args$output, suffix, "miqc_mtrcs", sep="_"),
+        pdf=args$pdf
+    )
     export_vln_plot(
         data=seurat_data,
         features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi"),
@@ -2217,7 +2325,8 @@ classifier <- load_classifier(args$classifier)
 cat("\n\nStep 2: Filtering raw datasets\n")
 
 print("Adding QC metrics to not filtered seurat data")
-seurat_data <- add_qc_metrics(seurat_data, args$mitopattern)
+seurat_data <- add_qc_metrics(seurat_data, args)
+
 export_all_qc_plots(seurat_data, "raw", args)                                                                  # <--- raw
 print("Applying QC filters")
 seurat_data <- apply_qc_filters(seurat_data, cell_identity_data, args)
