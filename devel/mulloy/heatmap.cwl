@@ -48,6 +48,12 @@ inputs:
       name: "plot_type"
       symbols: ["lines", "fill", "se", "std"]
   
+  sort_regions:
+    type:
+    - type: enum
+      name: "sort_regions"
+      symbols: ["descend", "ascend", "no", "keep"]
+
   what_to_show:
     type:
     - type: enum
@@ -126,8 +132,7 @@ steps:
       before_region_start_length: before_region_start_length
       after_region_start_length: after_region_start_length
       bin_size: bin_size
-      sort_regions:
-        default: "keep"
+      sort_regions: sort_regions
       samples_label: scores_labels
       output_filename:
         default: "score_matrix.gz"
@@ -147,8 +152,7 @@ steps:
       output_filename:
         default: "score_matrix.pdf"
       plot_type: plot_type
-      sort_regions:
-        default: "keep"
+      sort_regions: sort_regions
       average_type_summary_plot:
         default: "mean"
       what_to_show: what_to_show
