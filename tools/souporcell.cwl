@@ -8,7 +8,7 @@ requirements:
 
 hints:
 - class: DockerRequirement
-  dockerPull: cumulusprod/souporcell:2020.07
+  dockerPull: cumulusprod/souporcell:2021.03
 
 
 inputs:
@@ -198,7 +198,7 @@ $schemas:
 
 label: "Souporcell Cluster by Genotype"
 s:name: "Souporcell Cluster by Genotype"
-s:alternateName: "Runs clustering of scRNA-Seq data by genotype and ambient RNA inference without reference genotypes"
+s:alternateName: "Souporcell: robust clustering of single-cell RNA-seq data by genotype without reference genotypes"
 
 s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows/master/tools/souporcell.cwl
 s:codeRepository: https://github.com/Barski-lab/workflows
@@ -239,11 +239,10 @@ doc: |
   Souporcell Cluster by Genotype
   ==============================
 
-  Runs clustering of scRNA-Seq data by genotype and ambient RNA inference
-  without reference genotypes
+  Souporcell: robust clustering of single-cell RNA-seq data by genotype without reference genotypes
 
   --out_dir - harcoded to ./souporcell
-  --threads - forced to the default 1, becaues it's required parameter
+  --threads - forced to the default 1, because it's required parameter
 
 
 s:about: |
@@ -259,7 +258,7 @@ s:about: |
                                 [--ignore IGNORE] [--aligner ALIGNER]
 
   single cell RNAseq mixed genotype clustering using sparse mixture model
-  clustering with tensorflow.
+  clustering.
 
   optional arguments:
     -h, --help            show this help message and exit
