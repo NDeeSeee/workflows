@@ -2,15 +2,18 @@
 # Dockerfile
 #
 # Software:         Seurat script
-# Software Version: v0.0.15
+# Software Version: v0.0.16
 # Description:      Dockerized version of Seurat script
 # Website:          https://satijalab.org/seurat/index.html
 # Provides:         Seurat script
 # Base Image:       satijalab/seurat:4.0.3
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat:v0.0.15 -f seurat-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/seurat:v0.0.15
-# Run Cmd:          docker run --rm -ti biowardrobe2/seurat:v0.0.15 /bin/bash
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat:v0.0.16 -f seurat-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/seurat:v0.0.16
+# Run Cmd:          docker run --rm -ti biowardrobe2/seurat:v0.0.16 /bin/bash
 #################################################################
+#
+# v0.0.16
+# - Added MiQC into run_seurat.R script
 #
 # v0.0.15
 # - Added assign_cell_types.R script
@@ -92,11 +95,13 @@ RUN apt-get update && \
     R -e 'install.packages("devtools", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("argparse", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("tidyverse", repo = "https://cloud.r-project.org/")' && \
+    R -e 'install.packages("flexmix", repo = "https://cloud.r-project.org/")' && \
     R -e "BiocManager::install(c('BiocGenerics', 'DelayedArray', 'DelayedMatrixStats','limma', 'S4Vectors', 'SingleCellExperiment', 'SummarizedExperiment', 'batchelor', 'Matrix.utils', 'DESeq2', 'EnhancedVolcano'))" && \
     R -e "devtools::install_github('cole-trapnell-lab/leidenbase')" && \
     R -e "devtools::install_github('cole-trapnell-lab/monocle3')" && \
     R -e "BiocManager::install(c('org.Hs.eg.db', 'org.Mm.eg.db'))" && \
     R -e "devtools::install_github('cole-trapnell-lab/garnett', ref='monocle3')" && \
+    R -e "remotes::install_github('satijalab/seurat-wrappers')" && \
 ### Installing run_seurat.R, sc_diff_expr.R, and assign_cell_types.R scripts
     chmod +x /usr/local/bin/run_seurat.R && \
     chmod +x /usr/local/bin/sc_diff_expr.R && \
