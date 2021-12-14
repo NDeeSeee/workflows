@@ -5968,3 +5968,39 @@
     quantile_stats_plot:
       class: File
       location: "res.qstat.pdf"
+
+# ========================================================
+# vdjtools-join-samples
+# ========================================================
+
+- job: ./vdjtools-join-samples-1.json
+  tool: ../tools/vdjtools-join-samples.cwl
+  output:
+    combined_vdj_file:
+      class: File
+      location: "join.aa.table.txt.gz"
+    summary_file:
+      class: File
+      location: "join.aa.summary.txt"
+    metadata_file:
+      class: File
+      location: "metadata.tsv"
+    venn_diag_plot:
+      class: File
+      location: "join.aa.venn.pdf"
+
+- job: ./vdjtools-join-samples-2.json
+  tool: ../tools/vdjtools-join-samples.cwl
+  output:
+    combined_vdj_file:
+      class: File
+      location: "res.join.strict.table.txt.gz"
+    summary_file:
+      class: File
+      location: "res.join.strict.summary.txt"
+    metadata_file:
+      class: File
+      location: "metadata.tsv"
+    venn_diag_plot:
+      class: File
+      location: "res.join.strict.venn.pdf"

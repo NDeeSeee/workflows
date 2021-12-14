@@ -1,0 +1,28 @@
+{
+    "vdj_file": [
+        {
+            "class": "File",
+            "location": "./data/dm3_chr4/generated_inputs/vdjtools/results.clonotypes.ALL.txt.gz"
+        },
+        {
+            "class": "File",
+            "location": "./data/dm3_chr4/generated_inputs/vdjtools/results.clonotypes.ALL.txt.gz"
+        },
+        {
+            "class": "File",
+            "location": "./data/dm3_chr4/generated_inputs/vdjtools/results.clonotypes.ALL.txt.gz"
+        },
+        {
+            "class": "File",
+            "location": "./data/dm3_chr4/generated_inputs/vdjtools/results.clonotypes.ALL.txt.gz"
+        }
+    ],
+    "vdj_name": [
+        "One",
+        "Two",
+        "Three",
+        "Four"
+    ],
+    "intersect_type": "strict",
+    "output_prefix": "res"
+}
