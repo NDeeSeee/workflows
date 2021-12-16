@@ -20,17 +20,8 @@ get_file_type <- function (filename) {
 
 export_metadata <- function(data, suffix, args){
     cells_data <- Cells(data)
-    print(paste("Saving", length(cells_data), "cell"))
-    print(head(cells_data))
-
     umap_data <- Embeddings(data, reduction="umap")
-    print(paste("Saving", length(umap_data), "UMAP embeddings"))
-    print(head(umap_data))
-
     cluster_data <- data@meta.data[, args$source]
-    print(paste("Saving", length(cluster_data), "clusters"))
-    print(head(cluster_data))
-
     export_data(
         cells_data,
         location=paste0(args$cells, "_", suffix, ".tsv"),
@@ -78,41 +69,42 @@ get_args <- function(){
         "--rds",
         help=paste(
             "Path to the RDS file to load Seurat object from.",
-            "RDS file can be produced by run_seurat.R or assign_cell_types.R scripts"
+            "RDS file can be produced by run_seurat.R or assign_cell_types.R scripts."
         ),
         type="character", required="True"
     )
     parser$add_argument(
         "--source",
         help=paste(
-            "Column name to extract clusters information from"
+            "Column from metadata to extract clusters information from."
         ),
         type="character", required="True"
     )
     parser$add_argument(
         "--splitby",
         help=paste(
-            "Column name to split data by. Barcode suffixes will be removed.",
-            "Output files will have values from the selected column as part of their names.",
+            "Column from metadata to split output files by. Barcode suffixes that define",
+            "the origin of the cells will be removed. Values from this column will be",
+            "appended to the names of output files.",
             "Default: do not split, export combined file"
         ),
         type="character"
     )
     parser$add_argument(
         "--cells",
-        help="Output prefix to save cells information data as TSV file",
+        help="Output prefix for TSV file to save cells information data.",
         type="character", default="./cells"
     )
     parser$add_argument(
         "--umap",
-        help="Output prefix to save UMAP embeddings data as TSV file",
+        help="Output prefix for TSV file to save UMAP embeddings data.",
         type="character", default="./umap"
     )
     parser$add_argument(
         "--clusters",
         help=paste(
-            "Output prefix to save clusters selected by the --source",
-            "parameter data as TSV file"
+            "Output prefix for TSV file to save clusters data defined in the column",
+            "selected with --source parameter."
         ),
         type="character", default="./clusters"
     )
@@ -127,13 +119,13 @@ print(paste("Loading Seurat data from", args$rds))
 seurat_data <- readRDS(args$rds)
 
 if (!is.null(args$splitby)){
-    print(paste("Splitting Seurat data by", args$splitby))
+    print(paste("Exporting results splitted by", args$splitby))
     Idents(seurat_data) <- args$splitby
     identities <- unique(as.vector(as.character(Idents(seurat_data))))
     for (i in 1:length(identities)) {
         current_identity <- identities[i]
-        print(paste("Subsetting to", current_identity))
-        suffix <- gsub("'|\"| |-", "_", current_identity)
+        print(paste("Processing", current_identity))
+        suffix <- gsub("'|\"| |-", "_", current_identity)                       # safety measure
         filtered_seurat_data <- subset(seurat_data, idents=current_identity)
         filtered_seurat_data <- RenameCells(
             filtered_seurat_data,
@@ -142,6 +134,6 @@ if (!is.null(args$splitby)){
         export_metadata(filtered_seurat_data, suffix, args)
     }
 } else {
-    print("Exporting no splitted data")
+    print("Exporting combined results")
     export_metadata(seurat_data, "combined", args)
 }
