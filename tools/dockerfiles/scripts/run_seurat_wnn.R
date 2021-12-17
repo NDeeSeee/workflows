@@ -847,7 +847,12 @@ load_seurat_data <- function(args) {
         print("Replacing Cell Ranger's peaks with MACS2 peaks.")
         backup_assay <- DefaultAssay(seurat_data)
         DefaultAssay(seurat_data) <- "ATAC"
-        macs2_peaks <- CallPeaks(seurat_data)
+        # We use group.by="orig.ident" to force CallPeaks using only those fragments
+        # that belong to the cells already identified by Cell Ranger as valid.
+        # Otherwise, CallPeaks function will use all fragments even from invalid cells.
+        # Grouping by orig.ident will results in only 1 group, which is fine as long
+        # as our input mex matrix includes only one dataset (not aggregated).
+        macs2_peaks <- CallPeaks(seurat_data, group.by="orig.ident")
         macs2_counts <- FeatureMatrix(
             fragments=Fragments(seurat_data),
             sep=c(":", "-"),
