@@ -8,59 +8,54 @@ import numpy
 import matplotlib
 
 
-def estimate_velocity(args):
-    velocity_data = anndata.read_h5ad(args.h5ad)
-    print(velocity_data)
-    cells_data = pandas.read_csv(args.cells, header=None, sep="\t")
-    umap_data = pandas.read_csv(args.umap, header=None, sep="\t")
-    clusters_data = pandas.read_csv(args.clusters, header=None, sep="\t")
+def get_filtered_velocity_data(velocity_data, cells_data, umap_data, clusters_data):
     filtered_velocity_data = velocity_data[cells_data.iloc[:, 0]].copy()
-    print(filtered_velocity_data)
     filtered_velocity_data.obsm["X_umap"] = umap_data.values
     filtered_velocity_data.obs["cluster"] = clusters_data.values
-    scvelo.pl.proportions(
-        filtered_velocity_data,
-        show=False,
-        save=".png"
-    )
-    print(filtered_velocity_data)
-    scvelo.pp.filter_and_normalize(filtered_velocity_data)
-    scvelo.pp.moments(filtered_velocity_data)
-    scvelo.tl.velocity(filtered_velocity_data, mode="stochastic")
-    scvelo.tl.velocity_graph(filtered_velocity_data, n_jobs=args.threads)
+    return filtered_velocity_data
+
+
+def estimate_velocity(velocity_data, args):
+    scvelo.pp.filter_and_normalize(velocity_data)
+    scvelo.pp.moments(velocity_data)
+    scvelo.tl.velocity(velocity_data, mode="stochastic")
+    scvelo.tl.velocity_graph(velocity_data, n_jobs=args.threads)
+    scvelo.tl.velocity_confidence(velocity_data)
+    scvelo.tl.velocity_pseudotime(velocity_data)
+
+
+def export_velocity_plot(velocity_data, args):
     scvelo.pl.velocity_embedding_stream(
-        filtered_velocity_data,
+        velocity_data,
         basis="umap",
         color="cluster",
         show=False,
         save="stream.png"
     )
     scvelo.pl.velocity_embedding_grid(
-        filtered_velocity_data,
+        velocity_data,
         basis="umap",
         color="cluster",
         show=False,
         save="grid.png"
     )
-    if len(args.genes) > 0:
+    if args.genes and len(args.genes) > 0:
         scvelo.pl.velocity(
-            filtered_velocity_data,
+            velocity_data,
             args.genes,
             show=False,
             save="genes.png"
         )
-    scvelo.tl.velocity_confidence(filtered_velocity_data)
     scvelo.pl.scatter(
-        filtered_velocity_data,
+        velocity_data,
         c=["velocity_length", "velocity_confidence"],
         cmap="coolwarm",
         perc=[5, 95],
         show=False,
         save="confidence.png"
     )
-    scvelo.tl.velocity_pseudotime(filtered_velocity_data)
     scvelo.pl.scatter(
-        filtered_velocity_data,
+        velocity_data,
         color="velocity_pseudotime",
         cmap="gnuplot",
         show=False,
@@ -85,6 +80,7 @@ def arg_parser():
     general_parser.add_argument("--umap",     help="Path to the UMAP data TSV file",           type=str, required=True)
     general_parser.add_argument("--genes",    help="List of genes of interest",                type=str, nargs="*")
     general_parser.add_argument("--clusters", help="Path to the clusters data TSV file",       type=str, required=True)
+    general_parser.add_argument("--dpi",      help="Resolution for exported plots",            type=int, default=300)
     general_parser.add_argument("--threads",  help="Number of threads to run in parallel",     type=int, default=1)
     return general_parser
 
@@ -93,9 +89,19 @@ def main(argsl=None):
     if argsl is None:
         argsl = sys.argv[1:]
     args, _ = arg_parser().parse_known_args(argsl)
-    args = normalize_args(args, ["threads", "genes"])
-    scvelo.set_figure_params("scvelo", dpi=300, transparent=False)
-    estimate_velocity(args)
+    args = normalize_args(args, ["threads", "genes", "dpi"])
+
+    scvelo.set_figure_params("scvelo", dpi=args.dpi, transparent=False)
+    
+    print(f"""Loading data:\n velocity - {args.h5ad}\n barcodes - {args.cells}\n UMAP     - {args.umap}\n clusters - {args.clusters}""")
+    raw_velocity_data = anndata.read_h5ad(args.h5ad)
+    cells_data = pandas.read_csv(args.cells, header=None, sep="\t")
+    umap_data = pandas.read_csv(args.umap, header=None, sep="\t")
+    clusters_data = pandas.read_csv(args.clusters, header=None, sep="\t")
+
+    filtered_velocity_data = get_filtered_velocity_data(raw_velocity_data, cells_data, umap_data, clusters_data)
+    estimate_velocity(filtered_velocity_data, args)
+    export_velocity_plot(filtered_velocity_data, args)
 
 
 if __name__ == "__main__":
