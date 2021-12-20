@@ -21,6 +21,7 @@ get_file_type <- function (filename) {
 export_metadata <- function(data, suffix, args){
     cells_data <- Cells(data)
     umap_data <- Embeddings(data, reduction="umap")
+    pca_data <- Embeddings(data, reduction="pca")
     cluster_data <- data@meta.data[, args$source]
     export_data(
         cells_data,
@@ -31,6 +32,12 @@ export_metadata <- function(data, suffix, args){
     export_data(
         umap_data,
         location=paste0(args$umap, "_", suffix, ".tsv"),
+        row_names=FALSE,
+        col_names=FALSE
+    )
+    export_data(
+        pca_data,
+        location=paste0(args$pca, "_", suffix, ".tsv"),
         row_names=FALSE,
         col_names=FALSE
     )
@@ -99,6 +106,11 @@ get_args <- function(){
         "--umap",
         help="Output prefix for TSV file to save UMAP embeddings data.",
         type="character", default="./umap"
+    )
+    parser$add_argument(
+        "--pca",
+        help="Output prefix for TSV file to save PCA embeddings data.",
+        type="character", default="./pca"
     )
     parser$add_argument(
         "--clusters",
