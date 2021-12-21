@@ -234,18 +234,35 @@ def export_velocity_plot(velocity_data, args):
         print("Failed to export PAGA plot", err)
 
     # if user provided genes of interest
-    if args.genes and len(args.genes) > 0:
+    for gene in args.genes or []:
         try:
             scvelo.pl.velocity(
                 velocity_data,
-                var_names=args.genes,
+                var_names=gene,
                 basis="umap",
                 color="clusters",
-                ncols=5,
-                save="_selected_genes_velocity.png"
+                dpi=args.dpi,
+                save=f"""custom_phase_{gene}.png"""
             )
         except Exception as err:
-            print("Failed to export selected genes velocity\n", err)
+            print("Failed to export driver gene phase portraits\n", err)
+        try:
+            scvelo.pl.scatter(
+                velocity_data,
+                basis="umap",
+                color="clusters",
+                x="latent_time",
+                y=gene,
+                frameon=False,
+                fontsize=10,
+                legend_fontsize=8,
+                legend_loc="best",
+                title=f"""{gene} expression dynamics""",
+                dpi=args.dpi,
+                save=f"""custom_expression_{gene}.png"""
+            )
+        except Exception as err:
+            print("Failed to export driver gene expression dynamics plot", err)
 
 
 def normalize_args(args, skip_list=[]):
