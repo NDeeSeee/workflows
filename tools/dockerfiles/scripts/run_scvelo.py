@@ -6,6 +6,7 @@ import scvelo
 import pandas
 import numpy
 import matplotlib
+import dataframe_image
 
 
 def configure_scvelo(args):
@@ -52,8 +53,6 @@ def estimate_velocity(velocity_data, args):
     scvelo.tl.velocity(velocity_data, mode="dynamical")
     scvelo.tl.velocity_graph(velocity_data, n_jobs=args.threads)
     scvelo.tl.velocity_confidence(velocity_data)
-    scvelo.tl.rank_velocity_genes(velocity_data, groupby="clusters", min_corr=0.3, n_genes=args.top)
-    scvelo.tl.velocity_pseudotime(velocity_data)
     scvelo.tl.rank_dynamical_genes(velocity_data, groupby="clusters", n_genes=args.top)
     scvelo.tl.latent_time(velocity_data)
     velocity_data.uns["neighbors"]["distances"] = velocity_data.obsp["distances"]
@@ -61,104 +60,192 @@ def estimate_velocity(velocity_data, args):
     scvelo.tl.paga(
         velocity_data,
         groups="clusters",
-        use_time_prior="latent_time"    # "velocity_pseudotime"
+        use_time_prior="latent_time"
     )
 
 
 def export_text_data(velocity_data, args):
-    velocity_genes = scvelo.get_df(velocity_data, "rank_velocity_genes/names")
-    velocity_genes.to_csv(args.output+"vel_genes.tsv", sep="\t")
-    dynamical_genes = scvelo.get_df(velocity_data, "rank_dynamical_genes/names")
-    dynamical_genes.to_csv(args.output+"dyn_genes.tsv", sep="\t")
+    driver_genes = scvelo.get_df(velocity_data, "rank_dynamical_genes/names")
+    driver_genes.to_csv(args.output + "putative_driver_genes.tsv", sep="\t")
 
 
 def export_velocity_plot(velocity_data, args):
-    scvelo.pl.proportions(
-        velocity_data,
-        groupby="clusters",
-        show=False,              # need to specify explicitely for scvelo.pl.proportions
-        save="proportions.png"
-    )
-    scvelo.pl.scatter(
-        velocity_data,
-        c=["velocity_length", "velocity_confidence"],
-        cmap="coolwarm",
-        perc=[5, 95],
-        save="confidence.png"
-    )
-    scvelo.pl.velocity_embedding_stream(
-        velocity_data,
-        basis="umap",
-        color="clusters",
-        save="stream.png"
-    )
-    scvelo.pl.velocity_embedding_grid(
-        velocity_data,
-        basis="umap",
-        color="clusters",
-        save="grid.png"
-    )
-    scvelo.pl.scatter(
-        velocity_data,
-        color="velocity_pseudotime",
-        alpha=0.25,
-        cmap="gnuplot",
-        save="pseudotime.png"
-    )
-    scvelo.pl.scatter(
-        velocity_data,
-        color="latent_time",
-        color_map="gnuplot",
-        alpha=0.25,
-        save="latenttime.png"
-    )
-    scvelo.pl.paga(
-        velocity_data,
-        basis="umap",
-        alpha=0.1,
-        min_edge_width=2,
-        node_size_scale=1.5,
-        size=50,
-        legend_loc="on data",
-        legend_fontsize=6,
-        fontsize=6,
-        save="paga.png"
-    )
+    try:
+        scvelo.pl.proportions(
+           velocity_data,
+            groupby="clusters",
+            show=False,              # need to specify explicitely for scvelo.pl.proportions
+            dpi=args.dpi,            # need to specify explicitely for scvelo.pl.proportions
+            save="chart.png"         # "proportions" part is hardcoded so we add only extension
+        )
+    except Exception as err:
+        print("Failed to export spliced/unspliced proportions charts\n", err)
+    
+    # These provide insights where cells differentiate at a slower/faster pace, and where the direction is un-/determined.
+    try:
+        scvelo.pl.scatter(
+            velocity_data,
+            basis="umap",
+            color="velocity_length",
+            color_map="coolwarm",
+            colorbar=True,
+            fontsize=10,
+            legend_fontsize=8,
+            title="Velocity length",
+            add_text="defines speed of differentiation",
+            add_text_pos=(0.05, 0),
+            save="velocity_length.png"
+        )
+    except Exception as err:
+        print("Failed to export velocity length plot\n", err)
+    
+    try:
+        scvelo.pl.scatter(
+            velocity_data,
+            basis="umap",
+            color="velocity_confidence",
+            color_map="coolwarm",
+            colorbar=True,
+            fontsize=10,
+            legend_fontsize=8,
+            title="Velocity confidence",
+            add_text="defines velocity vectors direction correlation",
+            add_text_pos=(0.05, 0),
+            save="velocity_confidence.png"
+        )
+    except Exception as err:
+        print("Failed to export velocity confidence plot\n", err)
+
+    try:
+        velocity_speed_df = velocity_data.obs.groupby("clusters")["velocity_length", "velocity_confidence"].mean().T
+        dataframe_image.export(
+            velocity_speed_df.style.background_gradient(cmap="coolwarm", axis=1),
+            args.output + "velocity_metrics.png"
+        )
+    except Exception as err:
+        print("Failed to export velocity length and confidence metrics\n", err)
+
+    # These yields fine-grained insights into the developmental processes
+    try:
+        scvelo.pl.velocity_embedding_stream(
+            velocity_data,
+            basis="umap",
+            color="clusters",
+            fontsize=10,
+            legend_fontsize=8,
+            title="Velocities streams",
+            save="velocity_stream.png"
+        )
+    except Exception as err:
+        print("Failed to export velocities stream plot\n", err)
+
+    try:
+        scvelo.pl.velocity_embedding_grid(
+            velocity_data,
+            basis="umap",
+            color="clusters",
+            fontsize=10,
+            legend_fontsize=8,
+            title="Velocities grid",
+            save="velocity_grid.png"
+        )
+    except Exception as err:
+        print("Failed to export velocities grid plot\n", err)
+
+    try:
+        scvelo.pl.scatter(
+            velocity_data,
+            basis="umap",
+            color="latent_time",
+            color_map="gnuplot",
+            alpha=0.25,
+            fontsize=10,
+            legend_fontsize=8,
+            title="Latent time",
+            add_text="defines the real time experienced by cells as they differentiate\n(based on the transcriptional dynamics)",
+            add_text_pos=(0.05, 0),
+            save="latent_time.png"
+        )
+    except Exception as err:
+        print("Failed to export latent time plot\n", err)
+
     top_genes = velocity_data.var["fit_likelihood"].sort_values(ascending=False).index[:args.top]
-    top_genes = top_genes.tolist()
-    scvelo.pl.heatmap(
-        velocity_data,
-        var_names=top_genes,
-        sortby="latent_time",
-        col_color="clusters",
-        n_convolve=300,
-        font_scale=0.2,
-        yticklabels=True,                                        # to display all genes
-        save=f"""top_{args.top}_driver_genes_heatmap.png"""
-    )
-    # scvelo.pl.scatter(
-    #     velocity_data,
-    #     x="latent_time",
-    #     y=top_genes,
-    #     color="clusters",
-    #     frameon=False,
-    #     ncols=5,
-    #     legend_loc="best",
-    #     save=f"""top_{args.top}_driver_genes_scatter.png"""
-    # )
-    scvelo.pl.velocity(
-        velocity_data,
-        var_names=top_genes,
-        color="clusters",
-        save="driver_genes_velocity.png"
-    )
+    try:
+        scvelo.pl.heatmap(
+            velocity_data,
+            var_names=top_genes,
+            sortby="latent_time",
+            n_convolve=30,
+            col_color="clusters",
+            font_scale=0.2,
+            colorbar=True,
+            yticklabels=True,
+            save="driver_genes.png"
+        )
+    except Exception as err:
+        print("Failed to export driver genes heatmap\n", err)
+
+    for gene in top_genes:
+        try:
+            scvelo.pl.velocity(
+                velocity_data,
+                var_names=gene,
+                basis="umap",
+                color="clusters",
+                dpi=args.dpi,
+                save=f"""phase_{gene}.png"""
+            )
+        except Exception as err:
+            print("Failed to export driver gene phase portraits\n", err)
+        try:
+            scvelo.pl.scatter(
+                velocity_data,
+                basis="umap",
+                color="clusters",
+                x="latent_time",
+                y=gene,
+                frameon=False,
+                fontsize=10,
+                legend_fontsize=8,
+                legend_loc="best",
+                title=f"""{gene} expression dynamics""",
+                dpi=args.dpi,
+                save=f"""expression_{gene}.png"""
+            )
+        except Exception as err:
+            print("Failed to export driver gene expression dynamics plot", err)
+
+    try:
+        scvelo.pl.paga(
+            velocity_data,
+            basis="umap",
+            alpha=0.1,
+            min_edge_width=2,
+            node_size_scale=1.5,
+            size=50,
+            legend_loc="on data",
+            fontsize=10,
+            legend_fontsize=8,
+            fontoutline=1,
+            title="PAGA graph with velocity-directed edges",
+            save="paga.png"
+        )
+    except Exception as err:
+        print("Failed to export PAGA plot", err)
+
     # if user provided genes of interest
     if args.genes and len(args.genes) > 0:
-        scvelo.pl.velocity(
-            velocity_data,
-            var_names=args.genes,
-            save="selected_genes_velocity.png"
-        )
+        try:
+            scvelo.pl.velocity(
+                velocity_data,
+                var_names=args.genes,
+                basis="umap",
+                color="clusters",
+                ncols=5,
+                save="_selected_genes_velocity.png"
+            )
+        except Exception as err:
+            print("Failed to export selected genes velocity\n", err)
 
 
 def normalize_args(args, skip_list=[]):
