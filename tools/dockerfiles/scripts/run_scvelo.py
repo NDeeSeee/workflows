@@ -228,6 +228,8 @@ def export_velocity_plot(velocity_data, args):
             legend_fontsize=8,
             fontoutline=1,
             title="PAGA graph with velocity-directed edges",
+            add_text="abstracted graph of partitions, in which edge weights represent\nconfidence in the presence of connections",
+            add_text_pos=(0.05, 0),
             save="paga.png"
         )
     except Exception as err:
