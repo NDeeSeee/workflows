@@ -21,6 +21,27 @@ def configure_scvelo(args):
     scvelo.settings.autoshow = False
 
 
+def get_absolute_path(p, cwd=None):
+    """
+    Get absolute path relative to cwd or current working directory
+    """
+    cwd = os.getcwd() if cwd is None else cwd
+    return p if os.path.isabs(p) else os.path.normpath(os.path.join(cwd, p))
+
+
+def get_dir(location, cwd=None, permissions=None, exist_ok=None):
+    permissions = 0o0775 if permissions is None else permissions
+    exist_ok = True if exist_ok is None else exist_ok
+    cwd = os.getcwd() if cwd is None else cwd
+    abs_location = get_absolute_path(location, cwd)
+    try:
+        os.makedirs(abs_location, mode=permissions)
+    except os.error:
+        if not exist_ok:
+            raise
+    return abs_location
+
+
 def get_velocity_data(h5ad, cells, umap, pca, clusters, barcode_suffix=None):
     raw_velocity_data = anndata.read_h5ad(h5ad)
     cells_data = pandas.read_csv(cells, header=None, sep="\t")
@@ -97,7 +118,7 @@ def export_velocity_plot(velocity_data, args):
         )
     except Exception as err:
         print("Failed to export velocity length plot\n", err)
-    
+
     try:
         scvelo.pl.scatter(
             velocity_data,
@@ -266,20 +287,27 @@ def export_velocity_plot(velocity_data, args):
             print("Failed to export driver gene expression dynamics plot", err)
 
 
-def normalize_args(args, skip_list=[]):
+def get_normalized_args(args, skip_list=None, cwd=None):
+    """
+    Converts all relative path arguments to absolute
+    ones relatively to the cwd or current working directory.
+    Skipped arguments and None will be returned unchanged.
+    """
+    cwd = os.getcwd() if cwd is None else cwd
+    skip_list = [] if skip_list is None else skip_list
     normalized_args = {}
-    for key,value in args.__dict__.items():
-        if key not in skip_list:
+    for key, value in args.__dict__.items():
+        if key not in skip_list and value is not None:
             if isinstance(value, list):
-                normalized_args[key] = [
-                    item if not item or os.path.isabs(item) else os.path.normpath(os.path.join(os.getcwd(), item))
-                    for item in value
-                ]
+                for v in value:
+                    normalized_args.setdefault(key, []).append(
+                        get_absolute_path(v, cwd)
+                    )
             else:
-                normalized_args[key] = value if not value or os.path.isabs(value) else os.path.normpath(os.path.join(os.getcwd(), value))
+                normalized_args[key] = get_absolute_path(value, cwd)
         else:
-            normalized_args[key]=value
-    return argparse.Namespace (**normalized_args)
+            normalized_args[key] = value
+    return argparse.Namespace(**normalized_args)
 
 
 def arg_parser():
@@ -372,7 +400,7 @@ def main(argsl=None):
     if argsl is None:
         argsl = sys.argv[1:]
     args, _ = arg_parser().parse_known_args(argsl)
-    args = normalize_args(args, ["threads", "genes", "dpi", "top", "nneighbors"])
+    args = get_normalized_args(args, ["threads", "genes", "dpi", "top", "nneighbors"])
 
     print("Setting scvelo parameters")
     configure_scvelo(args)
