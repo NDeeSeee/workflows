@@ -56,6 +56,13 @@ def estimate_velocity(velocity_data, args):
     )
 
 
+def export_ann_data(velocity_data, args):
+    velocity_data.write(
+        filename=args.output + "compressed.h5ad",
+        compression="gzip"
+    )
+
+
 def export_text_data(velocity_data, args):
     driver_genes = scvelo.get_df(velocity_data, "rank_dynamical_genes/names")
     driver_genes.to_csv(args.output + "putative_driver_genes.tsv", sep="\t")
@@ -387,8 +394,9 @@ def main(argsl=None):
 
     print("Estimating velocity")
     estimate_velocity(concat_velocity_data, args)
-    export_velocity_plot(concat_velocity_data, args)
+    export_ann_data(concat_velocity_data, args)
     export_text_data(concat_velocity_data, args)
+    export_velocity_plot(concat_velocity_data, args)
 
 
 if __name__ == "__main__":
