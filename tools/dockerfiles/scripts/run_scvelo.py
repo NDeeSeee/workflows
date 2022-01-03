@@ -56,7 +56,7 @@ def estimate_velocity(velocity_data, args):
     )
 
 
-def export_ann_data(velocity_data, args):
+def export_h5ad_data(velocity_data, args):
     velocity_data.write(
         filename=args.output + "compressed.h5ad",
         compression="gzip"
@@ -394,7 +394,7 @@ def main(argsl=None):
 
     print("Estimating velocity")
     estimate_velocity(concat_velocity_data, args)
-    export_ann_data(concat_velocity_data, args)
+    export_h5ad_data(concat_velocity_data, args)
     export_text_data(concat_velocity_data, args)
     export_velocity_plot(concat_velocity_data, args)
 
