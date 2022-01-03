@@ -21,34 +21,26 @@ def configure_scvelo(args):
     scvelo.settings.autoshow = False
 
 
-def get_velocity_data(args):
-    print(f"""velocity - {args.h5ad}\nbarcodes - {args.cells}\nUMAP     - {args.umap}\nPCA      - {args.pca}\nclusters - {args.clusters}""")
-    raw_velocity_data = anndata.read_h5ad(args.h5ad)
-    cells_data = pandas.read_csv(args.cells, header=None, sep="\t")
+def get_velocity_data(h5ad, cells, umap, pca, clusters, barcode_suffix=None):
+    raw_velocity_data = anndata.read_h5ad(h5ad)
+    cells_data = pandas.read_csv(cells, header=None, sep="\t")
     filtered_velocity_data = raw_velocity_data[cells_data.iloc[:, 0]].copy()
-    clusters_data = pandas.read_csv(args.clusters, header=None, sep="\t")
+    clusters_data = pandas.read_csv(clusters, header=None, sep="\t")
     filtered_velocity_data.obs["clusters"] = clusters_data.values
-    try:
-        # https://github.com/theislab/scvelo/issues/37#issuecomment-499101214
-        # https://github.com/theislab/scvelo/discussions/722
-        pca_data = pandas.read_csv(args.pca, header=None, sep="\t")
-        umap_data = pandas.read_csv(args.umap, header=None, sep="\t")
-        filtered_velocity_data.obsm["X_pca"] = pca_data.values
-        filtered_velocity_data.obsm["X_umap"] = umap_data.values
-    except Exception:
-        print("Failed to load custom PCA/UMAP coordinates. Will be calculated internally")
+    # https://github.com/theislab/scvelo/issues/37#issuecomment-499101214
+    # https://github.com/theislab/scvelo/discussions/722
+    pca_data = pandas.read_csv(pca, header=None, sep="\t")
+    umap_data = pandas.read_csv(umap, header=None, sep="\t")
+    filtered_velocity_data.obsm["X_pca"] = pca_data.values
+    filtered_velocity_data.obsm["X_umap"] = umap_data.values
+    if barcode_suffix != None:
+        filtered_velocity_data.obs.index = filtered_velocity_data.obs.index + "-" + barcode_suffix
     return filtered_velocity_data
 
 
 def estimate_velocity(velocity_data, args):
     scvelo.pp.filter_and_normalize(velocity_data)
-    if ("X_umap" not in velocity_data.obsm) or ("X_pca" not in velocity_data.obsm):
-        print(f"""Computing moments with calculated PCA and UMAP using {args.ndim} PCs and {args.nneighbors} nearest neighbors""")
-        scvelo.pp.moments(velocity_data, n_pcs=args.ndim, n_neighbors=args.nneighbors)
-        scvelo.tl.umap(velocity_data)
-    else:
-        print(f"""Computing moments using custom PCA and UMAP coordinates and {args.nneighbors} nearest neighbors""")
-        scvelo.pp.moments(velocity_data, n_pcs=None, n_neighbors=args.nneighbors)
+    scvelo.pp.moments(velocity_data, n_pcs=None, n_neighbors=args.nneighbors)
     scvelo.tl.recover_dynamics(velocity_data, n_jobs=args.threads)
     scvelo.tl.velocity(velocity_data, mode="dynamical")
     scvelo.tl.velocity_graph(velocity_data, n_jobs=args.threads)
@@ -271,7 +263,13 @@ def normalize_args(args, skip_list=[]):
     normalized_args = {}
     for key,value in args.__dict__.items():
         if key not in skip_list:
-            normalized_args[key] = value if not value or os.path.isabs(value) else os.path.normpath(os.path.join(os.getcwd(), value))
+            if isinstance(value, list):
+                normalized_args[key] = [
+                    item if not item or os.path.isabs(item) else os.path.normpath(os.path.join(os.getcwd(), item))
+                    for item in value
+                ]
+            else:
+                normalized_args[key] = value if not value or os.path.isabs(value) else os.path.normpath(os.path.join(os.getcwd(), value))
         else:
             normalized_args[key]=value
     return argparse.Namespace (**normalized_args)
@@ -281,34 +279,48 @@ def arg_parser():
     general_parser = argparse.ArgumentParser()
     general_parser.add_argument(
         "--h5ad",
-        help="Path to the h5ad file",
+        help="Path to the h5ad file. \
+              If multiple files provided, the order should correspond to \
+              the order of files provided in --cells, --umap, --pca, --clusters",
         type=str,
-        required=True
+        required=True,
+        nargs="*"
     )
     general_parser.add_argument(
         "--cells",
-        help="Path to the cells data TSV file",
+        help="Path to the cells data TSV file. \
+              If multiple files provided, the order should correspond to \
+              the order of files provided in --h5ad, --umap, --pca, --clusters",
         type=str,
-        required=True
+        required=True,
+        nargs="*"
     )
     general_parser.add_argument(
         "--umap",
         help="Path to the custom UMAP data TSV file. \
-              Ignored if --pca is not provided",
-        type=str
+              If multiple files provided, the order should correspond to \
+              the order of files provided in --cells, --h5ad, --pca, --clusters",
+        type=str,
+        required=True,
+        nargs="*"
     )
     general_parser.add_argument(
         "--pca",
         help="Path to the custom PCA data TSV file.\
-              Ignored if --umap is not provided",
-        type=str
+              If multiple files provided, the order should correspond to \
+              the order of files provided in --cells, --umap, --h5ad, --clusters",
+        type=str,
+        required=True,
+        nargs="*"
     )
     general_parser.add_argument(
-        "--ndim",
-        help="Number of principal components to use. \
-              Ignored when both --pca and --umap are provided",
-        type=int,
-        default=30
+        "--clusters",
+        help="Path to the clusters data TSV file. \
+              If multiple files provided, the order should correspond to \
+              the order of files provided in --cells, --umap, --pca, --h5ad",
+        type=str,
+        required=True,
+        nargs="*"
     )
     general_parser.add_argument(
         "--nneighbors",
@@ -321,12 +333,6 @@ def arg_parser():
         help="List of genes of interest",
         type=str,
         nargs="*"
-    )
-    general_parser.add_argument(
-        "--clusters",
-        help="Path to the clusters data TSV file",
-        type=str,
-        required=True
     )
     general_parser.add_argument(
         "--dpi",
@@ -359,18 +365,30 @@ def main(argsl=None):
     if argsl is None:
         argsl = sys.argv[1:]
     args, _ = arg_parser().parse_known_args(argsl)
-    args = normalize_args(args, ["threads", "genes", "dpi", "top", "ndim", "nneighbors"])
+    args = normalize_args(args, ["threads", "genes", "dpi", "top", "nneighbors"])
 
     print("Setting scvelo parameters")
     configure_scvelo(args)
 
-    print("Loading data")
-    velocity_data = get_velocity_data(args)
-    
+    concat_velocity_data = []                                                                                     # can't use None, because anndata can't be compred to None. We'll use len() == 0 instead
+    for barcode_suffix, (h5ad, cells, umap, pca, clusters) in enumerate(zip(args.h5ad, args.cells, args.umap, args.pca, args.clusters)):
+        barcode_suffix = str(barcode_suffix + 1) if len(args.h5ad) > 1 else None                                  # safety measure in case we don't need to concatenate input h5ad files
+        print("Loading dataset")
+        print(f"""  velocity - {h5ad}\n  cells    - {cells}\n  UMAP     - {umap}\n  PCA      - {pca}\n  clusters - {clusters}""")
+        velocity_data = get_velocity_data(h5ad, cells, umap, pca, clusters, barcode_suffix)
+        if len(concat_velocity_data) == 0:
+            concat_velocity_data = velocity_data
+        else:
+            concat_velocity_data = concat_velocity_data.concatenate(
+                velocity_data,
+                batch_key="dataset",
+                index_unique=None
+            )
+
     print("Estimating velocity")
-    estimate_velocity(velocity_data, args)
-    export_velocity_plot(velocity_data, args)
-    export_text_data(velocity_data, args)
+    estimate_velocity(concat_velocity_data, args)
+    export_velocity_plot(concat_velocity_data, args)
+    export_text_data(concat_velocity_data, args)
 
 
 if __name__ == "__main__":
