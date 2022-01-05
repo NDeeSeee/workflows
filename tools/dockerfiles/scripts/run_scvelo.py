@@ -212,7 +212,7 @@ def export_velocity_plot(velocity_data, args):
                 basis="umap",
                 color="clusters",
                 dpi=args.dpi,
-                save=f"""phase_{gene}.png"""
+                save=f"""{gene}_phase.png"""
             )
         except Exception as err:
             print("Failed to export driver gene phase portraits\n", err)
@@ -229,7 +229,7 @@ def export_velocity_plot(velocity_data, args):
                 legend_loc="best",
                 title=f"""{gene} expression dynamics""",
                 dpi=args.dpi,
-                save=f"""expression_{gene}.png"""
+                save=f"""{gene}_expression.png"""
             )
         except Exception as err:
             print("Failed to export driver gene expression dynamics plot", err)
@@ -263,7 +263,7 @@ def export_velocity_plot(velocity_data, args):
                 basis="umap",
                 color="clusters",
                 dpi=args.dpi,
-                save=f"""custom_phase_{gene}.png"""
+                save=f"""{gene}_phase_selected.png"""
             )
         except Exception as err:
             print("Failed to export driver gene phase portraits\n", err)
@@ -280,7 +280,7 @@ def export_velocity_plot(velocity_data, args):
                 legend_loc="best",
                 title=f"""{gene} expression dynamics""",
                 dpi=args.dpi,
-                save=f"""custom_expression_{gene}.png"""
+                save=f"""{gene}_expression_selected.png"""
             )
         except Exception as err:
             print("Failed to export driver gene expression dynamics plot", err)
@@ -390,7 +390,7 @@ def arg_parser():
         "--output",
         help="Prefix for generated output files",
         type=str,
-        default="./velocity_"
+        default="./scvelo_"
     )
     return general_parser
 
