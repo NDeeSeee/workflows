@@ -1,11 +1,10 @@
+#!/usr/bin/env python
 import os
 import sys
-import argparse
-import anndata
 import scvelo
 import pandas
-import numpy
-import matplotlib
+import anndata
+import argparse
 import dataframe_image
 
 

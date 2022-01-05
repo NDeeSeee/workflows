@@ -1,0 +1,32 @@
+#################################################################
+# Software:         scVelo
+# Software Version: v0.0.1
+# Description:      scVelo is a scalable toolkit for RNA velocity analysis in single cells
+# Website:          https://scvelo.readthedocs.io/about/
+# Provides:         scVelo
+# Base Image:       python:3.8.6
+# Build Cmd:        docker build --rm -t biowardrobe2/scvelo:v0.0.1 -f scvelo-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/scvelo:v0.0.1
+# Run Cmd:          docker run --rm -ti biowardrobe2/scvelo:v0.0.1 /bin/bash
+#################################################################
+
+
+FROM python:3.8.6
+LABEL maintainer="misha.kotliar@gmail.com"
+ENV DEBIAN_FRONTEND noninteractive
+
+WORKDIR /tmp
+
+ENV SCVELO_VERSION 0.2.4
+
+COPY ./scripts/run_scvelo.py /usr/local/bin/run_scvelo.py
+
+### Installing scvelo
+RUN pip install dataframe_image scvelo==$SCVELO_VERSION && \
+### Installing run_scvelo.py script
+    chmod +x /usr/local/bin/run_scvelo.py && \
+### Cleaning
+    apt-get clean && \
+    apt-get purge && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /usr/share/doc/* && \
+    strip /usr/local/bin/*; true
