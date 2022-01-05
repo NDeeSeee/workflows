@@ -1,0 +1,38 @@
+#################################################################
+# Dockerfile
+#
+# Software:         seurat related scripts
+# Software Version: v0.0.1
+# Description:      Dockerized version of seurat related scripts
+# Website:          https://satijalab.org/seurat/index.html
+# Provides:         seurat related scripts
+# Base Image:       satijalab/seurat:4.0.3
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat-export:v0.0.1 -f seurat-export-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/seurat-export:v0.0.1
+# Run Cmd:          docker run --rm -ti biowardrobe2/seurat-export:v0.0.1 /bin/bash
+#################################################################
+
+
+### Base Image
+FROM satijalab/seurat:4.0.3
+LABEL maintainer="misha.kotliar@gmail.com"
+ENV DEBIAN_FRONTEND noninteractive
+
+
+################## BEGIN INSTALLATION ######################
+
+WORKDIR /tmp
+
+COPY ./scripts/extract_seurat_metadata.R /usr/local/bin/extract_seurat_metadata.R
+
+### Installing dependencies
+RUN apt-get update && \
+    apt-get install libgcc-10-dev python3-dev python3-pip -y && \
+    R -e 'install.packages("argparse", repo = "https://cloud.r-project.org/")' && \
+### Installing extract_seurat_metadata.R script
+    chmod +x /usr/local/bin/extract_seurat_metadata.R && \
+### Cleaning
+    apt-get clean && \
+    apt-get purge && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /usr/share/doc/* && \
+    strip /usr/local/bin/*; true
