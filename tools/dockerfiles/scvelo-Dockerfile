@@ -22,7 +22,7 @@ ENV SCVELO_VERSION 0.2.4
 COPY ./scripts/run_scvelo.py /usr/local/bin/run_scvelo.py
 
 ### Installing scvelo
-RUN pip install dataframe_image scvelo==$SCVELO_VERSION && \
+RUN pip install dataframe_image igraph scvelo==$SCVELO_VERSION && \
 ### Installing run_scvelo.py script
     chmod +x /usr/local/bin/run_scvelo.py && \
 ### Cleaning
