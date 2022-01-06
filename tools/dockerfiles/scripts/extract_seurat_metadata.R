@@ -23,6 +23,10 @@ export_metadata <- function(data, suffix, args){
     umap_data <- Embeddings(data, reduction="umap")
     pca_data <- Embeddings(data, reduction="pca")
     cluster_data <- data@meta.data[, args$source]
+    loupe_umap_data <- cbind(cells_data, umap_data)
+    colnames(loupe_umap_data) <- c("Barcode", "UMAP-1", "UMAP-2")
+    loupe_cluster_data <- cbind(cells_data, cluster_data)
+    colnames(loupe_cluster_data) <- c("barcode", "id")
     export_data(
         cells_data,
         location=paste0(args$cells, "_", suffix, ".tsv"),
@@ -46,6 +50,18 @@ export_metadata <- function(data, suffix, args){
         location=paste0(args$clusters, "_", suffix, ".tsv"),
         row_names=FALSE,
         col_names=FALSE
+    )
+    export_data(
+        loupe_umap_data,
+        location=paste0(args$umap, "_", suffix, "_loupe.csv"),
+        row_names=FALSE,
+        col_names=TRUE
+    )
+    export_data(
+        loupe_cluster_data,
+        location=paste0(args$clusters, "_", suffix, "_loupe.csv"),
+        row_names=FALSE,
+        col_names=TRUE
     )
 }
 

@@ -77,22 +77,32 @@ outputs:
   cells_metadata:
     type: File[]
     outputBinding:
-      glob: $(inputs.cells_prefix + "*")
+      glob: $(inputs.cells_prefix + "*" + ".tsv")
 
   umap_metadata:
     type: File[]
     outputBinding:
-      glob: $(inputs.umap_prefix + "*")
+      glob: $(inputs.umap_prefix + "*" + ".tsv")
 
   pca_metadata:
     type: File[]
     outputBinding:
-      glob: $(inputs.pca_prefix + "*")
+      glob: $(inputs.pca_prefix + "*" + ".tsv")
 
   clusters_metadata:
     type: File[]
     outputBinding:
-      glob: $(inputs.clusters_prefix + "*")
+      glob: $(inputs.clusters_prefix + "*" + ".tsv")
+
+  loupe_umap_metadata:
+    type: File[]
+    outputBinding:
+      glob: $(inputs.umap_prefix + "*" + ".csv")
+
+  loupe_clusters_metadata:
+    type: File[]
+    outputBinding:
+      glob: $(inputs.clusters_prefix + "*" + ".csv")
 
   stdout_log:
     type: stdout
