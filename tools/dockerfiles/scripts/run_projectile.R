@@ -225,7 +225,14 @@ if (!is.null(args$splitby)){
         print(paste("Processing", current_group))
         suffix <- gsub("'|\"| |-", "_", current_group)                     # safety measure
         filtered_query_data <- subset(query_data, idents=current_group)
-        run_projection(reference_data, filtered_query_data, suffix, args)
+        tryCatch(
+            expr = {
+                run_projection(reference_data, filtered_query_data, suffix, args)
+            },
+            error = function(e){
+                print(paste("Failed to run projection for", suffix))
+            }
+        )
     }
 } else {
     print("Exporting combined results")
