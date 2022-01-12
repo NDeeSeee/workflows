@@ -119,7 +119,7 @@ run_projection <- function(reference_data, query_data, suffix, args){
     projected_data <- make.projection(
         query_data,
         ref=reference_data,
-        filter.cells=TRUE,
+        filter.cells=!args$nofilter,
         query.assay="RNA",
         skip.normalize=TRUE       # our Seurat data is already normalized
     )
@@ -140,6 +140,7 @@ run_projection <- function(reference_data, query_data, suffix, args){
     export_radar_plot(
         reference_data=reference_data,
         projected_data=projected_data,
+        genes4radar=args$features,
         rootname=paste(args$output, "radar", suffix, sep="_")
     )
 }
@@ -180,6 +181,16 @@ get_args <- function(){
     parser$add_argument(
         "--pdf",
         help="Export plots in PDF. Default: false",
+        action="store_true"
+    )
+    parser$add_argument(
+        "--features",
+        help="Features of interest to highlight. Default: Foxp3, Cd4, Cd8a, Tcf7, Ccr7, Gzmb, Gzmk, Pdcd1, Havcr2, Tox, Mki67, Il2ra",
+        type="character", nargs="*", default=c("Foxp3", "Cd4", "Cd8a", "Tcf7", "Ccr7", "Gzmb", "Gzmk", "Pdcd1", "Havcr2", "Tox", "Mki67", "Il2ra")
+    )
+    parser$add_argument(
+        "--nofilter",
+        help="Skip pre-filtering T cells using scGate. Default: pre-filter T-cells",
         action="store_true"
     )
     parser$add_argument(
