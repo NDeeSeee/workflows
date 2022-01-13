@@ -13,7 +13,6 @@ suppressMessages(library(tibble))
 suppressMessages(library(scales))
 suppressMessages(library(ggplot2))
 suppressMessages(library(ggrepel))
-suppressMessages(library(garnett))
 suppressMessages(library(argparse))
 suppressMessages(library(patchwork))
 suppressMessages(library(data.table))
@@ -21,16 +20,202 @@ suppressMessages(library(reticulate))
 suppressMessages(library(sctransform))
 suppressMessages(library(rtracklayer))
 suppressMessages(library(RColorBrewer))
-suppressMessages(library(org.Hs.eg.db))
-suppressMessages(library(org.Mm.eg.db))
-suppressMessages(library(GenomicFeatures))
-suppressMessages(library(EnsDb.Hsapiens.v86))
+suppressMessages(library(SeuratWrappers))
 
 
 set_threads <- function (threads) {
     invisible(capture.output(plan("multiprocess", workers=threads)))
     invisible(capture.output(plan()))
     invisible(capture.output(setDTthreads(threads)))
+}
+
+
+writeSparseMatrix <- function (inMat, outFname, sliceSize=1000){
+    fnames <- c()
+    mat <- inMat
+    geneCount <- nrow(mat)
+    startIdx <- 1
+    while (startIdx < geneCount){
+        endIdx <- min(startIdx + sliceSize - 1, geneCount)
+        matSlice <- mat[startIdx:endIdx,]
+        denseSlice <- as.matrix(matSlice)
+        dt <- data.table(denseSlice)
+        dt <- cbind(gene=rownames(matSlice), dt)
+        writeHeader <- FALSE
+        if (startIdx == 1) { 
+            writeHeader <- TRUE
+        }
+        sliceFname <- paste0("temp", startIdx, ".txt")
+        fwrite(dt, sep="\t", file=sliceFname, quote=FALSE, col.names=writeHeader)
+        fnames <- append(fnames, sliceFname)
+        startIdx <- startIdx + sliceSize
+    }
+    system(paste("cat", paste(fnames, collapse=" "), "| gzip >", outFname, sep=" "))
+    unlink(fnames)
+}
+
+
+findMatrix <- function(object, matrix.slot){
+    if (matrix.slot == "counts") {
+        counts <- GetAssayData(object=object, slot="counts")
+    } else if (matrix.slot == "scale.data") {
+        counts <- GetAssayData(object=object, slot="scale.data")
+    } else if (matrix.slot == "data") {
+        counts <- GetAssayData(object=object)
+    } else {
+        error("matrix.slot can only be one of: counts, scale.data, data")
+    }
+}
+
+
+ExportToCellbrowser <- function(
+    object,
+    matrix.slot,
+    dir,
+    cluster.field,
+    features,
+    meta.fields,
+    meta.fields.names
+) {
+    if (!dir.exists(dir)) {
+        dir.create(dir)
+    }
+    idents <- Idents(object)
+    meta <- object@meta.data
+    cellOrder <- colnames(object)
+    counts <- findMatrix(object, matrix.slot)
+    genes <- rownames(x=object)
+    dr <- object@reductions
+
+    gzPath <- file.path(dir, "exprMatrix.tsv.gz")
+    if ((((ncol(counts)/1000)*(nrow(counts)/1000))>2000) && is(counts, 'sparseMatrix')){
+        writeSparseMatrix(counts, gzPath);
+    } else {
+        mat <- as.matrix(counts)
+        df <- as.data.frame(mat, check.names=FALSE)
+        df <- data.frame(gene=genes, df, check.names=FALSE)
+        z <- gzfile(gzPath, "w")
+        write.table(x=df, sep="\t", file=z, quote=FALSE, row.names=FALSE)
+        close(con=z)
+    }
+    embeddings = names(dr)
+    embeddings.conf <- c()
+    for (embedding in embeddings) {
+        emb <- dr[[embedding]]
+        df <- emb@cell.embeddings
+        if (ncol(df) > 2){
+            df <- df[, 1:2]
+        }
+        colnames(df) <- c("x", "y")
+        df <- data.frame(cellId=rownames(df), df, check.names=FALSE)
+        write.table(
+            df[cellOrder,],
+            sep="\t",
+            file=file.path(dir, sprintf("%s.coords.tsv", embedding)),
+            quote=FALSE,
+            row.names=FALSE
+        )
+        embeddings.conf <- c(
+            embeddings.conf,
+            sprintf('{"file": "%s.coords.tsv", "shortLabel": "Seurat %1$s"}', embedding)
+        )
+    }
+    df <- data.frame(row.names=cellOrder, check.names=FALSE)
+    enum.fields <- c()
+    for (i in 1:length(meta.fields)){
+        field <- meta.fields[i]
+        name <- meta.fields.names[i]
+        if (field %in% colnames(meta)){
+            df[[name]] <- meta[[field]]
+            if (!is.numeric(df[[name]])) {
+                enum.fields <- c(enum.fields, name)
+            }
+        }
+    }
+    df <- data.frame(Cell=rownames(df), df, check.names=FALSE)
+    write.table(
+        as.matrix(df[cellOrder,]),
+        sep="\t",
+        file=file.path(dir, "meta.tsv"),
+        quote=FALSE,
+        row.names=FALSE
+    )
+    if (!is.null(features)){
+        write.table(
+            features,
+            sep="\t",
+            file=file.path(dir, "quickGenes.tsv"),
+            quote=FALSE,
+            row.names=FALSE,
+            col.names=FALSE
+        )
+    }
+    config <- '
+name="cellbrowser"
+shortLabel="cellbrowser"
+geneLabel="Feature"
+exprMatrix="exprMatrix.tsv.gz"
+meta="meta.tsv"
+radius=3
+alpha=0.5
+geneIdType="auto"
+clusterField="%s"
+labelField="%s"
+enumFields=%s
+coords=%s'
+    enum.string <- paste0("[", paste(paste0('"', enum.fields, '"'), collapse=", "), "]")
+    coords.string <- paste0("[", paste(embeddings.conf, collapse = ",\n"), "]")
+    config <- sprintf(
+        config,
+        cluster.field,
+        cluster.field,
+        enum.string,
+        coords.string
+    )
+    if (!is.null(features)){
+        config <- paste(config, 'quickGenesFile="quickGenes.tsv"', sep="\n")
+    }
+    confPath = file.path(dir, "cellbrowser.conf")
+    cat(config, file=confPath)
+    cb.dir <- paste(dir, "html_data", sep="/")
+    cb <- reticulate::import(module = "cellbrowser")
+    cb$cellbrowser$build(dir, cb.dir)
+}
+
+
+export_cellbrowser_data <- function(seurat_data, assay, matrix_slot, resolution, features, rootname){
+    tryCatch(
+        expr = {
+            backup_assay <- DefaultAssay(seurat_data)
+            DefaultAssay(seurat_data) <- assay
+            meta_fields       <- c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "nFeature_ATAC", "nucleosome_signal", "frip", "blacklisted_fraction")
+            meta_fields_names <- c("GEX UMIs",   "Genes",        "Mitochondrial %", "Novelty score",            "ATAC UMIs",   "Peaks",         "Nucleosome signal", "FRiP", "Blacklisted fraction")
+            meta_fields <- c(
+                meta_fields,
+                paste("wsnn_res", resolution, sep=".")
+            )
+            meta_fields_names <- c(
+                meta_fields_names,
+                paste("Clustering (", resolution, ")", sep="")
+            )
+            ExportToCellbrowser(
+                seurat_data,
+                matrix.slot=matrix_slot,
+                dir=rootname,
+                cluster.field=paste("Clustering (", resolution, ")", sep="")[1],    # take only the first of possible multiple resolutions
+                features=features,
+                meta.fields=meta_fields,
+                meta.fields.names=meta_fields_names
+            )
+            print(paste("Export UCSC Cellbrowser data to", rootname, sep=" "))
+        },
+        error = function(e){
+            print(paste("Failed to export UCSC Cellbrowser data to", rootname, sep=" "))
+        },
+        finally = {
+            DefaultAssay(seurat_data) <- backup_assay
+        }
+    )
 }
 
 
@@ -50,14 +235,6 @@ add_qc_metrics <- function(seurat_data, blacklisted_data, args) {
     #   the approximate ratio of mononucleosomal to nucleosome-free fragments (stored as 
     #   nucleosome_signal)
     seurat_data <- NucleosomeSignal(seurat_data, verbose=FALSE)
-
-    # Transcriptional start site (TSS) enrichment score
-    #   The ENCODE project has defined an ATAC-seq targeting score based on the ratio of fragments
-    #   centered at the TSS to fragments in TSS-flanking regions (see https://www.encodeproject.org/data-standards/terms/).
-    #   Poor ATAC-seq experiments typically will have a low TSS enrichment score. We can compute this
-    #   metric for each cell with the TSSEnrichment() function, and the results are stored in metadata
-    #   under the column name TSS.enrichment.
-    seurat_data <- TSSEnrichment(seurat_data, fast=FALSE, verbose=FALSE)  # set fast=FALSE, because we want to build TSS Enrichment plot later
 
     # Fraction of fragments in peaks.
     #   Represents the fraction of all fragments that fall within ATAC-seq peaks. Cells with low values
@@ -120,7 +297,6 @@ apply_qc_filters <- function(seurat_data, args) {
                (nCount_ATAC >= args$atacminumi) &
                (nucleosome_signal <= args$maxnuclsignal) &
                (frip >= args$minfrip) &
-               (TSS.enrichment >= args$mintssenrich) &
                (blacklisted_fraction <= args$maxblacklisted)
     )
     return (filtered_seurat_data)
@@ -682,13 +858,6 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
     )
     backup_assay <- DefaultAssay(seurat_data)
     DefaultAssay(seurat_data) <- "ATAC"
-    export_tss_plot(
-        data=seurat_data,
-        group_by_value=args$mintssenrich,
-        rootname=paste(args$output, suffix, "tss_enrch", sep="_"),
-        plot_title=paste("TSS Enrichment Score (", suffix, ")", sep=""),
-        pdf=args$pdf
-    )
     export_fragments_hist(
         data=seurat_data,
         group_by_value=args$maxnuclsignal,
@@ -748,8 +917,8 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
     )
     export_vln_plot(
         data=seurat_data,
-        features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "nFeature_ATAC", "TSS.enrichment",        "nucleosome_signal", "frip", "blacklisted_fraction"),
-        labels=c(  "GEX UMIs",   "Genes",        "Mitochondrial %", "Novelty score",            "ATAC UMIs",   "Peaks",         "TSS enrichment score",  "Nucleosome signal", "FRiP", "Fr. of reads in bl-ted reg."),
+        features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "nFeature_ATAC", "nucleosome_signal", "frip", "blacklisted_fraction"),
+        labels=c(  "GEX UMIs",   "Genes",        "Mitochondrial %", "Novelty score",            "ATAC UMIs",   "Peaks",         "Nucleosome signal", "FRiP", "Fr. of reads in bl-ted reg."),
         rootname=paste(args$output, suffix, "qc_mtrcs", sep="_"),
         plot_title=paste("QC metrics densities per cell (", suffix, ")", sep=""),
         legend_title="Identity",
@@ -820,6 +989,147 @@ export_all_dimensionality_plots <- function(seurat_data, suffix, args) {
 }
 
 
+export_dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, cluster_idents=FALSE, min_pct=0.01, col_min=-2.5, col_max=2.5, pdf=FALSE, width=1200, height=800, resolution=100){
+    tryCatch(
+        expr = {
+            plot <- DotPlot(
+                        data,
+                        features=features,
+                        cluster.idents=cluster_idents,
+                        dot.min=min_pct,
+                        col.min=col_min,
+                        col.max=col_max,
+                        scale=TRUE,
+                        scale.by="size"  # for optimal perception
+                    ) +
+                    xlab(x_label) +
+                    ylab(y_label) +
+                    theme_gray() +
+                    ggtitle(plot_title) +
+                    RotatedAxis()
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(plot))
+            dev.off()
+
+            if (pdf) {
+                pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                suppressMessages(print(plot))
+                dev.off()
+            }
+
+            print(paste("Export dot plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export dot plot to ", rootname, ".(png/pdf)", sep=""))
+        }
+    )
+}
+
+
+export_feature_plot <- function(data, features, labels, rootname, reduction, plot_title, split_by=NULL, label=FALSE, order=FALSE, min_cutoff=NA, max_cutoff=NA, pt_size=NULL, combine_guides=NULL, alpha=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
+    tryCatch(
+        expr = {
+            plots <- FeaturePlot(
+                        data,
+                        features=features,
+                        pt.size=pt_size,
+                        order=order,
+                        min.cutoff=min_cutoff,
+                        max.cutoff=max_cutoff,
+                        reduction=reduction,
+                        split.by=split_by,
+                        label=label,
+                        combine=FALSE       # to return a list of gglots
+                    )
+            plots <- lapply(seq_along(plots), function(i){
+                plots[[i]] <- plots[[i]] + ggtitle(labels[i]) + theme_gray()
+                if (!is.null(alpha)) { plots[[i]]$layers[[1]]$aes_params$alpha <- alpha }
+                return (plots[[i]])
+            })
+            combined_plots <- wrap_plots(plots, guides=combine_guides) + plot_annotation(title=plot_title)
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(combined_plots))
+            dev.off()
+
+            if (pdf) {
+                pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                suppressMessages(print(combined_plots))
+                dev.off()
+            }
+
+            print(paste("Export feature plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export feature plot to ", rootname, ".(png/pdf)", sep=""))
+        }
+    )
+}
+
+
+export_all_expression_plots <- function(seurat_data, suffix, args, assay="RNA") {
+    backup_assay <- DefaultAssay(seurat_data)
+    DefaultAssay(seurat_data) <- assay
+    for (i in 1:length(args$resolution)) {
+        current_resolution <- args$resolution[i]
+        Idents(seurat_data) <- paste("wsnn_res", current_resolution, sep=".")
+        export_dot_plot(
+            data=seurat_data,
+            features=args$gexfeatures,
+            plot_title=paste("Scaled average log normalized gene expression per cluster. Resolution", current_resolution),
+            x_label="Genes",
+            y_label="Clusters",
+            cluster_idents=FALSE,
+            rootname=paste(args$output, suffix, "avg_per_clst_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+        export_feature_plot(
+            data=seurat_data,
+            features=args$gexfeatures,
+            labels=args$gexfeatures,
+            reduction="wnnumap",
+            plot_title=paste("Log normalized gene expression per cell of clustered datasets. Resolution", current_resolution),
+            label=TRUE,
+            order=TRUE,
+            max_cutoff="q99",  # to prevent cells with overexpressed gene from distoring the color bar
+            rootname=paste(args$output, suffix, "per_clst_cell_res", current_resolution, sep="_"),
+            combine_guides="keep",
+            pdf=args$pdf
+        )
+        export_vln_plot(
+            data=seurat_data,
+            features=args$gexfeatures,
+            labels=args$gexfeatures,
+            plot_title=paste("Log normalized gene expression densities per cluster. Resolution", current_resolution),
+            legend_title="Cluster",
+            log=TRUE,
+            pt_size=0,
+            combine_guides="collect",
+            rootname=paste(args$output, suffix, "dnst_per_clst_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+        Idents(seurat_data) <- "orig.ident"
+    }
+    DefaultAssay(seurat_data) <- backup_assay
+}
+
+
+export_rds <- function(data, location){
+    tryCatch(
+        expr = {
+            saveRDS(data, location)
+            print(paste("Export data as RDS to", location, sep=" "))
+        },
+        error = function(e){
+            print(paste("Failed to export data as RDS to", location, sep=" "))
+        }
+    )
+}
+
+
 load_seurat_data <- function(args) {
     raw_data <- Read10X(data.dir=args$mex) 
     seurat_data <- CreateSeuratObject(
@@ -829,10 +1139,7 @@ load_seurat_data <- function(args) {
         names.field=2
     )
 
-    annotation <- GetGRangesFromEnsDb(ensdb=EnsDb.Hsapiens.v86)
-    seqlevelsStyle(annotation) <- "UCSC"
-    genome(annotation) <- "hg38"
-    print("Bypassing GTF file. Loading annotations from EnsDB.")
+    annotation <- rtracklayer::import(args$annotations, format="GFF")
 
     seurat_data[["ATAC"]] <- CreateChromatinAssay(
         counts=raw_data$Peaks,
@@ -840,7 +1147,6 @@ load_seurat_data <- function(args) {
         fragments=args$fragments,
         min.cells=args$atacmincells,
         annotation=annotation
-        # annotation=transcripts(makeTxDbFromGFF(args$annotations))  # not sure how it used and how it's different from GetGRangesFromEnsDb
     )
 
     if (args$callpeaks){
@@ -895,10 +1201,10 @@ get_args <- function(){
     parser$add_argument(
         "--mex",
         help=paste(
-            "Filtered feature barcode matrix stored in MEX format. The rows consist",
-            "of all the gene and peak features concatenated together (identical to",
-            "raw feature barcode matrix) and the columns are restricted to those barcodes",
-            "that are identified as cells."
+            "Path to the folder with feature-barcode matrix from Cell Ranger ARC Count",
+            "in MEX format. The rows consist of all the gene and peak features concatenated",
+            "together and the columns are restricted to those barcodes that are identified",
+            "as cells."
         ),
         type="character", required="True"
     )
@@ -912,19 +1218,19 @@ get_args <- function(){
     )
     parser$add_argument(
         "--annotations",
-        help="Not yet used",
+        help="Path to the genome annotation file in GTF format",
         type="character", required="True"
     )
     parser$add_argument(
         "--blacklisted",
-        help="Blacklisted regions BED file",
+        help="Path to the blacklisted regions file in BED format",
         type="character"
     )
     # Filtering
     parser$add_argument(
         "--gexmincells",
         help=paste(
-            "Include only GEX genes detected in at least this many cells.",
+            "Include only GEX features detected in at least this many cells.",
             "Default: 5"
         ),
         type="integer", default=5
@@ -932,7 +1238,7 @@ get_args <- function(){
     parser$add_argument(
         "--mingenes",
         help=paste(
-            "Include cells where at least this many GEX genes are detected.",
+            "Include cells where at least this many GEX features are detected",
             "Default: 250"
         ),
         type="integer", default=250
@@ -940,7 +1246,7 @@ get_args <- function(){
     parser$add_argument(
         "--maxgenes",
         help=paste(
-            "Include cells with the number of GEX genes not bigger than this value.",
+            "Include cells with the number of GEX features not bigger than this value.",
             "Default: 5000"
         ),
         type="integer", default=5000
@@ -955,15 +1261,14 @@ get_args <- function(){
     )
     parser$add_argument(
         "--mitopattern",
-        help="Regex pattern to identify mitochondrial GEX genes. Default: '^Mt-'",
+        help="Regex pattern to identify mitochondrial GEX features. Default: '^Mt-'",
         type="character", default="^Mt-"
     )
     parser$add_argument(
         "--maxmt",
         help=paste(
-            "Include cells with the percentage of transcripts mapped to mitochondrial",
-            "GEX genes not bigger than this value.",
-            "Default: 5"
+            "Include cells with the percentage of GEX transcripts mapped to mitochondrial",
+            "genes not bigger than this value. Default: 5"
         ),
         type="double", default=5
     )
@@ -980,7 +1285,7 @@ get_args <- function(){
     parser$add_argument(
         "--atacmincells",
         help=paste(
-            "Include only peaks detected in at least this many cells.",
+            "Include only ATAC features detected in at least this many cells.",
             "Default: 5"
         ),
         type="integer", default=5
@@ -989,7 +1294,7 @@ get_args <- function(){
         "--atacminumi",
         help=paste(
             "Include cells where at least this many ATAC UMIs (transcripts) are detected.",
-            "Default: 500"
+            "Default: 1000"
         ),
         type="integer", default=1000
     )
@@ -1002,16 +1307,6 @@ get_args <- function(){
             "Default: 4"
         ),
         type="double", default=4
-    )
-    parser$add_argument(
-        "--mintssenrich",
-        help=paste(
-            "Include cells with the TSS enrichment score not lower than this value.",
-            "Score is calculated based on the ratio of fragments centered at the TSS",
-            "to fragments in TSS-flanking regions.",
-            "Default: 2"
-        ),
-        type="double", default=2
     )
     parser$add_argument(
         "--minfrip",
@@ -1033,29 +1328,43 @@ get_args <- function(){
     parser$add_argument(
         "--callpeaks",
         help=paste(
-            "Call peaks with MACS2 instead of those that are provided by Cell Ranger.",
+            "Call peaks with MACS2 instead of those that are provided by Cell Ranger ARC Count.",
             "Default: false"
         ),
         action="store_true"
     )
     parser$add_argument(
+        "--gexfeatures",
+        help="GEX features of interest to evaluate expression. Default: None",
+        type="character", nargs="*"
+    )
+    parser$add_argument(
         "--highvarcount",
-        help="",
+        help=paste(
+            "Number of highly variable features to detect. Used for datasets integration,",
+            "scaling, and dimensional reduction. Default: 3000"
+        ),
         type="integer", default=3000
     )
     parser$add_argument(
         "--gexndim",
-        help="",
+        help=paste(
+            "Number of principal components to use in GEX UMAP projection and clustering",
+            "(from 1 to 50). Use Elbow plot to adjust this parameter. Default: 50"
+        ),
         type="integer", default=50
     )
     parser$add_argument(
         "--atacndim",
-        help="",
+        help=paste(
+            "Number of principal components to use in ATAC UMAP projection and clustering",
+            "(from 1 to 50). Use Elbow plot to adjust this parameter. Default: 50"
+        ),
         type="integer", default=50
     )
     parser$add_argument(
         "--resolution",
-        help="",
+        help="Clustering resolution. Can be set as an array. Default: 0.3",
         type="double", default=c(0.3), nargs="*"
     )
     # Export results
@@ -1168,3 +1477,24 @@ seurat_data <- FindClusters(
 )
 
 export_all_clustering_plots(seurat_data, "clst", args)
+
+if (args$rds){ export_rds(seurat_data, paste(args$output, "_clst_data.rds", sep="")) }
+
+if (!is.null(args$gexfeatures)){
+    print("Check genes of interest to include only those that are present in the datasets")
+    backup_assay <- DefaultAssay(seurat_data)
+    DefaultAssay(seurat_data) <- "RNA"
+    args$gexfeatures <- unique(args$gexfeatures)
+    args$gexfeatures <- args$gexfeatures[args$gexfeatures %in% as.vector(as.character(rownames(seurat_data)))]
+    print(args$gexfeatures)
+    DefaultAssay(seurat_data) <- backup_assay
+}
+
+if (!is.null(args$gexfeatures)){ export_all_expression_plots(seurat_data, "expr", args, assay="RNA") }
+
+print("Exporting UCSC Cellbrowser data")
+export_cellbrowser_data(
+    seurat_data, assay="RNA", matrix_slot="data",
+    resolution=args$resolution, features=args$gexfeatures,
+    rootname=paste(args$output, "_cellbrowser", sep="")
+)
