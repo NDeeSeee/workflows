@@ -1,0 +1,6 @@
+{
+    "metrics_summary_report": {
+        "class": "File",
+        "location": "./data/dm3_chr4/main_inputs/cell_ranger/summary_cell_ranger_arc_count.csv"
+    }
+}

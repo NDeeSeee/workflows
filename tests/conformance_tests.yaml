@@ -6004,3 +6004,63 @@
     venn_diag_plot:
       class: File
       location: "res.join.strict.venn.pdf"
+
+# ========================================================
+# collect-stats-sc-count
+# ========================================================
+
+- job: ./collect-stats-sc-count-1.json
+  tool: ../tools/collect-stats-sc-count.cwl
+  output:
+    collected_statistics_md:
+      class: File
+      location: "summary_cell_ranger_count_stats.md"
+    collected_statistics_tsv:
+      class: File
+      location: "summary_cell_ranger_count_stats.tsv"
+    collected_statistics_yaml:
+      class: File
+      location: "summary_cell_ranger_count_stats.yaml"
+
+- job: ./collect-stats-sc-count-2.json
+  tool: ../tools/collect-stats-sc-count.cwl
+  output:
+    collected_statistics_md:
+      class: File
+      location: "res.md"
+    collected_statistics_tsv:
+      class: File
+      location: "res.tsv"
+    collected_statistics_yaml:
+      class: File
+      location: "res.yaml"
+
+# ========================================================
+# collect-stats-sc-arc-count
+# ========================================================
+
+- job: ./collect-stats-sc-arc-count-1.json
+  tool: ../tools/collect-stats-sc-arc-count.cwl
+  output:
+    collected_statistics_md:
+      class: File
+      location: "summary_cell_ranger_arc_count_stats.md"
+    collected_statistics_tsv:
+      class: File
+      location: "summary_cell_ranger_arc_count_stats.tsv"
+    collected_statistics_yaml:
+      class: File
+      location: "summary_cell_ranger_arc_count_stats.yaml"
+
+- job: ./collect-stats-sc-arc-count-2.json
+  tool: ../tools/collect-stats-sc-arc-count.cwl
+  output:
+    collected_statistics_md:
+      class: File
+      location: "arc_res.md"
+    collected_statistics_tsv:
+      class: File
+      location: "arc_res.tsv"
+    collected_statistics_yaml:
+      class: File
+      location: "arc_res.yaml"
