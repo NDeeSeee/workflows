@@ -1264,7 +1264,7 @@ load_blacklisted_data <- function(location) {
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description='Runs Seurat for comparative scRNA-seq analysis of across experimental conditions')
+    parser <- ArgumentParser(description='Runs Seurat Weighted Nearest Neighbor Analysis')
     # Loading data
     parser$add_argument(
         "--mex",
