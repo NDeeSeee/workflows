@@ -30,6 +30,16 @@ set_threads <- function (threads) {
 }
 
 
+get_file_type <- function (filename) {
+    ext = tools::file_ext(filename)
+    separator = "\t"
+    if (ext == "csv"){
+        separator = ","
+    }
+    return (separator)
+}
+
+
 writeSparseMatrix <- function (inMat, outFname, sliceSize=1000){
     fnames <- c()
     mat <- inMat
@@ -524,6 +534,54 @@ export_geom_point_plot <- function(data, rootname, x_axis, y_axis, facet_by, x_l
 }
 
 
+export_data <- function(data, location, row_names=FALSE, col_names=TRUE, quote=FALSE){
+    tryCatch(
+        expr = {
+            write.table(
+                data,
+                file=location,
+                sep=get_file_type(location),
+                row.names=row_names,
+                col.names=col_names,
+                quote=quote
+            )
+            print(paste("Export data to", location, sep=" "))
+        },
+        error = function(e){
+            print(paste("Failed to export data to", location, sep=" "))
+        }
+    )
+}
+
+
+get_density_data <- function(data, features, labels, assay="RNA", slot="data", n_bins=1024, x_min=NULL, x_max=NULL){
+    DefaultAssay(data) <- assay                               # no need to backup assay as we don't return data from the function
+    slot_data <- FetchData(data, vars=features, slot=slot)
+    density_data <- as.data.frame(
+        do.call(
+            cbind,                                            # merges to one big dataframe
+            lapply(                                           # returns list of dataframes
+                features,
+                function(f){
+                    feature_data <- slot_data[, f]
+                    l <- labels[match(f, features)]
+                    density_ls <- density(
+                        feature_data,
+                        from=ifelse(is.null(x_min), 0, x_min),
+                        to=ifelse(is.null(x_max), max(feature_data[is.finite(feature_data)]), x_max),
+                        n=n_bins
+                    )
+                    density_df <- data.frame(density_ls$x, density_ls$y)
+                    colnames(density_df) <- c(paste(l, "x"), paste(l, "y"))
+                    return (density_df)
+                }
+            )
+        )
+    )
+    return (density_data)
+}
+
+
 export_vln_plot <- function(data, features, labels, rootname, plot_title, legend_title, log=FALSE, group_by=NULL, hide_x_text=FALSE, pt_size=NULL, palette=NULL, combine_guides=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
@@ -914,6 +972,16 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         plot_title=paste("Novelty score density per cell (", suffix, ")", sep=""),
         zoom_on_intercept=TRUE,
         pdf=args$pdf
+    )
+    export_data(
+        get_density_data(      # if raises any exception, will be caught by export_data
+            data=seurat_data,
+            features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "nFeature_ATAC", "nucleosome_signal", "frip", "blacklisted_fraction"),
+            labels=c("GEX UMIs", "Genes", "Mitochondrial %", "Novelty score", "ATAC UMIs", "Peaks", "Nucleosome signal", "FRiP", "Frac. of reads in bl-ted reg."),
+            assay="RNA",
+            slot="data"
+        ),
+        location=paste(args$output, suffix, "dnst.tsv", sep="_")
     )
     export_vln_plot(
         data=seurat_data,
