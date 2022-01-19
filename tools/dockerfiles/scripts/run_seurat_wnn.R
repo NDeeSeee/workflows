@@ -981,7 +981,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
             assay="RNA",
             slot="data"
         ),
-        location=paste(args$output, suffix, "dnst.tsv", sep="_")
+        location=paste(args$output, suffix, "qc_mtrcs.tsv", sep="_")
     )
     export_vln_plot(
         data=seurat_data,
