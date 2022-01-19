@@ -1,0 +1,48 @@
+#################################################################
+# Dockerfile
+#
+# Software:         Seurat WNN
+# Software Version: v0.0.1
+# Description:      Dockerized version of Seurat WNN
+# Website:          https://satijalab.org/seurat/articles/weighted_nearest_neighbor_analysis.html
+# Provides:         run_seurat_wnn.R script
+# Base Image:       satijalab/seurat:4.0.3
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat-wnn:v0.0.1 -f seurat-wnn-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/seurat-wnn:v0.0.1
+# Run Cmd:          docker run --rm -ti biowardrobe2/seurat-wnn:v0.0.1 /bin/bash
+#################################################################
+
+
+### Base Image
+FROM satijalab/seurat:4.0.3
+LABEL maintainer="misha.kotliar@gmail.com"
+ENV DEBIAN_FRONTEND noninteractive
+
+
+################## BEGIN INSTALLATION ######################
+
+WORKDIR /tmp
+
+ENV CB_VERSION "1.1.1"
+ENV MACS2_VERSION "2.2.7.1"
+
+COPY ./scripts/run_seurat_wnn.R /usr/local/bin/run_seurat_wnn.R
+
+### Installing dependencies
+RUN apt-get update && \
+    apt-get install libgcc-10-dev python3-dev python3-pip libxml2-dev libcurl4-openssl-dev libssl-dev pandoc libudunits2-dev libgdal-dev libcairo2-dev libharfbuzz-dev libfribidi-dev libbz2-dev -y && \
+    pip3 install scipy numpy && \
+    pip3 install cellbrowser==${CB_VERSION} && \
+    pip3 install MACS2==${MACS2_VERSION} && \
+    R -e 'install.packages("argparse", repo = "https://cloud.r-project.org/")' && \
+    R -e 'install.packages("tidyverse", repo = "https://cloud.r-project.org/")' && \
+    R -e "BiocManager::install(c('BiocGenerics', 'DelayedArray', 'DelayedMatrixStats','limma', 'S4Vectors', 'SingleCellExperiment', 'SummarizedExperiment', 'batchelor', 'Matrix.utils', 'DESeq2', 'EnhancedVolcano', 'Rsamtools', 'rtracklayer'))" && \
+    R -e 'install.packages("Signac", repo = "https://cloud.r-project.org/")' && \
+    R -e "remotes::install_github('satijalab/seurat-wrappers')" && \
+### Installing run_seurat_wnn.R script
+    chmod +x /usr/local/bin/run_seurat_wnn.R && \
+### Cleaning
+    apt-get clean && \
+    apt-get purge && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /usr/share/doc/* && \
+    strip /usr/local/bin/*; true
