@@ -18,9 +18,9 @@ inputs:
     inputBinding:
       prefix: "--mex"
     doc: |
-      Path to the folder with feature-barcode matrix from Cell Ranger ARC Count,
-      in MEX format. The rows consist of all the gene and peak features concatenated,
-      together and the columns are restricted to those barcodes that are identified,
+      Path to the folder with feature-barcode matrix from Cell Ranger ARC Count
+      in MEX format. The rows consist of all the gene and peak features concatenated
+      together and the columns are restricted to those barcodes that are identified
       as cells.
 
   atac_fragments_file:
@@ -30,7 +30,7 @@ inputs:
     inputBinding:
       prefix: "--fragments"
     doc: |
-      Count and barcode information for every ATAC fragment observed in,
+      Count and barcode information for every ATAC fragment observed in
       the experiment in TSV format. Tbi-index file is required.
 
   annotation_gtf_file:
@@ -52,7 +52,7 @@ inputs:
     inputBinding:
       prefix: "--gexmincells"
     doc: |
-      Include only GEX features detected in at least this many cells.,
+      Include only GEX features detected in at least this many cells.
       Default: 5
 
   gex_minimum_features:
@@ -60,7 +60,7 @@ inputs:
     inputBinding:
       prefix: "--mingenes"
     doc: |
-      Include cells where at least this many GEX features are detected,
+      Include cells where at least this many GEX features are detected.
       Default: 250
 
   gex_maximum_features:
@@ -68,7 +68,7 @@ inputs:
     inputBinding:
       prefix: "--maxgenes"
     doc: |
-      Include cells with the number of GEX features not bigger than this value.,
+      Include cells with the number of GEX features not bigger than this value.
       Default: 5000
 
   gex_minimum_umis:
@@ -76,7 +76,7 @@ inputs:
     inputBinding:
       prefix: "--gexminumi"
     doc: |
-      Include cells where at least this many GEX UMIs (transcripts) are detected.,
+      Include cells where at least this many GEX UMIs (transcripts) are detected.
       Default: 500
 
   mito_pattern:
@@ -92,7 +92,7 @@ inputs:
     inputBinding:
       prefix: "--maxmt"
     doc: |
-      Include cells with the percentage of GEX transcripts mapped to mitochondrial,
+      Include cells with the percentage of GEX transcripts mapped to mitochondrial
       genes not bigger than this value.
       Default: 5
 
@@ -101,8 +101,8 @@ inputs:
     inputBinding:
       prefix: "--minnovelty"
     doc: |
-      Include cells with the novelty score not lower than this value,,
-      calculated for GEX as log10(genes)/log10(UMIs).,
+      Include cells with the novelty score not lower than this value
+      calculated for GEX as log10(genes)/log10(UMIs).
       Default: 0.8
 
   atac_minimum_cells:
@@ -110,7 +110,7 @@ inputs:
     inputBinding:
       prefix: "--atacmincells"
     doc: |
-      Include only ATAC features detected in at least this many cells.,
+      Include only ATAC features detected in at least this many cells.
       Default: 5
 
   atac_minimum_umis:
@@ -118,7 +118,7 @@ inputs:
     inputBinding:
       prefix: "--atacminumi"
     doc: |
-      Include cells where at least this many ATAC UMIs (transcripts) are detected.,
+      Include cells where at least this many ATAC UMIs (transcripts) are detected.
       Default: 1000
 
   maximum_nucl_signal:
@@ -126,9 +126,9 @@ inputs:
     inputBinding:
       prefix: "--maxnuclsignal"
     doc: |
-      Include cells with the nucleosome signal not bigger than this value.,
-      Nucleosome signal quantifies the approximate ratio of mononucleosomal,
-      to nucleosome-free fragments.,
+      Include cells with the nucleosome signal not bigger than this value.
+      Nucleosome signal quantifies the approximate ratio of mononucleosomal
+      to nucleosome-free fragments.
       Default: 4
 
   minimum_frip:
@@ -136,7 +136,7 @@ inputs:
     inputBinding:
       prefix: "--minfrip"
     doc: |
-      Include cells with the FRiP not lower than this value.,
+      Include cells with the FRiP not lower than this value.
       Default: 0.15
 
   maximum_blacklisted_ratio:
@@ -144,8 +144,8 @@ inputs:
     inputBinding:
       prefix: "--maxblacklisted"
     doc: |
-      Include cells with the ratio of reads in genomic blacklist regions,
-      not bigger than this value.,
+      Include cells with the ratio of reads in genomic blacklist regions
+      not bigger than this value.
       Default: 0.05
 
   call_peaks:
@@ -153,7 +153,7 @@ inputs:
     inputBinding:
       prefix: "--callpeaks"
     doc: |
-      Call peaks with MACS2 instead of those that are provided by Cell Ranger ARC Count.,
+      Call peaks with MACS2 instead of those that are provided by Cell Ranger ARC Count.
       Default: false
 
   gex_selected_features:
@@ -172,7 +172,7 @@ inputs:
     inputBinding:
       prefix: "--highvarcount"
     doc: |
-      Number of highly variable features to detect. Used for datasets integration,,
+      Number of highly variable features to detect. Used for datasets integration,
       scaling, and dimensional reduction.
       Default: 3000
 
@@ -181,7 +181,7 @@ inputs:
     inputBinding:
       prefix: "--gexndim"
     doc: |
-      Number of principal components to use in GEX UMAP projection and clustering,
+      Number of principal components to use in GEX UMAP projection and clustering
       (from 1 to 50). Use Elbow plot to adjust this parameter.
       Default: 50
 
@@ -190,7 +190,7 @@ inputs:
     inputBinding:
       prefix: "--atacndim"
     doc: |
-      Number of principal components to use in ATAC UMAP projection and clustering,
+      Number of principal components to use in ATAC UMAP projection and clustering
       (from 1 to 50). Use Elbow plot to adjust this parameter.
       Default: 50
 
