@@ -208,6 +208,23 @@ export_cellbrowser_data <- function(seurat_data, assay, matrix_slot, resolution,
                 meta_fields_names,
                 paste("Clustering (", resolution, ")", sep="")
             )
+            tryCatch(
+                expr = {
+                    custom_fields <- grep("^custom_", colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
+                    custom_fields_names <- gsub("custom_", "", custom_fields)
+                    meta_fields <- c(
+                        meta_fields,
+                        custom_fields
+                    )
+                    meta_fields_names <- c(
+                        meta_fields_names,
+                        custom_fields_names
+                    )
+                },
+                error = function(e){
+                    print(paste("Failed to add extra metadata fields due to", e))
+                }
+            )
             ExportToCellbrowser(
                 seurat_data,
                 matrix.slot=matrix_slot,
@@ -226,6 +243,45 @@ export_cellbrowser_data <- function(seurat_data, assay, matrix_slot, resolution,
             DefaultAssay(seurat_data) <- backup_assay
         }
     )
+}
+
+
+extend_metadata <- function(seurat_data, location) {
+    tryCatch(
+        expr = {
+            extra_metadata <- read.table(
+                location,
+                sep=get_file_type(location),
+                header=TRUE,
+                check.names=FALSE,
+                stringsAsFactors=FALSE
+            )
+            print(paste("Extra metadata is successfully loaded from ", location))
+            refactored_metadata <- data.frame(Cells(seurat_data)) %>%           # create a dataframe with only one column
+                                   dplyr::rename("barcode"=1) %>%               # rename that column to barcode
+                                   left_join(extra_metadata, by="barcode") %>%  # intersect with loaded extra metadata by "barcode"
+                                   remove_rownames() %>%
+                                   column_to_rownames("barcode") %>%
+                                   replace(is.na(.), "Unknown") %>%             # in case an extra metadata had less barcodes than we had in our Seurat object
+                                   rename_with(~paste0("custom_", .x))          # add prefix to all extra metadata columns
+            seurat_data <- AddMetaData(
+                seurat_data,
+                refactored_metadata[Cells(seurat_data), , drop=FALSE]           # to guarantee the proper cells order
+            )
+        },
+        error = function(e){
+            print(paste("Failed to add extra cells metadata due to", e))
+        },
+        finally = {
+            return (seurat_data)
+        }
+    )
+}
+
+
+apply_cell_filters <- function(seurat_data, barcodes_data) {
+    filtered_seurat_data <- subset(seurat_data, cells=barcodes_data)
+    return (filtered_seurat_data)
 }
 
 
@@ -1198,6 +1254,29 @@ export_rds <- function(data, location){
 }
 
 
+load_barcodes_data <- function(location, seurat_data) {
+    default_barcodes_data <- Cells(seurat_data)                               # to include all available cells
+    if (!is.null(location)){
+        barcodes_data <- read.table(
+            location,
+            sep=get_file_type(location),
+            header=FALSE,
+            check.names=FALSE,
+            stringsAsFactors=FALSE
+        )[,1]                                                                 # to get it as vector
+        print(
+            paste(
+                "Barcodes data is successfully loaded and from", location,
+                "and will be used to prefilter feature-barcode matrices by",
+                "cells of interest")
+        )
+        return (barcodes_data)
+    }
+    print("Barcodes data is not provided. Using all cells")
+    return (default_barcodes_data)
+}
+
+
 load_seurat_data <- function(args) {
     raw_data <- Read10X(data.dir=args$mex) 
     seurat_data <- CreateSeuratObject(
@@ -1292,6 +1371,27 @@ get_args <- function(){
     parser$add_argument(
         "--blacklisted",
         help="Path to the blacklisted regions file in BED format",
+        type="character"
+    )
+    parser$add_argument(
+        "--barcodes",
+        help=paste(
+            "Path to the headerless TSV/CSV file with the list of barcodes to select",
+            "cells of interest (one barcode per line). Prefilters input feature-barcode",
+            "matrix to include only selected cells. Default: use all cells."
+        ),
+        type="character"
+    )
+    parser$add_argument(
+        "--metadata",
+        help=paste(
+            "Path to the TSV/CSV file to optionally extend cells metadata with",
+            "categorical values. First column - 'barcode' should include cells",
+            "barcodes that correspond to the data provided in --mex. Values from",
+            "all other columns will be added as extra metadata columns prefixed",
+            "with 'custom_'. Values for missing barcodes will be set to 'Unknown'.",
+            "Default: no extra cells metadata is added"
+        ),
         type="character"
     )
     # Filtering
@@ -1479,7 +1579,14 @@ print(paste("Loading gene/peak-barcode matrices from", args$mex))
 print(paste("Loading fragments from", args$fragments))
 print(paste("Loading annotations from from", args$annotations))
 seurat_data <- load_seurat_data(args)
+print("Trying to load blacklisted regions")
 blacklisted_data <- load_blacklisted_data(args$blacklisted)
+print("Trying to load barcodes to prefilter feature-barcode matrices by cells of interest")
+barcodes_data <- load_barcodes_data(args$barcodes, seurat_data)
+seurat_data <- apply_cell_filters(seurat_data, barcodes_data)
+print("Trying to extend loaded data with the extra cells metadata fields")
+seurat_data <- extend_metadata(seurat_data, args$metadata)
+
 print("Adding QC metrics to raw seurat data")
 seurat_data <- add_qc_metrics(seurat_data, blacklisted_data, args)
 export_all_qc_plots(seurat_data, "raw", args)
