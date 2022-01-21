@@ -2,15 +2,25 @@
 # Dockerfile
 #
 # Software:         Seurat WNN
-# Software Version: v0.0.1
+# Software Version: v0.0.2
 # Description:      Dockerized version of Seurat WNN
 # Website:          https://satijalab.org/seurat/articles/weighted_nearest_neighbor_analysis.html
 # Provides:         run_seurat_wnn.R script
 # Base Image:       satijalab/seurat:4.0.3
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat-wnn:v0.0.1 -f seurat-wnn-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/seurat-wnn:v0.0.1
-# Run Cmd:          docker run --rm -ti biowardrobe2/seurat-wnn:v0.0.1 /bin/bash
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat-wnn:v0.0.2 -f seurat-wnn-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/seurat-wnn:v0.0.2
+# Run Cmd:          docker run --rm -ti biowardrobe2/seurat-wnn:v0.0.2 /bin/bash
 #################################################################
+#
+# v0.0.2
+# - updated run_seurat_wnn.R script to support --barcodes and
+#   --metadata inputs
+#
+# v0.0.1
+# - initial version of run_seurat_wnn.R script
+#
+#################################################################
+
 
 
 ### Base Image

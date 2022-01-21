@@ -8,7 +8,7 @@ requirements:
 
 hints:
 - class: DockerRequirement
-  dockerPull: biowardrobe2/seurat-wnn:v0.0.1
+  dockerPull: biowardrobe2/seurat-wnn:v0.0.2
 
 
 inputs:
@@ -46,6 +46,28 @@ inputs:
       prefix: "--blacklisted"
     doc: |
       Path to the blacklisted regions file in BED format
+
+  barcodes_data:
+    type: File?
+    inputBinding:
+      prefix: "--barcodes"
+    doc: |
+      Path to the headerless TSV/CSV file with the list of barcodes to select
+      cells of interest (one barcode per line). Prefilters input feature-barcode
+      matrix to include only selected cells.
+      Default: use all cells.
+
+  metadata_file:
+    type: File?
+    inputBinding:
+      prefix: "--metadata"
+    doc: |
+      Path to the TSV/CSV file to optionally extend cells metadata with
+      categorical values. First column - 'barcode' should include cells
+      barcodes that correspond to the data provided in --mex. Values from
+      all other columns will be added as extra metadata columns prefixed
+      with 'custom_'. Values for missing barcodes will be set to 'Unknown'.
+      Default: no extra cells metadata is added
 
   gex_minimum_cells:
     type: int?
