@@ -173,6 +173,8 @@ name="cellbrowser"
 shortLabel="cellbrowser"
 exprMatrix="exprMatrix.tsv.gz"
 meta="meta.tsv"
+radius=3
+alpha=0.5
 geneIdType="auto"
 clusterField="%s"
 labelField="%s"
@@ -1870,7 +1872,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         color_by="miQC.keep",
         alpha=0.1,
         palette=c("keep"="lightslateblue", "discard"="red"),
-        plot_title=paste("MiQC evaluation of the compromised cells level (", suffix, ")", sep=""),
+        plot_title=paste("MiQC prediction of the compromised cells level (", suffix, ")", sep=""),
         legend_title="Category",
         combine_guides="collect",
         rootname=paste(args$output, suffix, "miqc_mtrcs", sep="_"),
@@ -2032,7 +2034,6 @@ get_args <- function(){
         ),
         type="character"
     )
-
     # Apply QC filters
     parser$add_argument(
         "--mincells",
