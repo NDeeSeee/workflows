@@ -2,15 +2,18 @@
 # Dockerfile
 #
 # Software:         Seurat WNN
-# Software Version: v0.0.2
+# Software Version: v0.0.3
 # Description:      Dockerized version of Seurat WNN
 # Website:          https://satijalab.org/seurat/articles/weighted_nearest_neighbor_analysis.html
 # Provides:         run_seurat_wnn.R script
 # Base Image:       satijalab/seurat:4.0.3
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat-wnn:v0.0.2 -f seurat-wnn-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/seurat-wnn:v0.0.2
-# Run Cmd:          docker run --rm -ti biowardrobe2/seurat-wnn:v0.0.2 /bin/bash
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat-wnn:v0.0.3 -f seurat-wnn-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/seurat-wnn:v0.0.3
+# Run Cmd:          docker run --rm -ti biowardrobe2/seurat-wnn:v0.0.3 /bin/bash
 #################################################################
+#
+# v0.0.3
+# - updated run_seurat_wnn.R script to support datasets integration
 #
 # v0.0.2
 # - updated run_seurat_wnn.R script to support --barcodes and
@@ -46,6 +49,7 @@ RUN apt-get update && \
     pip3 install MACS2==${MACS2_VERSION} && \
     R -e 'install.packages("argparse", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("tidyverse", repo = "https://cloud.r-project.org/")' && \
+    R -e 'install.packages("flexmix", repo = "https://cloud.r-project.org/")' && \
     R -e "BiocManager::install(c('BiocGenerics', 'DelayedArray', 'DelayedMatrixStats','limma', 'S4Vectors', 'SingleCellExperiment', 'SummarizedExperiment', 'batchelor', 'Matrix.utils', 'DESeq2', 'EnhancedVolcano', 'Rsamtools', 'rtracklayer'))" && \
     R -e 'install.packages("Signac", repo = "https://cloud.r-project.org/")' && \
     R -e "remotes::install_github('satijalab/seurat-wrappers')" && \
