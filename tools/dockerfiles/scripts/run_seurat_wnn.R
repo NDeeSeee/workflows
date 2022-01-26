@@ -1,7 +1,6 @@
 #!/usr/bin/env Rscript
 options(warn=-1)
 options("width"=200)
-options(future.globals.maxSize = 32000 * 1024^2)  # 8GB should be good by default
 
 suppressMessages(library(dplyr))
 suppressMessages(library(purrr))
@@ -21,25 +20,29 @@ suppressMessages(library(reticulate))
 suppressMessages(library(sctransform))
 suppressMessages(library(rtracklayer))
 suppressMessages(library(RColorBrewer))
+suppressMessages(library(GenomicRanges))
 suppressMessages(library(SeuratWrappers))
 
 
-set_threads <- function (threads) {
-    invisible(capture.output(plan("multiprocess", workers=threads)))
+setup_parallelization <- function (args) {
+    invisible(capture.output(plan("multiprocess", workers=args$cpus)))
     invisible(capture.output(plan()))
-    invisible(capture.output(setDTthreads(threads)))
+    invisible(capture.output(setDTthreads(args$cpus)))
+    options(future.globals.maxSize = args$memory * 1024^3)               # convert to bytes
 }
 
 
-debug_seurat_data <- function(seurat_data) {
-    print("Assays")
-    print(seurat_data@assays)
-    print("Reductions")
-    print(seurat_data@reductions)
-    print("Active assay")
-    print(DefaultAssay(seurat_data))
-    print("Metadata")
-    print(head(seurat_data@meta.data))
+debug_seurat_data <- function(seurat_data, args) {
+    if (args$verbose){
+        print("Assays")
+        print(seurat_data@assays)
+        print("Reductions")
+        print(seurat_data@reductions)
+        print("Active assay")
+        print(DefaultAssay(seurat_data))
+        print("Metadata")
+        print(head(seurat_data@meta.data))
+    }
 }
 
 
@@ -176,7 +179,7 @@ ExportToCellbrowser <- function(
     config <- '
 name="cellbrowser"
 shortLabel="cellbrowser"
-geneLabel="Feature"
+geneLabel="Gene"
 exprMatrix="exprMatrix.tsv.gz"
 meta="meta.tsv"
 radius=3
@@ -211,8 +214,8 @@ export_cellbrowser_data <- function(seurat_data, assay, matrix_slot, resolution,
         expr = {
             backup_assay <- DefaultAssay(seurat_data)
             DefaultAssay(seurat_data) <- assay
-            meta_fields       <- c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "nFeature_ATAC", "nucleosome_signal", "frip", "blacklisted_fraction")
-            meta_fields_names <- c("GEX UMIs",   "Genes",        "Mitochondrial %", "Novelty score",            "ATAC UMIs",   "Peaks",         "Nucleosome signal", "FRiP", "Blacklisted fraction")
+            meta_fields       <- c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "nFeature_ATAC", "TSS.enrichment",       "nucleosome_signal", "frip", "blacklisted_fraction", "miQC.keep")
+            meta_fields_names <- c("GEX UMIs",   "Genes",        "Mitochondrial %", "Novelty score",            "ATAC UMIs",   "Peaks",         "TSS enrichment score", "Nucleosome signal", "FRiP", "Blacklisted fraction", "miQC prediction")
             meta_fields <- c(
                 meta_fields,
                 paste("wsnn_res", resolution, sep=".")
@@ -298,41 +301,86 @@ apply_cell_filters <- function(seurat_data, barcodes_data) {
 }
 
 
+get_tss_positions <- function(annotation_ranges){
+    # Based on GetTSSPositions function from signac/R/utilities.R
+    # adapted to work with refgene GTF annotations file
+    annotation_df <- as.data.table(x=annotation_ranges)
+    annotation_df$strand <- as.character(x=annotation_df$strand)
+    annotation_df$strand <- ifelse(
+        test = annotation_df$strand == "*",
+        yes = "+",
+        no = annotation_df$strand
+    )
+    collapsed_annotation_df <- annotation_df[
+        , .(unique(seqnames),
+            min(start),
+            max(end),
+            strand[[1]],
+            gene_name[[1]]),
+        "gene_id"
+    ]
+    colnames(x=collapsed_annotation_df) <- c(
+        "gene_id", "seqnames", "start", "end", "strand", "gene_name"
+    )
+    collapsed_annotation_df$gene_name <- make.unique(names=collapsed_annotation_df$gene_name)
+    collapsed_ranges <- makeGRangesFromDataFrame(
+        df=collapsed_annotation_df,
+        keep.extra.columns=TRUE
+    )
+    tss_positions <- resize(collapsed_ranges, width=1, fix="start")
+    return (tss_positions)
+}
+
+
 add_qc_metrics <- function(seurat_data, blacklisted_data, args) {
     backup_assay <- DefaultAssay(seurat_data)
     DefaultAssay(seurat_data) <- "RNA"
     seurat_data$log10_gene_per_log10_umi <- log10(seurat_data$nFeature_RNA) / log10(seurat_data$nCount_RNA)
     seurat_data$mito_percentage <- PercentageFeatureSet(seurat_data, pattern=args$mitopattern) 
-    print("Trying to evaluate a threshold for the percentage of transcripts mapped to mitochondrial genes using MiQC")
-    tryCatch(
-        expr = {
-            Idents(seurat_data) <- "new.ident"                                      # safety measure
-            identities <- unique(as.vector(as.character(Idents(seurat_data))))
-            merged_seurat_data <- NULL
-            for (i in 1:length(identities)) {
-                current_identity <- identities[i]
-                filtered_seurat_data <- subset(seurat_data, idents=current_identity)
-                filtered_seurat_data <- RunMiQC(
-                    filtered_seurat_data,
-                    percent.mt="mito_percentage",
-                    nFeature_RNA="nFeature_RNA",
-                    model.type="linear",
-                    posterior.cutoff=0.75,
-                    model.slot="flexmix_model",
-                    verbose=FALSE
-                )
-                if (is.null(merged_seurat_data)){
-                    merged_seurat_data <- filtered_seurat_data
-                } else {
-                    merged_seurat_data <- merge(merged_seurat_data, y=filtered_seurat_data)
+    if (args$skipmiqc){
+        print(
+            paste(
+                "Skipping threshold prediction for the percentage of",
+                "transcripts mapped to mitochondrial genes (do not run MiQC)"
+            )
+        )
+    } else {
+        print(
+            paste(
+                "Trying to predict the threshold for the percentage of transcripts",
+                "mapped to mitochondrial genes using MiQC"
+            )
+        )
+        tryCatch(
+            expr = {
+                Idents(seurat_data) <- "new.ident"                                      # safety measure
+                identities <- unique(as.vector(as.character(Idents(seurat_data))))
+                merged_seurat_data <- NULL
+                for (i in 1:length(identities)) {
+                    current_identity <- identities[i]
+                    filtered_seurat_data <- subset(seurat_data, idents=current_identity)
+                    filtered_seurat_data <- RunMiQC(
+                        filtered_seurat_data,
+                        percent.mt="mito_percentage",
+                        nFeature_RNA="nFeature_RNA",
+                        model.type="linear",
+                        posterior.cutoff=0.75,
+                        model.slot="flexmix_model",
+                        verbose=args$verbose
+                    )
+                    if (is.null(merged_seurat_data)){
+                        merged_seurat_data <- filtered_seurat_data
+                    } else {
+                        merged_seurat_data <- merge(merged_seurat_data, y=filtered_seurat_data)
+                    }
                 }
+                seurat_data <- merged_seurat_data
+            },
+            error = function(e){
+                print(paste(" ", "Failed running MiQC due to", e))
             }
-            seurat_data <- merged_seurat_data
-        },
-        error = function(e){
-            print(paste(" ", "Failed running MiQC due to", e))
-        }
-    )
+        )
+    }
 
     DefaultAssay(seurat_data) <- "ATAC"
 
@@ -342,7 +390,23 @@ add_qc_metrics <- function(seurat_data, blacklisted_data, args) {
     #   wrapped around a single nucleosome. We calculate this per single cell, and quantify
     #   the approximate ratio of mononucleosomal to nucleosome-free fragments (stored as 
     #   nucleosome_signal)
-    seurat_data <- NucleosomeSignal(seurat_data, verbose=FALSE)
+    seurat_data <- NucleosomeSignal(seurat_data, verbose=args$verbose)
+
+    # Transcriptional start site (TSS) enrichment score
+    #   The ENCODE project has defined an ATAC-seq targeting score based on the ratio of fragments
+    #   centered at the TSS to fragments in TSS-flanking regions (see https://www.encodeproject.org/data-standards/terms/).
+    #   Poor ATAC-seq experiments typically will have a low TSS enrichment score. We can compute this
+    #   metric for each cell with the TSSEnrichment() function, and the results are stored in metadata
+    #   under the column name TSS.enrichment.
+    #   We need to calculate tss.positions by ourselves as those that are calculated automatically
+    #   will require biotypes="protein_coding" filed in GTF file
+    #   see https://m.ensembl.org/info/genome/genebuild/biotypes.html for details about biotypes in GTF
+    seurat_data <- TSSEnrichment(
+        seurat_data,
+        tss.positions=get_tss_positions(Annotation(seurat_data[["ATAC"]])),
+        fast=FALSE,                                                          # set fast=FALSE, because we want to build TSS Enrichment plot later
+        verbose=args$verbose
+    )
 
     # Fraction of fragments in peaks.
     #   Represents the fraction of all fragments that fall within ATAC-seq peaks. Cells with low values
@@ -351,7 +415,7 @@ add_qc_metrics <- function(seurat_data, blacklisted_data, args) {
     fragments_data <- CountFragments(
         fragments=args$fragments,
         cells=colnames(seurat_data),           # limit it to only those cells that are present in seurat_data
-        verbose=FALSE
+        verbose=args$verbose
     ) %>% column_to_rownames("CB")             # for easy access to cell barcodes
     seurat_data$fragments <- fragments_data[colnames(seurat_data), "frequency_count"]  # select by rownames to make sure the cells order wasn't accidentally changed
     seurat_data <- FRiP(
@@ -359,7 +423,7 @@ add_qc_metrics <- function(seurat_data, blacklisted_data, args) {
         assay="ATAC",                          # FRiP can't take the default assay, so we set it explicitly
         total.fragments="fragments",
         col.name="frip",
-        verbose=FALSE
+        verbose=args$verbose
     )
 
     # Ratio reads in genomic blacklist regions.
@@ -379,34 +443,37 @@ add_qc_metrics <- function(seurat_data, blacklisted_data, args) {
     return (seurat_data)
 }
 
+
 integrate_atac_data <- function(seurat_data, args) {
     DefaultAssay(seurat_data) <- "ATAC"                                          # safety measure in case ATAC wasn't the default assay
     splitted_seurat_data <- SplitObject(seurat_data, split.by="new.ident")
     if (length(splitted_seurat_data) == 1){
         print("Skipping datasets integration as only one identity is present.")
-        scaled_norm_seurat_data <- FindTopFeatures(splitted_seurat_data[[1]], min.cutoff=args$highvaratac, verbose=FALSE)
-        scaled_norm_seurat_data <- RunTFIDF(scaled_norm_seurat_data, verbose=FALSE)
+        scaled_norm_seurat_data <- FindTopFeatures(splitted_seurat_data[[1]], min.cutoff=args$highvaratac, verbose=args$verbose)
+        scaled_norm_seurat_data <- RunTFIDF(scaled_norm_seurat_data, verbose=args$verbose)
         scaled_norm_seurat_data <- RunSVD(
             scaled_norm_seurat_data,
-            verbose=FALSE,
+            verbose=args$verbose,
             reduction.name="atac_lsi"
         )
         return (scaled_norm_seurat_data)
     } else {
-        seurat_data <- FindTopFeatures(seurat_data, min.cutoff=args$highvaratac, verbose=FALSE)
-        seurat_data <- RunTFIDF(seurat_data, verbose=FALSE)
-        seurat_data <- RunSVD(seurat_data, verbose=FALSE)
+        backup_pca_reduction <- seurat_data[["pca"]]          # need to backup reductions generated from RNA assay as the will be deleted by IntegrateEmbeddings function
+        backup_rnaumap_reduction <- seurat_data[["rnaumap"]]
+        seurat_data <- FindTopFeatures(seurat_data, min.cutoff=args$highvaratac, verbose=args$verbose)
+        seurat_data <- RunTFIDF(seurat_data, verbose=args$verbose)
+        seurat_data <- RunSVD(seurat_data, verbose=args$verbose)
         for (i in 1:length(splitted_seurat_data)) {
-            splitted_seurat_data[[i]] <- FindTopFeatures(splitted_seurat_data[[i]], min.cutoff=args$highvaratac, verbose=FALSE)
-            splitted_seurat_data[[i]] <- RunTFIDF(splitted_seurat_data[[i]], verbose=FALSE)
-            splitted_seurat_data[[i]] <- RunSVD(splitted_seurat_data[[i]], verbose=FALSE)
+            splitted_seurat_data[[i]] <- FindTopFeatures(splitted_seurat_data[[i]], min.cutoff=args$highvaratac, verbose=args$verbose)
+            splitted_seurat_data[[i]] <- RunTFIDF(splitted_seurat_data[[i]], verbose=args$verbose)
+            splitted_seurat_data[[i]] <- RunSVD(splitted_seurat_data[[i]], verbose=args$verbose)
         }
         integration_anchors <- FindIntegrationAnchors(
             splitted_seurat_data,
             anchor.features=rownames(seurat_data),
             reduction="rlsi",
             dims=2:args$atacndim,
-            verbose=FALSE
+            verbose=args$verbose
         )
         integrated_seurat_data <- IntegrateEmbeddings(
             anchorset=integration_anchors,
@@ -415,9 +482,12 @@ integrate_atac_data <- function(seurat_data, args) {
             k.weight=min(min(table(Idents(seurat_data))), 100),  # 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
             dims.to.integrate=1:args$atacndim
         )
+        integrated_seurat_data[["pca"]] <- backup_pca_reduction          # restoring deleted reductions
+        integrated_seurat_data[["rnaumap"]] <- backup_rnaumap_reduction
         return (integrated_seurat_data)
     }
 }
+
 
 integrate_gex_data <- function(seurat_data, args) {
     DefaultAssay(seurat_data) <- "RNA"                                                       # safety measure, in case RNA was not default assay
@@ -427,55 +497,53 @@ integrate_gex_data <- function(seurat_data, args) {
             "Skipping datasets integration as only one identity is present.",
             "Running log-normalization and scalling instead."
         ))
-        scaled_norm_seurat_data <- NormalizeData(splitted_seurat_data[[1]], verbose=FALSE)
+        scaled_norm_seurat_data <- NormalizeData(splitted_seurat_data[[1]], verbose=args$verbose)
         scaled_norm_seurat_data <- FindVariableFeatures(
             scaled_norm_seurat_data,
             nfeatures=args$highvargex,
-            verbose=FALSE
+            verbose=args$verbose
         )
         scaled_norm_seurat_data <- ScaleData(
             scaled_norm_seurat_data,
             vars.to.regress=NULL,
-            verbose=FALSE
+            verbose=args$verbose
         )
         DefaultAssay(scaled_norm_seurat_data) <- "RNA"
         return (scaled_norm_seurat_data)
     } else if (args$nosct) {
         print("Skipping SCTransform and running standard integration algorithm")
         for (i in 1:length(splitted_seurat_data)) {
-            splitted_seurat_data[[i]] <- NormalizeData(splitted_seurat_data[[i]], verbose=FALSE)
+            splitted_seurat_data[[i]] <- NormalizeData(splitted_seurat_data[[i]], verbose=args$verbose)
             splitted_seurat_data[[i]] <- FindVariableFeatures(
                 splitted_seurat_data[[i]],
                 nfeatures=args$highvargex,
-                verbose=FALSE
+                verbose=args$verbose
             )
         }
-        set_threads(1)                                           # need to use one thread, otherwise gets stuck
         integration_features <- SelectIntegrationFeatures(
             splitted_seurat_data,
             nfeatures=args$highvargex,
-            verbose=FALSE
+            verbose=args$verbose
         )
         integration_anchors <- FindIntegrationAnchors(
             splitted_seurat_data,
             normalization.method="LogNormalize",
             anchor.features=integration_features,
-            verbose=FALSE
+            verbose=args$verbose
         )
         integrated_seurat_data <- IntegrateData(
             integration_anchors, 
             new.assay.name="gex_integrated",
             normalization.method="LogNormalize",
             k.weight=min(min(table(Idents(seurat_data))), 100),  # 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
-            verbose=FALSE
+            verbose=args$verbose
         )
         integrated_seurat_data <- ScaleData(
             integrated_seurat_data,
             vars.to.regress=NULL,
-            verbose=FALSE
+            verbose=args$verbose
         )
         DefaultAssay(integrated_seurat_data) <- "gex_integrated"
-        set_threads(args$threads)
         return (integrated_seurat_data)
     } else {
         for (i in 1:length(splitted_seurat_data)) {
@@ -485,35 +553,33 @@ integrate_gex_data <- function(seurat_data, args) {
                 new.assay.name="SCT",
                 variable.features.n=args$highvargex,
                 vars.to.regress=NULL,
-                verbose=FALSE
+                verbose=args$verbose
             )
         }
-        set_threads(1)                                             # need to use one thread, otherwise gets stuck
         integration_features <- SelectIntegrationFeatures(
             splitted_seurat_data,
             nfeatures=args$highvargex,
-            verbose=FALSE
+            verbose=args$verbose
         )
         splitted_seurat_data <- PrepSCTIntegration(
             splitted_seurat_data, 
             anchor.features=integration_features,
-            verbose=FALSE
+            verbose=args$verbose
         )
         integration_anchors <- FindIntegrationAnchors(
             splitted_seurat_data,
             normalization.method="SCT",
             anchor.features=integration_features,
-            verbose=FALSE
+            verbose=args$verbose
         )
         integrated_seurat_data <- IntegrateData(
             integration_anchors, 
             new.assay.name="gex_integrated",
             normalization.method="SCT",
             k.weight=min(min(table(Idents(seurat_data))), 100),  # 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
-            verbose=FALSE
+            verbose=args$verbose
         )
         DefaultAssay(integrated_seurat_data) <- "gex_integrated"
-        set_threads(args$threads)
         return (integrated_seurat_data)
     }
 }
@@ -530,6 +596,7 @@ apply_qc_filters <- function(seurat_data, cell_identity_data, args) {
         minnovelty <- args$minnovelty[i]
         atacminumi <- args$atacminumi[i]
         maxnuclsignal <- args$maxnuclsignal[i]
+        mintssenrich <- args$mintssenrich[i]
         minfrip <- args$minfrip[i]
         maxblacklisted <- args$maxblacklisted[i]
 
@@ -539,6 +606,7 @@ apply_qc_filters <- function(seurat_data, cell_identity_data, args) {
         print(paste(" ", "GEX novelty score >=", minnovelty))
         print(paste(" ", "ATAC UMIs per cell >=", atacminumi))
         print(paste(" ", "Nucleosome signal <=", maxnuclsignal))
+        print(paste(" ", "TSS enrichment score >=", mintssenrich))
         print(paste(" ", "FRiP >=", minfrip))
         print(paste(" ", "Ratio of reads in genomic blacklist regions <=", maxblacklisted))
         print(paste(" ", "Percentage of GEX transcripts mapped to mitochondrial genes <=", args$maxmt))
@@ -552,6 +620,7 @@ apply_qc_filters <- function(seurat_data, cell_identity_data, args) {
                 (log10_gene_per_log10_umi >= minnovelty) &
                 (nCount_ATAC >= atacminumi) &
                 (nucleosome_signal <= maxnuclsignal) &
+                (TSS.enrichment >= mintssenrich) &
                 (frip >= minfrip) &
                 (blacklisted_fraction <= maxblacklisted) &
                 (mito_percentage <= args$maxmt)
@@ -841,7 +910,6 @@ export_feature_scatter_plot <- function(data, rootname, x_axis, y_axis, x_label,
 }
 
 
-
 export_data <- function(data, location, row_names=FALSE, col_names=TRUE, quote=FALSE){
     tryCatch(
         expr = {
@@ -1028,34 +1096,42 @@ export_elbow_plot <- function(data, rootname, plot_title, ndims=NULL, pdf=FALSE,
 }
 
 
-export_tss_plot <- function(data, rootname, plot_title, group_by_value=NULL, idents=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
+export_tss_plot <- function(data, rootname, plot_title, split_by, group_by_value=NULL, combine_guides=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
-            group_by <- NULL
-            if (!is.null(group_by_value)){
-                data$tss_group_by <- ifelse(
-                    data$TSS.enrichment >= group_by_value ,
-                    paste("High ", "(bigger or equal to ", group_by_value, ")", sep=""),
-                    paste("Low ", "(smaller than ", group_by_value, ")", sep="")
-                )
-                group_by <- "tss_group_by"
-            }
-            plot <- TSSPlot(
-                        data,
-                        group.by=group_by,
-                        idents=idents
+            Idents(data) <- split_by
+            identities <- unique(as.vector(as.character(Idents(data))))
+            plots <- list()
+            for (i in 1:length(identities)) {
+                current_identity <- identities[i]
+                filtered_data <- subset(data, idents=current_identity)
+                group_by <- NULL
+                if (!is.null(group_by_value)){
+                    filtered_data$tss_group_by <- ifelse(
+                        filtered_data$TSS.enrichment >= group_by_value ,
+                        paste("High ", "(bigger or equal to ", group_by_value, ")", sep=""),
+                        paste("Low ", "(smaller than ", group_by_value, ")", sep="")
+                    )
+                    group_by <- "tss_group_by"
+                }
+                plots[[current_identity]] <- TSSPlot(
+                        filtered_data,
+                        group.by=group_by
                     ) +
+                    ggtitle(current_identity) +
                     theme_gray() +
-                    ggtitle(plot_title) +
                     NoLegend()
+            }
+            Idents(data) <- "new.ident"
+            combined_plots <- wrap_plots(plots, guides=combine_guides) + plot_annotation(title=plot_title)
 
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
-            suppressMessages(print(plot))
+            suppressMessages(print(combined_plots))
             dev.off()
 
             if (pdf) {
                 pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
-                suppressMessages(print(plot))
+                suppressMessages(print(combined_plots))
                 dev.off()
             }
 
@@ -1069,40 +1145,49 @@ export_tss_plot <- function(data, rootname, plot_title, group_by_value=NULL, ide
 }
 
 
-export_fragments_hist <- function(data, rootname, plot_title, group_by_value=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
+export_fragments_hist <- function(data, rootname, plot_title, split_by, group_by_value=NULL, combine_guides=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
-            group_by <- NULL
-            if (!is.null(group_by_value)){
-                data$ns_group_by <- ifelse(
-                    data$nucleosome_signal >= group_by_value ,
-                    paste("High nucleosome signal ", "(bigger or equal to ", group_by_value, ")", sep=""),
-                    paste("Low nucleosome signal", "(smaller than ", group_by_value, ")", sep="")
-                )
-                group_by <- "ns_group_by"
-            }
-            plot <- FragmentHistogram(
-                        data,
+            Idents(data) <- split_by
+            identities <- unique(as.vector(as.character(Idents(data))))
+            plots <- list()
+            for (i in 1:length(identities)) {
+                current_identity <- identities[i]
+                filtered_data <- subset(data, idents=current_identity)
+                group_by <- NULL
+                if (!is.null(group_by_value)){
+                    filtered_data$ns_group_by <- ifelse(
+                        filtered_data$nucleosome_signal >= group_by_value ,
+                        paste("High nucleosome signal ", "(bigger or equal to ", group_by_value, ")", sep=""),
+                        paste("Low nucleosome signal", "(smaller than ", group_by_value, ")", sep="")
+                    )
+                    group_by <- "ns_group_by"
+                }
+                plots[[current_identity]] <- FragmentHistogram(
+                        filtered_data,
                         group.by=group_by
                     ) +
                     theme_gray() +
-                    ggtitle(plot_title) +
+                    ggtitle(current_identity) +
                     NoLegend()
+            }
+            Idents(data) <- "new.ident"
+            combined_plots <- wrap_plots(plots, guides=combine_guides) + plot_annotation(title=plot_title)
 
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
-            suppressMessages(print(plot))
+            suppressMessages(print(combined_plots))
             dev.off()
 
             if (pdf) {
                 pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
-                suppressMessages(print(plot))
+                suppressMessages(print(combined_plots))
                 dev.off()
             }
 
             print(paste("Export fragments length histogram to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
-            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called dev.off() with error -", e))})
             print(paste("Failed to export fragments length histogram to ", rootname, ".(png/pdf)", sep=""))
         }
     )
@@ -1222,16 +1307,27 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         scale_y_log10=TRUE,
         pdf=args$pdf
     )
-    # backup_assay <- DefaultAssay(seurat_data)
-    # DefaultAssay(seurat_data) <- "ATAC"
-    # export_fragments_hist(
-    #     data=seurat_data,
-    #     group_by_value=args$maxnuclsignal,
-    #     rootname=paste(args$output, suffix, "frg_len_hist", sep="_"),
-    #     plot_title=paste("Fragments Length Histogram (", suffix, ")", sep=""),
-    #     pdf=args$pdf
-    # )
-    # DefaultAssay(seurat_data) <- backup_assay
+    backup_assay <- DefaultAssay(seurat_data)
+    DefaultAssay(seurat_data) <- "ATAC"
+    export_tss_plot(
+        data=seurat_data,
+        split_by="new.ident",
+        group_by_value=args$mintssenrich,
+        combine_guides="collect",
+        rootname=paste(args$output, suffix, "tss_enrch", sep="_"),
+        plot_title=paste("TSS Enrichment Score (", suffix, ")", sep=""),
+        pdf=args$pdf
+    )
+    export_fragments_hist(
+        data=seurat_data,
+        split_by="new.ident",
+        group_by_value=args$maxnuclsignal,
+        combine_guides="collect",
+        rootname=paste(args$output, suffix, "frg_len_hist", sep="_"),
+        plot_title=paste("Fragments Length Histogram (", suffix, ")", sep=""),
+        pdf=args$pdf
+    )
+    DefaultAssay(seurat_data) <- backup_assay
     export_geom_point_plot(
         data=seurat_data@meta.data,
         rootname=paste(args$output, suffix, "gene_umi_corr", sep="_"),
@@ -1300,8 +1396,8 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
     # export_data(
     #     get_density_data(      # if raises any exception, will be caught by export_data
     #         data=seurat_data,
-    #         features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "nFeature_ATAC", "nucleosome_signal", "frip", "blacklisted_fraction"),
-    #         labels=c("GEX UMIs", "Genes", "Mitochondrial %", "Novelty score", "ATAC UMIs", "Peaks", "Nucleosome signal", "FRiP", "Frac. of reads in bl-ted reg."),
+    #         features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "nFeature_ATAC", "TSS.enrichment", "nucleosome_signal", "frip", "blacklisted_fraction"),
+    #         labels=c("GEX UMIs", "Genes", "Mitochondrial %", "Novelty score", "ATAC UMIs", "Peaks", "TSS enrichment score", "Nucleosome signal", "FRiP", "Fr. of reads in bl-ted reg."),
     #         assay="RNA",
     #         slot="data"
     #     ),
@@ -1309,8 +1405,8 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
     # )
     export_vln_plot(
         data=seurat_data,
-        features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "nFeature_ATAC", "nucleosome_signal", "frip", "blacklisted_fraction"),
-        labels=c(  "GEX UMIs",   "Genes",        "Mitochondrial %", "Novelty score",            "ATAC UMIs",   "Peaks",         "Nucleosome signal", "FRiP", "Fr. of reads in bl-ted reg."),
+        features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "nFeature_ATAC", "TSS.enrichment",       "nucleosome_signal", "frip", "blacklisted_fraction"),
+        labels=c(  "GEX UMIs",   "Genes",        "Mitochondrial %", "Novelty score",            "ATAC UMIs",   "Peaks",         "TSS enrichment score", "Nucleosome signal", "FRiP", "Fr. of reads in bl-ted reg."),
         rootname=paste(args$output, suffix, "qc_mtrcs", sep="_"),
         plot_title=paste("QC metrics densities per cell (", suffix, ")", sep=""),
         legend_title="Identity",
@@ -1399,12 +1495,13 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
         Idents(seurat_data) <- paste(paste(cluster_prefix, "res", sep="_"), current_resolution, sep=".")
         export_feature_plot(
             data=seurat_data,
-            features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "nFeature_ATAC", "nucleosome_signal", "frip", "blacklisted_fraction"),
-            labels=c("GEX UMIs", "Genes", "Mitochondrial %", "Novelty score", "ATAC UMIs", "Peaks", "Nucleosome signal", "FRiP", "Fr. of reads in bl-ted reg."),
+            features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "nFeature_ATAC", "TSS.enrichment", "nucleosome_signal", "frip", "blacklisted_fraction"),
+            labels=c("GEX UMIs", "Genes", "Mitochondrial %", "Novelty score", "ATAC UMIs", "Peaks", "TSS enrichment score", "Nucleosome signal", "FRiP", "Fr. of reads in bl-ted reg."),
             reduction="wnnumap",
             plot_title=paste("QC metrics for clustered UMAP projected WNN. Resolution", current_resolution),
             label=TRUE,
             alpha=0.4,
+            max_cutoff="q99",  # to prevent outlier cells to distort coloring
             rootname=paste(args$output, suffix, "wnn_qc_mtrcs_res", current_resolution, sep="_"),
             combine_guides="keep",
             pdf=args$pdf
@@ -1680,7 +1777,7 @@ load_seurat_data <- function(args, cell_identity_data, condition_data) {
             sep=c(":", "-"),
             features=macs2_peaks,
             cells=colnames(seurat_data),
-            verbose=FALSE,
+            verbose=args$verbose,
         )
         atac_assay <- CreateChromatinAssay(
             counts=macs2_counts,
@@ -1896,6 +1993,18 @@ get_args <- function(){
         type="double", default=4, nargs="*"
     )
     parser$add_argument(
+        "--mintssenrich",
+        help=paste(
+            "Include cells with the TSS enrichment score not lower than this value.",
+            "Score is calculated based on the ratio of fragments centered at the TSS",
+            "to fragments in TSS-flanking regions. If multiple values provided, each",
+            "of them will be applied to the correspondent dataset from the --mex input",
+            "based on the --identity file.",
+            "Default: 2 (applied to all datasets)"
+        ),
+        type="double", default=2, nargs="*"
+    )
+    parser$add_argument(
         "--minfrip",
         help=paste(
             "Include cells with the FRiP not lower than this value. If multiple values",
@@ -2001,14 +2110,37 @@ get_args <- function(){
         action="store_true"
     )
     parser$add_argument(
+        "--verbose",
+        help="Print debug information. Default: false",
+        action="store_true"
+    )
+    parser$add_argument(
+        "--skipmiqc",
+        help=paste(
+            "Skip threshold prediction for the percentage of transcripts",
+            "mapped to mitochondrial genes (do not run MiQC).",
+            "Default: false"
+        ),
+        action="store_true"
+    )
+    parser$add_argument(
         "--output",
         help="Output prefix. Default: ./seurat",
         type="character", default="./seurat"
     )
     parser$add_argument(
-        "--threads",
-        help="Threads. Default: 1",
+        "--cpus",
+        help="Number of cores/cpus to use. Default: 1",
         type="integer", default=1
+    )
+    parser$add_argument(
+        "--memory",
+        help=paste(
+            "Maximum memory in GB allowed to be shared between the workers",
+            "when using multiple --cpus.",
+            "Default: 32"
+        ),
+        type="integer", default=32
     )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
     return (args)
@@ -2019,8 +2151,12 @@ args <- get_args()
 cat("Step 0: Runtime configuration\n")
 print(args)
 
-print(paste("Setting parallelizations threads to", args$threads))
-set_threads(args$threads)
+print(
+    paste(
+        "Setting parallelization parameters to", args$cpus,
+        "cores, and", args$memory, "GB of memory")
+    )
+setup_parallelization(args)
 
 cat("\n\nStep 1: Loading raw datasets\n")
 
@@ -2034,12 +2170,12 @@ print(paste("Loading gene/peak-barcode matrices from", args$mex))
 print(paste("Loading fragments from", args$fragments))
 print(paste("Loading annotations from from", args$annotations))
 seurat_data <- load_seurat_data(args, cell_identity_data, condition_data)
-debug_seurat_data(seurat_data)
+debug_seurat_data(seurat_data, args)
 
 print("Validating/adjusting input parameters")
 idents_count <- length(unique(as.vector(as.character(Idents(seurat_data)))))
 for (key in names(args)){
-    if (key %in% c("mingenes", "maxgenes", "gexminumi", "minnovelty", "atacminumi", "maxnuclsignal", "minfrip", "maxblacklisted")){
+    if (key %in% c("mingenes", "maxgenes", "gexminumi", "minnovelty", "atacminumi", "maxnuclsignal", "mintssenrich", "minfrip", "maxblacklisted")){
         if (length(args[[key]]) != 1 && length(args[[key]]) != idents_count){
             print(paste("Filtering parameter", key, "has an ambiguous size. Exiting"))
             quit(save="no", status=1, runLast=FALSE)
@@ -2051,6 +2187,8 @@ for (key in names(args)){
     }
 }
 args[["highvaratac"]] <- paste0("q", args$highvaratac)          # need to have it in a form of "q75", for example
+print("Adjusted parameters")
+print(args)
 
 print("Trying to load blacklisted regions")
 blacklisted_data <- load_blacklisted_data(args$blacklisted)
@@ -2064,82 +2202,81 @@ seurat_data <- extend_metadata_by_barcode(seurat_data, args$metadata)
 
 print("Adding QC metrics to raw seurat data")
 seurat_data <- add_qc_metrics(seurat_data, blacklisted_data, args)
-debug_seurat_data(seurat_data)
+debug_seurat_data(seurat_data, args)
 export_all_qc_plots(seurat_data, "raw", args)
 
 cat("\n\nStep 2: Filtering raw datasets\n")
 seurat_data <- apply_qc_filters(seurat_data, cell_identity_data, args)
-debug_seurat_data(seurat_data)
+debug_seurat_data(seurat_data, args)
 export_all_qc_plots(seurat_data, "fltr", args)
 
 cat("\n\nStep 3: Running GEX analysis\n")
 print("Running datasets integration/scaling on RNA assay")
 seurat_data <- integrate_gex_data(seurat_data, args)                                            # sets "gex_integrated" as a default assay for integrated data, and leave "RNA" as a default assays for scaled data
-debug_seurat_data(seurat_data)
+debug_seurat_data(seurat_data, args)
 print(
     paste(
         "Performing PCA reduction on", DefaultAssay(seurat_data),
-        "assay, using all 50 principal components"
+        "assay using 50 principal components"
     )
 )
-seurat_data <- RunPCA(seurat_data, npcs=50, verbose=FALSE)
+seurat_data <- RunPCA(seurat_data, npcs=50, verbose=args$verbose)
 seurat_data <- RunUMAP(
     seurat_data,
     reduction="pca",
     dims=1:args$gexndim,
     reduction.name="rnaumap",
     reduction.key="RNAUMAP_",
-    verbose=FALSE
+    verbose=args$verbose
 )
-debug_seurat_data(seurat_data)
+debug_seurat_data(seurat_data, args)
 export_all_dimensionality_plots(seurat_data, "ntgr", args)
 
 cat("\n\nStep 4: Running ATAC analysis\n")
 print("Running datasets integration/scaling on ATAC assay")
 seurat_data <- integrate_atac_data(seurat_data, args)                # shouldn't change default assay, but will add "atac_lsi" reduction
-debug_seurat_data(seurat_data)
+debug_seurat_data(seurat_data, args)
 seurat_data <- RunUMAP(
     seurat_data,
     reduction="atac_lsi",
     dims=2:args$atacndim,
     reduction.name="atacumap",
     reduction.key="ATACUMAP_",
-    verbose=FALSE
+    verbose=args$verbose
 )
-debug_seurat_data(seurat_data)
+debug_seurat_data(seurat_data, args)
 
-cat("\n\nStep 6: Running WNN analysis\n")
+cat("\n\nStep 5: Running WNN analysis\n")
 seurat_data <- FindMultiModalNeighbors(
     seurat_data,
     reduction.list=list("pca", "atac_lsi"),          # we used "atac_lsi" reduction name for both after integration and just scaling/normalization
     dims.list=list(1:args$gexndim, 2:args$atacndim),
     snn.graph.name="wsnn",
     weighted.nn.name="weighted.nn",
-    verbose=FALSE
+    verbose=args$verbose
 )
 seurat_data <- RunUMAP(
     seurat_data,
     nn.name="weighted.nn",
     reduction.name="wnnumap",
     reduction.key="WNNUMAP_",
-    verbose=FALSE
+    verbose=args$verbose
 )
 seurat_data <- FindClusters(
     seurat_data,
     graph.name="wsnn",
     algorithm=3,
     resolution=args$resolution,
-    verbose=FALSE
+    verbose=args$verbose
 )
-debug_seurat_data(seurat_data)
-
+debug_seurat_data(seurat_data, args)
 export_all_clustering_plots(seurat_data, "clst", args)
 
 if ("gex_integrated" %in% names(seurat_data@assays)) {                                                         # if we run integration, our counts and data slots in RNA assay remain the same, so we need to normalize counts first
     print("Normalizing counts in RNA assay")                                                                   # in case is was already normalized, it's safe to run it again, as it uses counts and overwrites data slots
     backup_assay <- DefaultAssay(seurat_data)
     DefaultAssay(seurat_data) <- "RNA"
-    seurat_data <- NormalizeData(seurat_data, verbose=FALSE)
+    seurat_data <- NormalizeData(seurat_data, verbose=args$verbose)
     DefaultAssay(seurat_data) <- backup_assay
 }
 
