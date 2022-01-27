@@ -224,6 +224,21 @@ export_cellbrowser_data <- function(seurat_data, assay, matrix_slot, resolution,
                 meta_fields_names,
                 paste("Clustering (", resolution, ")", sep="")
             )
+
+            Idents(seurat_data) <- "condition"
+            if (length(unique(as.vector(as.character(Idents(seurat_data))))) > 1){
+                meta_fields <- c("condition", meta_fields)
+                meta_fields_names <- c("Condition", meta_fields_names)
+            }
+
+            cluster_field <- paste("Clustering (", resolution, ")", sep="")[1]
+            Idents(seurat_data) <- "new.ident"
+            if (length(unique(as.vector(as.character(Idents(seurat_data))))) > 1){
+                cluster_field <- "Identity"
+                meta_fields <- c("new.ident", meta_fields)
+                meta_fields_names <- c("Identity", meta_fields_names)
+            }
+
             tryCatch(
                 expr = {
                     custom_fields <- grep("^custom_", colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
@@ -245,7 +260,7 @@ export_cellbrowser_data <- function(seurat_data, assay, matrix_slot, resolution,
                 seurat_data,
                 matrix.slot=matrix_slot,
                 dir=rootname,
-                cluster.field=paste("Clustering (", resolution, ")", sep="")[1],    # take only the first of possible multiple resolutions
+                cluster.field=cluster_field,
                 features=features,
                 meta.fields=meta_fields,
                 meta.fields.names=meta_fields_names
@@ -447,8 +462,8 @@ add_qc_metrics <- function(seurat_data, blacklisted_data, args) {
 integrate_atac_data <- function(seurat_data, args) {
     DefaultAssay(seurat_data) <- "ATAC"                                          # safety measure in case ATAC wasn't the default assay
     splitted_seurat_data <- SplitObject(seurat_data, split.by="new.ident")
-    if (length(splitted_seurat_data) == 1){
-        print("Skipping datasets integration as only one identity is present.")
+    if (args$skipatacntrg | length(splitted_seurat_data) == 1){
+        print("Skipping datasets integration: either forced or only one identity is present")
         scaled_norm_seurat_data <- FindTopFeatures(splitted_seurat_data[[1]], min.cutoff=args$highvaratac, verbose=args$verbose)
         scaled_norm_seurat_data <- RunTFIDF(scaled_norm_seurat_data, verbose=args$verbose)
         scaled_norm_seurat_data <- RunSVD(
@@ -458,6 +473,7 @@ integrate_atac_data <- function(seurat_data, args) {
         )
         return (scaled_norm_seurat_data)
     } else {
+        print("Running ATAC datasets integration using IntegrateEmbeddings algorithm")
         backup_pca_reduction <- seurat_data[["pca"]]          # need to backup reductions generated from RNA assay as the will be deleted by IntegrateEmbeddings function
         backup_rnaumap_reduction <- seurat_data[["rnaumap"]]
         seurat_data <- FindTopFeatures(seurat_data, min.cutoff=args$highvaratac, verbose=args$verbose)
@@ -492,11 +508,13 @@ integrate_atac_data <- function(seurat_data, args) {
 integrate_gex_data <- function(seurat_data, args) {
     DefaultAssay(seurat_data) <- "RNA"                                                       # safety measure, in case RNA was not default assay
     splitted_seurat_data <- SplitObject(seurat_data, split.by="new.ident")
-    if (length(splitted_seurat_data) == 1){
-        print(paste(
-            "Skipping datasets integration as only one identity is present.",
-            "Running log-normalization and scalling instead."
-        ))
+    if (args$skipgexntrg | length(splitted_seurat_data) == 1){
+        print(
+            paste(
+                "Skipping datasets integration: either forced or only one identity is present.",
+                "Running log-normalization and scalling instead."
+            )
+        )
         scaled_norm_seurat_data <- NormalizeData(splitted_seurat_data[[1]], verbose=args$verbose)
         scaled_norm_seurat_data <- FindVariableFeatures(
             scaled_norm_seurat_data,
@@ -546,6 +564,7 @@ integrate_gex_data <- function(seurat_data, args) {
         DefaultAssay(integrated_seurat_data) <- "gex_integrated"
         return (integrated_seurat_data)
     } else {
+        print("Running SCTransform integration algorithm")
         for (i in 1:length(splitted_seurat_data)) {
             splitted_seurat_data[[i]] <- SCTransform(
                 splitted_seurat_data[[i]],
@@ -2065,7 +2084,10 @@ get_args <- function(){
         "--nosct",
         help=paste(
             "Do not use SCTransform when running RNA datasets integration.",
-            "Use LogNormalize instead.",
+            "Use LogNormalize instead. Ignored when --mex points to the",
+            "Cell Ranger ARC Count outputs (single, not aggregated dataset",
+            "that doesn't require any integration) or --skipgexntrg parameter",
+            "was applied.",
             "Default: false"
         ),
         action="store_true"
@@ -2097,6 +2119,28 @@ get_args <- function(){
             "Default: 0.3, 0.5, 1.0"
         ),
         type="double", default=c(0.3, 0.5, 1.0), nargs="*"
+    )
+    parser$add_argument(
+        "--skipgexntrg",
+        help=paste(
+            "Do not integrate RNA datasets, use merged data instead.",
+            "Applied by default if --mex points to the Cell Ranger ARC Count",
+            "outputs (single, not aggregated dataset that doesn't require any",
+            "integration).",
+            "Default: false"
+        ),
+        action="store_true"
+    )
+    parser$add_argument(
+        "--skipatacntrg",
+        help=paste(
+            "Do not integrate ATAC datasets, use merged data instead.",
+            "Applied by default if --mex pointed to the Cell Ranger ARC Count",
+            "outputs (single, not aggregated dataset that doesn't require any",
+            "integration).",
+            "Default: false"
+        ),
+        action="store_true"
     )
     # Export results
     parser$add_argument(
