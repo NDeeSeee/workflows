@@ -2,6 +2,7 @@
 options(warn=-1)
 options("width"=200)
 options(future.globals.maxSize = 8000 * 1024^2)  # 8GB should be good by default
+options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
 suppressMessages(library(Seurat))
 suppressMessages(library(future))
@@ -15,6 +16,20 @@ set_threads <- function (threads) {
     invisible(capture.output(plan("multiprocess", workers=threads)))
     invisible(capture.output(plan()))
     invisible(capture.output(setDTthreads(threads)))
+}
+
+
+debug_seurat_data <- function(seurat_data, args) {
+    if (args$verbose){
+        print("Assays")
+        print(seurat_data@assays)
+        print("Reductions")
+        print(seurat_data@reductions)
+        print("Active assay")
+        print(DefaultAssay(seurat_data))
+        print("Metadata")
+        print(head(seurat_data@meta.data))
+    }
 }
 
 
@@ -109,6 +124,24 @@ run_cellchat <- function (data, args, assay="RNA", ctypes=NULL) {
 }
 
 
+get_filtered_data <- function(seurat_data, args){
+    if (!is.null(args$groupby) && !is.null(args$select)){
+        print(
+            paste0(
+                "Include only '", paste(args$select, collapse=" "),
+                "' values from the '", args$groupby, "' metadata column"
+            )
+        )
+        print(paste("Cells before filtering", nrow(seurat_data@meta.data)))
+        Idents(seurat_data) <- args$groupby
+        seurat_data <- subset(seurat_data, idents=args$select)
+        Idents(seurat_data) <- "new.ident"
+        print(paste("Cells after filtering", nrow(seurat_data@meta.data)))
+    }
+    return (seurat_data)
+}
+
+
 get_args <- function(){
     parser <- ArgumentParser(description="Inference and analysis of cell-cell communication")
     parser$add_argument(
@@ -124,6 +157,30 @@ get_args <- function(){
             "Column name to select clusters for running CellChat"
         ),
         type="character", required="True"
+    )
+    parser$add_argument(
+        "--groupby",
+        help=paste(
+            "Column from the Seurat object metadata to group cells for optional",
+            "subsetting with --select parameter (for example, subset to the",
+            "specific dataset or condition).",
+            "Default: do not subset"
+        ),
+        type="character"
+    )
+    parser$add_argument(
+        "--select",
+        help=paste(
+            "Value(s) from the column set with --groupby to optionally subset cells",
+            "before running CellChat analysis.",
+            "Default: do not subset, use all cells."
+        ),
+        type="character", nargs="*"
+    )
+    parser$add_argument(
+        "--verbose",
+        help="Print debug information. Default: false",
+        action="store_true"
     )
     parser$add_argument(
         "--output",
@@ -149,6 +206,9 @@ set_threads(args$threads)
 
 print("Loading data")
 seurat_data <- readRDS(args$rds)
+debug_seurat_data(seurat_data, args)
+seurat_data <- get_filtered_data(seurat_data, args)
+debug_seurat_data(seurat_data, args)
 
 run_cellchat(
     seurat_data,
