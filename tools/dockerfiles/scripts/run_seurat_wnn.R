@@ -1,6 +1,7 @@
 #!/usr/bin/env Rscript
 options(warn=-1)
 options("width"=200)
+options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
 suppressMessages(library(dplyr))
 suppressMessages(library(purrr))
@@ -508,6 +509,10 @@ integrate_atac_data <- function(seurat_data, args) {
 integrate_gex_data <- function(seurat_data, args) {
     DefaultAssay(seurat_data) <- "RNA"                                                       # safety measure, in case RNA was not default assay
     splitted_seurat_data <- SplitObject(seurat_data, split.by="new.ident")
+    vars_to_regress <- NULL                                                                  # used in all three places, so no need to repeat it each time
+    if (args$regressmt) {
+        vars_to_regress <- c("mito_percentage")
+    }
     if (args$skipgexntrg | length(splitted_seurat_data) == 1){
         print(
             paste(
@@ -523,7 +528,7 @@ integrate_gex_data <- function(seurat_data, args) {
         )
         scaled_norm_seurat_data <- ScaleData(
             scaled_norm_seurat_data,
-            vars.to.regress=NULL,
+            vars.to.regress=vars_to_regress,
             verbose=args$verbose
         )
         DefaultAssay(scaled_norm_seurat_data) <- "RNA"
@@ -558,7 +563,7 @@ integrate_gex_data <- function(seurat_data, args) {
         )
         integrated_seurat_data <- ScaleData(
             integrated_seurat_data,
-            vars.to.regress=NULL,
+            vars.to.regress=vars_to_regress,
             verbose=args$verbose
         )
         DefaultAssay(integrated_seurat_data) <- "gex_integrated"
@@ -571,7 +576,7 @@ integrate_gex_data <- function(seurat_data, args) {
                 assay="RNA",
                 new.assay.name="SCT",
                 variable.features.n=args$highvargex,
-                vars.to.regress=NULL,
+                vars.to.regress=vars_to_regress,
                 verbose=args$verbose
             )
         }
@@ -1969,6 +1974,14 @@ get_args <- function(){
             "Default: 5 (applied to all datasets)"
         ),
         type="double", default=5
+    )
+    parser$add_argument(
+        "--regressmt",
+        help=paste(
+            "Regress mitochondrial genes expression as a confounding source of variation.",
+            "Default: false"
+        ),
+        action="store_true"
     )
     parser$add_argument(
         "--minnovelty",
