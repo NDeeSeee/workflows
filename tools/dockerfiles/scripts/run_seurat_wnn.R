@@ -467,7 +467,7 @@ integrate_atac_data <- function(seurat_data, args) {
         print("Skipping datasets integration: either forced or only one identity is present")
         scaled_norm_seurat_data <- FindTopFeatures(splitted_seurat_data[[1]], min.cutoff=args$highvaratac, verbose=args$verbose)
         scaled_norm_seurat_data <- RunTFIDF(scaled_norm_seurat_data, verbose=args$verbose)
-        scaled_norm_seurat_data <- RunSVD(
+        scaled_norm_seurat_data <- RunSVD(                                                          # by default computes 50 singular values
             scaled_norm_seurat_data,
             verbose=args$verbose,
             reduction.name="atac_lsi"
@@ -479,17 +479,17 @@ integrate_atac_data <- function(seurat_data, args) {
         backup_rnaumap_reduction <- seurat_data[["rnaumap"]]
         seurat_data <- FindTopFeatures(seurat_data, min.cutoff=args$highvaratac, verbose=args$verbose)
         seurat_data <- RunTFIDF(seurat_data, verbose=args$verbose)
-        seurat_data <- RunSVD(seurat_data, verbose=args$verbose)
+        seurat_data <- RunSVD(seurat_data, verbose=args$verbose)                                    # by default computes 50 singular values
         for (i in 1:length(splitted_seurat_data)) {
             splitted_seurat_data[[i]] <- FindTopFeatures(splitted_seurat_data[[i]], min.cutoff=args$highvaratac, verbose=args$verbose)
             splitted_seurat_data[[i]] <- RunTFIDF(splitted_seurat_data[[i]], verbose=args$verbose)
-            splitted_seurat_data[[i]] <- RunSVD(splitted_seurat_data[[i]], verbose=args$verbose)
+            splitted_seurat_data[[i]] <- RunSVD(splitted_seurat_data[[i]], verbose=args$verbose)    # by default computes 50 singular values
         }
         integration_anchors <- FindIntegrationAnchors(
             splitted_seurat_data,
             anchor.features=rownames(seurat_data),
             reduction="rlsi",
-            dims=2:args$atacndim,
+            dims=2:50,                                                                              # use up to computed singular values
             verbose=args$verbose
         )
         integrated_seurat_data <- IntegrateEmbeddings(
@@ -497,9 +497,9 @@ integrate_atac_data <- function(seurat_data, args) {
             reductions=seurat_data[["lsi"]],
             new.reduction.name="atac_lsi",
             k.weight=min(min(table(Idents(seurat_data))), 100),  # 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
-            dims.to.integrate=1:args$atacndim
+            dims.to.integrate=1:50                                                                  # use up to computed singular values
         )
-        integrated_seurat_data[["pca"]] <- backup_pca_reduction          # restoring deleted reductions
+        integrated_seurat_data[["pca"]] <- backup_pca_reduction                                     # restoring deleted reductions
         integrated_seurat_data[["rnaumap"]] <- backup_rnaumap_reduction
         return (integrated_seurat_data)
     }
@@ -1119,6 +1119,37 @@ export_elbow_plot <- function(data, rootname, plot_title, ndims=NULL, pdf=FALSE,
     )
 }
 
+export_depth_corr_plot <- function(data, rootname, plot_title, assay, reduction, ndims=NULL, pdf=FALSE, width=1200, height=400, resolution=100){
+    tryCatch(
+        expr = {
+            plot <- DepthCor(
+                        data,
+                        assay=assay,
+                        reduction=reduction,
+                        n=ndims
+                    ) +
+                    theme_gray() +
+                    ggtitle(plot_title)
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(plot))
+            dev.off()
+
+            if (pdf) {
+                pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                suppressMessages(print(plot))
+                dev.off()
+            }
+
+            print(paste("Export depth correlation plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export depth correlation plot to ", rootname, ".(png/pdf)", sep=""))
+        }
+    )
+}
+
 
 export_tss_plot <- function(data, rootname, plot_title, split_by, group_by_value=NULL, combine_guides=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
@@ -1535,7 +1566,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
 }
 
 
-export_all_dimensionality_plots <- function(seurat_data, suffix, args) {
+export_all_gex_dimensionality_plots <- function(seurat_data, suffix, args) {
     export_elbow_plot(
         data=seurat_data,
         ndims=50,
@@ -1550,6 +1581,26 @@ export_all_dimensionality_plots <- function(seurat_data, suffix, args) {
         legend_title="Identity",
         rootname=paste(args$output, suffix, "gex_pca", sep="_"),
         palette="Paired",
+        pdf=args$pdf
+    )
+    export_depth_corr_plot(
+        data=seurat_data,
+        assay="RNA",
+        reduction="pca",
+        plot_title="GEX correlation plot between depth and reduced dimension components",
+        rootname=paste(args$output, suffix, "gex_depth_corr", sep="_"),
+        pdf=args$pdf
+    )
+}
+
+
+export_all_atac_dimensionality_plots <- function(seurat_data, suffix, args) {
+    export_depth_corr_plot(
+        data=seurat_data,
+        assay="ATAC",
+        reduction="atac_lsi",
+        plot_title="ATAC correlation plot between depth and reduced dimension components",
+        rootname=paste(args$output, suffix, "atac_depth_corr", sep="_"),
         pdf=args$pdf
     )
 }
@@ -2087,11 +2138,12 @@ get_args <- function(){
     parser$add_argument(
         "--gexndim",
         help=paste(
-            "Dimensionality to use in GEX UMAP projection and clustering",
-            "(from 1 to 50).",
-            "Default: 10"
+            "Dimensionality to use in GEX UMAP projection and clustering (from 1 to 50).",
+            "If single number N is provided, use from 1 to N PCs. If multiple numbers are",
+            "provided, subset to only selected PCs.",
+            "Default: from 1 to 10"
         ),
-        type="integer", default=10
+        type="integer", default=10, nargs="*"
     )
     parser$add_argument(
         "--nosct",
@@ -2108,11 +2160,12 @@ get_args <- function(){
     parser$add_argument(
         "--atacndim",
         help=paste(
-            "Dimensionality to use in ATAC UMAP projection and clustering",
-            "(from 2 to 50). The first LSI dimension will be always excluded.",
-            "Default: 10"
+            "Dimensionality to use in ATAC UMAP projection and clustering (from 2 to 50).",
+            "If single number N is provided, use from 2 to N LSI components. If multiple",
+            "numbers are provided, subset to only selected LSI components.",
+            "Default: from 2 to 10"
         ),
-        type="integer", default=10
+        type="integer", default=10, nargs="*"
     )
     parser$add_argument(
         "--highvaratac",
@@ -2243,7 +2296,13 @@ for (key in names(args)){
         }
     }
 }
-args[["highvaratac"]] <- paste0("q", args$highvaratac)          # need to have it in a form of "q75", for example
+args$highvaratac <- paste0("q", args$highvaratac)          # need to have it in a form of "q75", for example
+if (length(args$gexndim) == 1) {                           # only one value was provided, so we need to inflate it to 1:N
+    args$gexndim <- c(1:args$gexndim[1])
+}
+if (length(args$atacndim) == 1) {                          # only one value was provided, so we need to inflate it to 2:N
+    args$atacndim <- c(2:args$atacndim[1])                 # skip first LSI component by default
+}
 print("Adjusted parameters")
 print(args)
 
@@ -2281,13 +2340,13 @@ seurat_data <- RunPCA(seurat_data, npcs=50, verbose=args$verbose)
 seurat_data <- RunUMAP(
     seurat_data,
     reduction="pca",
-    dims=1:args$gexndim,
+    dims=args$gexndim,
     reduction.name="rnaumap",
     reduction.key="RNAUMAP_",
     verbose=args$verbose
 )
 debug_seurat_data(seurat_data, args)
-export_all_dimensionality_plots(seurat_data, "ntgr", args)
+export_all_gex_dimensionality_plots(seurat_data, "ntgr", args)
 
 cat("\n\nStep 4: Running ATAC analysis\n")
 print("Running datasets integration/scaling on ATAC assay")
@@ -2296,18 +2355,19 @@ debug_seurat_data(seurat_data, args)
 seurat_data <- RunUMAP(
     seurat_data,
     reduction="atac_lsi",
-    dims=2:args$atacndim,
+    dims=args$atacndim,
     reduction.name="atacumap",
     reduction.key="ATACUMAP_",
     verbose=args$verbose
 )
 debug_seurat_data(seurat_data, args)
+export_all_atac_dimensionality_plots(seurat_data, "ntgr", args)
 
 cat("\n\nStep 5: Running WNN analysis\n")
 seurat_data <- FindMultiModalNeighbors(
     seurat_data,
     reduction.list=list("pca", "atac_lsi"),          # we used "atac_lsi" reduction name for both after integration and just scaling/normalization
-    dims.list=list(1:args$gexndim, 2:args$atacndim),
+    dims.list=list(args$gexndim, args$atacndim),
     snn.graph.name="wsnn",
     weighted.nn.name="weighted.nn",
     verbose=args$verbose
