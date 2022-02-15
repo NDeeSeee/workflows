@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 options(warn=-1)
 options("width"=200)
-options(future.globals.maxSize = 8000 * 1024^2)  # 8GB should be good by default
+options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
 suppressMessages(library(dplyr))
 suppressMessages(library(purrr))
@@ -47,6 +47,28 @@ SPECIES_DATA <- list(
 # https://github.com/maximilianh/cellBrowser/blob/master/src/cbPyLib/cellbrowser/R/ExportToCellbrowser-seurat.R
 ###############################################################################################################
 
+
+setup_parallelization <- function (args) {
+    invisible(capture.output(plan("multiprocess", workers=args$cpus)))
+    invisible(capture.output(plan()))
+    invisible(capture.output(setDTthreads(args$cpus)))
+    options(future.globals.maxSize = args$memory * 1024^3)               # convert to bytes
+}
+
+
+debug_seurat_data <- function(seurat_data, args) {
+    if (args$verbose){
+        print("Assays")
+        print(seurat_data@assays)
+        print("Reductions")
+        print(seurat_data@reductions)
+        print("Active assay")
+        print(DefaultAssay(seurat_data))
+        print("Metadata")
+        print(head(seurat_data@meta.data))
+        print(gc())
+    }
+}
 
 writeSparseMatrix <- function (inMat, outFname, sliceSize=1000){
     fnames <- c()
@@ -171,6 +193,7 @@ ExportToCellbrowser <- function(
     config <- '
 name="cellbrowser"
 shortLabel="cellbrowser"
+geneLabel="Gene"
 exprMatrix="exprMatrix.tsv.gz"
 meta="meta.tsv"
 radius=3
@@ -201,13 +224,6 @@ coords=%s'
 
 
 ###############################################################################################################
-
-
-set_threads <- function (threads) {
-    invisible(capture.output(plan("multiprocess", workers=threads)))
-    invisible(capture.output(plan()))
-    invisible(capture.output(setDTthreads(threads)))
-}
 
 
 get_file_type <- function (filename) {
@@ -597,7 +613,6 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
                 verbose=FALSE
             )
         }
-        set_threads(1)  # need to use one thread, otherwise gets stuck
         integration_features <- SelectIntegrationFeatures(
             splitted_seurat_data,
             nfeatures=args$highvarcount,
@@ -626,7 +641,6 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
             verbose=FALSE
         )
         DefaultAssay(integrated_seurat_data) <- "integrated"
-        set_threads(args$threads)
         return (integrated_seurat_data)
     } else {
         for (i in 1:length(splitted_seurat_data)) {
@@ -679,7 +693,6 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
                 )
             }
         }
-        set_threads(1)  # need to use one thread, otherwise gets stuck
         integration_features <- SelectIntegrationFeatures(
             splitted_seurat_data,
             nfeatures=args$highvarcount,
@@ -704,7 +717,6 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
             verbose=FALSE
         )
         DefaultAssay(integrated_seurat_data) <- "integrated"
-        set_threads(args$threads)
         return (integrated_seurat_data)
     }
 }
@@ -2256,18 +2268,29 @@ get_args <- function(){
         action="store_true"
     )
     parser$add_argument(
+        "--verbose",
+        help="Print debug information. Default: false",
+        action="store_true"
+    )
+    parser$add_argument(
         "--output",
         help="Output prefix. Default: ./seurat",
         type="character", default="./seurat"
     )
-
-    # Performance parameters
     parser$add_argument(
-        "--threads",
-        help="Threads. Default: 1",
+        "--cpus",
+        help="Number of cores/cpus to use. Default: 1",
         type="integer", default=1
     )
-
+    parser$add_argument(
+        "--memory",
+        help=paste(
+            "Maximum memory in GB allowed to be shared between the workers",
+            "when using multiple --cpus.",
+            "Default: 32"
+        ),
+        type="integer", default=32
+    )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
     return (args)
 }
@@ -2278,8 +2301,12 @@ args <- get_args()
 cat("Step 0: Runtime configuration\n")
 print("Used parameters")
 print(args)
-print(paste("Setting parallelizations threads to", args$threads))
-set_threads(args$threads)
+print(
+    paste(
+        "Setting parallelization parameters to", args$cpus,
+        "cores, and", args$memory, "GB of memory")
+    )
+setup_parallelization(args)
 
 cat("\n\nStep 1: Loading raw datasets\n")
 
@@ -2291,6 +2318,7 @@ print("Trying to load condition data")
 condition_data <- load_condition_data(args$condition, cell_identity_data)
 print("Loading feature-barcode matrices")
 seurat_data <- load_seurat_data(args$mex, args$mincells, cell_identity_data, condition_data)
+debug_seurat_data(seurat_data, args)
 
 print("Validating filtering thresholds")
 # if we put it in a function, args will be passed by value
@@ -2327,10 +2355,12 @@ cat("\n\nStep 2: Filtering raw datasets\n")
 
 print("Adding QC metrics to not filtered seurat data")
 seurat_data <- add_qc_metrics(seurat_data, args)
-
+debug_seurat_data(seurat_data, args)
 export_all_qc_plots(seurat_data, "raw", args)                                                                  # <--- raw
+
 print("Applying QC filters")
 seurat_data <- apply_qc_filters(seurat_data, cell_identity_data, args)
+debug_seurat_data(seurat_data, args)
 export_all_qc_plots(seurat_data, "fltr", args)                                                                 # <--- fltr
 print("Evaluating effects of cell cycle and mitochodrial gene expression")
 explore_unwanted_variation(seurat_data, cell_cycle_data, args)
@@ -2339,6 +2369,7 @@ cat("\n\nStep 3: Integrating filtered datasets\n")
 
 print("Running dataset integration/scaling")
 seurat_data <- integrate_seurat_data(seurat_data, cell_cycle_data, args)                                       # sets "integrated" as a default assay for integrated data, and "RNA" for scaled data
+debug_seurat_data(seurat_data, args)
 
 cat("\n\nStep 4: Reducing dimensionality of intergrated/scaled datasets\n")
 
@@ -2352,6 +2383,7 @@ seurat_data <- RunUMAP(                                                         
     umap.method=args$umethod,
     reduction="pca", dims=1:args$ndim, verbose=FALSE
 )
+debug_seurat_data(seurat_data, args)
 export_all_dimensionality_plots(seurat_data, "ntgr", args)                                                     # <--- ntgr
 
 cat("\n\nStep 5: Clustering and cell type assignment of intergrated/scaled datasets with reduced dimensionality\n")
@@ -2370,6 +2402,7 @@ seurat_data <- FindClusters(
 )
 print("Assigning cell types for all clusters and all resolutions using only highly variable genes")
 seurat_data <- assign_cell_types(seurat_data, classifier, "RNA", "counts", args)                               # uses all features from "counts" slot of "RNA" assay
+debug_seurat_data(seurat_data, args)
 export_all_clustering_plots(seurat_data, "clst", args)                                                         # <--- clst
 
 cat("\n\nStep 6: Running gene expression analysis\n")
@@ -2378,7 +2411,7 @@ if ("integrated" %in% names(seurat_data@assays)) {                              
     print("Normalizing counts in RNA assay")                                                                   # in case is was already normalized, it's safe to run it again, as it uses counts and overwrites data slots
     backup_assay <- DefaultAssay(seurat_data)
     DefaultAssay(seurat_data) <- "RNA"
-    seurat_data <- NormalizeData(seurat_data, verbose=FALSE)
+    seurat_data <- NormalizeData(seurat_data, verbose=FALSE)                                                   # it's fine to run it for merged datasets https://github.com/satijalab/seurat/issues/343#issuecomment-373732931
     DefaultAssay(seurat_data) <- backup_assay
 }
 if (args$rds){ export_rds(seurat_data, paste(args$output, "_clst_data.rds", sep="")) }
@@ -2391,7 +2424,10 @@ all_conserved_markers <- get_all_conserved_markers(seurat_data, args)
 export_data(all_conserved_markers, paste(args$output, "_clst_csrvd_gene_markers.tsv", sep=""))
 print("Exporting UCSC Cellbrowser data")
 export_cellbrowser_data(
-    seurat_data, assay="RNA", matrix_slot="data",
-    resolution=args$resolution, features=args$features,
+    seurat_data=seurat_data,
+    assay="RNA",
+    matrix_slot="counts",
+    resolution=args$resolution,
+    features=args$features,
     rootname=paste(args$output, "_cellbrowser", sep="")
 )

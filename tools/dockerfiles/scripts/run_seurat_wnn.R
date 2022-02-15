@@ -609,6 +609,46 @@ integrate_gex_data <- function(seurat_data, args) {
 }
 
 
+get_all_putative_markers <- function(seurat_data, args, assay="RNA", min_diff_pct=-Inf){
+    backup_assay <- DefaultAssay(seurat_data)
+    DefaultAssay(seurat_data) <- assay
+    all_putative_markers <- NULL
+    for (i in 1:length(args$resolution)) {
+        resolution <- args$resolution[i]
+        Idents(seurat_data) <- paste("wsnn_res", resolution, sep=".")
+        tryCatch(
+            expr = {
+                markers <- FindAllMarkers(
+                    seurat_data,
+                    logfc.threshold=args$gexlogfc,
+                    min.pct=args$gexminpct,
+                    only.pos=args$gexonlypos,
+                    test.use=args$gextestuse,
+                    min.diff.pct=min_diff_pct,
+                    verbose=FALSE
+                ) %>% relocate(cluster, gene, .before=1)
+                if (nrow(markers) > 0) {
+                    markers <- markers %>% cbind(resolution=resolution, .)
+                } else {
+                    markers <- markers %>% add_column(resolution=numeric(), .before=1)  # safety measure in case markers was empty
+                }
+                if (!is.null(all_putative_markers)) {
+                    all_putative_markers <- rbind(all_putative_markers, markers)
+                } else {
+                    all_putative_markers <- markers
+                }
+            },
+            error = function(e){
+                print(paste("Failed find putative gene markers for resolution", resolution, "due to", e))
+            }
+        )
+        Idents(seurat_data) <- "new.ident"
+    }
+    DefaultAssay(seurat_data) <- backup_assay
+    return (all_putative_markers)
+}
+
+
 apply_qc_filters <- function(seurat_data, cell_identity_data, args) {
     merged_seurat_data <- NULL
     for (i in 1:length(args$mingenes)){
@@ -2146,6 +2186,43 @@ get_args <- function(){
         type="integer", default=10, nargs="*"
     )
     parser$add_argument(
+        "--gexlogfc",
+        help=paste(
+            "For putative gene markers identification include only those GEX features that",
+            "on average have log fold change difference in expression between every tested",
+            "pair of clusters not lower than this value.",
+            "Default: 0.25"
+        ),
+        type="double", default=0.25
+    )
+    parser$add_argument(
+        "--gexminpct",
+        help=paste(
+            "For putative gene markers identification include only those GEX features that",
+            "are detected in not lower than this fraction of cells in either of the two",
+            "tested clusters.",
+            "Default: 0.1"
+        ),
+        type="double", default=0.1
+    )
+    parser$add_argument(
+        "--gexonlypos",
+        help=paste(
+            "For putative gene markers identification return only positive markers.",
+            "Default: false"
+        ),
+        action="store_true"
+    )
+    parser$add_argument(
+        "--gextestuse",
+        help=paste(
+            "Statistical test to use for putative gene markers identification.",
+            "Default: wilcox"
+        ),
+        type="character", default="wilcox",
+        choices=c("wilcox", "bimod", "roc", "t", "negbinom", "poisson", "LR", "MAST", "DESeq2")
+    )
+    parser$add_argument(
         "--nosct",
         help=paste(
             "Do not use SCTransform when running RNA datasets integration.",
@@ -2414,9 +2491,16 @@ if (!is.null(args$gexfeatures)){
 
 if (!is.null(args$gexfeatures)){ export_all_expression_plots(seurat_data, "expr", args, assay="RNA") }
 
+print("Identifying putative gene markers for all clusters and all resolutions")
+all_putative_markers <- get_all_putative_markers(seurat_data, args)
+export_data(all_putative_markers, paste(args$output, "_clst_pttv_gene_markers.tsv", sep=""))
+
 print("Exporting UCSC Cellbrowser data")
 export_cellbrowser_data(
-    seurat_data, assay="RNA", matrix_slot="data",
-    resolution=args$resolution, features=args$gexfeatures,
+    seurat_data=seurat_data,
+    assay="RNA",
+    matrix_slot="counts",
+    resolution=args$resolution,
+    features=args$gexfeatures,
     rootname=paste(args$output, "_cellbrowser", sep="")
 )
