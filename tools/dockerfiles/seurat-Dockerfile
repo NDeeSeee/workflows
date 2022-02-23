@@ -2,15 +2,18 @@
 # Dockerfile
 #
 # Software:         Seurat script
-# Software Version: v0.0.18
+# Software Version: v0.0.19
 # Description:      Dockerized version of Seurat script
 # Website:          https://satijalab.org/seurat/index.html
 # Provides:         Seurat script
 # Base Image:       satijalab/seurat:4.0.3
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat:v0.0.18 -f seurat-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/seurat:v0.0.18
-# Run Cmd:          docker run --rm -ti biowardrobe2/seurat:v0.0.18 /bin/bash
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat:v0.0.19 -f seurat-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/seurat:v0.0.19
+# Run Cmd:          docker run --rm -ti biowardrobe2/seurat:v0.0.19 /bin/bash
 #################################################################
+#
+# v0.0.19
+# - Updated run_seurat.R to generate PCA QC metrics plot
 #
 # v0.0.18
 # - Updated run_seurat.R
@@ -116,6 +119,7 @@ RUN apt-get update && \
     R -e "BiocManager::install(c('org.Hs.eg.db', 'org.Mm.eg.db'))" && \
     R -e "devtools::install_github('cole-trapnell-lab/garnett', ref='monocle3')" && \
     R -e 'install.packages("Signac", repo = "https://cloud.r-project.org/")' && \
+    R -e 'install.packages("bestNormalize", repo = "https://cloud.r-project.org/")' && \
     R -e "remotes::install_github('satijalab/seurat-wrappers')" && \
 ### Installing run_seurat.R, sc_diff_expr.R, and assign_cell_types.R scripts
     chmod +x /usr/local/bin/run_seurat.R && \

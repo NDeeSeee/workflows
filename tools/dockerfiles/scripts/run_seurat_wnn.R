@@ -21,6 +21,7 @@ suppressMessages(library(reticulate))
 suppressMessages(library(sctransform))
 suppressMessages(library(rtracklayer))
 suppressMessages(library(RColorBrewer))
+suppressMessages(library(bestNormalize))
 suppressMessages(library(GenomicRanges))
 suppressMessages(library(SeuratWrappers))
 
@@ -1159,33 +1160,57 @@ export_elbow_plot <- function(data, rootname, plot_title, ndims=NULL, pdf=FALSE,
     )
 }
 
-export_depth_corr_plot <- function(data, rootname, plot_title, assay, reduction, ndims=NULL, pdf=FALSE, width=1200, height=400, resolution=100){
+
+export_corr_plot <- function(data, reduction, qc_columns, qc_labels, plot_title, rootname, ndims=NULL, combine_guides=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
-            plot <- DepthCor(
-                        data,
-                        assay=assay,
-                        reduction=reduction,
-                        n=ndims
-                    ) +
-                    theme_gray() +
-                    ggtitle(plot_title)
+            embeddings <- Embeddings(data[[reduction]])
+            ndims=ifelse(is.null(ndims), length(data[[reduction]]), ndims)
+            plots <- list()
+            for (i in 1:length(qc_columns)) {
+                current_qc_column <- qc_columns[i]
+                current_qc_label <- qc_labels[i]
+                if ( !(qc_columns[i] %in% colnames(data@meta.data)) ){
+                    print(
+                        paste(
+                            "Column", current_qc_column, "was not found,",
+                            "skipping", current_qc_label
+                        )
+                    )
+                    next
+                }
+                qc_data <- data[[current_qc_column]]
+                corr_data <- as.data.frame(cor(x=embeddings, y=qc_data))
+                corr_data$correlation <- corr_data[, 1]
+                corr_data$dimension <- seq_len(length.out=nrow(corr_data))
+
+                plots[[current_qc_column]] <- ggplot(corr_data, aes(dimension, correlation)) +
+                                              geom_point() +
+                                              xlab("Dimension") +
+                                              ylab("Correlation") +
+                                              xlim(c(0, ndims)) +
+                                              ylim(c(-1, 1)) +
+                                              theme_gray() +
+                                              ggtitle(current_qc_label)
+            }
+            combined_plots <- wrap_plots(plots, guides=combine_guides) + plot_annotation(title=plot_title)
 
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
-            suppressMessages(print(plot))
+            suppressMessages(print(combined_plots))
             dev.off()
 
             if (pdf) {
                 pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
-                suppressMessages(print(plot))
+                suppressMessages(print(combined_plots))
                 dev.off()
             }
 
-            print(paste("Export depth correlation plot to ", rootname, ".(png/pdf)", sep=""))
+            print(paste("Export correlation plot to ", rootname, ".(png/pdf)", sep=""))
+
         },
         error = function(e){
             tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
-            print(paste("Failed to export depth correlation plot to ", rootname, ".(png/pdf)", sep=""))
+            print(paste("Failed to export correlation plot to ", rootname, ".(png/pdf)", sep=""))
         }
     )
 }
@@ -1289,7 +1314,141 @@ export_fragments_hist <- function(data, rootname, plot_title, split_by, group_by
 }
 
 
+get_qc_metrics_pca <- function(seurat_data, qc_columns, qc_labels, orq_transform=FALSE){
+    tryCatch(
+        expr = {
+            print("Computing PCA for the following QC metrics")
+            print(paste(qc_labels, collapse=", "))
+            qc_columns_corrected <- c()
+            qc_labels_corrected <- c()
+            for (i in 1:length(qc_columns)){
+                if (qc_columns[i] %in% colnames(seurat_data@meta.data)){
+                    qc_columns_corrected <- c(qc_columns_corrected, qc_columns[i])
+                    qc_labels_corrected <- c(qc_labels_corrected, qc_labels[i])
+                } else {
+                    print(
+                        paste(
+                            "Column", qc_columns[i], "was not found,",
+                            "skipping", qc_labels[i]
+                        )
+                    )
+                }
+            }
+            target_data <- as.data.frame(seurat_data[[qc_columns_corrected]]) %>% 
+                           filter_all(all_vars(!is.infinite(.)))                          # safety measure
+            print(
+                paste(
+                    "Rows removed due to having infinite values",
+                    "in any of the selected column -",
+                    nrow(seurat_data@meta.data) - nrow(target_data)
+                )
+            )
+            if (orq_transform){
+                print("Running Ordered Quantile (ORQ) normalization transformation")
+                target_data <- target_data %>% mutate_all(function(x){return (orderNorm(x)$x.t)})
+            }
+            pca_raw <- prcomp(
+                t(target_data),
+                center=!orq_transform,         # no need to center or scale when data is already ORQ-transformed
+                scale.=!orq_transform
+            )
+            print(summary(pca_raw))
+            pca_scores <- as.data.frame(pca_raw$x)
+            pca_scores$labels <- qc_labels_corrected
+            pca_variance <- round(pca_raw$sdev / sum(pca_raw$sdev) * 100, 2)
+            return (list(scores=pca_scores, variance=pca_variance))
+        },
+        error = function(e){
+            print(paste("Failed to compute PCA for QC metrics due to", e))
+        }
+    )
+}
+
+
+export_pca_plot <- function(pca_data, pcs, rootname, plot_title, legend_title, color_by="label", label_size=5, pt_size=8, pt_shape=19, alpha=0.75, palette="Paired", pdf=FALSE, width=1200, height=1200, resolution=100){
+    tryCatch(
+        expr = {
+            x_score_column <- paste0("PC", pcs[1])
+            y_score_column <- paste0("PC", pcs[2])
+            x_variance <- pca_data$variance[pcs[1]]
+            y_variance <- pca_data$variance[pcs[2]]
+            plot <- ggplot(
+                        pca_data$scores,
+                        aes_string(x=x_score_column, y=y_score_column, color=color_by)
+                    ) +
+                    geom_point(size=pt_size, shape=pt_shape, alpha=alpha) +
+                    xlab(paste0(x_score_column, ": ", x_variance, "% variance")) +
+                    ylab(paste0(y_score_column, ": ", y_variance, "% variance")) + 
+                    geom_label_repel(
+                        aes_string(label=color_by),
+                        size=label_size,
+                        point.padding=0.5,
+                        box.padding=0.5,
+                        check_overlap=TRUE,
+                        show.legend=FALSE
+                    ) +
+                    ggtitle(plot_title) +
+                    guides(color=guide_legend(legend_title)) +
+                    scale_color_brewer(palette=palette) +
+                    theme_gray()
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(plot))
+            dev.off()
+
+            if (pdf) {
+                pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                suppressMessages(print(plot))
+                dev.off()
+            }
+
+            print(paste("Export PCA plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export PCA plot to ", rootname, ".(png/pdf)", sep=""))
+        }
+    )
+}
+
+
 export_all_qc_plots <- function(seurat_data, suffix, args){
+    qc_metrics_pca <- get_qc_metrics_pca(
+        seurat_data=seurat_data,
+        qc_columns=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "nFeature_ATAC", "TSS.enrichment", "nucleosome_signal", "frip", "blacklisted_fraction"),
+        qc_labels=c("GEX UMIs", "Genes", "Mitochondrial %", "Novelty score", "ATAC UMIs", "Peaks", "TSS enrichment score", "Nucleosome signal", "FRiP", "Fr. of reads in bl-ted reg."),
+        orq_transform=TRUE
+    )
+    export_pca_plot(
+        pca_data=qc_metrics_pca,
+        rootname=paste(args$output, suffix, "pca", paste(c(1, 2) ,collapse="_"), "qc_mtrcs", sep="_"),
+        pcs=c(1, 2),
+        plot_title=paste(
+            paste(
+                paste0("PC", c(1, 2)),
+                collapse=" and "
+            ),
+            " of ORQ-transformed QC metrics PCA (", suffix, ")", sep=""
+        ),
+        legend_title="QC metrics",
+        color_by="labels",
+        pdf=args$pdf
+    )
+    export_pca_plot(
+        pca_data=qc_metrics_pca,
+        rootname=paste(args$output, suffix, "pca", paste(c(2, 3) ,collapse="_"), "qc_mtrcs", sep="_"),
+        pcs=c(2, 3),
+        plot_title=paste(
+            paste(
+                paste0("PC", c(2, 3)),
+                collapse=" and "
+            ),
+            " of ORQ-transformed QC metrics PCA (", suffix, ")", sep=""
+        ),
+        legend_title="QC metrics",
+        color_by="labels",
+        pdf=args$pdf
+    )
     export_geom_bar_plot(
         data=seurat_data@meta.data,
         rootname=paste(args$output, suffix, "cell_count", sep="_"),
@@ -1606,7 +1765,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args) {
 }
 
 
-export_all_gex_dimensionality_plots <- function(seurat_data, suffix, args) {
+export_all_dimensionality_plots <- function(seurat_data, suffix, args) {
     export_elbow_plot(
         data=seurat_data,
         ndims=50,
@@ -1623,24 +1782,24 @@ export_all_gex_dimensionality_plots <- function(seurat_data, suffix, args) {
         palette="Paired",
         pdf=args$pdf
     )
-    export_depth_corr_plot(
+    export_corr_plot(
         data=seurat_data,
-        assay="RNA",
         reduction="pca",
-        plot_title="GEX correlation plot between depth and reduced dimension components",
-        rootname=paste(args$output, suffix, "gex_depth_corr", sep="_"),
+        qc_columns=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi"),
+        qc_labels=c("GEX UMIs", "Genes", "Mitochondrial %", "Novelty score"),
+        plot_title="Correlation plots between main QC metrics and PCA reduction on GEX assay",
+        rootname=paste(args$output, suffix, "gex_qc_dim_corr", sep="_"),
+        combine_guides="collect",
         pdf=args$pdf
     )
-}
-
-
-export_all_atac_dimensionality_plots <- function(seurat_data, suffix, args) {
-    export_depth_corr_plot(
+    export_corr_plot(
         data=seurat_data,
-        assay="ATAC",
         reduction="atac_lsi",
-        plot_title="ATAC correlation plot between depth and reduced dimension components",
-        rootname=paste(args$output, suffix, "atac_depth_corr", sep="_"),
+        qc_columns=c("nCount_ATAC", "nFeature_ATAC", "TSS.enrichment", "nucleosome_signal", "frip", "blacklisted_fraction"),
+        qc_labels=c("ATAC UMIs", "Peaks", "TSS enrichment score", "Nucleosome signal", "FRiP", "Fr. of reads in bl-ted reg."),
+        plot_title="Correlation plots between main QC metrics and LSI reduction on ATAC assay",
+        rootname=paste(args$output, suffix, "atac_qc_dim_corr", sep="_"),
+        combine_guides="collect",
         pdf=args$pdf
     )
 }
@@ -2423,7 +2582,6 @@ seurat_data <- RunUMAP(
     verbose=args$verbose
 )
 debug_seurat_data(seurat_data, args)
-export_all_gex_dimensionality_plots(seurat_data, "ntgr", args)
 
 cat("\n\nStep 4: Running ATAC analysis\n")
 print("Running datasets integration/scaling on ATAC assay")
@@ -2438,7 +2596,7 @@ seurat_data <- RunUMAP(
     verbose=args$verbose
 )
 debug_seurat_data(seurat_data, args)
-export_all_atac_dimensionality_plots(seurat_data, "ntgr", args)
+export_all_dimensionality_plots(seurat_data, "ntgr", args)
 
 cat("\n\nStep 5: Running WNN analysis\n")
 seurat_data <- FindMultiModalNeighbors(
