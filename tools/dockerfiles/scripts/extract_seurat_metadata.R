@@ -1,11 +1,34 @@
 #!/usr/bin/env Rscript
 options(warn=-1)
 options("width"=200)
-options(future.globals.maxSize = 8000 * 1024^2)  # 8GB should be good by default
+options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
 suppressMessages(library(Seurat))
 suppressMessages(library(future))
 suppressMessages(library(argparse))
+suppressMessages(library(data.table))
+
+
+setup_parallelization <- function (args) {
+    invisible(capture.output(plan("multiprocess", workers=args$cpus)))
+    invisible(capture.output(plan()))
+    invisible(capture.output(setDTthreads(args$cpus)))
+    options(future.globals.maxSize = args$memory * 1024^3)               # convert to bytes
+}
+
+
+debug_seurat_data <- function(seurat_data, args) {
+    if (args$verbose){
+        print("Assays")
+        print(seurat_data@assays)
+        print("Reductions")
+        print(seurat_data@reductions)
+        print("Active assay")
+        print(DefaultAssay(seurat_data))
+        print("Metadata")
+        print(head(seurat_data@meta.data))
+    }
+}
 
 
 get_file_type <- function (filename) {
@@ -19,50 +42,22 @@ get_file_type <- function (filename) {
 
 
 export_metadata <- function(data, suffix, args){
-    cells_data <- Cells(data)
-    umap_data <- Embeddings(data, reduction="umap")
-    pca_data <- Embeddings(data, reduction="pca")
-    cluster_data <- data@meta.data[, args$source]
-    loupe_umap_data <- cbind(cells_data, umap_data)
-    colnames(loupe_umap_data) <- c("Barcode", "UMAP-1", "UMAP-2")
-    loupe_cluster_data <- cbind(cells_data, cluster_data)
-    colnames(loupe_cluster_data) <- c("barcode", "id")
-    export_data(
-        cells_data,
-        location=paste0(args$cells, "_", suffix, ".tsv"),
-        row_names=FALSE,
-        col_names=FALSE
-    )
-    export_data(
-        umap_data,
-        location=paste0(args$umap, "_", suffix, ".tsv"),
-        row_names=FALSE,
-        col_names=FALSE
-    )
-    export_data(
-        pca_data,
-        location=paste0(args$pca, "_", suffix, ".tsv"),
-        row_names=FALSE,
-        col_names=FALSE
-    )
+    cluster_data <- cbind(Cells(data), data@meta.data[, args$source])
     export_data(
         cluster_data,
-        location=paste0(args$clusters, "_", suffix, ".tsv"),
+        location=paste(args$output, suffix, "clusters.tsv", sep="_"),
         row_names=FALSE,
         col_names=FALSE
     )
-    export_data(
-        loupe_umap_data,
-        location=paste0(args$umap, "_", suffix, "_loupe.csv"),
-        row_names=FALSE,
-        col_names=TRUE
-    )
-    export_data(
-        loupe_cluster_data,
-        location=paste0(args$clusters, "_", suffix, "_loupe.csv"),
-        row_names=FALSE,
-        col_names=TRUE
-    )
+    for (i in 1:length(args$reductions)) {
+        current_reduction <- args$reductions[i]
+        export_data(
+            Embeddings(data, reduction=current_reduction),                                      # if raises exception, it will be caught within export_data
+            location=paste(args$output, suffix, paste0(current_reduction, ".tsv"), sep="_"),
+            row_names=FALSE,
+            col_names=FALSE
+        )
+    }
 }
 
 
@@ -80,7 +75,7 @@ export_data <- function(data, location, row_names=FALSE, col_names=TRUE, quote=F
             print(paste("Export data to", location, sep=" "))
         },
         error = function(e){
-            print(paste("Failed to export data to", location, sep=" "))
+            print(paste("Failed to export data to", location, "due to", e, sep=" "))
         }
     )
 }
@@ -91,8 +86,8 @@ get_args <- function(){
     parser$add_argument(
         "--rds",
         help=paste(
-            "Path to the RDS file to load Seurat object from.",
-            "RDS file can be produced by run_seurat.R or assign_cell_types.R scripts."
+            "Path to the RDS file to load Seurat object from. RDS file can be produced by run_seurat.R,",
+            "assign_cell_types.R, or run_seurat_wnn.R scripts."
         ),
         type="character", required="True"
     )
@@ -114,27 +109,39 @@ get_args <- function(){
         type="character"
     )
     parser$add_argument(
-        "--cells",
-        help="Output prefix for TSV file to save cells information data.",
-        type="character", default="./cells"
-    )
-    parser$add_argument(
-        "--umap",
-        help="Output prefix for TSV file to save UMAP embeddings data.",
-        type="character", default="./umap"
-    )
-    parser$add_argument(
-        "--pca",
-        help="Output prefix for TSV file to save PCA embeddings data.",
-        type="character", default="./pca"
-    )
-    parser$add_argument(
-        "--clusters",
+        "--reductions",
         help=paste(
-            "Output prefix for TSV file to save clusters data defined in the column",
-            "selected with --source parameter."
+            "List of reductions to extract metadata from. Each reduction",
+            "name will be appended to the output files names.",
+            "Default: umap, pca, atac_lsi, rnaumap, atacumap, wnnumap"
         ),
-        type="character", default="./clusters"
+        type="character",
+        default=c("umap", "pca", "atac_lsi", "rnaumap", "atacumap", "wnnumap"),
+        nargs="*"
+    )
+    parser$add_argument(
+        "--output",
+        help="Output prefix. Default: ./metadata",
+        type="character", default="./metadata"
+    )
+    parser$add_argument(
+        "--verbose",
+        help="Print debug information. Default: false",
+        action="store_true"
+    )
+    parser$add_argument(
+        "--cpus",
+        help="Number of cores/cpus to use. Default: 1",
+        type="integer", default=1
+    )
+    parser$add_argument(
+        "--memory",
+        help=paste(
+            "Maximum memory in GB allowed to be shared between the workers",
+            "when using multiple --cpus.",
+            "Default: 32"
+        ),
+        type="integer", default=32
     )
     args <- parser$parse_args(commandArgs(trailingOnly=TRUE))
     return (args)
@@ -142,9 +149,14 @@ get_args <- function(){
 
 
 args <- get_args()
+print(args)
+
+print(paste("Setting parallelization parameters to", args$cpus, "cores, and", args$memory, "GB of memory"))
+setup_parallelization(args)
 
 print(paste("Loading Seurat data from", args$rds))
 seurat_data <- readRDS(args$rds)
+debug_seurat_data(seurat_data, args)
 
 if (!is.null(args$splitby)){
     print(paste("Exporting results splitted by", args$splitby))

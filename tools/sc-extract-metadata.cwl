@@ -8,7 +8,7 @@ requirements:
 
 hints:
 - class: DockerRequirement
-  dockerPull: biowardrobe2/seurat-export:v0.0.1
+  dockerPull: biowardrobe2/seurat-export:v0.0.2
 
 
 inputs:
@@ -18,8 +18,9 @@ inputs:
     inputBinding:
       prefix: "--rds"
     doc: |
-      Path to the RDS file to load Seurat object from.
-      RDS file can be produced by run_seurat.R or assign_cell_types.R scripts.
+      Path to the RDS file to load Seurat object from. RDS file can be
+      produced by run_seurat.R, assign_cell_types.R, or run_seurat_wnn.R
+      scripts.
 
   source_column:
     type: string
@@ -38,71 +39,63 @@ inputs:
       appended to the names of output files.
       Default: do not split, export combined file
 
-  cells_prefix:
-    type: string?
+  reductions:
+    type:
+    - "null"
+    - string
+    - string[]
     inputBinding:
-      prefix: "--cells"
-    default: "cells"
+      prefix: "--reductions"
     doc: |
-      Output prefix for TSV file to save cells information data.
+      List of reductions to extract metadata from. Each reduction
+      name will be appended to the output files names.
+      Default: umap, pca, atac_lsi, rnaumap, atacumap, wnnumap
 
-  umap_prefix:
+  output_prefix:
     type: string?
     inputBinding:
-      prefix: "--umap"
-    default: "umap"
+      prefix: "--output"
     doc: |
-      Output prefix for TSV file to save UMAP embeddings data.
+      Output prefix.
+      Default: ./metadata
 
-  pca_prefix:
-    type: string?
+  verbose:
+    type: boolean?
     inputBinding:
-      prefix: "--pca"
-    default: "pca"
+      prefix: "--verbose"
     doc: |
-      Output prefix for TSV file to save PCA embeddings data.
+      Print debug information.
+      Default: false
 
-  clusters_prefix:
-    type: string?
+  memory:
+    type: int?
     inputBinding:
-      prefix: "--clusters"
-    default: "clusters"
+      prefix: "--memory"
     doc: |
-      Output prefix for TSV file to save clusters data defined in the column
-      selected with --source parameter.
+      Maximum memory in GB allowed to be shared between the workers
+      when using multiple --cpus.
+      Default: 32
+
+  threads:
+    type: int?
+    inputBinding:
+      prefix: "--cpus"
+    doc: |
+      Number of cores/cpus to use.
+      Default: 1
 
 
 outputs:
 
-  cells_metadata:
-    type: File[]
-    outputBinding:
-      glob: $(inputs.cells_prefix + "*" + ".tsv")
-
-  umap_metadata:
-    type: File[]
-    outputBinding:
-      glob: $(inputs.umap_prefix + "*" + ".tsv")
-
-  pca_metadata:
-    type: File[]
-    outputBinding:
-      glob: $(inputs.pca_prefix + "*" + ".tsv")
-
   clusters_metadata:
     type: File[]
     outputBinding:
-      glob: $(inputs.clusters_prefix + "*" + ".tsv")
+      glob: "*_clusters.tsv"
 
-  loupe_umap_metadata:
+  reductions_metadata:
     type: File[]
     outputBinding:
-      glob: $(inputs.umap_prefix + "*" + ".csv")
-
-  loupe_clusters_metadata:
-    type: File[]
-    outputBinding:
-      glob: $(inputs.clusters_prefix + "*" + ".csv")
+      glob: "*[!_clusters].tsv"
 
   stdout_log:
     type: stdout
@@ -170,30 +163,32 @@ doc: |
 
 
 s:about: |
-  usage: extract_seurat_metadata.R [-h] --rds RDS --source SOURCE
-                                                  [--splitby SPLITBY]
-                                                  [--cells CELLS] [--umap UMAP]
-                                                  [--pca PCA]
-                                                  [--clusters CLUSTERS]
+  usage: extract_seurat_metadata.R
+        [-h] --rds RDS --source SOURCE [--splitby SPLITBY]
+        [--reductions [REDUCTIONS ...]] [--output OUTPUT] [--verbose]
+        [--cpus CPUS] [--memory MEMORY]
 
   Extracts cells, UMAP, and clusters from the Seurat RDS file
 
   optional arguments:
-    -h, --help           show this help message and exit
-    --rds RDS            Path to the RDS file to load Seurat object from. RDS
-                        file can be produced by run_seurat.R or
-                        assign_cell_types.R scripts.
-    --source SOURCE      Column from metadata to extract clusters information
-                        from.
-    --splitby SPLITBY    Column from metadata to split output files by. Barcode
-                        suffixes that define the origin of the cells will be
-                        removed. Values from this column will be appended to
-                        the names of output files. Default: do not split,
-                        export combined file
-    --cells CELLS        Output prefix for TSV file to save cells information
-                        data.
-    --umap UMAP          Output prefix for TSV file to save UMAP embeddings
-                        data.
-    --pca PCA            Output prefix for TSV file to save PCA embeddings data.
-    --clusters CLUSTERS  Output prefix for TSV file to save clusters data
-                        defined in the column selected with --source parameter.
+    -h, --help            show this help message and exit
+    --rds RDS             Path to the RDS file to load Seurat object from. RDS
+                          file can be produced by run_seurat.R,
+                          assign_cell_types.R, or run_seurat_wnn.R scripts.
+    --source SOURCE       Column from metadata to extract clusters information
+                          from.
+    --splitby SPLITBY     Column from metadata to split output files by. Barcode
+                          suffixes that define the origin of the cells will be
+                          removed. Values from this column will be appended to
+                          the names of output files. Default: do not split,
+                          export combined file
+    --reductions [REDUCTIONS ...]
+                          List of reductions to extract metadata from. Each
+                          reduction name will be appended to the output files
+                          names. Default: umap, pca, atac_lsi, rnaumap,
+                          atacumap, wnnumap
+    --output OUTPUT       Output prefix. Default: ./metadata
+    --verbose             Print debug information. Default: false
+    --cpus CPUS           Number of cores/cpus to use. Default: 1
+    --memory MEMORY       Maximum memory in GB allowed to be shared between the
+                          workers when using multiple --cpus. Default: 32
