@@ -510,12 +510,12 @@ explore_unwanted_variation <- function(seurat_data, cell_cycle_data, args) {
     )
     temp_seurat_data <- FindVariableFeatures(temp_seurat_data, verbose=FALSE)
     temp_seurat_data <- ScaleData(temp_seurat_data, verbose=FALSE)
-    temp_seurat_data <- RunPCA(temp_seurat_data, verbose=FALSE)
+    temp_seurat_data <- RunPCA(temp_seurat_data, npcs=50, verbose=FALSE)
     suppressWarnings(
         temp_seurat_data <- RunUMAP(
             temp_seurat_data,
             reduction="pca",
-            dims=1:args$ndim,
+            dims=1:50,                   # we use 50, because in RunPCA we used 50 as well
             verbose=FALSE
         )
     )
@@ -2339,9 +2339,11 @@ get_args <- function(){
         "--ndim",
         help=paste(
             "Number of principal components to use in UMAP projection and clustering",
-            "(from 1 to 50). Use Elbow plot to adjust this parameter. Default: 10"
+            "(from 1 to 50). If single number N is provided, use from 1 to N PCs. If",
+            "multiple numbers are provided, subset to only selected PCs.",
+            "Default: from 1 to 10"
         ),
-        type="integer", default=10
+        type="integer", default=10, nargs="*"
     )
     parser$add_argument(
         "--spread",
@@ -2499,7 +2501,7 @@ get_args <- function(){
 args <- get_args()
 
 cat("Step 0: Runtime configuration\n")
-print("Used parameters")
+print("Provided parameters")
 print(args)
 print(
     paste(
@@ -2520,7 +2522,7 @@ print("Loading feature-barcode matrices")
 seurat_data <- load_seurat_data(args$mex, args$mincells, cell_identity_data, condition_data)
 debug_seurat_data(seurat_data, args)
 
-print("Validating filtering thresholds")
+print("Validating/adjusting input parameters")
 # if we put it in a function, args will be passed by value
 idents_count <- length(unique(as.vector(as.character(Idents(seurat_data)))))
 for (key in names(args)){
@@ -2535,6 +2537,12 @@ for (key in names(args)){
         }
     }
 }
+if (length(args$ndim) == 1) {                           # only one value was provided, so we need to inflate it to 1:N
+    args$ndim <- c(1:args$ndim[1])
+}
+print("Adjusted parameters")
+print(args)
+
 if (!is.null(args$features)){
     print("Check genes of interest to include only those that are present in the datasets")
     backup_assay <- DefaultAssay(seurat_data)
@@ -2575,25 +2583,38 @@ cat("\n\nStep 4: Reducing dimensionality of intergrated/scaled datasets\n")
 
 print("Performing PCA reduction of integrated/scaled data. Use all 50 principal components")
 seurat_data <- RunPCA(seurat_data, npcs=50, verbose=FALSE)                                                     # runs on "integrated" assay for integrated data, and on "RNA" assay for scaled data
-print(paste("Performing UMAP reduction of integrated/scaled data using", args$ndim, "principal components"))
+print(
+    paste(
+        "Performing UMAP reduction of integrated/scaled data using",
+        paste(args$ndim, collapse=", "), "principal components"
+    )
+)
 seurat_data <- RunUMAP(                                                                                        # runs on "integrated" assay for integrated data, and on "RNA" assay for scaled data
     seurat_data,
     spread=args$spread, min.dist=args$mindist, n.neighbors=args$nneighbors,
     metric=args$umetric,
     umap.method=args$umethod,
-    reduction="pca", dims=1:args$ndim, verbose=FALSE
+    reduction="pca",
+    dims=args$ndim,
+    verbose=FALSE
 )
 debug_seurat_data(seurat_data, args)
 export_all_dimensionality_plots(seurat_data, "ntgr", args)                                                     # <--- ntgr
 
 cat("\n\nStep 5: Clustering and cell type assignment of intergrated/scaled datasets with reduced dimensionality\n")
 
-print(paste("Clustering integrated/scaled data using", args$ndim, "principal components"))
+print(
+    paste(
+        "Clustering integrated/scaled data using",
+        paste(args$ndim, collapse=", "),
+        "principal components"
+    )
+)
 seurat_data <- FindNeighbors(                                                                                  # runs on "integrated" assay for integrated data, and on "RNA" assay for scaled data
     seurat_data,
     annoy.metric=args$ametric,
     reduction="pca",
-    dims=1:args$ndim,
+    dims=args$ndim,
     verbose=FALSE
 )
 seurat_data <- FindClusters(
