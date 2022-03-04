@@ -554,13 +554,40 @@ explore_unwanted_variation <- function(seurat_data, cell_cycle_data, args) {
 }
 
 
+get_vars_to_regress <- function(args, exclude_columns=NULL) {
+    vars_to_regress <- NULL
+    arguments <- c(args$regressmt, args$regresscellcycle, args$regressumis, args$regressgenes)
+    metadata_columns <- c("mito_percentage", "S.Score&G2M.Score", "nCount_RNA", "nFeature_RNA")
+    for (i in 1:length(arguments)) {
+        current_argument <- arguments[i]
+        current_column <- metadata_columns[i]
+        if (current_column %in% exclude_columns) {
+            next
+        }
+        current_column <- unlist(strsplit(metadata_columns[i], "&"))
+        if (current_argument) {
+            if (is.null(vars_to_regress)) {
+                vars_to_regress <- current_column
+            } else {
+                vars_to_regress <- append(vars_to_regress, current_column)
+            }
+        }
+    }
+    return (vars_to_regress)
+}
+
+
 integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
     splitted_seurat_data <- SplitObject(seurat_data, split.by="new.ident")
     if (length(splitted_seurat_data) == 1){
-        print(paste(
-            "Skipping datasets integration as only one identity is present.",
-            "Running log-normalization and scalling instead."
-        ))
+        vars_to_regress <- get_vars_to_regress(args)
+        print(
+            paste(
+                "Skipping datasets integration as only one identity is present.",
+                "Running log-normalization and scalling instead.",
+                "Regressing out", paste(vars_to_regress, collapse=", ")
+            )
+        )
         scaled_norm_seurat_data <- NormalizeData(splitted_seurat_data[[1]], verbose=FALSE)
         tryCatch(
             expr = {
@@ -580,10 +607,6 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
             nfeatures=args$highvarcount,
             verbose=FALSE
         )
-        vars_to_regress <- NULL
-        if (args$regressmt){ vars_to_regress <- c("mito_percentage") }
-        if (args$regresscellcycle){ vars_to_regress <- c("S.Score", "G2M.Score") }
-        if (args$regressmt && args$regresscellcycle){ vars_to_regress <- c("mito_percentage", "S.Score", "G2M.Score") }
         scaled_norm_seurat_data <- ScaleData(
             scaled_norm_seurat_data,
             vars.to.regress=vars_to_regress,
@@ -591,7 +614,13 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
         )
         return (scaled_norm_seurat_data)
     } else if (args$nosct) {
-        print("Skipping SCTransform and running standard integration algorithm")
+        vars_to_regress <- get_vars_to_regress(args)
+        print(
+            paste(
+                "Skipping SCTransform and running standard integration algorithm.",
+                "Regressing out", paste(vars_to_regress, collapse=", ")
+            )
+        )
         for (i in 1:length(splitted_seurat_data)) {
             splitted_seurat_data[[i]] <- NormalizeData(splitted_seurat_data[[i]], verbose=FALSE)
             tryCatch(
@@ -632,10 +661,6 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
             k.weight=min(min(table(Idents(seurat_data))), 100),  # 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
             verbose=FALSE
         )
-        vars_to_regress <- NULL
-        if (args$regressmt){ vars_to_regress <- c("mito_percentage") }
-        if (args$regresscellcycle){ vars_to_regress <- c("S.Score", "G2M.Score") }
-        if (args$regressmt && args$regresscellcycle){ vars_to_regress <- c("mito_percentage", "S.Score", "G2M.Score") }
         integrated_seurat_data <- ScaleData(
             integrated_seurat_data,
             vars.to.regress=vars_to_regress,
@@ -644,17 +669,21 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
         DefaultAssay(integrated_seurat_data) <- "integrated"
         return (integrated_seurat_data)
     } else {
+        vars_to_regress_short <- get_vars_to_regress(args, c("S.Score&G2M.Score"))       # first, we skip S.Score and G2M.Score as we need to evaluate cell cycle score
+        vars_to_regress_complete <- get_vars_to_regress(args)
+        print(
+            paste(
+                "Running SCTransform normalization and integration algorithm.",
+                "Regressing out", paste(vars_to_regress_complete, collapse=", ")
+            )
+        )
         for (i in 1:length(splitted_seurat_data)) {
-            vars_to_regress <- NULL
-            if (args$regressmt){
-                vars_to_regress <- c("mito_percentage")
-            }
             splitted_seurat_data[[i]] <- SCTransform(
                 splitted_seurat_data[[i]],
                 assay="RNA",
                 new.assay.name="SCT",
                 variable.features.n=args$highvarcount,
-                vars.to.regress=vars_to_regress,
+                vars.to.regress=vars_to_regress_short,
                 verbose=FALSE
             )
             tryCatch(
@@ -672,11 +701,6 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
                 }
             )
             if (args$regresscellcycle){
-                if (!is.null(vars_to_regress)) {
-                    vars_to_regress <- append(vars_to_regress, c("S.Score", "G2M.Score"))
-                } else {
-                    vars_to_regress <- c("S.Score", "G2M.Score")
-                }
                 tryCatch(
                     expr = {
                         splitted_seurat_data[[i]] <- SCTransform(
@@ -684,7 +708,7 @@ integrate_seurat_data <- function(seurat_data, cell_cycle_data, args) {
                             assay="RNA",
                             new.assay.name="SCT",
                             variable.features.n=args$highvarcount,
-                            vars.to.regress=vars_to_regress,
+                            vars.to.regress=vars_to_regress_complete,
                             verbose=FALSE
                         )
                     },
@@ -2323,6 +2347,22 @@ get_args <- function(){
         "--regressmt",
         help=paste(
             "Regress mitochondrial genes expression as a confounding source of variation.",
+            "Default: false"
+        ),
+        action="store_true"
+    )
+    parser$add_argument(
+        "--regressumis",
+        help=paste(
+            "Regress UMIs per cell as a confounding source of variation.",
+            "Default: false"
+        ),
+        action="store_true"
+    )
+    parser$add_argument(
+        "--regressgenes",
+        help=paste(
+            "Regress genes per cell as a confounding source of variation.",
             "Default: false"
         ),
         action="store_true"

@@ -2,15 +2,18 @@
 # Dockerfile
 #
 # Software:         Seurat script
-# Software Version: v0.0.20
+# Software Version: v0.0.21
 # Description:      Dockerized version of Seurat script
 # Website:          https://satijalab.org/seurat/index.html
 # Provides:         Seurat script
 # Base Image:       satijalab/seurat:4.0.3
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat:v0.0.20 -f seurat-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/seurat:v0.0.20
-# Run Cmd:          docker run --rm -ti biowardrobe2/seurat:v0.0.20 /bin/bash
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat:v0.0.21 -f seurat-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/seurat:v0.0.21
+# Run Cmd:          docker run --rm -ti biowardrobe2/seurat:v0.0.21 /bin/bash
 #################################################################
+#
+# v0.0.21
+# - Updated run_seurat.R to optionally regress UMIs and/or Genes per cell
 #
 # v0.0.20
 # - Updated run_seurat.R to generate select specific PCs
