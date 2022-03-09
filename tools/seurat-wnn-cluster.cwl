@@ -1424,10 +1424,10 @@ s:about: |
         [--minnovelty [MINNOVELTY ...]] [--atacmincells ATACMINCELLS]
         [--atacminumi [ATACMINUMI ...]] [--maxnuclsignal [MAXNUCLSIGNAL ...]]
         [--mintssenrich [MINTSSENRICH ...]] [--minfrip [MINFRIP ...]]
-        [--maxblacklisted [MAXBLACKLISTED ...]] [--callpeaks]
-        [--gexfeatures [GEXFEATURES ...]] [--highvargex HIGHVARGEX]
-        [--gexndim [GEXNDIM ...]] [--gexlogfc GEXLOGFC] [--gexminpct GEXMINPCT]
-        [--gexonlypos]
+        [--maxblacklisted [MAXBLACKLISTED ...]]
+        [--callpeaks {identity,cluster}] [--gexfeatures [GEXFEATURES ...]]
+        [--highvargex HIGHVARGEX] [--gexndim [GEXNDIM ...]]
+        [--gexlogfc GEXLOGFC] [--gexminpct GEXMINPCT] [--gexonlypos]
         [--gextestuse {wilcox,bimod,roc,t,negbinom,poisson,LR,MAST,DESeq2}]
         [--nosct] [--atacndim [ATACNDIM ...]] [--highvaratac HIGHVARATAC]
         [--resolution [RESOLUTION ...]] [--skipgexntrg] [--skipatacntrg]
@@ -1553,11 +1553,17 @@ s:about: |
                           to the correspondent dataset from the --mex input
                           based on the --identity file. Default: 0.05 (applied
                           to all datasets)
-    --callpeaks           Call peaks with MACS2 instead of those that are
-                          provided by Cell Ranger ARC Count. If --mex points to
-                          the Cell Ranger ARC Aggregate experiment, peaks will
-                          be called for each dataset independently and then
-                          combined Default: false
+    --callpeaks {identity,cluster}
+                          Call peaks with MACS2 instead of those that are
+                          provided by Cell Ranger ARC Count. Peaks are called
+                          per GEX cluster (cluster) or per identity (identity)
+                          after applying all GEX related thresholds, maximum
+                          nucleosome signal, and minimum TSS enrichment score
+                          filters. If set to 'cluster' GEX clusters are
+                          identified based on the first value from the
+                          --resolution array using --gexndim principal
+                          components when building nearest-neighbour graph.
+                          Default: do not call peaks
     --gexfeatures [GEXFEATURES ...]
                           GEX features of interest to evaluate expression.
                           Default: None
