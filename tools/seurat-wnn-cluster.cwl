@@ -14,7 +14,7 @@ requirements:
 
 hints:
 - class: DockerRequirement
-  dockerPull: biowardrobe2/seurat-wnn:v0.0.7
+  dockerPull: biowardrobe2/seurat-wnn:v0.0.8
 
 
 inputs:
@@ -260,14 +260,22 @@ inputs:
       Default: 0.05 (applied to all datasets)
 
   call_peaks:
-    type: boolean?
+    type:
+    - "null"
+    - type: enum
+      symbols:
+      - "identity"
+      - "cluster"
     inputBinding:
       prefix: "--callpeaks"
     doc: |
       Call peaks with MACS2 instead of those that are provided by Cell Ranger ARC Count.
-      If --mex points to the Cell Ranger ARC Aggregate experiment, peaks will be called for
-      each dataset independently and then combined
-      Default: false
+      Peaks are called per GEX cluster (cluster) or per identity (identity) after
+      applying all GEX related thresholds, maximum nucleosome signal, and minimum TSS
+      enrichment score filters. If set to 'cluster' GEX clusters are identified based on the
+      first value from the --resolution array using --gexndim principal components when
+      building nearest-neighbour graph.
+      Default: do not call peaks
 
   gex_selected_features:
     type:

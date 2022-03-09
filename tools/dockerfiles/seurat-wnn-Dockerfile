@@ -2,15 +2,18 @@
 # Dockerfile
 #
 # Software:         Seurat WNN
-# Software Version: v0.0.7
+# Software Version: v0.0.8
 # Description:      Dockerized version of Seurat WNN
 # Website:          https://satijalab.org/seurat/articles/weighted_nearest_neighbor_analysis.html
 # Provides:         run_seurat_wnn.R script
 # Base Image:       satijalab/seurat:4.0.3
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat-wnn:v0.0.7 -f seurat-wnn-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/seurat-wnn:v0.0.7
-# Run Cmd:          docker run --rm -ti biowardrobe2/seurat-wnn:v0.0.7 /bin/bash
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat-wnn:v0.0.8 -f seurat-wnn-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/seurat-wnn:v0.0.8
+# Run Cmd:          docker run --rm -ti biowardrobe2/seurat-wnn:v0.0.8 /bin/bash
 #################################################################
+#
+# v0.0.8
+# - updated run_seurat_wnn.R script to call MACS2 peaks per cluster
 #
 # v0.0.7
 # - updated run_seurat_wnn.R script to export PCA QC metrics plot
