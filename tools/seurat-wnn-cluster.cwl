@@ -752,6 +752,262 @@ outputs:
   #     QC metrics densities per cell (not filtered).
   #     TSV format
 
+  mid_fltr_cell_count_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_cell_count.png"
+    doc: |
+      Number of cells per dataset (intermediate filtered).
+      PNG format
+
+  mid_fltr_cell_count_plot_pdf:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_cell_count.pdf"
+    doc: |
+      Number of cells per dataset (intermediate filtered).
+      PDF format
+
+  mid_fltr_pca_1_2_qc_mtrcs_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_pca_1_2_qc_mtrcs.png"
+    doc: |
+      PC1 and PC2 of ORQ-transformed QC metrics PCA (intermediate filtered).
+      PNG format
+
+  mid_fltr_pca_1_2_qc_mtrcs_plot_pdf:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_pca_1_2_qc_mtrcs.pdf"
+    doc: |
+      PC1 and PC2 of ORQ-transformed QC metrics PCA (intermediate filtered).
+      PDF format
+
+  mid_fltr_pca_2_3_qc_mtrcs_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_pca_2_3_qc_mtrcs.png"
+    doc: |
+      PC2 and PC3 of ORQ-transformed QC metrics PCA (intermediate filtered).
+      PNG format
+
+  mid_fltr_pca_2_3_qc_mtrcs_plot_pdf:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_pca_2_3_qc_mtrcs.pdf"
+    doc: |
+      PC2 and PC3 of ORQ-transformed QC metrics PCA (intermediate filtered).
+      PDF format
+
+  mid_fltr_gex_umi_dnst_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_gex_umi_dnst.png"
+    doc: |
+      GEX UMI density per cell (intermediate filtered).
+      PNG format
+
+  mid_fltr_gex_umi_dnst_plot_pdf:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_gex_umi_dnst.pdf"
+    doc: |
+      GEX UMI density per cell (intermediate filtered).
+      PDF format
+
+  mid_fltr_atac_umi_dnst_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_atac_umi_dnst.png"
+    doc: |
+      ATAC UMI density per cell (intermediate filtered).
+      PNG format
+
+  mid_fltr_atac_umi_dnst_plot_pdf:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_atac_umi_dnst.pdf"
+    doc: |
+      ATAC UMI density per cell (intermediate filtered).
+      PDF format
+
+  mid_fltr_gene_dnst_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_gene_dnst.png"
+    doc: |
+      Gene density per cell (intermediate filtered).
+      PNG format
+
+  mid_fltr_gene_dnst_plot_pdf:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_gene_dnst.pdf"
+    doc: |
+      Gene density per cell (intermediate filtered).
+      PDF format
+  
+  mid_fltr_peak_dnst_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_peak_dnst.png"
+    doc: |
+      Peak density per cell (intermediate filtered).
+      PNG format
+
+  mid_fltr_peak_dnst_plot_pdf:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_peak_dnst.pdf"
+    doc: |
+      Peak density per cell (intermediate filtered).
+      PDF format
+
+  mid_fltr_bl_cnts_dnst_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_bl_cnts_dnst.png"
+    doc: |
+      Density of fraction of reads within blacklisted regions per cell (intermediate filtered).
+      PNG format
+
+  mid_fltr_bl_cnts_dnst_plot_pdf:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_bl_cnts_dnst.pdf"
+    doc: |
+      Density of fraction of reads within blacklisted regions per cell (intermediate filtered).
+      PDF format
+
+  mid_fltr_gex_atac_umi_corr_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_gex_atac_umi_corr.png"
+    doc: |
+      GEX vs ATAC UMIs per cell correlation (intermediate filtered).
+      PNG format
+
+  mid_fltr_gex_atac_umi_corr_plot_pdf:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_gex_atac_umi_corr.pdf"
+    doc: |
+      GEX vs ATAC UMIs per cell correlation (intermediate filtered).
+      PDF format
+
+  mid_fltr_tss_enrch_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_tss_enrch.png"
+    doc: |
+      TSS Enrichment Score (intermediate filtered).
+      PNG format
+
+  mid_fltr_tss_enrch_plot_pdf:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_tss_enrch.pdf"
+    doc: |
+      TSS Enrichment Score (intermediate filtered).
+      PDF format
+
+  mid_fltr_frg_len_hist_png:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_frg_len_hist.png"
+    doc: |
+      Fragments Length Histogram (intermediate filtered).
+      PNG format
+
+  mid_fltr_frg_len_hist_pdf:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_frg_len_hist.pdf"
+    doc: |
+      Fragments Length Histogram (intermediate filtered).
+      PDF format
+
+  mid_fltr_gene_umi_corr_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_gene_umi_corr.png"
+    doc: |
+      Genes vs GEX UMIs per cell correlation (intermediate filtered).
+      PNG format
+
+  mid_fltr_gene_umi_corr_plot_pdf:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_gene_umi_corr.pdf"
+    doc: |
+      Genes vs GEX UMIs per cell correlation (intermediate filtered).
+      PDF format
+
+  mid_fltr_mito_perc_dnst_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_mito_perc_dnst.png"
+    doc: |
+      Density of transcripts mapped to mitochondrial genes per cell (intermediate filtered).
+      PNG format
+
+  mid_fltr_mito_perc_dnst_plot_pdf:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_mito_perc_dnst.pdf"
+    doc: |
+      Density of transcripts mapped to mitochondrial genes per cell (intermediate filtered).
+      PDF format
+
+  mid_fltr_miqc_mtrcs_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_miqc_mtrcs.png"
+    doc: |
+      MiQC prediction of the compromised cells level (intermediate filtered).
+      PNG format
+
+  mid_fltr_miqc_mtrcs_plot_pdf:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_miqc_mtrcs.pdf"
+    doc: |
+      MiQC prediction of the compromised cells level (intermediate filtered).
+      PDF format
+
+  mid_fltr_nvlt_score_dnst_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_nvlt_score_dnst.png"
+    doc: |
+      Novelty score density per cell (intermediate filtered).
+      PNG format
+
+  mid_fltr_nvlt_score_dnst_plot_pdf:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_nvlt_score_dnst.pdf"
+    doc: |
+      Novelty score density per cell (intermediate filtered).
+      PDF format
+
+  mid_fltr_qc_mtrcs_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_qc_mtrcs.png"
+    doc: |
+      QC metrics densities per cell (intermediate filtered).
+      PNG format
+
+  mid_fltr_qc_mtrcs_plot_pdf:
+    type: File?
+    outputBinding:
+      glob: "*_mid_fltr_qc_mtrcs.pdf"
+    doc: |
+      QC metrics densities per cell (intermediate filtered).
+      PDF format
+
   fltr_cell_count_plot_png:
     type: File?
     outputBinding:
