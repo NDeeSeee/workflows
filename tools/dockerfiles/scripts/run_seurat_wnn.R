@@ -358,6 +358,7 @@ add_peak_qc_metrics <- function(seurat_data, blacklisted_data, args){
         verbose=args$verbose
     ) %>% column_to_rownames("CB")                                                     # for easy access to cell barcodes
     seurat_data$fragments <- fragments_data[colnames(seurat_data), "frequency_count"]  # select by rownames to make sure the cells order wasn't accidentally changed
+    rm(fragments_data)                                                                 # remove unused data
     seurat_data <- FRiP(
         seurat_data,
         assay="ATAC",                                                                  # FRiP can't take the default assay, so we set it explicitly
@@ -423,6 +424,7 @@ add_main_qc_metrics <- function(seurat_data, blacklisted_data, args) {
                 }
                 merged_seurat_data@reductions <- seurat_data@reductions
                 seurat_data <- merged_seurat_data
+                rm(merged_seurat_data)                                                                           # remove unused data
             },
             error = function(e){
                 print(paste(" ", "Failed running MiQC due to", e))
@@ -454,10 +456,11 @@ integrate_atac_data <- function(seurat_data, args) {
             verbose=args$verbose,
             reduction.name="atac_lsi"
         )
+        rm(splitted_seurat_data)                                                                    # remove unused data
         return (scaled_norm_seurat_data)
     } else {
         print("Running ATAC datasets integration using IntegrateEmbeddings algorithm")
-        backup_pca_reduction <- seurat_data[["pca"]]          # need to backup reductions generated from RNA assay as the will be deleted by IntegrateEmbeddings function
+        backup_pca_reduction <- seurat_data[["pca"]]                                                # need to backup reductions generated from RNA assay as the will be deleted by IntegrateEmbeddings function
         backup_rnaumap_reduction <- seurat_data[["rnaumap"]]
         seurat_data <- FindTopFeatures(seurat_data, min.cutoff=args$highvaratac, verbose=args$verbose)
         seurat_data <- RunTFIDF(seurat_data, verbose=args$verbose)
@@ -474,15 +477,17 @@ integrate_atac_data <- function(seurat_data, args) {
             dims=2:50,                                                                              # use up to computed singular values
             verbose=args$verbose
         )
+        rm(splitted_seurat_data)                                                                    # remove unused data
         integrated_seurat_data <- IntegrateEmbeddings(
             anchorset=integration_anchors,
             reductions=seurat_data[["lsi"]],
             new.reduction.name="atac_lsi",
-            k.weight=min(min(table(Idents(seurat_data))), 100),  # 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
+            k.weight=min(min(table(Idents(seurat_data))), 100),                                     # 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
             dims.to.integrate=1:50                                                                  # use up to computed singular values
         )
         integrated_seurat_data[["pca"]] <- backup_pca_reduction                                     # restoring deleted reductions
         integrated_seurat_data[["rnaumap"]] <- backup_rnaumap_reduction
+        rm(seurat_data, integration_anchors, backup_reductions)                                     # remove unused data
         return (integrated_seurat_data)
     }
 }
@@ -514,6 +519,7 @@ integrate_gex_data <- function(seurat_data, args) {
             verbose=args$verbose
         )
         DefaultAssay(scaled_norm_seurat_data) <- "RNA"
+        rm(splitted_seurat_data)                                                             # remove unused data
         return (scaled_norm_seurat_data)
     } else if (args$nosct) {
         print("Skipping SCTransform and running standard integration algorithm")
@@ -549,6 +555,7 @@ integrate_gex_data <- function(seurat_data, args) {
             verbose=args$verbose
         )
         DefaultAssay(integrated_seurat_data) <- "gex_integrated"
+        rm(splitted_seurat_data, integration_features, integration_anchors)                  # remove unused data
         return (integrated_seurat_data)
     } else {
         print("Running SCTransform integration algorithm")
@@ -586,6 +593,7 @@ integrate_gex_data <- function(seurat_data, args) {
             verbose=args$verbose
         )
         DefaultAssay(integrated_seurat_data) <- "gex_integrated"
+        rm(splitted_seurat_data, integration_features, integration_anchors)                  # remove unused data
         return (integrated_seurat_data)
     }
 }
@@ -619,6 +627,7 @@ get_all_putative_markers <- function(seurat_data, args, assay="RNA", min_diff_pc
                 } else {
                     all_putative_markers <- markers
                 }
+                rm(markers)                                                             # remove unused data
             },
             error = function(e){
                 print(paste("Failed find putative gene markers for resolution", resolution, "due to", e))
@@ -632,6 +641,7 @@ get_all_putative_markers <- function(seurat_data, args, assay="RNA", min_diff_pc
 
 
 apply_peak_qc_filters <- function(seurat_data, cell_identity_data, args) {
+    print(paste("Cell before filtering:", length(Cells(seurat_data))))
     merged_seurat_data <- NULL
     Idents(seurat_data) <- "new.ident"                                                 # safety measure
     for (i in 1:length(args$mingenes)){
@@ -651,13 +661,15 @@ apply_peak_qc_filters <- function(seurat_data, cell_identity_data, args) {
         } else {
             merged_seurat_data <- merge(merged_seurat_data, y=filtered_seurat_data)
         }
+        rm(filtered_seurat_data)                                                       # remove unused data
     }
-    merged_seurat_data@reductions <- seurat_data@reductions
+    print(paste("Cell after filtering:", length(Cells(merged_seurat_data))))
     return (merged_seurat_data)
 }
 
 
 apply_main_qc_filters <- function(seurat_data, cell_identity_data, args) {
+    print(paste("Cell before filtering:", length(Cells(seurat_data))))
     merged_seurat_data <- NULL
     Idents(seurat_data) <- "new.ident"                                                 # safety measure
     for (i in 1:length(args$mingenes)){
@@ -698,8 +710,9 @@ apply_main_qc_filters <- function(seurat_data, cell_identity_data, args) {
         } else {
             merged_seurat_data <- merge(merged_seurat_data, y=filtered_seurat_data)
         }
+        rm(filtered_seurat_data)                                                          # remove unused data
     }
-    merged_seurat_data@reductions <- seurat_data@reductions
+    print(paste("Cell after filtering:", length(Cells(merged_seurat_data))))
     return (merged_seurat_data)
 }
 
@@ -2061,7 +2074,7 @@ load_seurat_data <- function(args, cell_identity_data, condition_data) {
         min.cells=args$atacmincells,
         annotation=annotation
     )
-
+    rm(raw_data, annotation)                                             # removing unused data
     print("Assigning new dataset identities")
     Idents(seurat_data) <- "orig.ident"                                  # safety measure to make sure we get correct Idents
     idents <- as.numeric(as.character(Idents(seurat_data)))              # need to properly convert factor to numeric vector
@@ -2082,12 +2095,11 @@ load_seurat_data <- function(args, cell_identity_data, condition_data) {
 
 
 call_peaks <- function(seurat_data, args) {
-
     print("Calling MACS2 peaks")
     group_by <- "new.ident"
     if (args$callpeaks == "cluster"){
         current_resolution <- args$resolution[1]
-        group_by <- paste0("peaks_snn_res.", current_resolution)
+        group_by <- paste0("custom_peaks_snn_res.", current_resolution)
         print(
             paste(
                 "Group by GEX cluster identified from PCA reduction using",
@@ -2098,12 +2110,12 @@ call_peaks <- function(seurat_data, args) {
             seurat_data,
             reduction="pca",                                        # this is the same reduction we got after running RunPCA on our GEX data, it's bound to the specific assay
             dims=args$gexndim,
-            graph.name=c("peaks_nn", "peaks_snn"),
+            graph.name=c("custom_peaks_nn", "custom_peaks_snn"),
             verbose=args$verbose
         )
         seurat_data <- FindClusters(
             seurat_data,
-            graph.name="peaks_snn",
+            graph.name="custom_peaks_snn",
             resolution=current_resolution,
             verbose=args$verbose
         )
@@ -2124,6 +2136,7 @@ call_peaks <- function(seurat_data, args) {
         cells=colnames(seurat_data),
         verbose=args$verbose,
     )
+    rm(macs2_peaks)                                                       # remove unused data
     atac_assay <- CreateChromatinAssay(
         counts=macs2_counts,
         sep=c(":", "-"),
@@ -2132,7 +2145,9 @@ call_peaks <- function(seurat_data, args) {
         min.features=-1,                                                  # as they check ncount.cell > min.features and by default it's 0, we will remove cells without peaks and won't be able to add new assay to our seurat_data
         annotation=rtracklayer::import(args$annotations, format="GFF")
     )
+    rm(macs2_counts)                                                      # remove unused data
     seurat_data[["ATAC"]] <- atac_assay
+    rm(atac_assay)                                                        # remove unused data
     DefaultAssay(seurat_data) <- backup_assay
     Idents(seurat_data) <- "new.ident"                                    # safety measure
     return (seurat_data)
@@ -2148,6 +2163,78 @@ load_blacklisted_data <- function(location) {
     }
     print("Blacklisted regions data is not provided. Cells won't be filtered by --maxblacklisted")
     return (default_blacklisted_data)
+}
+
+
+run_gex_analysis <- function(seurat_data, args) {
+    print("Running datasets integration/scaling on RNA assay")
+    Idents(seurat_data) <- "new.ident"                                # safety measure
+    seurat_data <- integrate_gex_data(seurat_data, args)              # sets "gex_integrated" as a default assay for integrated data, and leave "RNA" as a default assays for scaled data
+    debug_seurat_data(seurat_data, args)
+    print(
+        paste(
+            "Performing PCA reduction on", DefaultAssay(seurat_data),
+            "assay using 50 principal components"
+        )
+    )
+    seurat_data <- RunPCA(seurat_data, npcs=50, verbose=args$verbose)
+    seurat_data <- RunUMAP(
+        seurat_data,
+        reduction="pca",
+        dims=args$gexndim,
+        reduction.name="rnaumap",
+        reduction.key="RNAUMAP_",
+        verbose=args$verbose
+    )
+    debug_seurat_data(seurat_data, args)
+    return (seurat_data)
+}
+
+
+run_atac_analysis <- function(seurat_data, args) {
+    print("Running datasets integration/scaling on ATAC assay")
+    Idents(seurat_data) <- "new.ident"                                   # safety measure
+    seurat_data <- integrate_atac_data(seurat_data, args)                # shouldn't change default assay, but will add "atac_lsi" reduction
+    debug_seurat_data(seurat_data, args)
+    seurat_data <- RunUMAP(
+        seurat_data,
+        reduction="atac_lsi",
+        dims=args$atacndim,
+        reduction.name="atacumap",
+        reduction.key="ATACUMAP_",
+        verbose=args$verbose
+    )
+    debug_seurat_data(seurat_data, args)
+    return (seurat_data)
+}
+
+
+run_wnn_analysis <- function(seurat_data, args) {
+    Idents(seurat_data) <- "new.ident"                   # safety measure
+    seurat_data <- FindMultiModalNeighbors(
+        seurat_data,
+        reduction.list=list("pca", "atac_lsi"),          # we used "atac_lsi" reduction name for both after integration and just scaling/normalization
+        dims.list=list(args$gexndim, args$atacndim),
+        snn.graph.name="wsnn",
+        weighted.nn.name="weighted.nn",
+        verbose=args$verbose
+    )
+    seurat_data <- RunUMAP(
+        seurat_data,
+        nn.name="weighted.nn",
+        reduction.name="wnnumap",
+        reduction.key="WNNUMAP_",
+        verbose=args$verbose
+    )
+    seurat_data <- FindClusters(
+        seurat_data,
+        graph.name="wsnn",
+        algorithm=3,
+        resolution=args$resolution,
+        verbose=args$verbose
+    )
+    debug_seurat_data(seurat_data, args)
+    return (seurat_data)
 }
 
 
@@ -2575,6 +2662,7 @@ print(paste("Loading gene/peak-barcode matrices from", args$mex))
 print(paste("Loading fragments from", args$fragments))
 print(paste("Loading annotations from from", args$annotations))
 seurat_data <- load_seurat_data(args, cell_identity_data, condition_data)               # identities are set to the "new.ident" column
+rm(condition_data)                                                                      # removing unused data
 debug_seurat_data(seurat_data, args)
 
 print("Validating/adjusting input parameters")
@@ -2607,6 +2695,7 @@ blacklisted_data <- load_blacklisted_data(args$blacklisted)
 print("Trying to load barcodes to prefilter feature-barcode matrices by cells of interest")
 barcodes_data <- load_barcodes_data(args$barcodes, seurat_data)
 seurat_data <- apply_cell_filters(seurat_data, barcodes_data)
+rm(barcodes_data)                                          # remove unused data
 
 print("Trying to extend cells metadata with categorical values using cells barcodes")
 seurat_data <- extend_metadata_by_barcode(seurat_data, args$metadata)
@@ -2627,33 +2716,15 @@ export_qc_plots(
 
 cat("\n\nStep 2: Filtering raw datasets\n")
 print("Applying filters based on the main QC metrics")
-seurat_data <- apply_main_qc_filters(seurat_data, cell_identity_data, args)
+seurat_data <- apply_main_qc_filters(seurat_data, cell_identity_data, args)                         # cleans up all reductions
 if (is.null(args$callpeaks)){
     print("Applying filters based on peak QC metrics calculated for Cell Ranger ARC called peaks")
-    seurat_data <- apply_peak_qc_filters(seurat_data, cell_identity_data, args)
+    seurat_data <- apply_peak_qc_filters(seurat_data, cell_identity_data, args)                     # cleans up all reductions
 }
 debug_seurat_data(seurat_data, args)
 
-cat("\n\nStep 3: Running GEX analysis\n")
-print("Running datasets integration/scaling on RNA assay")
-seurat_data <- integrate_gex_data(seurat_data, args)                                                 # sets "gex_integrated" as a default assay for integrated data, and leave "RNA" as a default assays for scaled data
-debug_seurat_data(seurat_data, args)
-print(
-    paste(
-        "Performing PCA reduction on", DefaultAssay(seurat_data),
-        "assay using 50 principal components"
-    )
-)
-seurat_data <- RunPCA(seurat_data, npcs=50, verbose=args$verbose)
-seurat_data <- RunUMAP(
-    seurat_data,
-    reduction="pca",
-    dims=args$gexndim,
-    reduction.name="rnaumap",
-    reduction.key="RNAUMAP_",
-    verbose=args$verbose
-)
-debug_seurat_data(seurat_data, args)
+cat("\n\nStep 3.1: Running GEX analysis\n")
+seurat_data <- run_gex_analysis(seurat_data, args)
 
 if (!is.null(args$callpeaks)){
     seurat_data <- call_peaks(seurat_data, args)
@@ -2666,7 +2737,31 @@ if (!is.null(args$callpeaks)){
         show_peaks_qc=TRUE
     )
     print("Applying filters based on MACS2 peaks QC metrics")
-    seurat_data <- apply_peak_qc_filters(seurat_data, cell_identity_data, args)
+    backup_reductions <- seurat_data@reductions
+    original_n_cells <- length(Cells(seurat_data))
+    seurat_data <- apply_peak_qc_filters(seurat_data, cell_identity_data, args)                      # cleans up all reductions
+    reduced_n_cells <- length(Cells(seurat_data))
+    if (original_n_cells == reduced_n_cells){
+        print(
+            paste(
+                "Filtering based on MACS2 peaks QC metrics didn't not change",
+                "the number of resulted cells, thus restoring reductions from",
+                "backup"
+            )
+        )
+        seurat_data@reductions <- backup_reductions
+    } else {
+        print(
+            paste(
+                "Filtering based on MACS2 peaks QC metrics changed",
+                "the number of resulted cells, thus rerunning GEX analysis",
+                "is required"
+            )
+        )
+        cat("\n\nStep 3.2: Re-running GEX analysis with the updated cells number\n")
+        seurat_data <- run_gex_analysis(seurat_data, args)
+    }
+    rm(backup_reductions, original_n_cells, reduced_n_cells)                                     # remove unused data
     debug_seurat_data(seurat_data, args)
 }
 
@@ -2678,44 +2773,13 @@ export_qc_plots(
 )
 
 cat("\n\nStep 4: Running ATAC analysis\n")
-print("Running datasets integration/scaling on ATAC assay")
-seurat_data <- integrate_atac_data(seurat_data, args)                # shouldn't change default assay, but will add "atac_lsi" reduction
-debug_seurat_data(seurat_data, args)
-seurat_data <- RunUMAP(
-    seurat_data,
-    reduction="atac_lsi",
-    dims=args$atacndim,
-    reduction.name="atacumap",
-    reduction.key="ATACUMAP_",
-    verbose=args$verbose
-)
-debug_seurat_data(seurat_data, args)
+seurat_data <- run_atac_analysis(seurat_data, args)
+
 export_all_dimensionality_plots(seurat_data, "ntgr", args)
 
 cat("\n\nStep 5: Running WNN analysis\n")
-seurat_data <- FindMultiModalNeighbors(
-    seurat_data,
-    reduction.list=list("pca", "atac_lsi"),          # we used "atac_lsi" reduction name for both after integration and just scaling/normalization
-    dims.list=list(args$gexndim, args$atacndim),
-    snn.graph.name="wsnn",
-    weighted.nn.name="weighted.nn",
-    verbose=args$verbose
-)
-seurat_data <- RunUMAP(
-    seurat_data,
-    nn.name="weighted.nn",
-    reduction.name="wnnumap",
-    reduction.key="WNNUMAP_",
-    verbose=args$verbose
-)
-seurat_data <- FindClusters(
-    seurat_data,
-    graph.name="wsnn",
-    algorithm=3,
-    resolution=args$resolution,
-    verbose=args$verbose
-)
-debug_seurat_data(seurat_data, args)
+seurat_data <- run_wnn_analysis(seurat_data, args)
+
 export_all_clustering_plots(seurat_data, "clst", args)
 
 if ("gex_integrated" %in% names(seurat_data@assays)) {                                                         # if we run integration, our counts and data slots in RNA assay remain the same, so we need to normalize counts first
@@ -2739,9 +2803,8 @@ if (!is.null(args$gexfeatures)){
     args$gexfeatures <- args$gexfeatures[args$gexfeatures %in% as.vector(as.character(rownames(seurat_data)))]
     print(args$gexfeatures)
     DefaultAssay(seurat_data) <- backup_assay
+    export_all_expression_plots(seurat_data, "expr", args, assay="RNA")
 }
-
-if (!is.null(args$gexfeatures)){ export_all_expression_plots(seurat_data, "expr", args, assay="RNA") }
 
 print("Identifying putative gene markers for all clusters and all resolutions")
 all_putative_markers <- get_all_putative_markers(seurat_data, args)
