@@ -1011,7 +1011,7 @@ outputs:
   fltr_cell_count_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_cell_count.png"
+      glob: "*[!_mid]_fltr_cell_count.png"
     doc: |
       Number of cells per dataset (filtered).
       PNG format
@@ -1019,7 +1019,7 @@ outputs:
   fltr_cell_count_plot_pdf:
     type: File?
     outputBinding:
-      glob: "*_fltr_cell_count.pdf"
+      glob: "*[!_mid]_fltr_cell_count.pdf"
     doc: |
       Number of cells per dataset (filtered).
       PDF format
@@ -1027,7 +1027,7 @@ outputs:
   fltr_pca_1_2_qc_mtrcs_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_pca_1_2_qc_mtrcs.png"
+      glob: "*[!_mid]_fltr_pca_1_2_qc_mtrcs.png"
     doc: |
       PC1 and PC2 of ORQ-transformed QC metrics PCA (filtered).
       PNG format
@@ -1035,7 +1035,7 @@ outputs:
   fltr_pca_1_2_qc_mtrcs_plot_pdf:
     type: File?
     outputBinding:
-      glob: "*_fltr_pca_1_2_qc_mtrcs.pdf"
+      glob: "*[!_mid]_fltr_pca_1_2_qc_mtrcs.pdf"
     doc: |
       PC1 and PC2 of ORQ-transformed QC metrics PCA (filtered).
       PDF format
@@ -1043,7 +1043,7 @@ outputs:
   fltr_pca_2_3_qc_mtrcs_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_pca_2_3_qc_mtrcs.png"
+      glob: "*[!_mid]_fltr_pca_2_3_qc_mtrcs.png"
     doc: |
       PC2 and PC3 of ORQ-transformed QC metrics PCA (filtered).
       PNG format
@@ -1051,7 +1051,7 @@ outputs:
   fltr_pca_2_3_qc_mtrcs_plot_pdf:
     type: File?
     outputBinding:
-      glob: "*_fltr_pca_2_3_qc_mtrcs.pdf"
+      glob: "*[!_mid]_fltr_pca_2_3_qc_mtrcs.pdf"
     doc: |
       PC2 and PC3 of ORQ-transformed QC metrics PCA (filtered).
       PDF format
@@ -1059,7 +1059,7 @@ outputs:
   fltr_gex_umi_dnst_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_gex_umi_dnst.png"
+      glob: "*[!_mid]_fltr_gex_umi_dnst.png"
     doc: |
       GEX UMI density per cell (filtered).
       PNG format
@@ -1067,7 +1067,7 @@ outputs:
   fltr_gex_umi_dnst_plot_pdf:
     type: File?
     outputBinding:
-      glob: "*_fltr_gex_umi_dnst.pdf"
+      glob: "*[!_mid]_fltr_gex_umi_dnst.pdf"
     doc: |
       GEX UMI density per cell (filtered).
       PDF format
@@ -1075,7 +1075,7 @@ outputs:
   fltr_atac_umi_dnst_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_atac_umi_dnst.png"
+      glob: "*[!_mid]_fltr_atac_umi_dnst.png"
     doc: |
       ATAC UMI density per cell (filtered).
       PNG format
@@ -1083,7 +1083,7 @@ outputs:
   fltr_atac_umi_dnst_plot_pdf:
     type: File?
     outputBinding:
-      glob: "*_fltr_atac_umi_dnst.pdf"
+      glob: "*[!_mid]_fltr_atac_umi_dnst.pdf"
     doc: |
       ATAC UMI density per cell (filtered).
       PDF format
@@ -1091,7 +1091,7 @@ outputs:
   fltr_gene_dnst_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_gene_dnst.png"
+      glob: "*[!_mid]_fltr_gene_dnst.png"
     doc: |
       Gene density per cell (filtered).
       PNG format
@@ -1099,7 +1099,7 @@ outputs:
   fltr_gene_dnst_plot_pdf:
     type: File?
     outputBinding:
-      glob: "*_fltr_gene_dnst.pdf"
+      glob: "*[!_mid]_fltr_gene_dnst.pdf"
     doc: |
       Gene density per cell (filtered).
       PDF format
@@ -1107,7 +1107,7 @@ outputs:
   fltr_peak_dnst_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_peak_dnst.png"
+      glob: "*[!_mid]_fltr_peak_dnst.png"
     doc: |
       Peak density per cell (filtered).
       PNG format
@@ -1115,7 +1115,7 @@ outputs:
   fltr_peak_dnst_plot_pdf:
     type: File?
     outputBinding:
-      glob: "*_fltr_peak_dnst.pdf"
+      glob: "*[!_mid]_fltr_peak_dnst.pdf"
     doc: |
       Peak density per cell (filtered).
       PDF format
@@ -1123,7 +1123,7 @@ outputs:
   fltr_bl_cnts_dnst_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_bl_cnts_dnst.png"
+      glob: "*[!_mid]_fltr_bl_cnts_dnst.png"
     doc: |
       Density of fraction of reads within blacklisted regions per cell (filtered).
       PNG format
@@ -1131,7 +1131,7 @@ outputs:
   fltr_bl_cnts_dnst_plot_pdf:
     type: File?
     outputBinding:
-      glob: "*_fltr_bl_cnts_dnst.pdf"
+      glob: "*[!_mid]_fltr_bl_cnts_dnst.pdf"
     doc: |
       Density of fraction of reads within blacklisted regions per cell (filtered).
       PDF format
@@ -1139,7 +1139,7 @@ outputs:
   fltr_gex_atac_umi_corr_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_gex_atac_umi_corr.png"
+      glob: "*[!_mid]_fltr_gex_atac_umi_corr.png"
     doc: |
       GEX vs ATAC UMIs per cell correlation (filtered).
       PNG format
@@ -1147,7 +1147,7 @@ outputs:
   fltr_gex_atac_umi_corr_plot_pdf:
     type: File?
     outputBinding:
-      glob: "*_fltr_gex_atac_umi_corr.pdf"
+      glob: "*[!_mid]_fltr_gex_atac_umi_corr.pdf"
     doc: |
       GEX vs ATAC UMIs per cell correlation (filtered).
       PDF format
@@ -1155,7 +1155,7 @@ outputs:
   fltr_tss_enrch_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_tss_enrch.png"
+      glob: "*[!_mid]_fltr_tss_enrch.png"
     doc: |
       TSS Enrichment Score (filtered).
       PNG format
@@ -1163,7 +1163,7 @@ outputs:
   fltr_tss_enrch_plot_pdf:
     type: File?
     outputBinding:
-      glob: "*_fltr_tss_enrch.pdf"
+      glob: "*[!_mid]_fltr_tss_enrch.pdf"
     doc: |
       TSS Enrichment Score (filtered).
       PDF format
@@ -1171,7 +1171,7 @@ outputs:
   fltr_frg_len_hist_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_frg_len_hist.png"
+      glob: "*[!_mid]_fltr_frg_len_hist.png"
     doc: |
       Fragments Length Histogram (filtered).
       PNG format
@@ -1179,7 +1179,7 @@ outputs:
   fltr_frg_len_hist_pdf:
     type: File?
     outputBinding:
-      glob: "*_fltr_frg_len_hist.pdf"
+      glob: "*[!_mid]_fltr_frg_len_hist.pdf"
     doc: |
       Fragments Length Histogram (filtered).
       PDF format
@@ -1187,7 +1187,7 @@ outputs:
   fltr_gene_umi_corr_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_gene_umi_corr.png"
+      glob: "*[!_mid]_fltr_gene_umi_corr.png"
     doc: |
       Genes vs GEX UMIs per cell correlation (filtered).
       PNG format
@@ -1195,7 +1195,7 @@ outputs:
   fltr_gene_umi_corr_plot_pdf:
     type: File?
     outputBinding:
-      glob: "*_fltr_gene_umi_corr.pdf"
+      glob: "*[!_mid]_fltr_gene_umi_corr.pdf"
     doc: |
       Genes vs GEX UMIs per cell correlation (filtered).
       PDF format
@@ -1203,7 +1203,7 @@ outputs:
   fltr_mito_perc_dnst_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_mito_perc_dnst.png"
+      glob: "*[!_mid]_fltr_mito_perc_dnst.png"
     doc: |
       Density of transcripts mapped to mitochondrial genes per cell (filtered).
       PNG format
@@ -1211,7 +1211,7 @@ outputs:
   fltr_mito_perc_dnst_plot_pdf:
     type: File?
     outputBinding:
-      glob: "*_fltr_mito_perc_dnst.pdf"
+      glob: "*[!_mid]_fltr_mito_perc_dnst.pdf"
     doc: |
       Density of transcripts mapped to mitochondrial genes per cell (filtered).
       PDF format
@@ -1219,7 +1219,7 @@ outputs:
   fltr_miqc_mtrcs_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_miqc_mtrcs.png"
+      glob: "*[!_mid]_fltr_miqc_mtrcs.png"
     doc: |
       MiQC prediction of the compromised cells level (filtered).
       PNG format
@@ -1227,7 +1227,7 @@ outputs:
   fltr_miqc_mtrcs_plot_pdf:
     type: File?
     outputBinding:
-      glob: "*_fltr_miqc_mtrcs.pdf"
+      glob: "*[!_mid]_fltr_miqc_mtrcs.pdf"
     doc: |
       MiQC prediction of the compromised cells level (filtered).
       PDF format
@@ -1235,7 +1235,7 @@ outputs:
   fltr_nvlt_score_dnst_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_nvlt_score_dnst.png"
+      glob: "*[!_mid]_fltr_nvlt_score_dnst.png"
     doc: |
       Novelty score density per cell (filtered).
       PNG format
@@ -1243,7 +1243,7 @@ outputs:
   fltr_nvlt_score_dnst_plot_pdf:
     type: File?
     outputBinding:
-      glob: "*_fltr_nvlt_score_dnst.pdf"
+      glob: "*[!_mid]_fltr_nvlt_score_dnst.pdf"
     doc: |
       Novelty score density per cell (filtered).
       PDF format
@@ -1251,7 +1251,7 @@ outputs:
   fltr_qc_mtrcs_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_qc_mtrcs.png"
+      glob: "*[!_mid]_fltr_qc_mtrcs.png"
     doc: |
       QC metrics densities per cell (filtered).
       PNG format
@@ -1259,7 +1259,7 @@ outputs:
   fltr_qc_mtrcs_plot_pdf:
     type: File?
     outputBinding:
-      glob: "*_fltr_qc_mtrcs.pdf"
+      glob: "*[!_mid]_fltr_qc_mtrcs.pdf"
     doc: |
       QC metrics densities per cell (filtered).
       PDF format
@@ -1267,7 +1267,7 @@ outputs:
   # fltr_qc_mtrcs_tsv:
   #   type: File?
   #   outputBinding:
-  #     glob: "*_fltr_qc_mtrcs.tsv"
+  #     glob: "*[!_mid]_fltr_qc_mtrcs.tsv"
   #   doc: |
   #     QC metrics densities per cell (filtered).
   #     TSV format
