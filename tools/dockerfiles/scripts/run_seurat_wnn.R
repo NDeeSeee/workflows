@@ -44,6 +44,7 @@ debug_seurat_data <- function(seurat_data, args) {
         print(DefaultAssay(seurat_data))
         print("Metadata")
         print(head(seurat_data@meta.data))
+        print(gc())
     }
 }
 
@@ -376,6 +377,7 @@ add_peak_qc_metrics <- function(seurat_data, blacklisted_data, args){
         seurat_data$blacklisted_fraction <- 0                                          # blacklisted regions file wasn't provided, so we set everything to 0
     }
     DefaultAssay(seurat_data) <- backup_assay
+    gc()
     return (seurat_data)
 }
 
@@ -440,6 +442,7 @@ add_main_qc_metrics <- function(seurat_data, blacklisted_data, args) {
         verbose=args$verbose
     )
     DefaultAssay(seurat_data) <- backup_assay
+    gc()
     return (seurat_data)
 }
 
@@ -457,6 +460,7 @@ integrate_atac_data <- function(seurat_data, args) {
             reduction.name="atac_lsi"
         )
         rm(splitted_seurat_data)                                                                    # remove unused data
+        gc()
         return (scaled_norm_seurat_data)
     } else {
         print("Running ATAC datasets integration using IntegrateEmbeddings algorithm")
@@ -488,6 +492,7 @@ integrate_atac_data <- function(seurat_data, args) {
         integrated_seurat_data[["pca"]] <- backup_pca_reduction                                     # restoring deleted reductions
         integrated_seurat_data[["rnaumap"]] <- backup_rnaumap_reduction
         rm(seurat_data, integration_anchors, backup_reductions)                                     # remove unused data
+        gc()
         return (integrated_seurat_data)
     }
 }
@@ -520,6 +525,7 @@ integrate_gex_data <- function(seurat_data, args) {
         )
         DefaultAssay(scaled_norm_seurat_data) <- "RNA"
         rm(splitted_seurat_data)                                                             # remove unused data
+        gc()
         return (scaled_norm_seurat_data)
     } else if (args$nosct) {
         print("Skipping SCTransform and running standard integration algorithm")
@@ -556,6 +562,7 @@ integrate_gex_data <- function(seurat_data, args) {
         )
         DefaultAssay(integrated_seurat_data) <- "gex_integrated"
         rm(splitted_seurat_data, integration_features, integration_anchors)                  # remove unused data
+        gc()
         return (integrated_seurat_data)
     } else {
         print("Running SCTransform integration algorithm")
@@ -594,6 +601,7 @@ integrate_gex_data <- function(seurat_data, args) {
         )
         DefaultAssay(integrated_seurat_data) <- "gex_integrated"
         rm(splitted_seurat_data, integration_features, integration_anchors)                  # remove unused data
+        gc()
         return (integrated_seurat_data)
     }
 }
@@ -636,6 +644,7 @@ get_all_putative_markers <- function(seurat_data, args, assay="RNA", min_diff_pc
         Idents(seurat_data) <- "new.ident"
     }
     DefaultAssay(seurat_data) <- backup_assay
+    gc()
     return (all_putative_markers)
 }
 
@@ -664,6 +673,7 @@ apply_peak_qc_filters <- function(seurat_data, cell_identity_data, args) {
         rm(filtered_seurat_data)                                                       # remove unused data
     }
     print(paste("Cell after filtering:", length(Cells(merged_seurat_data))))
+    gc()
     return (merged_seurat_data)
 }
 
@@ -713,6 +723,7 @@ apply_main_qc_filters <- function(seurat_data, cell_identity_data, args) {
         rm(filtered_seurat_data)                                                          # remove unused data
     }
     print(paste("Cell after filtering:", length(Cells(merged_seurat_data))))
+    gc()
     return (merged_seurat_data)
 }
 
@@ -2090,6 +2101,7 @@ load_seurat_data <- function(args, cell_identity_data, condition_data) {
         print("Identity file includes more than expected number of rows. Exiting.")
         quit(save="no", status=1, runLast=FALSE)
     }
+    gc()
     return (seurat_data)
 }
 
@@ -2099,7 +2111,7 @@ call_peaks <- function(seurat_data, args) {
     group_by <- "new.ident"
     if (args$callpeaks == "cluster"){
         current_resolution <- args$resolution[1]
-        group_by <- paste0("custom_peaks_snn_res.", current_resolution)
+        group_by <- paste0("custom_peak_calling_res.", current_resolution)
         print(
             paste(
                 "Group by GEX cluster identified from PCA reduction using",
@@ -2110,12 +2122,12 @@ call_peaks <- function(seurat_data, args) {
             seurat_data,
             reduction="pca",                                        # this is the same reduction we got after running RunPCA on our GEX data, it's bound to the specific assay
             dims=args$gexndim,
-            graph.name=c("custom_peaks_nn", "custom_peaks_snn"),
+            graph.name=c("custom_peak_calling_nn", "custom_peak_calling"),
             verbose=args$verbose
         )
         seurat_data <- FindClusters(
             seurat_data,
-            graph.name="custom_peaks_snn",
+            graph.name="custom_peak_calling",
             resolution=current_resolution,
             verbose=args$verbose
         )
@@ -2150,6 +2162,7 @@ call_peaks <- function(seurat_data, args) {
     rm(atac_assay)                                                        # remove unused data
     DefaultAssay(seurat_data) <- backup_assay
     Idents(seurat_data) <- "new.ident"                                    # safety measure
+    gc()
     return (seurat_data)
 }
 
