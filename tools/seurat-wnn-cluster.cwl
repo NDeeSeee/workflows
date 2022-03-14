@@ -847,7 +847,7 @@ outputs:
     doc: |
       Gene density per cell (intermediate filtered).
       PDF format
-  
+
   mid_fltr_peak_dnst_plot_png:
     type: File?
     outputBinding:
