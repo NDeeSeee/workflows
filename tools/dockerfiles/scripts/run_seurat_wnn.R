@@ -1050,24 +1050,30 @@ get_density_data <- function(data, features, labels, assay="RNA", slot="data", n
 }
 
 
-export_vln_plot <- function(data, features, labels, rootname, plot_title, legend_title, log=FALSE, group_by=NULL, hide_x_text=FALSE, pt_size=NULL, palette=NULL, combine_guides=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
+export_vln_plot <- function(data, features, labels, rootname, plot_title, legend_title, from_meta=FALSE, log=FALSE, group_by=NULL, hide_x_text=FALSE, pt_size=NULL, palette=NULL, combine_guides=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
-            features_corrected <- c()
-            labels_corrected <- c()
-            for (i in 1:length(features)){
-                if (features[i] %in% colnames(data@meta.data)){
-                    features_corrected <- c(features_corrected, features[i])
-                    labels_corrected <- c(labels_corrected, labels[i])
-                } else {
-                    print(
-                        paste(
-                            "Feature", features[i], "was not found,",
-                            "skipping", labels[i]
+
+            features_corrected <- features
+            labels_corrected <- labels
+            if (from_meta){
+                features_corrected <- c()
+                labels_corrected <- c()
+                for (i in 1:length(features)){
+                    if (features[i] %in% colnames(data@meta.data)){
+                        features_corrected <- c(features_corrected, features[i])
+                        labels_corrected <- c(labels_corrected, labels[i])
+                    } else {
+                        print(
+                            paste(
+                                "Feature", features[i], "was not found,",
+                                "skipping", labels[i]
+                            )
                         )
-                    )
+                    }
                 }
             }
+
             plots <- VlnPlot(
                          data,
                          features=features_corrected,
@@ -1715,6 +1721,7 @@ export_qc_plots <- function(seurat_data, suffix, args, show_peaks_qc=TRUE){
         data=seurat_data,
         features=selected_features,
         labels=selected_labels,
+        from_meta=TRUE,
         rootname=paste(args$output, suffix, "qc_mtrcs", sep="_"),
         plot_title=paste("QC metrics densities per cell (", suffix, ")", sep=""),
         legend_title="Identity",
