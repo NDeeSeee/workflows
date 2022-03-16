@@ -2160,7 +2160,7 @@ call_peaks <- function(seurat_data, args) {
         counts=macs2_counts,
         sep=c(":", "-"),
         fragments=Fragments(seurat_data),
-        min.cells=args$atacmincells,                                      # seems a bit rudandant
+        min.cells=0,                                                      # setting something other than 0 will update nCount_ATAC, which bring some discrepancy to the QC plots
         min.features=-1,                                                  # as they check ncount.cell > min.features and by default it's 0, we will remove cells without peaks and won't be able to add new assay to our seurat_data
         annotation=rtracklayer::import(args$annotations, format="GFF")
     )
