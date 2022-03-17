@@ -14,6 +14,7 @@ suppressMessages(library(tibble))
 suppressMessages(library(ggplot2))
 suppressMessages(library(ggrepel))
 suppressMessages(library(argparse))
+suppressMessages(library(tidyverse))
 suppressMessages(library(patchwork))
 suppressMessages(library(data.table))
 suppressMessages(library(BiocParallel))
@@ -59,27 +60,45 @@ extend_metadata <- function(seurat_data, args) {
 }
 
 
-get_combined_de_data <- function(seurat_data, design_formula, reduced_formula, args, assay="RNA", matrix_slot="counts"){
+get_aggr_seurat_data <- function(seurat_data, group_by, features=NULL, assay="RNA", matrix_slot="counts"){
+    backup_assay <- DefaultAssay(seurat_data)
+    DefaultAssay(seurat_data) <- assay         # need to explicitely set RNA as scaling is run only on active assay
+    Idents(seurat_data) <- group_by
+    aggr_expr_data <- AggregateExpression(
+        seurat_data,
+        assays=assay,                          # need only RNA assay
+        slot=matrix_slot,                      # for slot="counts" no exponentiation is performed prior to aggregating
+        features=features,                     # if NULL use all features in assay
+        return.seurat=TRUE,                    # summed values are saved in "counts", log-normalized - in "data", and scaled - in "scale.data"
+        verbose=FALSE
+    )
+    Idents(seurat_data) <- "new.ident"
+    DefaultAssay(seurat_data) <- backup_assay
+    return (aggr_expr_data)
+}
+
+
+get_deset_data <- function(seurat_data, design_formula, reduced_formula, args, assay="RNA", matrix_slot="counts"){
     print(paste0("Running DESeq2 using LRT for '", matrix_slot, "' slot from '", assay, "' assay."))
     backup_assay <- DefaultAssay(seurat_data)
     DefaultAssay(seurat_data) <- assay
-    
-    Idents(seurat_data) <- args$splitby
-    pct_data <- FoldChange(
+    aggr_seurat_data <- get_aggr_seurat_data(
         seurat_data,
-        ident.1=args$first,
-        ident.2=args$second,
-        slot=matrix_slot
+        group_by="new.ident",
+        assay="RNA",
+        matrix_slot="counts"
     )
-    Idents(seurat_data) <- "new.ident"
-    alpha_min <- pmax(pct_data$pct.1, pct_data$pct.2)
-    names(x=alpha_min) <- rownames(x=pct_data)
-    features_high_pct <- names(x=which(x=alpha_min>=args$minpct))
-    selected_features <- features_high_pct[!features_high_pct %in% args$exgenes]
-    counts <- GetAssayData(seurat_data, assay=assay, slot=matrix_slot)    # set assay in case GetAssayData won't take the default value
-    counts <- counts[selected_features, , drop=FALSE]
-    pct_data <- pct_data[rownames(counts), , drop=FALSE]                  # to guarantee the order of rows is the same as in the counts
-    col_data <- seurat_data@meta.data
+    print(aggr_seurat_data@meta.data)
+    counts <- GetAssayData(aggr_seurat_data, assay=assay, slot=matrix_slot)    # set assay in case GetAssayData won't take the default value
+    # col_data <- aggr_seurat_data@meta.data
+    col_data <- read.table(
+        args$condition,
+        sep=get_file_type(args$condition),
+        header=TRUE,
+        check.names=FALSE,
+        stringsAsFactors=FALSE
+    )
+    rownames(col_data) <- col_data$library_id
     col_data[[args$timeby]] <- as.factor(col_data[[args$timeby]])         # double check if we really need it. DESeq complains if it's not factor
     col_data[[args$splitby]] <- as.factor(col_data[[args$splitby]])
     print("Time factor levels")
@@ -87,26 +106,23 @@ get_combined_de_data <- function(seurat_data, design_formula, reduced_formula, a
     print("Group factor levels")
     col_data[[args$splitby]] <- relevel(col_data[[args$splitby]], args$first)  # relevel so the direction of comparison will be args$first vs args$second
     print(levels(col_data[[args$splitby]]))
+    print(col_data)
     deset_data <- DESeqDataSetFromMatrix(countData=counts, colData=col_data, design=design_formula)
-    scran_size_factors <- scran::computeSumFactors(deset_data)            # setting size factor as recommended here https://github.com/mikelove/zinbwave-deseq2/blob/master/zinbwave-deseq2.knit.md
-    sizeFactors(deset_data) <- sizeFactors(scran_size_factors)
+    # scran_size_factors <- scran::computeSumFactors(deset_data)            # setting size factor as recommended here https://github.com/mikelove/zinbwave-deseq2/blob/master/zinbwave-deseq2.knit.md
+    # sizeFactors(deset_data) <- sizeFactors(scran_size_factors)
     deset_data <- DESeq(
         deset_data,
         test="LRT",
-        fitType="glmGamPoi",
-        useT=TRUE,
-        minmu=1e-6,
-        minReplicatesForReplace=Inf,
+        # fitType="glmGamPoi",
+        # useT=TRUE,
+        # minmu=1e-6,
+        # minReplicatesForReplace=Inf,
         reduced=reduced_formula,
         quiet=FALSE,
         parallel=TRUE
     )
     DefaultAssay(seurat_data) <- backup_assay
-    combined_data <- list(
-        deset_data=deset_data,
-        pct_data=pct_data[, c("pct.1", "pct.2"), drop=FALSE]
-    )
-    return (combined_data)
+    return (deset_data)
 }
 
 
@@ -116,28 +132,34 @@ get_filtered_data <- function(seurat_data, args){
             paste0(
                 "Filtering Seurat data to include only '",
                 paste(args$select, collapse=" "), "' values from '",
-                args$groupby, "' metadata column"
+                args$groupby, "' metadata column, and only '",
+                args$first, "' and '", args$second, "' values from '",
+                args$splitby, "' column."
             )
         )
         Idents(seurat_data) <- args$groupby
         seurat_data <- subset(seurat_data, idents=args$select)
+        Idents(seurat_data) <- args$splitby
+        seurat_data <- subset(seurat_data, idents=c(args$first, args$second))
         Idents(seurat_data) <- "new.ident"
     }
     return (seurat_data)
 }
 
 
-get_avg_expr_data <- function(seurat_data, args, assay="RNA", slot="data"){
+get_avg_expr_data <- function(seurat_data, group_by, features=NULL, assay="RNA", slot="data"){
     backup_assay <- DefaultAssay(seurat_data)
     DefaultAssay(seurat_data) <- assay         # need to explicitely set RNA as scaling is run only on active assay
+    Idents(seurat_data) <- group_by
     avg_expr_data <- AverageExpression(
         seurat_data,
         assays=assay,                          # need only RNA assay
         slot=slot,                             # for slot="data" averaging is done in non-log space
-        group.by=args$splitby,
+        features=features,
         return.seurat=TRUE,                    # for slot="data" averaged values are saved in "counts", log-normalized - in "data", and scaled - in "scale.data"
         verbose=FALSE
     )
+    Idents(seurat_data) <- "new.ident"
     DefaultAssay(seurat_data) <- backup_assay
     return (avg_expr_data)
 }
@@ -168,7 +190,27 @@ get_diff_expr_genes <- function(seurat_data, args, assay="RNA", slot="data", min
 }
 
 
-export_counts_plot <- function(data, features, rootname, splitby, timeby, x_label, y_label, legend_title, plot_title, combine_guides=NULL, palette="Paired", alpha=0.1, pdf=FALSE, width=1200, height=800, resolution=100){
+write.gct <- function(gct, filename) {
+	rows <- dim(gct$data)[1]
+	columns <- dim(gct$data)[2]
+	rowDescriptions <- gct$rowDescriptions
+	m <- cbind(row.names(gct$data), rowDescriptions, gct$data)
+	f <- file(filename, "w")
+	on.exit(close(f))
+	cat("#1.2", "\n", file=f, append=TRUE, sep="")
+	cat(rows, "\t", columns, "\n", file=f, append=TRUE, sep="")
+	cat("Name", "\t", file=f, append=TRUE, sep="")
+	cat("Description", file=f, append=TRUE, sep="")
+	names <- colnames(gct$data)
+	for(j in 1:length(names)) {
+		cat("\t", names[j], file=f, append=TRUE, sep="")
+	}
+	cat("\n", file=f, append=TRUE, sep="")
+	write.table(m, file=f, append=TRUE, quote=FALSE, sep="\t", eol="\n", col.names=FALSE, row.names=FALSE)
+}
+
+
+export_counts_plot <- function(data, features, rootname, splitby, timeby, x_label, y_label, legend_title, plot_title, combine_guides=NULL, palette="Paired", alpha=1, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
             plots = list()
@@ -176,7 +218,7 @@ export_counts_plot <- function(data, features, rootname, splitby, timeby, x_labe
                 current_feature <- features[i]
                 normalized_counts <- plotCounts(
                     deseq_data,
-                    current_feature, 
+                    current_feature,
                     intgroup=c(timeby, splitby),
                     returnData=TRUE
                 )
@@ -185,7 +227,8 @@ export_counts_plot <- function(data, features, rootname, splitby, timeby, x_labe
                             normalized_counts,
                             aes_string(x=timeby, y="count", color=splitby, group=splitby)
                         ) + 
-                        geom_jitter(alpha=alpha) + stat_summary(fun.y=mean, geom="line") +
+                        # geom_jitter(alpha=alpha) + stat_summary(fun.y=mean, geom="line") +
+                        geom_point(alpha=alpha) + stat_summary(fun.y=mean, geom="line") +
                         ggtitle(current_feature) +
                         theme_gray() +
                         xlab(x_label) +
@@ -269,6 +312,80 @@ get_file_type <- function (filename) {
         separator = ","
     }
     return (separator)
+}
+
+
+export_dim_plot <- function(data, rootname, reduction, plot_title, legend_title, perc_legend_title, split_by=NULL, group_by=NULL, perc_split_by=NULL, perc_group_by=NULL, label=FALSE, palette=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
+    tryCatch(
+        expr = {
+            plot <- DimPlot(
+                        data,
+                        reduction=reduction,
+                        split.by=split_by,
+                        group.by=group_by,
+                        label=label
+                    ) +
+                    theme_gray() +
+                    ggtitle(plot_title) +
+                    guides(color=guide_legend(legend_title, override.aes=list(size=3)))
+
+            if (!is.null(palette)){ plot <- plot + scale_color_brewer(palette=palette) }
+
+            if(!is.null(perc_split_by) && !is.null(perc_group_by)){
+                width <- 2 * width
+                perc_data <- data@meta.data %>%
+                             dplyr::group_by(across(all_of(perc_split_by)), across(all_of(perc_group_by))) %>%
+                             summarise(counts=n(), .groups="drop") %>%               # drop the perc_group_by grouping level so we can get only groups defined by perc_split_by
+                             mutate(freq=counts/sum(counts)*100) %>%                      # sum is taken for the group defined by perc_split_by
+                             ungroup() %>%
+                             complete(
+                                 (!!as.symbol(perc_split_by)), (!!as.symbol(perc_group_by)),
+                                 fill=list(counts=0, freq=0)
+                             ) %>%
+                             mutate(caption=paste0(counts, " (", round(freq, digits=2), "%)")) %>%
+                             arrange(all_of(perc_split_by), all_of(perc_group_by))        # sort for consistency
+                perc_data[[perc_group_by]] <- as.factor(perc_data[[perc_group_by]])
+                label_data <- data@meta.data %>%
+                              dplyr::group_by(across(all_of(perc_split_by))) %>%
+                              summarise(counts=n(), .groups="drop_last") %>%              # drops all grouping as we have only one level
+                              arrange(all_of(perc_split_by))                              # sort for consistency
+                perc_plot <- ggplot(perc_data, aes_string(x=perc_split_by, y="freq", fill=perc_group_by)) +
+                             geom_col(position="dodge", width=0.98, linetype="solid", color="black", show.legend=TRUE) +
+                             geom_label(
+                                aes(label=caption),
+                                position=position_dodge(0.98),
+                                color="white", size=4, show.legend=FALSE
+                             ) +
+                             guides(fill=guide_legend(perc_legend_title)) +
+                             xlab("") +
+                             ylab("Cells percentage") +
+                             theme_gray() +
+                             geom_label_repel(
+                                label_data, mapping=aes(y=-Inf, label=counts),
+                                color="black", fill="white", segment.colour=NA,
+                                direction="y", size=4, show.legend=FALSE
+                             ) +
+                             RotatedAxis()
+                plot <- plot + perc_plot
+            }
+
+            png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            suppressMessages(print(plot))
+            dev.off()
+
+            if (pdf) {
+                pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                suppressMessages(print(plot))
+                dev.off()
+            }
+
+            print(paste("Export dim plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            tryCatch(expr={dev.off()}, error=function(e){print(paste("Called  dev.off() with error -", e))})
+            print(paste("Failed to export dim plot to ", rootname, ".(png/pdf)", sep=""))
+        }
+    )
 }
 
 
@@ -439,10 +556,12 @@ print("Trying to extend Seurat object with extra metadata")
 seurat_data <- extend_metadata(seurat_data, args)
 
 design_formula <- as.formula(
-    paste0("~", args$splitby, "+", args$timeby, "+", args$splitby, ":", args$timeby)
+    # paste0("~", args$splitby, "+", args$timeby, "+", args$timeby, ":", args$splitby)
+    paste0("~", args$splitby, "+", args$timeby)
 )
 reduced_formula <- as.formula(
-    paste0("~", args$splitby, "+", args$timeby)
+    # paste0("~", args$splitby, "+", args$timeby)
+    paste0("~", args$splitby)
 )
 contrast <- c(args$splitby, args$first, args$second)
 
@@ -465,17 +584,32 @@ print(
 )
 
 seurat_data <- get_filtered_data(seurat_data, args)
+export_dim_plot(
+    data=seurat_data,
+    reduction="umap",
+    plot_title=paste(
+        "Split by", args$splitby,
+        "clustered UMAP of filtered dataset with cell counts",
+        "distributed over time points"
+    ),
+    legend_title="Cell type",
+    split_by=args$splitby,
+    group_by=args$groupby,
+    perc_split_by=args$splitby,
+    perc_group_by=args$timeby,
+    perc_legend_title="Day",
+    label=TRUE,
+    rootname=paste(args$output, "umap_cell_perc", sep="_"),
+    pdf=args$pdf
+)
 
-
-
-combined_de_data <- get_combined_de_data(seurat_data, design_formula, reduced_formula, args)
-deseq_data <- combined_de_data$deset_data
+deseq_data <- get_deset_data(seurat_data, design_formula, reduced_formula, args)
 print(resultsNames(deseq_data))
 
 deseq_results <- results(
     deseq_data,
-    # contrast=contrast,
-    contrast=list(c("condition_PP_vs_PV", "conditionPP.day4")),
+    contrast=contrast,
+    # contrast=list(c("condition_PP_vs_PV", "conditionPP.day4")),
     alpha=args$maxpvadj  # recommended to set to our FDR threshold https://master.bioconductor.org/packages/release/workflows/vignettes/rnaseqGene/inst/doc/rnaseqGene.html
 )
 print(head(deseq_results))
@@ -485,10 +619,6 @@ diff_expr_genes <- deseq_results %>% data.frame() %>%
                    rownames_to_column(var="gene") %>%
                    filter(.$padj<=args$maxpvadj) %>%
                    arrange(desc(log2FoldChange))
-diff_expr_genes <- cbind(
-    diff_expr_genes,
-    combined_de_data$pct_data[diff_expr_genes$gene, , drop=FALSE]
-)
 
 max_log2FC <- max(diff_expr_genes$log2FoldChange[is.finite(diff_expr_genes$log2FoldChange)])
 min_log2FC <- min(diff_expr_genes$log2FoldChange[is.finite(diff_expr_genes$log2FoldChange)])
@@ -498,6 +628,19 @@ diff_expr_genes <- diff_expr_genes %>%                                          
                            .$log2FoldChange==-Inf, min_log2FC-0.05*abs(min_log2FC), .$log2FoldChange)
                        )
                    )
+
+avg_expr_counts <- GetAssayData(
+    get_avg_expr_data(
+        seurat_data,
+        group_by="new.ident",
+        features=diff_expr_genes$gene
+    ),
+    assay="RNA",
+    slot="data"
+)
+gct_filename <- paste(args$output, "_normalized_counts.gct", sep="")
+normCountsGct <- list(rowDescriptions=c(rep("na", times=length(row.names(avg_expr_counts)))), data=as.matrix(avg_expr_counts))
+write.gct(normCountsGct, file=gct_filename)
 
 topn_diff_expr_genes <- diff_expr_genes %>% filter(row_number() > max(row_number()) - all_of(args$topn) | row_number() <= all_of(args$topn))
 highlight_genes <- as.vector(as.character(topn_diff_expr_genes[, "gene"]))  # default genes to highlight
