@@ -176,8 +176,8 @@ steps:
     run: ../../tools/star-alignreads.cwl
     in:
       readFilesIn:
-      - extract_fastq_r1/fastq_file
-      - extract_fastq_r2/fastq_file
+      - trim_adapters/trimmed_file
+      - trim_adapters/trimmed_file_pair
       genomeDir: indices_folder
       outFilterMultimapNmax: max_multimap
       winAnchorMultimapNmax: max_multimap_anchor
