@@ -1,11 +1,16 @@
 cwlVersion: v1.1
 class: Workflow
 
+
 requirements:
   - class: SubworkflowFeatureRequirement
   - class: StepInputExpressionRequirement
   - class: MultipleInputFeatureRequirement
   - class: InlineJavascriptRequirement
+    expressionLib:
+    - var get_root = function(basename) {
+          return basename.split('.').slice(0,1).join('.');
+      };
 
 
 inputs:
@@ -104,10 +109,20 @@ outputs:
     outputSource: qc_alignments_file/log_file
     doc: "BAM file statistics report"
 
-  genome_coverage_file:
+  genome_coverage_not_stranded_file:
     type: File
-    doc: "Genome coverage file in bigWig format"
-    outputSource: calculate_genome_coverage/bigwig_file
+    doc: "Not stranded genome coverage file in bigWig format"
+    outputSource: calculate_genome_coverage_not_stranded/bigwig_file
+
+  genome_coverage_positive_file:
+    type: File
+    doc: "Genome coverage file for positive strand in bigWig format"
+    outputSource: calculate_genome_coverage_positive/bigwig_file
+
+  genome_coverage_negative_file:
+    type: File
+    doc: "Genome coverage file for negative strand in bigWig format"
+    outputSource: calculate_genome_coverage_negative/bigwig_file
 
 
 steps:
@@ -227,7 +242,7 @@ steps:
     out:
     - selected_file
 
-  calculate_genome_coverage:
+  calculate_genome_coverage_not_stranded:
     run: ../../tools/bam-bedgraph-bigwig.cwl
     in:
       bam_file: sort_alignments_file/bam_bai_pair
@@ -235,6 +250,45 @@ steps:
       mapped_reads_number:
         source: align_reads/uniquely_mapped_reads_number
         valueFrom: $(self*2)
+      bigwig_filename:
+        source: sort_alignments_file/bam_bai_pair
+        valueFrom: $(get_root(self.basename)+"_not_stranded.bigWig")
+    out:
+    - bigwig_file
+
+  calculate_genome_coverage_positive:
+    run: ../../tools/bam-bedgraph-bigwig.cwl
+    in:
+      bam_file: sort_alignments_file/bam_bai_pair
+      chrom_length_file: select_chrom_length_file/selected_file
+      mapped_reads_number:
+        source: align_reads/uniquely_mapped_reads_number
+        valueFrom: $(self*2)
+      bigwig_filename:
+        source: sort_alignments_file/bam_bai_pair
+        valueFrom: $(get_root(self.basename)+"_positive.bigWig")
+      strand:
+        default: "+"
+      dutp:
+        default: true
+    out:
+    - bigwig_file
+
+  calculate_genome_coverage_negative:
+    run: ../../tools/bam-bedgraph-bigwig.cwl
+    in:
+      bam_file: sort_alignments_file/bam_bai_pair
+      chrom_length_file: select_chrom_length_file/selected_file
+      mapped_reads_number:
+        source: align_reads/uniquely_mapped_reads_number
+        valueFrom: $(self*2)
+      bigwig_filename:
+        source: sort_alignments_file/bam_bai_pair
+        valueFrom: $(get_root(self.basename)+"_negative.bigWig")
+      strand:
+        default: "-"
+      dutp:
+        default: true
     out:
     - bigwig_file
 
