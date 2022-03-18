@@ -162,12 +162,8 @@ steps:
     in:
       input_file: extract_fastq_r1/fastq_file
       input_file_pair: extract_fastq_r2/fastq_file
-      dont_gzip:
-        default: true
       length:
         default: 30
-      trim1:
-        default: true
       paired:
         default: true
     out:
@@ -176,27 +172,12 @@ steps:
     - report_file
     - report_file_pair
 
-  bypass_trim_adapters:
-    run: ../../tools/bypass-trimgalore-pe.cwl
-    in:
-      original_fastq_file_1: extract_fastq_r1/fastq_file
-      trimmed_fastq_file_1: trim_adapters/trimmed_file
-      trimming_report_file_1: trim_adapters/report_file
-      original_fastq_file_2: extract_fastq_r2/fastq_file
-      trimmed_fastq_file_2: trim_adapters/trimmed_file_pair
-      trimming_report_file_2: trim_adapters/report_file_pair
-      min_reads_count:
-        default: 100                                                # any small number should be good
-    out:
-    - selected_fastq_file_1
-    - selected_fastq_file_2
-
   align_reads:
     run: ../../tools/star-alignreads.cwl
     in:
       readFilesIn:
-      - bypass_trim_adapters/selected_fastq_file_1
-      - bypass_trim_adapters/selected_fastq_file_2
+      - extract_fastq_r1/fastq_file
+      - extract_fastq_r2/fastq_file
       genomeDir: indices_folder
       outFilterMultimapNmax: max_multimap
       winAnchorMultimapNmax: max_multimap_anchor
