@@ -187,6 +187,8 @@ steps:
         default: 1
       seedSearchStartLmax:
         default: 15
+      outSAMattributes:
+        default: "All"                              # for SplAdder we need NM tag
       clip3pNbases: clip_3p_nbases
       clip5pNbases: clip_5p_nbases
       threads: threads
