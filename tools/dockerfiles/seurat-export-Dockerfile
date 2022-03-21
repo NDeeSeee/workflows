@@ -28,7 +28,7 @@ ENV DEBIAN_FRONTEND noninteractive
 
 WORKDIR /tmp
 
-COPY ./scripts/extract_seurat_metadata.R /usr/local/bin/extract_seurat_metadata.R
+COPY ./scripts/single_cell/extract_seurat_metadata.R /usr/local/bin/extract_seurat_metadata.R
 
 ### Installing dependencies
 RUN apt-get update && \

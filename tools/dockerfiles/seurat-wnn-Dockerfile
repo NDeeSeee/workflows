@@ -59,7 +59,7 @@ ENV R_MAX_VSIZE=200000000000
 ENV CB_VERSION "1.1.1"
 ENV MACS2_VERSION "2.2.7.1"
 
-COPY ./scripts/run_seurat_wnn.R /usr/local/bin/run_seurat_wnn.R
+COPY ./scripts/single_cell/run_seurat_wnn.R /usr/local/bin/run_seurat_wnn.R
 
 ### Installing dependencies
 RUN apt-get update && \
