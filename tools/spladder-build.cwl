@@ -7,13 +7,33 @@ requirements:
 - class: InitialWorkDirRequirement
   listing: |
     ${
-      return [
+      var listing = [
         {
           "entry": inputs.annotation_gtf_file,
           "entryname": inputs.annotation_gtf_file.basename,
           "writable": true
         }
-      ]
+      ];
+      for (var i = 0; i < inputs.alignment_files.length; i++){
+        var main_entry = inputs.alignment_files[i];
+        var main_entryname = inputs.alignment_aliases?inputs.alignment_aliases[i].replace(/\t|\s|\[|\]|\>|\<|,|\./g, "_")+".bam":main_entry.basename;
+        var secondary_entry = main_entry.secondaryFiles[0];
+        var secondary_entryname = main_entryname + ".bai"
+        delete main_entry.secondaryFiles;
+        listing.push(
+          {
+            "entry": main_entry,
+            "entryname": main_entryname,
+            "writable": true
+          },
+          {
+            "entry": secondary_entry,
+            "entryname": secondary_entryname,
+            "writable": true
+          }
+        );
+      }
+      return listing;
     }
 
 
@@ -32,6 +52,15 @@ inputs:
     - .bai
     inputBinding:
       prefix: "--bams"
+      itemSeparator: ","
+    doc: |
+      Sorted and indexed alignment file(s) in BAM format
+
+  alignment_aliases:
+    type:
+    - "null"
+    - string
+    - string[]
     doc: |
       Sorted and indexed alignment file(s) in BAM format
 
@@ -80,40 +109,137 @@ inputs:
 
 outputs:
 
-  # results_folder:
-  #   type: Directory
-  #   outputBinding:
-  #     glob: "./"
+  results_folder:
+    type: Directory
+    outputBinding:
+       glob: "./results"
 
-  alt_3prime_C3_counts_hdf5:
+
+  alt_3prime_counts_hdf5:
+    type: File
+    outputBinding:
+      glob: "./results/*_alt_3prime_C3.counts.hdf5"
+
+  alt_3prime_conf_event_bed:
     type: File?
     outputBinding:
-      glob: "./*_alt_3prime_C3.counts.hdf5"
+      glob: "./results/*_alt_3prime_C3.confirmed.bed"
 
-  alt_5prime_C3_counts_hdf5:
+  alt_3prime_conf_event_gff:
     type: File?
     outputBinding:
-      glob: "./*_alt_5prime_C3.counts.hdf5"
+      glob: "./results/*_alt_3prime_C3.confirmed.gff3"
 
-  exon_skip_C3_counts_hdf5:
+  alt_3prime_conf_event_txt:
     type: File?
     outputBinding:
-      glob: "./*_[!mult]_exon_skip_C3.counts.hdf5"
+      glob: "./results/*_alt_3prime_C3.confirmed.txt.gz"
 
-  intron_retention_C3_counts_hdf5:
+
+  alt_5prime_counts_hdf5:
+    type: File
+    outputBinding:
+      glob: "./results/*_alt_5prime_C3.counts.hdf5"
+
+  alt_5prime_conf_event_bed:
     type: File?
     outputBinding:
-      glob: "./*_intron_retention_C3.counts.hdf5"
+      glob: "./results/*_alt_5prime_C3.confirmed.bed"
 
-  mult_exon_skip_C3_counts_hdf5:
+  alt_5prime_conf_event_gff:
     type: File?
     outputBinding:
-      glob: "./*_mult_exon_skip_C3.counts.hdf5"
+      glob: "./results/*_alt_5prime_C3.confirmed.gff3"
 
-  mutex_exons_C3_counts_hdf5:
+  alt_5prime_conf_event_txt:
     type: File?
     outputBinding:
-      glob: "./*_mutex_exons_C3.counts.hdf5"
+      glob: "./results/*_alt_5prime_C3.confirmed.txt.gz"
+
+
+  exon_skip_counts_hdf5:
+    type: File
+    outputBinding:
+      glob: "./results/*[!_mult]_exon_skip_C3.counts.hdf5"
+
+  exon_skip_conf_event_bed:
+    type: File?
+    outputBinding:
+      glob: "./results/*[!_mult]_exon_skip_C3.confirmed.bed"
+
+  exon_skip_conf_event_gff:
+    type: File?
+    outputBinding:
+      glob: "./results/*[!_mult]_exon_skip_C3.confirmed.gff3"
+
+  exon_skip_conf_event_txt:
+    type: File?
+    outputBinding:
+      glob: "./results/*[!_mult]_exon_skip_C3.confirmed.txt.gz"
+
+
+  intron_retention_counts_hdf5:
+    type: File
+    outputBinding:
+      glob: "./results/*_intron_retention_C3.counts.hdf5"
+
+  intron_retention_conf_event_bed:
+    type: File?
+    outputBinding:
+      glob: "./results/*_intron_retention_C3.confirmed.bed"
+
+  intron_retention_conf_event_gff:
+    type: File?
+    outputBinding:
+      glob: "./results/*_intron_retention_C3.confirmed.gff3"
+
+  intron_retention_conf_event_txt:
+    type: File?
+    outputBinding:
+      glob: "./results/*_intron_retention_C3.confirmed.txt.gz"
+
+
+  mult_exon_skip_counts_hdf5:
+    type: File
+    outputBinding:
+      glob: "./results/*_mult_exon_skip_C3.counts.hdf5"
+
+  mult_exon_skip_conf_event_bed:
+    type: File?
+    outputBinding:
+      glob: "./results/*_mult_exon_skip_C3.confirmed.bed"
+
+  mult_exon_skip_conf_event_gff:
+    type: File?
+    outputBinding:
+      glob: "./results/*_mult_exon_skip_C3.confirmed.gff3"
+
+  mult_exon_skip_conf_event_txt:
+    type: File?
+    outputBinding:
+      glob: "./results/*_mult_exon_skip_C3.confirmed.txt.gz"
+
+
+  mutex_exons_counts_hdf5:
+    type: File
+    outputBinding:
+      glob: "./results/*_mutex_exons_C3.counts.hdf5"
+
+  mutex_exons_conf_event_bed:
+    type: File?
+    outputBinding:
+      glob: "./results/*_mutex_exons_C3.confirmed.bed"
+
+  mutex_exons_conf_event_gff:
+    type: File?
+    outputBinding:
+      glob: "./results/*_mutex_exons_C3.confirmed.gff3"
+
+  mutex_exons_conf_event_txt:
+    type: File?
+    outputBinding:
+      glob: "./results/*_mutex_exons_C3.confirmed.txt.gz"
+
 
   stdout_log:
     type: stdout
@@ -122,7 +248,13 @@ outputs:
     type: stderr
 
 
-baseCommand: ["spladder", "build", "--outdir", "./"]
+baseCommand: [
+  "spladder", "build",
+  "--output-gff3-conf",
+  "--output-conf-bed",
+  "--outdir", "./results",
+  "--tmp-dir", "./temp"
+]
 
 
 stdout: spladder_build_stdout.log
