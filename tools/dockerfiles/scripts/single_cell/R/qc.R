@@ -1,5 +1,6 @@
 import("dplyr", attach=FALSE)
 import("purrr", attach=FALSE)
+import("tidyr", attach=FALSE)
 import("Seurat", attach=FALSE)
 import("Signac", attach=FALSE)
 import("data.table", attach=FALSE)
@@ -36,8 +37,9 @@ qc_metrics_pca <- function(seurat_data, qc_columns, qc_labels, orq_transform=FAL
                     )
                 }
             }
-            target_data <- base::as.data.frame(seurat_data[[qc_columns_corrected]]) %>% 
-                           dplyr::filter_all(dplyr::all_vars(!is.infinite(.)))                          # safety measure
+            target_data <- base::as.data.frame(seurat_data[[qc_columns_corrected]]) %>%
+                           tidyr::drop_na() %>%
+                           dplyr::filter_all(dplyr::all_vars(!is.infinite(.)))
             base::print(
                 base::paste(
                     "Cells removed due to having infinite values",
@@ -55,7 +57,6 @@ qc_metrics_pca <- function(seurat_data, qc_columns, qc_labels, orq_transform=FAL
                 center=!orq_transform,         # no need to center or scale when data is already ORQ-transformed
                 scale.=!orq_transform
             )
-            base::print(base::summary(pca_raw))
             pca_scores <- base::as.data.frame(pca_raw$x)
             pca_scores$labels <- qc_labels_corrected
             pca_variance <- round(pca_raw$sdev / sum(pca_raw$sdev) * 100, 2)
@@ -80,7 +81,7 @@ add_gex_qc_metrics <- function(seurat_data, args){
 add_atac_qc_metrics <- function(seurat_data, args){
     backup_assay <- SeuratObject::DefaultAssay(seurat_data)
     SeuratObject::DefaultAssay(seurat_data) <- "ATAC"
-    seurat_data <- Signac::NucleosomeSignal(seurat_data, verbose=args$verbose)
+    seurat_data <- Signac::NucleosomeSignal(seurat_data, verbose=FALSE)
     seurat_data <- Signac::TSSEnrichment(
         seurat_data,
         tss.positions=get_tss_positions(Signac::Annotation(seurat_data[["ATAC"]])),
