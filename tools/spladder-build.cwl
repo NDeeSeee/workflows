@@ -253,7 +253,8 @@ baseCommand: [
   "--output-gff3-conf",
   "--output-conf-bed",
   "--outdir", "./results",
-  "--tmp-dir", "./temp"
+  "--tmp-dir", "./temp",
+  "--verbose"
 ]
 
 
