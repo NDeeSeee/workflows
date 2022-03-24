@@ -85,7 +85,7 @@ add_atac_qc_metrics <- function(seurat_data, args){
         seurat_data,
         tss.positions=get_tss_positions(Signac::Annotation(seurat_data[["ATAC"]])),
         fast=FALSE,                                                                    # set fast=FALSE, because we want to build TSS Enrichment plot later
-        verbose=args$verbose
+        verbose=FALSE
     )
     SeuratObject::DefaultAssay(seurat_data) <- backup_assay
     base::gc()
@@ -98,7 +98,7 @@ add_peak_qc_metrics <- function(seurat_data, blacklisted_data, args){
     fragments_data <- Signac::CountFragments(
         fragments=args$fragments,
         cells=base::colnames(seurat_data),                                                     # limit it to only those cells that are present in seurat_data
-        verbose=args$verbose
+        verbose=FALSE
     ) %>% tibble::column_to_rownames("CB")                                                     # for easy access to cell barcodes
     seurat_data$fragments <- fragments_data[base::colnames(seurat_data), "frequency_count"]    # select by rownames to make sure the cells order wasn't accidentally changed
     base::rm(fragments_data)                                                                   # remove unused data
@@ -107,7 +107,7 @@ add_peak_qc_metrics <- function(seurat_data, blacklisted_data, args){
         assay="ATAC",                                                                          # FRiP can't take the default assay, so we set it explicitly
         total.fragments="fragments",
         col.name="frip",
-        verbose=args$verbose
+        verbose=FALSE
     )
     if (!is.null(blacklisted_data)){
         seurat_data$blacklisted_fraction <- Signac::FractionCountsInRegion(

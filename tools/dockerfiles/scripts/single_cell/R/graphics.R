@@ -568,8 +568,8 @@ fragments_hist <- function(data, rootname, plot_title, split_by, group_by_value=
                 if (!is.null(group_by_value)){
                     filtered_data$ns_group_by <- base::ifelse(
                         filtered_data$nucleosome_signal >= group_by_value ,
-                        base::paste("High nucleosome signal ", "(bigger or equal to ", group_by_value, ")", sep=""),
-                        base::paste("Low nucleosome signal", "(smaller than ", group_by_value, ")", sep="")
+                        base::paste("Nucl. signal >= ", group_by_value, sep=""),
+                        base::paste("Nucl. signal < ", group_by_value, sep="")
                     )
                     group_by <- "ns_group_by"
                 }

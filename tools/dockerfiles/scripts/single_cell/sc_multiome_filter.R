@@ -39,13 +39,13 @@ call_peaks <- function(seurat_data, args) {
             reduction="pca",                                                # this is the same reduction we got after running RunPCA on our GEX data, it's bound to the specific assay
             dims=args$gexndim,
             graph.name=c("custom_peak_calling_nn", "custom_peak_calling"),
-            verbose=args$verbose
+            verbose=FALSE
         )
         seurat_data <- FindClusters(
             seurat_data,
             graph.name="custom_peak_calling",
             resolution=args$resolution,
-            verbose=args$verbose
+            verbose=FALSE
         )
     }
     Idents(seurat_data) <- "new.ident"                                      # safety measure as FindClusters may change identity column
@@ -61,7 +61,7 @@ call_peaks <- function(seurat_data, args) {
         sep=c(":", "-"),
         features=macs2_peaks,
         cells=colnames(seurat_data),
-        verbose=args$verbose,
+        verbose=FALSE,
     )
     rm(macs2_peaks)                                                         # remove unused data
     atac_assay <- CreateChromatinAssay(
@@ -614,7 +614,7 @@ get_args <- function(){
         ),
         type="character",
         default="sct",
-        choices=c("sct", "log")
+        choices=c("sct", "log", "sctglm")
     )
     parser$add_argument(
         "--highvargex",
@@ -674,6 +674,17 @@ get_args <- function(){
     parser$add_argument(
         "--h5seurat",
         help="Save Seurat data to h5seurat file. Default: false",
+        action="store_true"
+    )
+    parser$add_argument(
+        "--lowmem",
+        help=paste(
+            "Attempts to minimize RAM usage when integrating multiple datasets",
+            "with SCTransform algorithm (slows down the computation).",
+            "Ignored if --callpeaks is not set to 'cluster', if --ntgr is not set",
+            "to 'seurat', if --gexnorm is not set to either 'sct' or 'glm'.",
+            "Default: false"
+        ),
         action="store_true"
     )
     parser$add_argument(
@@ -783,7 +794,7 @@ if (!is.null(args$callpeaks)){
     print("Updating ATAC QC metrics after calling MACS2 peaks")
     seurat_data <- qc$add_atac_qc_metrics(seurat_data, args)                               # with the new peaks, we have different number of ATAC UMIs counted per cell, so all the metrics should be updated
     print("Updating peak QC metrics after calling MACS2 peaks")
-    seurat_data <- qc$add_peak_qc_metrics(seurat_data, blacklisted_data, args)
+    seurat_data <- qc$add_peak_qc_metrics(seurat_data, blacklisted_data, args)             # recalculate peak QC metrics
     debug$print_info(seurat_data, args)
     export_all_qc_plots(                                                                   # after GEX and ATAC filters have been applied
         seurat_data=seurat_data,
@@ -813,6 +824,8 @@ print("Applying filters based on peaks QC metrics")
 seurat_data <- filter$apply_peak_qc_filters(seurat_data, cell_identity_data, args)         # cleans up all reductions
 print("Updating ATAC QC metrics after all filtering thresholds applied")
 seurat_data <- qc$add_atac_qc_metrics(seurat_data, args)                                   # recalculate ATAC QC metrics
+print("Updating peak QC metrics after all filtering thresholds applied")
+seurat_data <- qc$add_peak_qc_metrics(seurat_data, blacklisted_data, args)                 # recalculate peak QC metrics
 debug$print_info(seurat_data, args)
 
 export_all_qc_plots(                                                                       # after all filters have been applied

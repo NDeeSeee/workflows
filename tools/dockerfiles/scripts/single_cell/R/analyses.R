@@ -1,5 +1,6 @@
 import("Seurat", attach=FALSE)
 import("Signac", attach=FALSE)
+import("glmGamPoi", attach=FALSE)  # safety measure. we don't use it directly, but SCTransform with method="glmGamPoi" needs it
 
 export(
     "gex_integrate",
@@ -18,7 +19,7 @@ gex_integrate <- function(seurat_data, args) {
         base::print(base::paste("Skipping datasets integration: either forced or only one identity is present."))
         if (args$gexnorm == "log"){
             base::print("Applying LogNormalize")
-            scaled_norm_seurat_data <- Seurat::NormalizeData(splitted_seurat_data[[1]], verbose=FALSE)
+            scaled_norm_seurat_data <- Seurat::NormalizeData(seurat_data, verbose=FALSE)     # use not splitted seurat_data
             scaled_norm_seurat_data <- Seurat::FindVariableFeatures(
                 scaled_norm_seurat_data,
                 nfeatures=args$highvargex,
@@ -31,18 +32,21 @@ gex_integrate <- function(seurat_data, args) {
             )
             SeuratObject::DefaultAssay(scaled_norm_seurat_data) <- "RNA"
         } else {
-            base::print("Applying SCTransform")
+            method <- base::ifelse(args$gexnorm=="sctglm", "glmGamPoi", "poisson")
+            base::print(base::paste("Applying SCTransform using", method, "method for initial parameter estimation"))
             scaled_norm_seurat_data <- Seurat::SCTransform(
-                splitted_seurat_data[[1]],
+                seurat_data,                                                                 # use not splitted seurat_data
                 assay="RNA",
                 new.assay.name="SCT",
                 variable.features.n=args$highvargex,
+                method=method,
                 vars.to.regress=vars_to_regress,
-                verbose=FALSE                                                                      # too many stdout
+                conserve.memory=args$lowmem,
+                verbose=FALSE                                                                # too many stdout
             )
             SeuratObject::DefaultAssay(scaled_norm_seurat_data) <- "SCT"
         }
-        base::rm(splitted_seurat_data)                                                             # remove unused data
+        base::rm(splitted_seurat_data)                                                       # remove unused data
         base::gc()
         return (scaled_norm_seurat_data)
     } else {
@@ -81,14 +85,17 @@ gex_integrate <- function(seurat_data, args) {
                 verbose=FALSE
             )
         } else {
-            base::print("Applying SCTransform")
+            method <- base::ifelse(args$gexnorm=="sctglm", "glmGamPoi", "poisson")
+            base::print(base::paste("Applying SCTransform using", method, "method for initial parameter estimation"))
             for (i in 1:length(splitted_seurat_data)) {
                 splitted_seurat_data[[i]] <- Seurat::SCTransform(
                     splitted_seurat_data[[i]],
                     assay="RNA",
                     new.assay.name="SCT",
                     variable.features.n=args$highvargex,
+                    method=method,
                     vars.to.regress=vars_to_regress,
+                    conserve.memory=args$lowmem,
                     verbose=FALSE                                                                      # too many stdout
                 )
             }
@@ -132,14 +139,14 @@ gex_analyze <- function(seurat_data, args) {
             "assay using 50 principal components"
         )
     )
-    seurat_data <- Seurat::RunPCA(seurat_data, npcs=50, verbose=args$verbose)
+    seurat_data <- Seurat::RunPCA(seurat_data, npcs=50, verbose=FALSE)
     seurat_data <- Seurat::RunUMAP(
         seurat_data,
         reduction="pca",
         dims=args$gexndim,
         reduction.name="rnaumap",
         reduction.key="RNAUMAP_",
-        verbose=args$verbose
+        verbose=FALSE
     )
     return (seurat_data)
 }

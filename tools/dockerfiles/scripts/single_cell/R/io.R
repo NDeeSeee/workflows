@@ -16,7 +16,8 @@ export(
     "extend_metadata",
     "load_grouping_data",
     "load_blacklisted_data",
-    "load_10x_multiome_data"
+    "load_10x_multiome_data",
+    "export_h5seurat"
 )
 
 
