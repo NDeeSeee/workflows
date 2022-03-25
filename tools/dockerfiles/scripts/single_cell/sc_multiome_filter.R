@@ -10,13 +10,13 @@ suppressMessages(library(argparse))
 suppressMessages(library(rtracklayer))
 
 HERE <- (function() {return (dirname(sub("--file=", "", commandArgs(trailingOnly=FALSE)[grep("--file=", commandArgs(trailingOnly=FALSE))])))})()
-suppressMessages(analyses <- modules::use(file.path(HERE, "R/analyses.R")))
-suppressMessages(debug <- modules::use(file.path(HERE, "R/debug.R")))
-suppressMessages(filter <- modules::use(file.path(HERE, "R/filter.R")))
-suppressMessages(graphics <- modules::use(file.path(HERE, "R/graphics.R")))
-suppressMessages(io <- modules::use(file.path(HERE, "R/io.R")))
-suppressMessages(qc <- modules::use(file.path(HERE, "R/qc.R")))
-suppressMessages(prod <- modules::use(file.path(HERE, "R/prod.R")))
+suppressMessages(analyses <- modules::use(file.path(HERE, "modules/analyses.R")))
+suppressMessages(debug <- modules::use(file.path(HERE, "modules/debug.R")))
+suppressMessages(filter <- modules::use(file.path(HERE, "modules/filter.R")))
+suppressMessages(graphics <- modules::use(file.path(HERE, "modules/graphics.R")))
+suppressMessages(io <- modules::use(file.path(HERE, "modules/io.R")))
+suppressMessages(qc <- modules::use(file.path(HERE, "modules/qc.R")))
+suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 
 
 call_peaks <- function(seurat_data, args) {

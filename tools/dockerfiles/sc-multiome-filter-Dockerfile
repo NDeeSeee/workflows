@@ -33,6 +33,7 @@ ENV CB_VERSION "1.1.1"
 ENV MACS2_VERSION "2.2.7.1"
 
 COPY ./scripts/single_cell/sc_multiome_filter.R /usr/local/bin/sc_multiome_filter.R
+COPY ./scripts/single_cell/modules/*.R /usr/local/bin/modules/
 
 ### Installing dependencies
 RUN apt-get update && \
