@@ -8,8 +8,8 @@
 # Provides:         sc_multiome_filter.R script
 # Base Image:       satijalab/seurat:4.0.6
 # Build Cmd:        docker build --no-cache --rm -t biowardrobe2/sc-multiome-filter:v0.0.1 -f sc-multiome-filter-Dockerfile .
-# Pull Cmd:         docker pull sc-multiome-filter:v0.0.1
-# Run Cmd:          docker run --rm -ti sc-multiome-filter:v0.0.1 /bin/bash
+# Pull Cmd:         docker pull biowardrobe2/sc-multiome-filter:v0.0.1
+# Run Cmd:          docker run --rm -ti biowardrobe2/sc-multiome-filter:v0.0.1 /bin/bash
 #################################################################
 #
 # v0.0.1
@@ -42,10 +42,10 @@ RUN apt-get update && \
     pip3 install MACS2==${MACS2_VERSION} && \
     R -e 'install.packages("argparse", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("tidyverse", repo = "https://cloud.r-project.org/")' && \
-    R -e "BiocManager::install(c('BiocGenerics', 'DelayedArray', 'DelayedMatrixStats','limma', 'S4Vectors', 'SingleCellExperiment', 'SummarizedExperiment', 'batchelor', 'Matrix.utils', 'DESeq2', 'EnhancedVolcano', 'Rsamtools', 'rtracklayer', 'glmGamPoi', 'modules'))" && \
+    R -e 'install.packages("modules", repo = "https://cloud.r-project.org/")' && \
+    R -e "BiocManager::install(c('BiocGenerics', 'DelayedArray', 'DelayedMatrixStats','limma', 'S4Vectors', 'SingleCellExperiment', 'SummarizedExperiment', 'batchelor', 'Matrix.utils', 'DESeq2', 'Rsamtools', 'rtracklayer', 'glmGamPoi'))" && \
     R -e 'install.packages("Signac", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("bestNormalize", repo = "https://cloud.r-project.org/")' && \
-    R -e "remotes::install_github('satijalab/seurat-wrappers')" && \
 ### Installing sc_multiome_filter.R script
     chmod +x /usr/local/bin/sc_multiome_filter.R && \
 ### Cleaning

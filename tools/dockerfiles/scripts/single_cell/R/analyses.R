@@ -76,7 +76,7 @@ gex_integrate <- function(seurat_data, args) {
                 integration_anchors, 
                 new.assay.name="gex_integrated",
                 normalization.method="LogNormalize",
-                k.weight=min(min(table(Idents(seurat_data))), 100),  # 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
+                k.weight=min(min(table(SeuratObject::Idents(seurat_data))), 100),  # 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
                 verbose=FALSE
             )
             integrated_seurat_data <- Seurat::ScaleData(

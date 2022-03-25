@@ -32,6 +32,7 @@ call_peaks <- function(seurat_data, args) {
         )
         print("Running GEX analysis before calling peaks by cluster")
         seurat_data <- analyses$gex_analyze(seurat_data, args)
+        seurat_data <- filter$collapse_fragments_list(seurat_data)                 # collapse repetitive fragments as we could split the datasets before integration
         debug$print_info(seurat_data, args)
         group_by <- paste0("custom_peak_calling_res.", args$resolution)
         seurat_data <- FindNeighbors(
@@ -832,7 +833,7 @@ export_all_qc_plots(                                                            
     seurat_data=seurat_data,
     suffix="fltr",
     args=args,
-    macs2_peaks=TRUE
+    macs2_peaks=!is.null(args$callpeaks)                                                   # can be both from 10x or MACS2
 )
 
 DefaultAssay(seurat_data) <- "RNA"                                                         # better to stick to RNA assay by default https://www.biostars.org/p/395951/#395954 
