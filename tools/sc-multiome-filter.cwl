@@ -10,6 +10,9 @@ requirements:
     entry: |
       library_id
       Experiment
+- class: EnvVarRequirement
+  envDef:
+    R_MAX_VSIZE: $(inputs.vector_memory_limit * 1000000000)
 
 
 hints:
@@ -375,7 +378,7 @@ inputs:
       Output prefix.
       Default: ./seurat
 
-  memory:
+  parallel_memory_limit:
     type: int?
     inputBinding:
       prefix: "--memory"
@@ -383,6 +386,13 @@ inputs:
       Maximum memory in GB allowed to be shared between the workers
       when using multiple --cpus.
       Default: 32
+
+  vector_memory_limit:
+    type: int?
+    default: 200
+    doc: |
+      Maximum vector memory in GB allowed to be used by R.
+      Default: 200
 
   threads:
     type: int?
