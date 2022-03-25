@@ -106,9 +106,9 @@ WORKDIR /tmp
 ENV R_MAX_VSIZE=200000000000
 ENV CB_VERSION "1.1.1"
 
-COPY ./scripts/single_cell/run_seurat.R /usr/local/bin/run_seurat.R
-COPY ./scripts/single_cell/sc_diff_expr.R /usr/local/bin/sc_diff_expr.R
-COPY ./scripts/single_cell/assign_cell_types.R /usr/local/bin/assign_cell_types.R
+COPY ./scripts/sc_tools/run_seurat.R /usr/local/bin/run_seurat.R
+COPY ./scripts/sc_tools/sc_diff_expr.R /usr/local/bin/sc_diff_expr.R
+COPY ./scripts/sc_tools/assign_cell_types.R /usr/local/bin/assign_cell_types.R
 
 ### Installing dependencies
 RUN apt-get update && \
