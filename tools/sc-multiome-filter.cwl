@@ -389,10 +389,10 @@ inputs:
 
   vector_memory_limit:
     type: int?
-    default: 200
+    default: 128
     doc: |
       Maximum vector memory in GB allowed to be used by R.
-      Default: 200
+      Default: 128
 
   threads:
     type: int?
