@@ -59,15 +59,15 @@ call_peaks <- function(seurat_data, args) {
     )
     macs2_counts <- FeatureMatrix(
         fragments=Fragments(seurat_data),
-        sep=c(":", "-"),
+        sep=c("-", "-"),
         features=macs2_peaks,
         cells=colnames(seurat_data),
-        verbose=FALSE,
+        verbose=FALSE
     )
     rm(macs2_peaks)                                                         # remove unused data
     atac_assay <- CreateChromatinAssay(
         counts=macs2_counts,
-        sep=c(":", "-"),
+        sep=c("-", "-"),
         fragments=Fragments(seurat_data),
         min.cells=0,                                                        # setting something other than 0 will update nCount_ATAC, which bring some discrepancy to the QC plots
         min.features=-1,                                                    # as they check ncount.cell > min.features and by default it's 0, we will remove cells without peaks and won't be able to add new assay to our seurat_data
@@ -182,10 +182,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         color_by="new.ident",
         facet_by="new.ident",
         x_left_intercept=args$maxblacklisted,
-        x_label="Fraction of reads within blacklisted regions per cell",
+        x_label="Fraction of fragments within blacklisted regions per cell",
         y_label="Density",
         legend_title="Identity",
-        plot_title=paste("Density of fraction of reads within blacklisted regions per cell (", suffix, ") ", peak_type, sep=""),
+        plot_title=paste("Density of fraction of fragments within blacklisted regions per cell (", suffix, ") ", peak_type, sep=""),
         scale_x_log10=FALSE,
         zoom_on_intercept=TRUE,
         show_ranked=TRUE,
@@ -576,8 +576,8 @@ get_args <- function(){
         "--minfrip",
         help=paste(
             "Include cells with the FRiP not lower than this value. If multiple values",
-            "provided, each of them will be applied to the correspondent dataset from",
-            "the --mex input based on the --identity file.",
+            "provided, each of them will be applied to the correspondent dataset from the ",
+            "--mex input based on the --identity file. FRiP is calculated for fragments.",
             "Default: 0.15 (applied to all datasets)"
         ),
         type="double", default=0.15, nargs="*"
@@ -585,7 +585,7 @@ get_args <- function(){
     parser$add_argument(
         "--maxblacklisted",
         help=paste(
-            "Include cells with the ratio of reads in genomic blacklist regions",
+            "Include cells with the ratio of fragments in genomic blacklist regions",
             "not bigger than this value. If multiple values provided, each of them",
             "will be applied to the correspondent dataset from the --mex input based",
             "on the --identity file.",
@@ -737,7 +737,11 @@ blacklisted_data <- io$load_blacklisted_data(args$blacklisted)
 print(paste("Loading gene/peak-barcode matrices from", args$mex))
 print(paste("Loading fragments from", args$fragments))
 print(paste("Loading annotations from", args$annotations))
-seurat_data <- io$load_10x_multiome_data(args, cell_identity_data, grouping_data)      # identities are set to the "new.ident" column
+seurat_data <- io$load_10x_multiome_data(                           # identities are set to the "new.ident" column
+    args=args,
+    cell_identity_data=cell_identity_data,
+    grouping_data=grouping_data
+)
 debug$print_info(seurat_data, args)
 
 print("Adjusting input parameters")

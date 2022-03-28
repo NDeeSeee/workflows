@@ -191,17 +191,46 @@ load_10x_multiome_data <- function(args, cell_identity_data, grouping_data) {
         names.field=2
     )
     annotation <- rtracklayer::import(args$annotations, format="GFF")
+    all_cells <- SeuratObject::Cells(seurat_data)
+    names(all_cells) <- all_cells
+    base::print(
+        base::paste(
+            "Preparing fragments for", length(all_cells), "cells"
+        )
+    )
+    fragments <- Signac::CreateFragmentObject(
+        path=args$fragments,
+        cells=all_cells,
+        validate.fragments=TRUE,
+        verbose=FALSE
+    )
+    peak_coordinates <- Signac::StringToGRanges(
+        regions=base::rownames(raw_data$Peaks),
+        sep=c(":", "-")                            # need to run it explicitely with correct sep, as in FeatureMatrix 1) they have bug, 2) for consistency we'll use ("-", "-")
+    )
+    base::print(
+        base::paste(
+            "Counting fragments overlapping", length(peak_coordinates), "peaks"
+        )
+    )
+    peak_counts <- Signac::FeatureMatrix(                                                 # need to recalculate feature-barcode matrix to include fragments, not reads
+        fragments=fragments,
+        sep=c("-", "-"),                                                                  # unexplainable bug - fails if use sep=c(":", "-")
+        features=peak_coordinates,
+        cells=all_cells,
+        verbose=FALSE
+    )
     seurat_data[["ATAC"]] <- Signac::CreateChromatinAssay(
-        counts=raw_data$Peaks,
-        sep=c(":", "-"),
-        fragments=args$fragments,
+        counts=peak_counts,
+        sep=c("-", "-"),
+        fragments=fragments,
         min.cells=args$atacmincells,
         annotation=annotation
     )
-    base::rm(raw_data, annotation)                                             # removing unused data
+    base::rm(raw_data, annotation, all_cells, fragments, peak_coordinates, peak_counts)   # removing unused data
     base::print("Assigning new dataset identities")
-    SeuratObject::Idents(seurat_data) <- "orig.ident"                                  # safety measure to make sure we get correct Idents
-    idents <- as.numeric(as.character(SeuratObject::Idents(seurat_data)))              # need to properly convert factor to numeric vector
+    SeuratObject::Idents(seurat_data) <- "orig.ident"                                     # safety measure to make sure we get correct Idents
+    idents <- as.numeric(as.character(SeuratObject::Idents(seurat_data)))                 # need to properly convert factor to numeric vector
     new_ident <- cell_identity_data$library_id[idents]
     if (sum(is.na(new_ident)) > 0){
         base::print("Identity file includes less than expected number of rows. Exiting.")
