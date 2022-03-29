@@ -74,7 +74,7 @@ add_gex_qc_metrics <- function(seurat_data, args){
     seurat_data$log10_gene_per_log10_umi <- log10(seurat_data$nFeature_RNA) / log10(seurat_data$nCount_RNA)
     seurat_data$mito_percentage <- Seurat::PercentageFeatureSet(seurat_data, pattern=args$mitopattern)
     SeuratObject::DefaultAssay(seurat_data) <- backup_assay
-    base::gc()
+    base::gc(verbose=FALSE)
     return (seurat_data)
 }
 
@@ -89,7 +89,7 @@ add_atac_qc_metrics <- function(seurat_data, args){
         verbose=FALSE
     )
     SeuratObject::DefaultAssay(seurat_data) <- backup_assay
-    base::gc()
+    base::gc(verbose=FALSE)
     return (seurat_data)
 }
 
@@ -120,7 +120,7 @@ add_peak_qc_metrics <- function(seurat_data, blacklisted_data, args){
         seurat_data$blacklisted_fraction <- 0                                                  # blacklisted regions file wasn't provided, so we set everything to 0
     }
     SeuratObject::DefaultAssay(seurat_data) <- backup_assay
-    base::gc()
+    base::gc(verbose=FALSE)
     return (seurat_data)
 }
 

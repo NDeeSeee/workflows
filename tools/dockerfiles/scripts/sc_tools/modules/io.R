@@ -16,7 +16,9 @@ export(
     "extend_metadata",
     "load_grouping_data",
     "load_blacklisted_data",
+    "assign_identities",
     "load_10x_multiome_data",
+    "load_10x_gex_data",
     "export_h5seurat"
 )
 
@@ -182,6 +184,25 @@ load_blacklisted_data <- function(location) {
     return (default_blacklisted_data)
 }
 
+assign_identities <- function(seurat_data, cell_identity_data, grouping_data){
+    SeuratObject::Idents(seurat_data) <- "orig.ident"                                     # safety measure to make sure we get correct Idents
+    idents <- as.numeric(as.character(SeuratObject::Idents(seurat_data)))                 # need to properly convert factor to numeric vector
+    new_ident <- cell_identity_data$library_id[idents]
+    if (sum(is.na(new_ident)) > 0){
+        base::print("Identity file includes less than expected number of rows. Exiting.")
+        base::quit(save="no", status=1, runLast=FALSE)
+    }
+    seurat_data[["new.ident"]] <- new_ident
+    seurat_data[["condition"]] <- grouping_data$condition[base::match(seurat_data$new.ident, grouping_data$library_id)]
+    SeuratObject::Idents(seurat_data) <- "new.ident"
+    if (base::nrow(cell_identity_data) > length(base::unique(base::as.vector(as.character(SeuratObject::Idents(seurat_data)))))){
+        base::print("Identity file includes more than expected number of rows. Exiting.")
+        base::quit(save="no", status=1, runLast=FALSE)
+    }
+    base::rm(idents, new_ident)
+    return (seurat_data)
+}
+
 load_10x_multiome_data <- function(args, cell_identity_data, grouping_data) {
     base::suppressMessages(raw_data <- Seurat::Read10X(data.dir=args$mex))
     seurat_data <- SeuratObject::CreateSeuratObject(
@@ -227,22 +248,68 @@ load_10x_multiome_data <- function(args, cell_identity_data, grouping_data) {
         min.cells=args$atacmincells,
         annotation=annotation
     )
-    base::rm(raw_data, annotation, all_cells, fragments, peak_coordinates, peak_counts)   # removing unused data
     base::print("Assigning new dataset identities")
-    SeuratObject::Idents(seurat_data) <- "orig.ident"                                     # safety measure to make sure we get correct Idents
-    idents <- as.numeric(as.character(SeuratObject::Idents(seurat_data)))                 # need to properly convert factor to numeric vector
-    new_ident <- cell_identity_data$library_id[idents]
-    if (sum(is.na(new_ident)) > 0){
-        base::print("Identity file includes less than expected number of rows. Exiting.")
-        base::quit(save="no", status=1, runLast=FALSE)
-    }
-    seurat_data[["new.ident"]] <- new_ident
-    seurat_data[["condition"]] <- grouping_data$condition[base::match(seurat_data$new.ident, grouping_data$library_id)]
-    SeuratObject::Idents(seurat_data) <- "new.ident"
-    if ( base::nrow(cell_identity_data) > length(base::unique(base::as.vector(as.character(SeuratObject::Idents(seurat_data))))) ){
-        base::print("Identity file includes more than expected number of rows. Exiting.")
-        base::quit(save="no", status=1, runLast=FALSE)
-    }
-    base::gc()
+    seurat_data <- assign_identities(seurat_data, cell_identity_data, grouping_data)
+    base::rm(raw_data, annotation, all_cells, fragments, peak_coordinates, peak_counts)   # removing unused data
+    base::gc(verbose=FALSE)
     return (seurat_data)
+}
+
+load_10x_gex_data <- function(args, cell_identity_data, grouping_data) {
+    if (length(args$mex) == 1){
+        base::print("Single feature-barcode matrix is provided. Using the original barcode suffixes")
+        seurat_data <- SeuratObject::CreateSeuratObject(
+            counts=Seurat::Read10X(data.dir=args$mex),
+            min.cells=args$gexmincells,
+            names.delim="-",
+            names.field=2
+        )
+        base::print("Assigning new dataset identities")
+        seurat_data <- assign_identities(seurat_data, cell_identity_data, grouping_data)
+        return (seurat_data)
+    } else {
+        base::print("Multiple feature-barcode matrices are provided. Original barcode suffixes will be updated")
+        merged_seurat_data <- NULL
+        for (i in 1:length(args$mex)){
+            current_location <- args$mex[i]
+            base::print(
+                base::paste(
+                    "Reading 10x data from", current_location,
+                    "replacing the original barcode suffixes with", i
+                )
+            )
+            seurat_data <- SeuratObject::CreateSeuratObject(
+                counts=Seurat::Read10X(
+                    data.dir=current_location,
+                    strip.suffix=TRUE             # removes suffix from barcode
+                )
+            )
+            idents <- i
+            new_ident <- cell_identity_data$library_id[idents]
+            base::print(base::paste("Assigning new identity", new_ident))
+            if (sum(is.na(new_ident)) > 0){
+                base::print("Identity file includes less than expected number of rows. Exiting.")
+                base::quit(save="no", status=1, runLast=FALSE)
+            }
+            seurat_data[["new.ident"]] <- new_ident
+            seurat_data[["condition"]] <- grouping_data$condition[base::match(seurat_data$new.ident, grouping_data$library_id)]
+            SeuratObject::Idents(seurat_data) <- "new.ident"
+            seurat_data <- SeuratObject::RenameCells(
+                seurat_data,
+                new.names=base::paste0(SeuratObject::Cells(seurat_data), "-", idents)      # to add new barcode suffix
+            )
+            if (is.null(merged_seurat_data)){
+                merged_seurat_data <- seurat_data
+            } else {
+                merged_seurat_data <- base::merge(merged_seurat_data, y=seurat_data)
+            }
+            base::rm(seurat_data, idents, new_ident)                                       # remove unused data
+        }
+        if (base::nrow(cell_identity_data) > length(base::unique(base::as.vector(as.character(SeuratObject::Idents(merged_seurat_data)))))){
+            base::print("Identity file includes more than expected number of rows. Exiting.")
+            base::quit(save="no", status=1, runLast=FALSE)
+        }
+        base::gc(verbose=FALSE)
+        return (merged_seurat_data)
+    }
 }

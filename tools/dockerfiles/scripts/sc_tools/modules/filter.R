@@ -93,7 +93,7 @@ apply_gex_qc_filters <- function(seurat_data, cell_identity_data, args) {
     }
     base::print(base::paste("Cells after filtering:", length(SeuratObject::Cells(merged_seurat_data))))
     merged_seurat_data <- collapse_fragments_list(merged_seurat_data)
-    base::gc()
+    base::gc(verbose=FALSE)
     return (merged_seurat_data)
 }
 
@@ -130,7 +130,7 @@ apply_atac_qc_filters <- function(seurat_data, cell_identity_data, args) {
     }
     base::print(base::paste("Cells after filtering:", length(SeuratObject::Cells(merged_seurat_data))))
     merged_seurat_data <- collapse_fragments_list(merged_seurat_data)
-    base::gc()
+    base::gc(verbose=FALSE)
     return (merged_seurat_data)
 }
 
@@ -162,6 +162,6 @@ apply_peak_qc_filters <- function(seurat_data, cell_identity_data, args) {
     }
     base::print(base::paste("Cells after filtering:", length(SeuratObject::Cells(merged_seurat_data))))
     merged_seurat_data <- collapse_fragments_list(merged_seurat_data)
-    base::gc()
+    base::gc(verbose=FALSE)
     return (merged_seurat_data)
 }

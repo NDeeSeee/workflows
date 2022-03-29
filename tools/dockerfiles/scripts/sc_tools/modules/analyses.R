@@ -47,7 +47,7 @@ gex_integrate <- function(seurat_data, args) {
             SeuratObject::DefaultAssay(scaled_norm_seurat_data) <- "SCT"
         }
         base::rm(splitted_seurat_data)                                                       # remove unused data
-        base::gc()
+        base::gc(verbose=FALSE)
         return (scaled_norm_seurat_data)
     } else {
         base::print(base::paste("Running datasets integration"))
@@ -125,7 +125,7 @@ gex_integrate <- function(seurat_data, args) {
         }
         SeuratObject::DefaultAssay(integrated_seurat_data) <- "gex_integrated"
         base::rm(splitted_seurat_data, integration_features, integration_anchors)                  # remove unused data
-        base::gc()
+        base::gc(verbose=FALSE)
         return (integrated_seurat_data)
     }
 }
