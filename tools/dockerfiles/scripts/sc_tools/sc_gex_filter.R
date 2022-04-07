@@ -17,90 +17,98 @@ suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 
 
 export_all_qc_plots <- function(seurat_data, suffix, args){
+    Idents(seurat_data) <- "new.ident"                                                                # safety measure
     selected_features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi")
     selected_labels=c("GEX UMIs", "Genes", "Mitochondrial %", "Novelty score")
+
     qc_metrics_pca <- qc$qc_metrics_pca(
         seurat_data=seurat_data,
         qc_columns=selected_features,
         qc_labels=selected_labels,
         orq_transform=TRUE
     )
+
     graphics$pca_plot(
         pca_data=qc_metrics_pca,
-        rootname=paste(args$output, suffix, "pca", paste(c(1, 2) ,collapse="_"), "qc_mtrcs", sep="_"),
         pcs=c(1, 2),
         plot_title=paste(
             paste(
                 paste0("PC", c(1, 2)),
                 collapse=" and "
             ),
-            " of ORQ-transformed QC metrics PCA (", suffix, ")", sep=""
+            " from PCA of GEX datasets' QC metrics (", suffix, ")", sep=""
         ),
         legend_title="QC metrics",
         color_by="labels",
+        palette_colors=graphics$D40_COLORS,
+        rootname=paste(args$output, suffix, "pca", paste(c(1, 2) ,collapse="_"), "qc_mtrcs", sep="_"),
         pdf=args$pdf
     )
     graphics$pca_plot(
         pca_data=qc_metrics_pca,
-        rootname=paste(args$output, suffix, "pca", paste(c(2, 3) ,collapse="_"), "qc_mtrcs", sep="_"),
         pcs=c(2, 3),
         plot_title=paste(
             paste(
                 paste0("PC", c(2, 3)),
                 collapse=" and "
             ),
-            " of ORQ-transformed QC metrics PCA (", suffix, ")", sep=""
+            " from PCA of GEX datasets' QC metrics (", suffix, ")", sep=""
         ),
         legend_title="QC metrics",
         color_by="labels",
+        palette_colors=graphics$D40_COLORS,
+        rootname=paste(args$output, suffix, "pca", paste(c(2, 3) ,collapse="_"), "qc_mtrcs", sep="_"),
         pdf=args$pdf
     )
     graphics$geom_bar_plot(
         data=seurat_data@meta.data,
-        rootname=paste(args$output, suffix, "cell_count", sep="_"),
         x_axis="new.ident",
         color_by="new.ident",
         x_label="Identity",
         y_label="Cells",
         legend_title="Identity",
-        plot_title=paste("Number of cells per dataset (", suffix, ")", sep=""),
+        plot_title=paste("Number of cells per GEX dataset (", suffix, ")", sep=""),
+        palette_colors=graphics$D40_COLORS,
+        rootname=paste(args$output, suffix, "cell_count", sep="_"),
         pdf=args$pdf
     )
+
     graphics$geom_density_plot(
         data=seurat_data@meta.data,
-        rootname=paste(args$output, suffix, "gex_umi_dnst_spl_by_cond", sep="_"),
         x_axis="nCount_RNA",
         color_by="new.ident",
-        facet_by="condition",
+        facet_by="new.ident",
         x_left_intercept=args$gexminumi,
         x_label="GEX UMIs per cell",
         y_label="Density",
         legend_title="Identity",
-        plot_title=paste("Split by condition GEX UMI density per cell (", suffix, ")", sep=""),
+        plot_title=paste("GEX UMIs per cell density (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
         zoom_on_intercept=TRUE,
+        palette_colors=graphics$D40_COLORS,
+        rootname=paste(args$output, suffix, "gex_umi_dnst", sep="_"),
         pdf=args$pdf
     )
     graphics$geom_density_plot(
         data=seurat_data@meta.data,
-        rootname=paste(args$output, suffix, "gene_dnst_spl_by_cond", sep="_"),
         x_axis="nFeature_RNA",
         color_by="new.ident",
-        facet_by="condition",
+        facet_by="new.ident",
         x_left_intercept=args$mingenes,
         x_right_intercept=args$maxgenes,
         x_label="Genes per cell",
         y_label="Density",
         legend_title="Identity",
-        plot_title=paste("Split by condition gene density per cell (", suffix, ")", sep=""),
+        plot_title=paste("Genes per cell density (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
         zoom_on_intercept=TRUE,
         show_ranked=TRUE,
+        palette_colors=graphics$D40_COLORS,
+        rootname=paste(args$output, suffix, "gene_dnst", sep="_"),
         pdf=args$pdf
     )
     graphics$geom_point_plot(
         data=seurat_data@meta.data,
-        rootname=paste(args$output, suffix, "gene_umi_corr", sep="_"),
         x_axis="nCount_RNA",
         y_axis="nFeature_RNA",
         facet_by="new.ident",
@@ -108,7 +116,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         y_low_intercept=args$mingenes,
         y_high_intercept=args$maxgenes,
         color_by="mito_percentage",
-        colors=c("lightslateblue", "red", "green"),
+        gradient_colors=c("lightslateblue", "red", "green"),
         color_limits=c(0, 100),
         color_break=args$maxmt,
         x_label="GEX UMIs per cell",
@@ -117,34 +125,38 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         plot_title=paste("Genes vs GEX UMIs per cell correlation (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
         scale_y_log10=TRUE,
+        palette_colors=graphics$D40_COLORS,
+        rootname=paste(args$output, suffix, "gene_gex_umi_corr", sep="_"),
         pdf=args$pdf
     )
     graphics$geom_density_plot(
         data=seurat_data@meta.data,
-        rootname=paste(args$output, suffix, "mito_perc_dnst_spl_by_cond", sep="_"),
         x_axis="mito_percentage",
         color_by="new.ident",
-        facet_by="condition",
+        facet_by="new.ident",
         x_left_intercept=args$maxmt,
         x_label="Percentage of transcripts mapped to mitochondrial genes per cell",
         y_label="Density",
         legend_title="Identity",
-        plot_title=paste("Split by condition density of GEX transcripts mapped to mitochondrial genes per cell (", suffix, ")", sep=""),
+        plot_title=paste("The percentage of transcripts mapped to mitochondrial genes per cell density (", suffix, ")", sep=""),
         zoom_on_intercept=TRUE,
+        palette_colors=graphics$D40_COLORS,
+        rootname=paste(args$output, suffix, "mito_perc_dnst", sep="_"),
         pdf=args$pdf
     )
     graphics$geom_density_plot(
         data=seurat_data@meta.data,
-        rootname=paste(args$output, suffix, "nvlt_score_dnst_spl_by_cond", sep="_"),
         x_axis="log10_gene_per_log10_umi",
         color_by="new.ident",
-        facet_by="condition",
+        facet_by="new.ident",
         x_left_intercept=args$minnovelty,
-        x_label="log10 Genes / log10 UMIs per cell",
+        x_label="log10 Genes / log10 GEX UMIs per cell",
         y_label="Density",
         legend_title="Identity",
-        plot_title=paste("Split by condition novelty score density per cell (", suffix, ")", sep=""),
+        plot_title=paste("Novelty score per cell density (", suffix, ")", sep=""),
         zoom_on_intercept=TRUE,
+        palette_colors=graphics$D40_COLORS,
+        rootname=paste(args$output, suffix, "nvlt_score_dnst", sep="_"),
         pdf=args$pdf
     )
     graphics$vln_plot(
@@ -152,15 +164,82 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         features=selected_features,
         labels=selected_labels,
         from_meta=TRUE,
-        rootname=paste(args$output, suffix, "qc_mtrcs", sep="_"),
-        plot_title=paste("QC metrics densities per cell (", suffix, ")", sep=""),
+        plot_title=paste("QC metrics per cell densities (", suffix, ")", sep=""),
         legend_title="Identity",
         hide_x_text=TRUE,
         pt_size=0,
-        palette="Paired",
         combine_guides="collect",
+        palette_colors=graphics$D40_COLORS,
+        rootname=paste(args$output, suffix, "qc_mtrcs", sep="_"),
         pdf=args$pdf
     )
+
+    if (seurat_data@meta.data$new.ident != seurat_data@meta.data$condition){
+        graphics$geom_density_plot(
+            data=seurat_data@meta.data,
+            x_axis="nCount_RNA",
+            color_by="new.ident",
+            facet_by="condition",
+            x_left_intercept=args$gexminumi,
+            x_label="GEX UMIs per cell",
+            y_label="Density",
+            legend_title="Identity",
+            plot_title=paste("Split by grouping condition GEX UMIs per cell density (", suffix, ")", sep=""),
+            scale_x_log10=TRUE,
+            zoom_on_intercept=TRUE,
+            palette_colors=graphics$D40_COLORS,
+            rootname=paste(args$output, suffix, "gex_umi_dnst_spl_by_cond", sep="_"),
+            pdf=args$pdf
+        )
+        graphics$geom_density_plot(
+            data=seurat_data@meta.data,
+            x_axis="nFeature_RNA",
+            color_by="new.ident",
+            facet_by="condition",
+            x_left_intercept=args$mingenes,
+            x_right_intercept=args$maxgenes,
+            x_label="Genes per cell",
+            y_label="Density",
+            legend_title="Identity",
+            plot_title=paste("Split by grouping condition genes per cell density (", suffix, ")", sep=""),
+            scale_x_log10=TRUE,
+            zoom_on_intercept=TRUE,
+            show_ranked=TRUE,
+            palette_colors=graphics$D40_COLORS,
+            rootname=paste(args$output, suffix, "gene_dnst_spl_by_cond", sep="_"),
+            pdf=args$pdf
+        )
+        graphics$geom_density_plot(
+            data=seurat_data@meta.data,
+            x_axis="mito_percentage",
+            color_by="new.ident",
+            facet_by="condition",
+            x_left_intercept=args$maxmt,
+            x_label="Percentage of transcripts mapped to mitochondrial genes per cell",
+            y_label="Density",
+            legend_title="Identity",
+            plot_title=paste("Split by grouping condition the percentage of transcripts mapped to mitochondrial genes per cell density (", suffix, ")", sep=""),
+            zoom_on_intercept=TRUE,
+            palette_colors=graphics$D40_COLORS,
+            rootname=paste(args$output, suffix, "mito_perc_dnst_spl_by_cond", sep="_"),
+            pdf=args$pdf
+        )
+        graphics$geom_density_plot(
+            data=seurat_data@meta.data,
+            x_axis="log10_gene_per_log10_umi",
+            color_by="new.ident",
+            facet_by="condition",
+            x_left_intercept=args$minnovelty,
+            x_label="log10 Genes / log10 GEX UMIs per cell",
+            y_label="Density",
+            legend_title="Identity",
+            plot_title=paste("Split by grouping condition the novelty score per cell density (", suffix, ")", sep=""),
+            zoom_on_intercept=TRUE,
+            palette_colors=graphics$D40_COLORS,
+            rootname=paste(args$output, suffix, "nvlt_score_dnst_spl_by_cond", sep="_"),
+            pdf=args$pdf
+        )
+    }
 }
 
 get_args <- function(){
@@ -388,7 +467,7 @@ export_all_qc_plots(                                                            
 )
 
 DefaultAssay(seurat_data) <- "RNA"                                                         # better to stick to RNA assay by default https://www.biostars.org/p/395951/#395954 
-io$export_rds(seurat_data, paste(args$output, "_filtered_data.rds", sep=""))
+io$export_rds(seurat_data, paste(args$output, "_fltr_data.rds", sep=""))
 if(args$h5seurat){
-    io$export_h5seurat(seurat_data, paste(args$output, "_filtered_data.h5seurat", sep=""))
+    io$export_h5seurat(seurat_data, paste(args$output, "_fltr_data.h5seurat", sep=""))
 }

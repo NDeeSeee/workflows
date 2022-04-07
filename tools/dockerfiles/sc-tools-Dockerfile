@@ -2,15 +2,26 @@
 # Dockerfile
 #
 # Software:         R script to filter single-cell multiome data
-# Software Version: v0.0.2
+# Software Version: v0.0.3
 # Description:      Dockerized version of sc_multiome_filter.R
 # Website:          https://github.com/Barski-lab/workflows
-# Provides:         sc_multiome_filter.R script
+# Provides:         sc_multiome_filter.R
+#                   sc_gex_filter.R
+#                   sc_gex_reduce.R
+#                   sc_gex_cluster.R
 # Base Image:       satijalab/seurat:4.0.6
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/sc-tools:v0.0.2 -f sc-tools-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/sc-tools:v0.0.2
-# Run Cmd:          docker run --rm -ti biowardrobe2/sc-tools:v0.0.2 /bin/bash
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/sc-tools:v0.0.3 -f sc-tools-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/sc-tools:v0.0.3
+# Run Cmd:          docker run --rm -ti biowardrobe2/sc-tools:v0.0.3 /bin/bash
 #################################################################
+#
+# v0.0.3
+# - add sc_gex_reduce.R script
+# - add sc_gex_cluster.R
+# Notes:
+# - pip3 install -U numba is required. This will reinstall numpy
+#   to the version that is needed by numba thus making possible to
+#   use umap in R through reticulate (use umap-learn in runUMAP).
 #
 # v0.0.2
 # - add sc_gex_filter.R script
@@ -37,6 +48,8 @@ ENV MACS2_VERSION "2.2.7.1"
 
 COPY ./scripts/sc_tools/sc_multiome_filter.R /usr/local/bin/sc_multiome_filter.R
 COPY ./scripts/sc_tools/sc_gex_filter.R /usr/local/bin/sc_gex_filter.R
+COPY ./scripts/sc_tools/sc_gex_reduce.R /usr/local/bin/sc_gex_reduce.R
+COPY ./scripts/sc_tools/sc_gex_cluster.R /usr/local/bin/sc_gex_cluster.R
 COPY ./scripts/sc_tools/modules/*.R /usr/local/bin/modules/
 
 ### Installing dependencies
@@ -45,6 +58,7 @@ RUN apt-get update && \
     pip3 install scipy numpy && \
     pip3 install cellbrowser==${CB_VERSION} && \
     pip3 install MACS2==${MACS2_VERSION} && \
+    pip3 install -U numba && \
     R -e 'install.packages("argparse", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("tidyverse", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("modules", repo = "https://cloud.r-project.org/")' && \
@@ -54,6 +68,8 @@ RUN apt-get update && \
 ### Installing sc_multiome_filter.R script
     chmod +x /usr/local/bin/sc_multiome_filter.R && \
     chmod +x /usr/local/bin/sc_gex_filter.R && \
+    chmod +x /usr/local/bin/sc_gex_reduce.R && \
+    chmod +x /usr/local/bin/sc_gex_cluster.R && \
 ### Cleaning
     apt-get clean && \
     apt-get purge && \

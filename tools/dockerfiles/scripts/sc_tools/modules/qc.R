@@ -13,7 +13,8 @@ export(
     "add_gex_qc_metrics",
     "add_atac_qc_metrics",
     "add_peak_qc_metrics",
-    "get_tss_positions"
+    "get_tss_positions",
+    "quartile_qc_metrics"
 )
 
 
@@ -47,7 +48,7 @@ qc_metrics_pca <- function(seurat_data, qc_columns, qc_labels, orq_transform=FAL
                     base::nrow(seurat_data@meta.data) - base::nrow(target_data)
                 )
             )
-            if (orq_transform){
+            if (!is.null(orq_transform) && orq_transform){
                 base::print("Running Ordered Quantile (ORQ) normalization transformation")
                 target_data <- target_data %>%
                                dplyr::mutate_all(function(x){return (bestNormalize::orderNorm(x)$x.t)})
@@ -152,4 +153,28 @@ get_tss_positions <- function(annotation_ranges){
     )
     tss_positions <- IRanges::resize(collapsed_ranges, width=1, fix="start")
     return (tss_positions)
+}
+
+quartile_qc_metrics <- function(seurat_data, features, prefix="quartile"){
+    for (i in 1:length(features)){
+        current_feature <- features[i]
+        base::tryCatch(
+            expr = {
+                quartiles <- stats::quantile(seurat_data@meta.data[, current_feature], c(0.25, 0.5, 0.75))
+                seurat_data <- SeuratObject::AddMetaData(
+                    object=seurat_data,
+                    metadata=base::cut(
+                        seurat_data@meta.data[, current_feature], 
+                        breaks=c(-Inf, quartiles[1], quartiles[2], quartiles[3], Inf), 
+                        labels=c("Low", "Medium", "Medium high", "High")
+                    ),
+                    col.name=base::paste(prefix, current_feature, sep="_")
+                )
+            },
+            error = function(e){
+                base::print(base::paste("Failed to quantile ", current_feature, " with error - ", e, sep=""))
+            }
+        )
+    }
+    return (seurat_data)
 }

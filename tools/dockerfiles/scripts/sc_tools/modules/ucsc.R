@@ -4,24 +4,27 @@ import("data.table", attach=FALSE)
 import("reticulate", attach=FALSE)
 
 export(
-    "cellbrowser_build"
+    "get_matrix",
+    "write_matrix",
+    "cb_build",
+    "export_cellbrowser"
 )
 
 
-find_matrix <- function(object, matrix.slot){
-    if (matrix.slot == "counts") {
+get_matrix <- function(object, slot){
+    if (slot == "counts") {
         counts <- SeuratObject::GetAssayData(object=object, slot="counts")
-    } else if (matrix.slot == "scale.data") {
+    } else if (slot == "scale.data") {
         counts <- SeuratObject::GetAssayData(object=object, slot="scale.data")
-    } else if (matrix.slot == "data") {
+    } else if (slot == "data") {
         counts <- SeuratObject::GetAssayData(object=object)
     } else {
-        error("matrix.slot can only be one of: counts, scale.data, data")
+        base::print(base::paste("Slot", slot, "not found. Quit."))
+        base::quit(save="no", status=1, runLast=FALSE)
     }
 }
 
-
-write_sparse_matrix <- function(inMat, outFname, sliceSize=1000){
+write_matrix <- function(inMat, outFname, sliceSize=1000){
     fnames <- c()
     mat <- inMat
     geneCount <- base::nrow(mat)
@@ -45,29 +48,20 @@ write_sparse_matrix <- function(inMat, outFname, sliceSize=1000){
     base::unlink(fnames)
 }
 
-
-cellbrowser_build <- function(
-    object,
-    matrix.slot,
-    dir,
-    cluster.field,
-    features,
-    meta.fields,
-    meta.fields.names
-) {
-    if (!base::dir.exists(dir)) {
-        base::dir.create(dir)
+cb_build <- function(object, slot, rootname, cluster_field, features, meta_fields, meta_fields_names, dot_radius, dot_alpha, hide_labels) {
+    if (!base::dir.exists(rootname)) {
+        base::dir.create(rootname)
     }
     idents <- SeuratObject::Idents(object)
     meta <- object@meta.data
-    cellOrder <- base::colnames(object)
-    counts <- find_matrix(object, matrix.slot)
+    cell_order <- base::colnames(object)
+    counts <- get_matrix(object, slot)
     genes <- base::rownames(x=object)
     dr <- object@reductions
 
-    gzPath <- base::file.path(dir, "exprMatrix.tsv.gz")
-    if ((((base::ncol(counts)/1000)*(base::nrow(counts)/1000))>2000) && methods::is(counts, 'sparseMatrix')){
-        write_sparse_matrix(counts, gzPath);
+    gzPath <- base::file.path(rootname, "exprMatrix.tsv.gz")
+    if ((((base::ncol(counts)/1000)*(base::nrow(counts)/1000))>2000) && methods::is(counts, "sparseMatrix")){
+        write_matrix(counts, gzPath);
     } else {
         mat <- base::as.matrix(counts)
         df <- base::as.data.frame(mat, check.names=FALSE)
@@ -77,7 +71,7 @@ cellbrowser_build <- function(
         base::close(con=z)
     }
     embeddings = names(dr)
-    embeddings.conf <- c()
+    embeddings_conf <- c()
     for (embedding in embeddings) {
         emb <- dr[[embedding]]
         df <- emb@cell.embeddings
@@ -87,34 +81,34 @@ cellbrowser_build <- function(
         base::colnames(df) <- c("x", "y")
         df <- base::data.frame(cellId=base::rownames(df), df, check.names=FALSE)
         utils::write.table(
-            df[cellOrder,],
+            df[cell_order,],
             sep="\t",
-            file=base::file.path(dir, base::sprintf("%s.coords.tsv", embedding)),
+            file=base::file.path(rootname, base::sprintf("%s.coords.tsv", embedding)),
             quote=FALSE,
             row.names=FALSE
         )
-        embeddings.conf <- c(
-            embeddings.conf,
+        embeddings_conf <- c(
+            embeddings_conf,
             base::sprintf('{"file": "%s.coords.tsv", "shortLabel": "Seurat %1$s"}', embedding)
         )
     }
-    df <- base::data.frame(row.names=cellOrder, check.names=FALSE)
-    enum.fields <- c()
-    for (i in 1:length(meta.fields)){
-        field <- meta.fields[i]
-        name <- meta.fields.names[i]
+    df <- base::data.frame(row.names=cell_order, check.names=FALSE)
+    enum_fields <- c()
+    for (i in 1:length(meta_fields)){
+        field <- meta_fields[i]
+        name <- meta_fields_names[i]
         if (field %in% base::colnames(meta)){
             df[[name]] <- meta[[field]]
             if (!is.numeric(df[[name]])) {
-                enum.fields <- c(enum.fields, name)
+                enum_fields <- c(enum_fields, name)
             }
         }
     }
     df <- base::data.frame(Cell=base::rownames(df), df, check.names=FALSE)
     utils::write.table(
-        base::as.matrix(df[cellOrder,]),
+        base::as.matrix(df[cell_order,]),
         sep="\t",
-        file=base::file.path(dir, "meta.tsv"),
+        file=base::file.path(rootname, "meta.tsv"),
         quote=FALSE,
         row.names=FALSE
     )
@@ -122,7 +116,7 @@ cellbrowser_build <- function(
         utils::write.table(
             features,
             sep="\t",
-            file=base::file.path(dir, "quickGenes.tsv"),
+            file=base::file.path(rootname, "quickGenes.tsv"),
             quote=FALSE,
             row.names=FALSE,
             col.names=FALSE
@@ -134,28 +128,110 @@ shortLabel="cellbrowser"
 geneLabel="Gene"
 exprMatrix="exprMatrix.tsv.gz"
 meta="meta.tsv"
-radius=3
-alpha=0.5
+radius=%i
+alpha=%f
 geneIdType="auto"
-clusterField="%s"
-labelField="%s"
 enumFields=%s
 coords=%s'
-    enum.string <- base::paste0("[", base::paste(base::paste0('"', enum.fields, '"'), collapse=", "), "]")
-    coords.string <- base::paste0("[", base::paste(embeddings.conf, collapse = ",\n"), "]")
+    enum_string <- base::paste0("[", base::paste(base::paste0('"', enum_fields, '"'), collapse=", "), "]")
+    coords_string <- base::paste0("[", base::paste(embeddings_conf, collapse = ",\n"), "]")
     config <- base::sprintf(
         config,
-        cluster.field,
-        cluster.field,
-        enum.string,
-        coords.string
+        dot_radius,
+        dot_alpha,
+        enum_string,
+        coords_string
     )
     if (!is.null(features)){
         config <- base::paste(config, 'quickGenesFile="quickGenes.tsv"', sep="\n")
     }
-    confPath = base::file.path(dir, "cellbrowser.conf")
-    base::cat(config, file=confPath)
-    cb.dir <- base::paste(dir, "html_data", sep="/")
+    if (!is.null(cluster_field)){
+        config <- base::paste(config, base::paste0('clusterField="', cluster_field,'"'), sep="\n")
+        config <- base::paste(config, base::paste0('labelField="', cluster_field,'"'), sep="\n")
+    }
+    if (!is.null(hide_labels) && hide_labels){
+        config <- base::paste(config, 'showLabels=False', sep="\n")
+    }
+    conf_path = base::file.path(rootname, "cellbrowser.conf")
+    base::cat(config, file=conf_path)
+    cb_dir <- base::paste(rootname, "html_data", sep="/")
     cb <- reticulate::import(module = "cellbrowser")
-    cb$cellbrowser$build(dir, cb.dir)
+    cb$cellbrowser$build(rootname, cb_dir)
+}
+
+export_cellbrowser <- function(seurat_data, assay, slot, rootname, dot_radius=3, dot_alpha=0.5, features=NULL, meta_fields=NULL, meta_fields_names=NULL, resolution=NULL, resolution_prefix=NULL){
+    base::tryCatch(
+        expr = {
+            backup_assay <- SeuratObject::DefaultAssay(seurat_data)
+            SeuratObject::DefaultAssay(seurat_data) <- assay                 # safety measure
+            SeuratObject::Idents(seurat_data) <- "new.ident"                 # safety measure
+            cluster_field <- "Genes"                                         # default value (in case we have only one identity and no clusters)
+
+            if (is.null(meta_fields) || is.null(meta_fields_names)){
+                meta_fields <-       c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "S.Score", "G2M.Score",    "nCount_ATAC", "nFeature_ATAC", "TSS.enrichment",       "nucleosome_signal", "frip", "blacklisted_fraction")    
+                meta_fields_names <- c("GEX UMIs",   "Genes",        "Mitochondrial %", "Novelty score",            "S score", "G to M score", "ATAC UMIs",   "Peaks",         "TSS enrichment score", "Nucleosome signal", "FRiP", "Blacklisted fraction")
+            }
+
+            if (length(base::unique(base::as.vector(as.character(seurat_data@meta.data$new.ident)))) > 1){
+                cluster_field <- "Identity"
+                meta_fields <- base::append(meta_fields, "new.ident", 0)
+                meta_fields_names <- base::append(meta_fields_names, "Identity", 0)
+            }
+
+            if(seurat_data@meta.data$new.ident != seurat_data@meta.data$condition){
+                meta_fields <- base::append(meta_fields, "condition", 1)
+                meta_fields_names <- base::append(meta_fields_names, "Condition", 1)
+            }
+
+            if(!is.null(resolution) && !is.null(resolution_prefix)){
+                meta_fields <- base::append(meta_fields, paste(resolution_prefix, resolution, sep="."))
+                meta_fields_names <- base::append(meta_fields_names, paste("Clustering (", resolution, ")", sep=""))
+                cluster_field <- paste("Clustering (", resolution, ")", sep="")[1]
+            }
+
+            base::tryCatch(
+                expr = {
+                    custom_fields <- base::grep("^custom_", base::colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
+                    custom_fields_names <- base::gsub("custom_", "Custom ", custom_fields)
+                    meta_fields <- base::append(meta_fields, custom_fields)
+                    meta_fields_names <- base::append(meta_fields_names, custom_fields_names)
+                },
+                error = function(e){
+                    base::print(base::paste("Failed to add custom metadata fields with error -", e))
+                }
+            )
+
+            base::tryCatch(
+                expr = {
+                    quartile_fields <- base::grep("^quartile_", base::colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
+                    quartile_fields_names <- base::gsub("quartile_", "Quartile ", quartile_fields)
+                    meta_fields <- base::append(meta_fields, quartile_fields)
+                    meta_fields_names <- base::append(meta_fields_names, quartile_fields_names)
+                },
+                error = function(e){
+                    base::print(base::paste("Failed to add quartile metadata fields with error -", e))
+                }
+            )
+
+            cb_build(
+                seurat_data,
+                slot=slot,
+                rootname=rootname,
+                cluster_field=cluster_field,
+                features=features,
+                meta_fields=meta_fields,
+                meta_fields_names=meta_fields_names,
+                dot_radius=dot_radius,
+                dot_alpha=dot_alpha,
+                hide_labels=base::ifelse(cluster_field=="Genes", TRUE, FALSE)
+            )
+            base::print(base::paste("Exporting UCSC Cellbrowser data to", rootname, sep=" "))
+        },
+        error = function(e){
+            base::print(base::paste("Failed to export UCSC Cellbrowser data with error -", e))
+        },
+        finally = {
+            SeuratObject::DefaultAssay(seurat_data) <- backup_assay
+        }
+    )
 }

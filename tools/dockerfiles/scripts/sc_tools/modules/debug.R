@@ -7,7 +7,7 @@ export(
 
 
 print_info <- function(seurat_data, args) {
-    if (args$verbose){
+    if (!is.null(args$verbose) && args$verbose){
         base::print("Assays")
         base::print(seurat_data@assays)
         base::print("Reductions")

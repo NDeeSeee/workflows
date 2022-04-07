@@ -19,7 +19,8 @@ export(
     "assign_identities",
     "load_10x_multiome_data",
     "load_10x_gex_data",
-    "export_h5seurat"
+    "export_h5seurat",
+    "load_cell_cycle_data"
 )
 
 
@@ -54,6 +55,26 @@ load_barcodes_data <- function(location, seurat_data){
     return (default_barcodes_data)
 }
 
+load_cell_cycle_data <- function(location){
+    if (!is.null(location)){
+        cell_cycle_data <- utils::read.table(
+            location,
+            sep=get_file_type(location),
+            header=TRUE,
+            check.names=FALSE,
+            stringsAsFactors=FALSE
+        )
+        base::print(
+            base::paste(
+                "Cell cycle data is successfully loaded from ", location
+            )
+        )
+        return (cell_cycle_data)
+    }
+    base::print("Cell cycle data is not provided.")
+    return (NULL)
+}
+
 export_data <- function(data, location, row_names=FALSE, col_names=TRUE, quote=FALSE){
     base::tryCatch(
         expr = {
@@ -65,7 +86,7 @@ export_data <- function(data, location, row_names=FALSE, col_names=TRUE, quote=F
                 col.names=col_names,
                 quote=quote
             )
-            base::print(base::paste("Export data to", location, sep=" "))
+            base::print(base::paste("Exporting data to", location, sep=" "))
         },
         error = function(e){
             base::print(base::paste("Failed to export data to", location, sep=" "))
@@ -77,7 +98,7 @@ export_rds <- function(data, location){
     base::tryCatch(
         expr = {
             base::saveRDS(data, location)
-            base::print(base::paste("Export data as RDS to", location, sep=" "))
+            base::print(base::paste("Exporting data as RDS to", location, sep=" "))
         },
         error = function(e){
             base::print(base::paste("Failed to export data as RDS to", location, sep=" "))
@@ -89,7 +110,7 @@ export_h5seurat <- function(data, location, overwrite=TRUE){
     base::tryCatch(
         expr = {
             SeuratDisk::SaveH5Seurat(data, location, overwrite=overwrite)
-            base::print(base::paste("Export data as h5seurat to", location, sep=" "))
+            base::print(base::paste("Exporting data as h5seurat to", location, sep=" "))
         },
         error = function(e){
             base::print(base::paste("Failed to export data as h5seurat to", location, sep=" "))
