@@ -28,7 +28,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         reduction="atac_lsi",
         qc_columns=selected_features,
         qc_labels=selected_labels,
-        plot_title="Correlation plots between QC metrics and LSI dimentions of GEX datasets",
+        plot_title="Correlation plots between QC metrics and LSI dimensions of GEX datasets",
         combine_guides="collect",
         rootname=paste(args$output, "atac_qc_dim_corr", sep="_"),
         pdf=args$pdf
