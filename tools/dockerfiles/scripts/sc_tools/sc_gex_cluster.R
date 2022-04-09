@@ -18,8 +18,9 @@ suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
 
 export_all_clustering_plots <- function(seurat_data, suffix, args){
-    Idents(seurat_data) <- "new.ident"                                # safety measure
-
+    Idents(seurat_data) <- "new.ident"                                                               # safety measure
+    downsampled_to <- analyses$get_min_ident_size(SplitObject(seurat_data, split.by="new.ident"))    # need to split it for consistency
+    downsampled_data <- subset(seurat_data, downsample=downsampled_to)
     for (i in 1:length(args$resolution)) {
         current_resolution <- args$resolution[i]
         graphics$dim_plot(
@@ -61,8 +62,11 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
                 pdf=args$pdf
             )
             graphics$composition_plot(
-                data=seurat_data,
-                plot_title=paste("Grouped by cluster split by identity composition plot of GEX datasets. Resolution", current_resolution),
+                data=downsampled_data,
+                plot_title=paste(
+                    "Grouped by cluster split by identity composition plot of GEX datasets.",
+                    "Downsampled to", downsampled_to, "cells per dataset.",
+                    "Resolution", current_resolution),
                 legend_title="Cluster",
                 group_by=paste("gex_res", current_resolution, sep="."),
                 split_by="new.ident",
@@ -73,8 +77,11 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
                 pdf=args$pdf
             )
             graphics$composition_plot(
-                data=seurat_data,
-                plot_title=paste("Grouped by identity split by cluster composition plot of GEX datasets. Resolution", current_resolution),
+                data=downsampled_data,
+                plot_title=paste(
+                    "Grouped by identity split by cluster composition plot of GEX datasets.",
+                    "Downsampled to", downsampled_to, "cells per dataset.",
+                    "Resolution", current_resolution),
                 legend_title="Identity",
                 group_by="new.ident",
                 split_by=paste("gex_res", current_resolution, sep="."),
@@ -100,8 +107,12 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
                 pdf=args$pdf
             )
             graphics$composition_plot(
-                data=seurat_data,
-                plot_title=paste("Grouped by cluster split by condition composition plot of GEX datasets. Resolution", current_resolution),
+                data=downsampled_data,
+                plot_title=paste(
+                    "Grouped by cluster split by condition composition plot of GEX datasets.",
+                    "Downsampled to", downsampled_to, "cells per dataset.",
+                    "Resolution", current_resolution
+                ),
                 legend_title="Cluster",
                 group_by=paste("gex_res", current_resolution, sep="."),
                 split_by="condition",
@@ -112,8 +123,12 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
                 pdf=args$pdf
             )
             graphics$composition_plot(
-                data=seurat_data,
-                plot_title=paste("Grouped by condition split by cluster composition plot of GEX datasets. Resolution", current_resolution),
+                data=downsampled_data,
+                plot_title=paste(
+                    "Grouped by condition split by cluster composition plot of GEX datasets.",
+                    "Downsampled to", downsampled_to, "cells per dataset.",
+                    "Resolution", current_resolution
+                ),
                 legend_title="Condition",
                 group_by="condition",
                 split_by=paste("gex_res", current_resolution, sep="."),
@@ -140,8 +155,11 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
                 pdf=args$pdf
             )
             graphics$composition_plot(
-                data=seurat_data,
-                plot_title=paste("Grouped by cell cycle phase split by identity composition plot of GEX datasets. Resolution", current_resolution),
+                data=downsampled_data,
+                plot_title=paste(
+                    "Grouped by cell cycle phase split by identity composition plot of GEX datasets.",
+                    "Downsampled to", downsampled_to, "cells per dataset.",
+                    "Resolution", current_resolution),
                 legend_title="Phase",
                 group_by="Phase",
                 split_by="new.ident",
@@ -152,8 +170,11 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
                 pdf=args$pdf
             )
             graphics$composition_plot(
-                data=seurat_data,
-                plot_title=paste("Grouped by cell cycle phase split by cluster composition plot of GEX datasets. Resolution", current_resolution),
+                data=downsampled_data,
+                plot_title=paste(
+                    "Grouped by cell cycle phase split by cluster composition plot of GEX datasets.",
+                    "Downsampled to", downsampled_to, "cells per dataset.",
+                    "Resolution", current_resolution),
                 legend_title="Phase",
                 group_by="Phase",
                 split_by=paste("gex_res", current_resolution, sep="."),
@@ -165,6 +186,8 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
             )
         }
     }
+    rm(downsampled_data)
+    gc(verbose=FALSE)
 }
 
 
@@ -184,40 +207,41 @@ export_all_expression_plots <- function(seurat_data, suffix, args) {
             rootname=paste(args$output, suffix, "expr_avg_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
-        for (i in 1:length(args$genes)) {
-            current_gene <- args$genes[i]
-            graphics$feature_plot(
-                data=seurat_data,
-                features=current_gene,
-                labels=current_gene,
-                reduction="rnaumap",
-                plot_title=paste("Log normalized gene expression per cell. Resolution", current_resolution),
-                label=TRUE,
-                order=TRUE,
-                max_cutoff="q99",  # to prevent cells with overexpressed gene from distoring the color bar
-                combine_guides="keep",
-                width=800,
-                height=800,
-                rootname=paste(args$output, suffix, "expr_per_cell_res", current_resolution, current_gene, sep="_"),
-                pdf=args$pdf
-            )
-            graphics$vln_plot(
-                data=seurat_data,
-                features=current_gene,
-                labels=current_gene,
-                plot_title=paste("Log normalized gene expression density per cluster. Resolution", current_resolution),
-                legend_title="Cluster",
-                log=TRUE,
-                pt_size=0,
-                combine_guides="collect",
-                width=800,
-                height=600,
-                palette_colors=graphics$D40_COLORS,
-                rootname=paste(args$output, suffix, "expr_dnst_res", current_resolution, current_gene, sep="_"),
-                pdf=args$pdf
-            )
+        if (length(args$genes) > 0){
+            for (i in 1:length(args$genes)) {
+                current_gene <- args$genes[i]
+                graphics$feature_plot(
+                    data=seurat_data,
+                    features=current_gene,
+                    labels=current_gene,
+                    reduction="rnaumap",
+                    plot_title=paste("Log normalized gene expression per cell. Resolution", current_resolution),
+                    label=TRUE,
+                    order=TRUE,
+                    max_cutoff="q99",  # to prevent cells with overexpressed gene from distoring the color bar
+                    combine_guides="keep",
+                    width=800,
+                    height=800,
+                    rootname=paste(args$output, suffix, "expr_per_cell_res", current_resolution, current_gene, sep="_"),
+                    pdf=args$pdf
+                )
+                graphics$vln_plot(
+                    data=seurat_data,
+                    features=current_gene,
+                    labels=current_gene,
+                    plot_title=paste("Log normalized gene expression density per cluster. Resolution", current_resolution),
+                    legend_title="Cluster",
+                    log=TRUE,
+                    pt_size=0,
+                    combine_guides="collect",
+                    width=800,
+                    height=600,
+                    palette_colors=graphics$D40_COLORS,
+                    rootname=paste(args$output, suffix, "expr_dnst_res", current_resolution, current_gene, sep="_"),
+                    pdf=args$pdf
+                )
+            }
         }
-
     }
     SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
 }

@@ -19,16 +19,18 @@ print_info <- function(seurat_data, args) {
         if ("ATAC" %in% names(seurat_data@assays)) {
             base::print("Fragments from ATAC assay")
             fragments <- Signac::Fragments(seurat_data[["ATAC"]])
-            for (i in 1:length(fragments)){
-                fragment <- fragments[[i]]
-                base::print(
-                    base::paste(
-                        "Fragment", i, "includes",
-                        length(methods::slot(fragment, "cells")), "cells",
-                        "loaded from", methods::slot(fragment, "path"),
-                        "with hash", methods::slot(fragment, "hash")[1]             # hash 1 is for Fragment file, hash 2 is for index
+            if (length(fragments) > 0){
+                for (i in 1:length(fragments)){
+                    fragment <- fragments[[i]]
+                    base::print(
+                        base::paste(
+                            "Fragment", i, "includes",
+                            length(methods::slot(fragment, "cells")), "cells",
+                            "loaded from", methods::slot(fragment, "path"),
+                            "with hash", methods::slot(fragment, "hash")[1]             # hash 1 is for Fragment file, hash 2 is for index
+                        )
                     )
-                )
+                }
             }
         }
         base::print(base::gc())

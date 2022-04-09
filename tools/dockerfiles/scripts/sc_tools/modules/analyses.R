@@ -15,8 +15,10 @@ export(
     "gex_sct_integrated",
     "get_vars_to_regress",
     "get_cell_cycle_scores",
-    "gex_integration_k_weight",
-    "gex_putative_gene_markers"
+    "get_min_ident_size",
+    "gex_putative_gene_markers",
+    "atac_preprocess",
+    "atac_analyze"
 )
 
 get_vars_to_regress <- function(seurat_data, args, exclude_columns=NULL) {
@@ -149,29 +151,24 @@ gex_sct_single <- function(seurat_data, args, cell_cycle_data=NULL){
     return (scaled_norm_seurat_data)
 }
 
-gex_integration_k_weight <- function(splitted_seurat_data, default_k_weight=100){
-    # For Seurat::IntegrateData k.weight 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
-
-    k_weight <- min(
-        min(
-            table(
-                unlist(
+get_min_ident_size <- function(splitted_seurat_data){
+    min_ident_size <- min(
+        table(
+            unlist(
+                lapply(
                     lapply(
                         lapply(
-                            lapply(
-                                splitted_seurat_data,
-                                SeuratObject::Idents
-                            ),
-                            as.character
+                            splitted_seurat_data,
+                            SeuratObject::Idents
                         ),
-                        base::as.vector
-                    )
+                        as.character
+                    ),
+                    base::as.vector
                 )
             )
-        ),
-        default_k_weight
+        )
     )
-    return (k_weight)
+    return (min_ident_size)
 }
 
 
@@ -241,7 +238,7 @@ gex_log_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
         integration_anchors, 
         new.assay.name="gex_integrated",
         normalization.method="LogNormalize",
-        k.weight=gex_integration_k_weight(splitted_seurat_data, 100),
+        k.weight=min(get_min_ident_size(splitted_seurat_data), 100),        # k.weight 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
         verbose=FALSE
     )
     if (failed_cell_cycle_scoring){
@@ -395,7 +392,7 @@ gex_sct_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
         integration_anchors, 
         new.assay.name="gex_integrated",
         normalization.method="SCT",
-        k.weight=gex_integration_k_weight(splitted_seurat_data, 100),
+        k.weight=min(get_min_ident_size(splitted_seurat_data), 100),        # k.weight 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
         verbose=FALSE
     )
     SeuratObject::DefaultAssay(integrated_seurat_data) <- "gex_integrated"
@@ -406,12 +403,13 @@ gex_sct_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
 
 gex_preprocess <- function(seurat_data, args, cell_cycle_data=NULL) {
     SeuratObject::DefaultAssay(seurat_data) <- "RNA"                                                        # safety measure
+    SeuratObject::Idents(seurat_data) <- "new.ident"                                                        # safety measure
     splitted_seurat_data <- Seurat::SplitObject(seurat_data, split.by="new.ident")                          # to check if we have aggregated datasets
     if (args$ntgr == "none" | length(splitted_seurat_data) == 1){
         base::print(
             base::paste(
-                "Skip datasets integration (either forced or only one identity is present)",
-                "using the original not splitted seurat data."
+                "Skipping datasets integration (either forced or only one identity",
+                "is present). Using the original not splitted seurat data."
             )
         )
         if (args$gexnorm == "log"){
@@ -420,7 +418,7 @@ gex_preprocess <- function(seurat_data, args, cell_cycle_data=NULL) {
             processed_seurat_data <- gex_sct_single(seurat_data, args, cell_cycle_data)                     # sets default assay to SCT
         }
     } else {
-        base::print("Run datasets integration using splitted seurat data.")
+        base::print("Running datasets integration using splitted seurat data.")
         if (args$gexnorm == "log"){
             processed_seurat_data <- gex_log_integrated(splitted_seurat_data, args, cell_cycle_data)        # sets default assay to gex_integrated
         } else {
@@ -532,4 +530,132 @@ gex_putative_gene_markers <- function(seurat_data, resolution_prefix, args, min_
     }
     base::gc(verbose=FALSE)
     return (all_putative_markers)
+}
+
+atac_preprocess <- function(seurat_data, args) {
+    SeuratObject::DefaultAssay(seurat_data) <- "ATAC"                                           # safety measure
+    SeuratObject::Idents(seurat_data) <- "new.ident"                                            # safety measure
+
+    base::print(
+        base::paste(
+            "Applying TF-IDF normalization. Searching for top highly variable",
+            "features using", args$minvarperc, "as a lower percentile bound.",
+            "Analyzing all datasets jointly."
+        )
+    )
+    processed_seurat_data <- Signac::RunTFIDF(
+        seurat_data,
+        assay="ATAC",                                                                           # safety measure
+        verbose=FALSE
+    )
+    processed_seurat_data <- Signac::FindTopFeatures(
+        processed_seurat_data,
+        assay="ATAC",                                                                           # safety measure
+        min.cutoff=args$minvarperc,
+        verbose=FALSE
+    )
+
+    splitted_seurat_data <- Seurat::SplitObject(seurat_data, split.by="new.ident")              # need to use original seurat_data for possible integration below
+    if (args$ntgr == "none" | length(splitted_seurat_data) == 1){
+        base::print(
+            base::paste(
+                "Skipping datasets integration (either forced or only one identity",
+                "is present). Using the original not splitted seurat data."
+            )
+        )
+        processed_seurat_data <- Signac::RunSVD(
+            processed_seurat_data,
+            n=50,                                                                               # by default computes 50 singular values
+            reduction.name="atac_lsi",                                                          # adding "atac_lsi" for consistency
+            verbose=FALSE
+        )
+    } else {
+        base::print("Running datasets integration using splitted seurat data.")
+        processed_seurat_data <- Signac::RunSVD(
+            processed_seurat_data,
+            n=50,                                                                               # by default computes 50 singular values
+            reduction.name="lsi",                                                               # adding "lsi" as it will be used in integration
+            verbose=FALSE
+        )
+        for (i in 1:length(splitted_seurat_data)){                                              # it was splitted from not updated seurat_data
+            SeuratObject::DefaultAssay(splitted_seurat_data[[i]]) <- "ATAC"                     # safety measure
+            base::print(
+                base::paste(
+                    "Applying TF-IDF normalization. Searching for top highly variable",
+                    "features using", args$minvarperc, "as a lower percentile bound.",
+                    "Analyzing", SeuratObject::Idents(splitted_seurat_data[[i]])[1],
+                    "dataset."
+                )
+            )
+            splitted_seurat_data[[i]] <- Signac::RunTFIDF(
+                splitted_seurat_data[[i]],
+                assay="ATAC",                                                                   # safety measure
+                verbose=FALSE
+            )
+            splitted_seurat_data[[i]] <- Signac::FindTopFeatures(
+                splitted_seurat_data[[i]],
+                assay="ATAC",                                                                   # safety measure
+                min.cutoff=args$minvarperc,
+                verbose=FALSE
+            )
+            splitted_seurat_data[[i]] <- Signac::RunSVD(
+                splitted_seurat_data[[i]],
+                n=50,                                                                           # by default computes 50 singular values
+                reduction.name="lsi",                                                           # adding "lsi" to be used in FindIntegrationAnchors
+                verbose=FALSE
+            )
+        }
+        integration_anchors <- Seurat::FindIntegrationAnchors(
+            splitted_seurat_data,
+            anchor.features=base::rownames(seurat_data),                                        # peaks from our ATAC assay
+            reduction="rlsi",                                                                   # will always search for "lsi" reductions in splitted_seurat_data
+            dims=args$atacndim,                                                                 # don't need to use more than we are going to use in UMAP
+            verbose=FALSE
+        )
+        integrated_seurat_data <- Seurat::IntegrateEmbeddings(
+            anchorset=integration_anchors,
+            reductions=processed_seurat_data[["lsi"]],
+            new.reduction.name="atac_lsi",                                                      # adding "atac_lsi" for consistency
+            k.weight=min(get_min_ident_size(splitted_seurat_data), 100),                        # k.weight 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
+            dims.to.integrate=args$atacndim                                                     # don't need to use more than we are going to use in UMAP
+        )
+        processed_seurat_data <- integrated_seurat_data
+        base::rm(integration_anchors, integrated_seurat_data)                                   # remove unused data
+    }
+    base::rm(splitted_seurat_data)
+    base::gc(verbose=FALSE)
+    return (processed_seurat_data)
+}
+
+atac_analyze <- function(seurat_data, args){
+    SeuratObject::DefaultAssay(seurat_data) <- "ATAC"                           # safety measure
+    SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
+    backup_reductions <- c()                                                    # ATAC integration main remove GEX related reductions so we need to back them up
+    for (reduction_name in c("pca", "rnaumap")){
+        if (reduction_name %in% names(seurat_data@reductions)){
+            base::print(base::paste("Backing up reduction", reduction_name))
+            backup_reductions[[reduction_name]] <- seurat_data[[reduction_name]]
+        }
+    }
+    seurat_data <- atac_preprocess(seurat_data, args)                            # adds "atac_lsi" reduction
+    if (length(backup_reductions) > 0){                                          # restoring backed up reductions
+        for (reduction_name in names(backup_reductions)){
+            base::print(base::paste("Restoring reduction", reduction_name, "from backup"))
+            seurat_data[[reduction_name]] <- backup_reductions[[reduction_name]]
+        }
+    }
+    seurat_data <- Seurat::RunUMAP(
+        seurat_data,
+        reduction="atac_lsi",
+        dims=args$atacndim,
+        reduction.name="atacumap",
+        reduction.key="ATACUMAP_",
+        spread=base::ifelse(is.null(args$uspread), 1, args$uspread),
+        min.dist=base::ifelse(is.null(args$umindist), 0.3, args$umindist),
+        n.neighbors=base::ifelse(is.null(args$uneighbors), 30, args$uneighbors),
+        metric=base::ifelse(is.null(args$umetric), "cosine", args$umetric),
+        umap.method=base::ifelse(is.null(args$umethod), "uwot", args$umethod),
+        verbose=FALSE
+    )
+    return (seurat_data)
 }

@@ -125,7 +125,7 @@ cb_build <- function(object, slot, rootname, cluster_field, features, meta_field
     config <- '
 name="cellbrowser"
 shortLabel="cellbrowser"
-geneLabel="Gene"
+geneLabel="Feature"
 exprMatrix="exprMatrix.tsv.gz"
 meta="meta.tsv"
 radius=%i
@@ -165,12 +165,20 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, dot_radius=3,
             backup_assay <- SeuratObject::DefaultAssay(seurat_data)
             SeuratObject::DefaultAssay(seurat_data) <- assay                 # safety measure
             SeuratObject::Idents(seurat_data) <- "new.ident"                 # safety measure
-            cluster_field <- "Genes"                                         # default value (in case we have only one identity and no clusters)
 
             if (is.null(meta_fields) || is.null(meta_fields_names)){
-                meta_fields <-       c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "S.Score", "G2M.Score",    "nCount_ATAC", "nFeature_ATAC", "TSS.enrichment",       "nucleosome_signal", "frip", "blacklisted_fraction")    
-                meta_fields_names <- c("GEX UMIs",   "Genes",        "Mitochondrial %", "Novelty score",            "S score", "G to M score", "ATAC UMIs",   "Peaks",         "TSS enrichment score", "Nucleosome signal", "FRiP", "Blacklisted fraction")
+                meta_fields <-       c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "S.Score", "G2M.Score",    "Phase", "nCount_ATAC", "nFeature_ATAC", "TSS.enrichment",       "nucleosome_signal", "frip", "blacklisted_fraction")
+                meta_fields_names <- c("GEX UMIs",   "Genes",        "Mitochondrial %", "Novelty score",            "S score", "G to M score", "Phase", "ATAC UMIs",   "Peaks",         "TSS enrichment score", "Nucleosome signal", "FRiP", "Bl. regions")
             }
+
+            for (i in 1:length(meta_fields)){
+                current_field <- meta_fields[i]
+                if (current_field %in% base::colnames(seurat_data@meta.data) && length(base::unique(base::as.vector(as.character(seurat_data@meta.data[, current_field])))) > 1){
+                    default_cluster_field <- meta_fields_names[i]                 # first field from the meta.data that is not unique for all cells
+                    break
+                }
+            }
+            cluster_field <- default_cluster_field                                # default value (in case we have only one identity and no clusters)
 
             if (length(base::unique(base::as.vector(as.character(seurat_data@meta.data$new.ident)))) > 1){
                 cluster_field <- "Identity"
@@ -223,7 +231,7 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, dot_radius=3,
                 meta_fields_names=meta_fields_names,
                 dot_radius=dot_radius,
                 dot_alpha=dot_alpha,
-                hide_labels=base::ifelse(cluster_field=="Genes", TRUE, FALSE)
+                hide_labels=base::ifelse(cluster_field==default_cluster_field, TRUE, FALSE)
             )
             base::print(base::paste("Exporting UCSC Cellbrowser data to", rootname, sep=" "))
         },

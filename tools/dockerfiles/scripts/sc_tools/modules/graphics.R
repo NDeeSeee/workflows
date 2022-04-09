@@ -549,7 +549,8 @@ composition_plot <- function(data, rootname, plot_title, legend_title, x_label, 
                     ggplot2::ylab(y_label) +
                     ggplot2::theme_gray() +
                     ggplot2::ggtitle(plot_title) +
-                    ggplot2::guides(fill=ggplot2::guide_legend(legend_title))
+                    ggplot2::guides(fill=ggplot2::guide_legend(legend_title)) +
+                    Seurat::RotatedAxis()
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(plot))

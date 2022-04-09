@@ -402,51 +402,6 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     } 
 }
 
-export_cellbrowser_data <- function(seurat_data, assay, matrix_slot, resolution, features, rootname){
-    tryCatch(
-        expr = {
-            backup_assay <- DefaultAssay(seurat_data)
-            DefaultAssay(seurat_data) <- assay
-            meta_fields <- c("nCount_RNA", "nFeature_RNA", "log10_gene_per_log10_umi", "mito_percentage", "Phase", "S.Score", "G2M.Score")
-            meta_fields_names <- c("UMIs", "Genes", "Novelty score", "Mitochondrial %", "Cell cycle phase", "S score", "G to M score")
-            cluster_field <- paste("Clustering (", resolution, ")", sep="")[1]
-            cluster_prefix <- "RNA"
-            if ("integrated" %in% names(seurat_data@assays)) {
-                cluster_prefix <- "integrated"
-                cluster_field <- "Identity"
-                meta_fields <- c(c("new.ident", "condition"), meta_fields)
-                meta_fields_names <- c(c("Identity", "Condition"), meta_fields_names)
-            }
-            meta_fields <- c(
-                meta_fields,
-                paste(paste(cluster_prefix, "snn_res", sep="_"), resolution, sep="."),
-                paste("cluster_ext_type_res", resolution, sep=".")
-            )
-            meta_fields_names <- c(
-                meta_fields_names,
-                paste("Clustering (", resolution, ")", sep=""),
-                paste("Cell Type Prediction (", resolution, ")", sep="")
-            )
-            ExportToCellbrowser(
-                seurat_data,
-                matrix.slot=matrix_slot,
-                dir=rootname,
-                cluster.field=cluster_field,
-                features=features,
-                meta.fields=meta_fields,
-                meta.fields.names=meta_fields_names
-            )
-            print(paste("Export UCSC Cellbrowser data to", rootname, sep=" "))
-        },
-        error = function(e){
-            print(paste("Failed to export UCSC Cellbrowser data to", rootname, sep=" "))
-        },
-        finally = {
-            DefaultAssay(seurat_data) <- backup_assay
-        }
-    )
-}
-
 
 get_args <- function(){
     parser <- ArgumentParser(description="Seurat GEX Dimensionality Reduction Analysis")
