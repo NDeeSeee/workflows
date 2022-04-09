@@ -169,9 +169,9 @@ get_args <- function(){
             "For example, setting to 5 will use the the top 95 percent most common among all cells",
             "ATAC features as highly variable. Used for ATAC datasets integration, scaling,",
             "and dimensional reduction.",
-            "Default: 5"
+            "Default: 0 (use all available ATAC features)"
         ),
-        type="integer", default=5
+        type="integer", default=0
     )
     parser$add_argument(
         "--atacndim",
@@ -291,7 +291,7 @@ if (length(args$atacndim) == 1) {
     args$atacndim <- c(2:args$atacndim[1])                                              # skipping the first LSI component
     print(paste("--atacndim was adjusted to", paste(args$atacndim, collapse=", ")))
 }
-args$minvarperc <- paste0("q", args$minvarperc)                                         # need to have it in a form of "qN", for example "q5"
+args$minvarperc <- paste0("q", args$minvarperc)                                         # need to have it in a form of "qN", for example "q0"
 
 print(
     paste(
