@@ -255,8 +255,8 @@ get_args <- function(){
             "Path to the RDS file to load Seurat object from. This file",
             "can be produced by sc_gex_reduce.R script and must include",
             "dimensional reduction information stored in the 'pca' and",
-            "'rnaumap' slots. GEX information should be stored in the RNA",
-            "assay."
+            "'rnaumap' slots. It is mandatory to have GEX information",
+            "stored in the RNA assay."
         ),
         type="character", required="True"
     )
@@ -266,9 +266,7 @@ get_args <- function(){
             "Dimensionality used when constructing nearest-neighbor graph before",
             "clustering (from 1 to 50). If single value N is provided, use from 1 to N",
             "dimensions. If multiple values are provided, subset to only selected",
-            "dimensions. The value will be automatically adjusted based on the",
-            "dimensional reduction information stored in the 'pca' slot of the loaded",
-            "Seurat object",
+            "dimensions.",
             "Default: from 1 to 10"
         ),
         type="integer", default=10, nargs="*"
