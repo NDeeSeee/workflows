@@ -571,11 +571,11 @@ composition_plot <- function(data, rootname, plot_title, legend_title, x_label, 
     )
 }
 
-corr_plot <- function(data, reduction, qc_columns, qc_labels, plot_title, rootname, ndims=NULL, combine_guides=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
+corr_plot <- function(data, reduction, qc_columns, qc_labels, plot_title, rootname, highlight_dims=NULL, combine_guides=NULL, pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             embeddings <- SeuratObject::Embeddings(data[[reduction]])
-            ndims=base::ifelse(is.null(ndims), length(data[[reduction]]), ndims)
+            ndims=length(data[[reduction]])
             plots <- list()
             for (i in 1:length(qc_columns)) {
                 current_qc_column <- qc_columns[i]
@@ -593,9 +593,12 @@ corr_plot <- function(data, reduction, qc_columns, qc_labels, plot_title, rootna
                 corr_data <- base::as.data.frame(stats::cor(x=embeddings, y=qc_data))
                 corr_data$correlation <- corr_data[, 1]
                 corr_data$dimension <- seq_len(length.out=base::nrow(corr_data))
-
+                corr_data$color <- "black"
+                if (!is.null(highlight_dims)){
+                    corr_data[highlight_dims, "color"] <- "red"
+                }
                 plots[[current_qc_column]] <- ggplot2::ggplot(corr_data, ggplot2::aes(dimension, correlation)) +
-                                              ggplot2::geom_point() +
+                                              ggplot2::geom_point(color=corr_data$color) +
                                               ggplot2::xlab("Dimension") +
                                               ggplot2::ylab("Correlation") +
                                               ggplot2::xlim(c(0, ndims)) +

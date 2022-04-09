@@ -94,6 +94,7 @@ export_all_dimensionality_plots <- function(seurat_data, suffix, args) {
     graphics$corr_plot(
         data=seurat_data,
         reduction="pca",
+        highlight_dims=args$gexndim,
         qc_columns=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi"),
         qc_labels=c("GEX UMIs", "Genes", "Mitochondrial %", "Novelty score"),
         plot_title=paste(

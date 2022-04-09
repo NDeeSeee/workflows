@@ -26,6 +26,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$corr_plot(
         data=seurat_data,
         reduction="atac_lsi",
+        highlight_dims=args$atacndim,
         qc_columns=selected_features,
         qc_labels=selected_labels,
         plot_title="Correlation plots between QC metrics and LSI dimensions of GEX datasets",
@@ -175,8 +176,8 @@ get_args <- function(){
     parser$add_argument(
         "--atacndim",
         help=paste(
-            "Dimensionality to use in ATAC UMAP projection (from 2 to 50). If single",
-            "value N is provided, use from 2 to N LSI components. If multiple values",
+            "Dimensionality to use for datasets integration and for ATAC UMAP projection (from 2 to 50).",
+            "If single value N is provided, use from 2 to N LSI components. If multiple values",
             "are provided, subset to only selected LSI components.",
             "Default: from 2 to 10"
         ),

@@ -62,6 +62,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$corr_plot(
         data=seurat_data,
         reduction="pca",
+        highlight_dims=args$gexndim,
         qc_columns=selected_features,
         qc_labels=selected_labels,
         plot_title="Correlation plots between QC metrics and principal components from PCA of GEX datasets",
