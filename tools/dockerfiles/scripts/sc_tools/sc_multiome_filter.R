@@ -740,7 +740,7 @@ get_args <- function(){
         "--highvargex",
         help=paste(
             "Number of highly variable GEX features to detect. Used for GEX datasets",
-            "integration, scaling, and dimensional reduction when identifying GEX based",
+            "integration, scaling, and dimensionality reduction when identifying GEX based",
             "clusters for calling custom MACS2 peaks. Ignored if --callpeaks is not set",
             "to 'cluster'.",
             "Default: 3000"

@@ -195,7 +195,7 @@ get_args <- function(){
         help=paste(
             "Path to the RDS file to load Seurat object from. This file",
             "can be produced by sc_atac_reduce.R script and must include",
-            "dimensional reduction information stored in the 'atac_lsi' and",
+            "dimensionality reduction information stored in the 'atac_lsi' and",
             "'atacumap' slots. It is mandatory to have chromatin accessibility",
             "information stored in the ATAC assay."
         ),

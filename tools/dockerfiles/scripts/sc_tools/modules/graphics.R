@@ -903,11 +903,11 @@ dim_heatmap <- function(data, rootname, plot_title, x_label, y_label, reduction=
                 grDevices::dev.off()
             }
 
-            base::print(base::paste("Exporting dimensional reduction heatmap to ", rootname, ".(png/pdf)", sep=""))
+            base::print(base::paste("Exporting dimensionality reduction heatmap to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
             base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
-            base::print(base::paste("Failed to export dimensional reduction heatmap to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+            base::print(base::paste("Failed to export dimensionality reduction heatmap to ", rootname, ".(png/pdf) with error - ", e, sep=""))
         }
     )
 }
@@ -941,11 +941,11 @@ dim_loadings_plot <- function(data, rootname, plot_title, x_label, y_label, redu
                 grDevices::dev.off()
             }
 
-            base::print(base::paste("Exporting dimensional reduction loadings plot to ", rootname, ".(png/pdf)", sep=""))
+            base::print(base::paste("Exporting dimensionality reduction loadings plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
             base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
-            base::print(base::paste("Failed to export dimensional reduction loadings plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+            base::print(base::paste("Failed to export dimensionality reduction loadings plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
         }
     )
 }

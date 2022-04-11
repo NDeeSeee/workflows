@@ -168,7 +168,7 @@ get_args <- function(){
             "Minimum percentile to set the top most common ATAC features as highly variable.",
             "For example, setting to 5 will use the the top 95 percent most common among all cells",
             "ATAC features as highly variable. Used for ATAC datasets integration, scaling,",
-            "and dimensional reduction.",
+            "and dimensionality reduction.",
             "Default: 0 (use all available ATAC features)"
         ),
         type="integer", default=0

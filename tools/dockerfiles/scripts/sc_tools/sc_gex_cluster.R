@@ -254,7 +254,7 @@ get_args <- function(){
         help=paste(
             "Path to the RDS file to load Seurat object from. This file",
             "can be produced by sc_gex_reduce.R script and must include",
-            "dimensional reduction information stored in the 'pca' and",
+            "dimensionality reduction information stored in the 'pca' and",
             "'rnaumap' slots. It is mandatory to have GEX information",
             "stored in the RNA assay."
         ),

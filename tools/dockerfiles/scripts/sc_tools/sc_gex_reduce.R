@@ -464,7 +464,7 @@ get_args <- function(){
         "--highvargex",
         help=paste(
             "Number of highly variable GEX features to detect. Used for GEX datasets",
-            "integration, scaling, and dimensional reduction.",
+            "integration, scaling, and dimensionality reduction.",
             "Default: 3000"
         ),
         type="integer", default=3000
