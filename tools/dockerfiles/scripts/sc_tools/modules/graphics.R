@@ -31,6 +31,7 @@ export(
     "dim_loadings_plot",
     "silhouette_plot",
     "composition_plot",
+    "coverage_plot",
     "D40_COLORS"
 )
 
@@ -945,6 +946,50 @@ dim_loadings_plot <- function(data, rootname, plot_title, x_label, y_label, redu
         error = function(e){
             base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
             base::print(base::paste("Failed to export dimensional reduction loadings plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
+coverage_plot <- function(data, assay, region, group_by, plot_title, rootname, idents=NULL, cells=NULL, features=NULL, expression_assay="RNA", expression_slot="data", extend_upstream=0, extend_downstream=0, show_annotation=TRUE, show_peaks=TRUE, palette_colors=D40_COLORS, pdf=FALSE, width=1200, height=800, resolution=100){
+    base::tryCatch(
+        expr = {
+
+            plot <- Signac::CoveragePlot(
+                data,
+                assay=assay,
+                group.by=group_by,
+                region=region,
+                idents=idents,
+                cells=cells,
+                features=features,
+                expression.assay=expression_assay,
+                expression.slot=expression_slot,
+                extend.upstream=extend_upstream,
+                extend.downstream=extend_downstream,
+                annotation=show_annotation,
+                peaks=show_peaks,
+                links=FALSE,                                       # always FALSE as it requires running aditional function beforehand
+                tile=FALSE,                                        # always FALSE due to bug in Signac
+                sep=c("-", "-")
+            ) + patchwork::plot_annotation(title=plot_title)
+
+            plot[[1]][[1]] <- plot[[1]][[1]] + ggplot2::scale_fill_manual(values=palette_colors)
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            base::suppressMessages(base::print(plot))
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                base::suppressMessages(base::print(plot))
+                grDevices::dev.off()
+            }
+
+            base::print(base::paste("Exporting genome coverage plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export genome coverage plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
         }
     )
 }

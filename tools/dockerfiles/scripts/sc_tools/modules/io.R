@@ -5,6 +5,7 @@ import("Signac", attach=FALSE)
 import("tibble", attach=FALSE)
 import("SeuratDisk", attach=FALSE)
 import("rtracklayer", attach=FALSE)
+import("GenomicRanges", attach=FALSE)
 import("magrittr", `%>%`, attach=TRUE)
 
 export(
@@ -234,6 +235,12 @@ load_10x_multiome_data <- function(args, cell_identity_data, grouping_data) {
         names.field=2
     )
     annotation <- rtracklayer::import(args$annotations, format="GFF")
+
+    if( !("gene_biotype" %in% base::colnames(GenomicRanges::mcols(annotation))) ){
+        base::print("Loaded genome annotation doesn't have 'gene_biotype' column. Adding NA")
+        annotation$gene_biotype <- NA                                                               # some Signac functions fail without this column
+    }
+
     all_cells <- SeuratObject::Cells(seurat_data)
     names(all_cells) <- all_cells
     base::print(

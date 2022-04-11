@@ -420,13 +420,6 @@ if (!all(c("pca", "rnaumap") %in% names(seurat_data@reductions))){
     quit(save="no", status=1, runLast=FALSE)
 }
 
-if (!is.null(args$genes)){
-    print("Adjusting genes of interest to include only those that are present in the loaded Seurat object")
-    args$genes <- unique(args$genes)
-    args$genes <- args$genes[args$genes %in% as.vector(as.character(rownames(seurat_data)))]     # with RNA assay set as default the rownames should be genes
-    print(args$genes)
-}
-
 print(paste("Clustering GEX data using", paste(args$gexndim, collapse=", "), "principal components"))
 seurat_data <- analyses$add_clusters(
     seurat_data=seurat_data,
@@ -444,6 +437,13 @@ export_all_clustering_plots(
     suffix="clst",
     args=args
 )
+
+if (!is.null(args$genes)){
+    print("Adjusting genes of interest to include only those that are present in the loaded Seurat object")
+    args$genes <- unique(args$genes)
+    args$genes <- args$genes[args$genes %in% as.vector(as.character(rownames(seurat_data)))]     # with RNA assay set as default the rownames should be genes
+    print(args$genes)
+}
 
 if(args$cbbuild){
     print("Exporting UCSC Cellbrowser data")

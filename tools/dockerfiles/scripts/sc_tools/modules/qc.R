@@ -13,7 +13,6 @@ export(
     "add_gex_qc_metrics",
     "add_atac_qc_metrics",
     "add_peak_qc_metrics",
-    "get_tss_positions",
     "quartile_qc_metrics"
 )
 
@@ -83,9 +82,16 @@ add_atac_qc_metrics <- function(seurat_data, args){
     backup_assay <- SeuratObject::DefaultAssay(seurat_data)
     SeuratObject::DefaultAssay(seurat_data) <- "ATAC"
     seurat_data <- Signac::NucleosomeSignal(seurat_data, verbose=FALSE)
+
+    # if 'gene_biotype' are all NAs, then annotation doesn't have real gene_biotype data and we need to use NULL
+    tss_positions <- Signac::GetTSSPositions(
+        ranges=Signac::Annotation(seurat_data[["ATAC"]]),
+        biotypes=if(all(is.na(Signac::Annotation(seurat_data[["ATAC"]])$gene_biotype))) NULL else "protein_coding"
+    )
+
     seurat_data <- Signac::TSSEnrichment(
         seurat_data,
-        tss.positions=get_tss_positions(Signac::Annotation(seurat_data[["ATAC"]])),
+        tss.positions=tss_positions,
         fast=FALSE,                                                                    # set fast=FALSE, because we want to build TSS Enrichment plot later
         verbose=FALSE
     )
@@ -125,6 +131,7 @@ add_peak_qc_metrics <- function(seurat_data, blacklisted_data, args){
     return (seurat_data)
 }
 
+# DEPRECATED as we now use standard Signac::GetTSSPositions function with biotypes=NULL when all gene_biotype are NA
 get_tss_positions <- function(annotation_ranges){
     # Based on GetTSSPositions function from signac/R/utilities.R
     # adapted to work with refgene GTF annotations file
