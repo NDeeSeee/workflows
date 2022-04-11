@@ -34,17 +34,17 @@ call_peaks <- function(seurat_data, args) {
         seurat_data <- analyses$gex_analyze(seurat_data, args)
         seurat_data <- filter$collapse_fragments_list(seurat_data)                 # collapse repetitive fragments as we could split the datasets before integration
         debug$print_info(seurat_data, args)
-        group_by <- paste0("custom_peak_calling_res.", args$resolution)
+        group_by <- paste0("peak_calling_res.", args$resolution)
         seurat_data <- FindNeighbors(
             seurat_data,
             reduction="pca",                                                # this is the same reduction we got after running RunPCA on our GEX data, it's bound to the specific assay
             dims=args$gexndim,
-            graph.name=c("custom_peak_calling_nn", "custom_peak_calling"),
+            graph.name=c("peak_calling_nn", "peak_calling"),
             verbose=FALSE
         )
         seurat_data <- FindClusters(
             seurat_data,
-            graph.name="custom_peak_calling",
+            graph.name="peak_calling",
             resolution=args$resolution,
             verbose=FALSE
         )
@@ -936,7 +936,7 @@ if (!is.null(args$callpeaks)){
             seurat_data=seurat_data,
             suffix="mid_fltr",
             args=args,
-            cluster_prefix="custom_peak_calling"
+            cluster_prefix="peak_calling"
         )
     }
     print("Applying filters based on updated ATAC QC metrics after calling MACS2 peaks")

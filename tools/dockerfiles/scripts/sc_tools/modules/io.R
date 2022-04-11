@@ -20,7 +20,8 @@ export(
     "load_10x_multiome_data",
     "load_10x_gex_data",
     "export_h5seurat",
-    "load_cell_cycle_data"
+    "load_cell_cycle_data",
+    "replace_fragments"
 )
 
 
@@ -333,4 +334,20 @@ load_10x_gex_data <- function(args, cell_identity_data, grouping_data) {
         base::gc(verbose=FALSE)
         return (merged_seurat_data)
     }
+}
+
+replace_fragments <- function(location, seurat_data){
+    SeuratObject::DefaultAssay(seurat_data) <- "ATAC"                                # safety measure
+    Signac::Fragments(seurat_data[["ATAC"]]) <- NULL                                 # remove old fragments
+    all_cells <- SeuratObject::Cells(seurat_data)
+    names(all_cells) <- all_cells
+    base::print(base::paste("Preparing fragments for", length(all_cells), "cells"))
+    fragments <- Signac::CreateFragmentObject(
+        path=location,
+        cells=all_cells,
+        validate.fragments=TRUE,
+        verbose=FALSE
+    )
+    Signac::Fragments(seurat_data[["ATAC"]]) <- fragments
+    return(seurat_data)
 }

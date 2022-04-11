@@ -48,7 +48,7 @@ write_matrix <- function(inMat, outFname, sliceSize=1000){
     base::unlink(fnames)
 }
 
-cb_build <- function(object, slot, rootname, cluster_field, features, meta_fields, meta_fields_names, dot_radius, dot_alpha, hide_labels) {
+cb_build <- function(object, slot, rootname, cluster_field, features, meta_fields, meta_fields_names, dot_radius, dot_alpha) {
     if (!base::dir.exists(rootname)) {
         base::dir.create(rootname)
     }
@@ -131,7 +131,10 @@ meta="meta.tsv"
 radius=%i
 alpha=%f
 geneIdType="auto"
+clusterField="%s"
+labelField="%s"
 enumFields=%s
+showLabels=False
 coords=%s'
     enum_string <- base::paste0("[", base::paste(base::paste0('"', enum_fields, '"'), collapse=", "), "]")
     coords_string <- base::paste0("[", base::paste(embeddings_conf, collapse = ",\n"), "]")
@@ -139,18 +142,13 @@ coords=%s'
         config,
         dot_radius,
         dot_alpha,
+        cluster_field,
+        cluster_field,
         enum_string,
         coords_string
     )
     if (!is.null(features)){
         config <- base::paste(config, 'quickGenesFile="quickGenes.tsv"', sep="\n")
-    }
-    if (!is.null(cluster_field)){
-        config <- base::paste(config, base::paste0('clusterField="', cluster_field,'"'), sep="\n")
-        config <- base::paste(config, base::paste0('labelField="', cluster_field,'"'), sep="\n")
-    }
-    if (!is.null(hide_labels) && hide_labels){
-        config <- base::paste(config, 'showLabels=False', sep="\n")
     }
     conf_path = base::file.path(rootname, "cellbrowser.conf")
     base::cat(config, file=conf_path)
@@ -159,7 +157,7 @@ coords=%s'
     cb$cellbrowser$build(rootname, cb_dir)
 }
 
-export_cellbrowser <- function(seurat_data, assay, slot, rootname, dot_radius=3, dot_alpha=0.5, features=NULL, meta_fields=NULL, meta_fields_names=NULL, resolution=NULL, resolution_prefix=NULL){
+export_cellbrowser <- function(seurat_data, assay, slot, rootname, dot_radius=3, dot_alpha=0.5, features=NULL, meta_fields=NULL, meta_fields_names=NULL){
     base::tryCatch(
         expr = {
             backup_assay <- SeuratObject::DefaultAssay(seurat_data)
@@ -178,10 +176,8 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, dot_radius=3,
                     break
                 }
             }
-            cluster_field <- default_cluster_field                                # default value (in case we have only one identity and no clusters)
 
             if (length(base::unique(base::as.vector(as.character(seurat_data@meta.data$new.ident)))) > 1){
-                cluster_field <- "Identity"
                 meta_fields <- base::append(meta_fields, "new.ident", 0)
                 meta_fields_names <- base::append(meta_fields_names, "Identity", 0)
             }
@@ -191,47 +187,41 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, dot_radius=3,
                 meta_fields_names <- base::append(meta_fields_names, "Condition", 1)
             }
 
-            if(!is.null(resolution) && !is.null(resolution_prefix)){
-                meta_fields <- base::append(meta_fields, paste(resolution_prefix, resolution, sep="."))
-                meta_fields_names <- base::append(meta_fields_names, paste("Clustering (", resolution, ")", sep=""))
-                cluster_field <- paste("Clustering (", resolution, ")", sep="")[1]
-            }
-
-            base::tryCatch(
-                expr = {
-                    custom_fields <- base::grep("^custom_", base::colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
-                    custom_fields_names <- base::gsub("custom_", "Custom ", custom_fields)
-                    meta_fields <- base::append(meta_fields, custom_fields)
-                    meta_fields_names <- base::append(meta_fields_names, custom_fields_names)
-                },
-                error = function(e){
-                    base::print(base::paste("Failed to add custom metadata fields with error -", e))
-                }
+            clustering_fields <- base::grep("_res\\.", base::colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
+            clustering_fields_names <- base::as.vector(
+                base::unlist(                                                                              # when nothing found it returns named list that should be unlisted
+                    base::sapply(
+                        clustering_fields,
+                        function(line) {
+                            split_line <- base::unlist(base::strsplit(line, split="_res\\."))
+                            base::paste("Clustering (", split_line[1], " ", split_line[2], ")", sep="")
+                        }
+                    )
+                )
             )
+            meta_fields <- base::append(meta_fields, clustering_fields)
+            meta_fields_names <- base::append(meta_fields_names, clustering_fields_names)
 
-            base::tryCatch(
-                expr = {
-                    quartile_fields <- base::grep("^quartile_", base::colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
-                    quartile_fields_names <- base::gsub("quartile_", "Quartile ", quartile_fields)
-                    meta_fields <- base::append(meta_fields, quartile_fields)
-                    meta_fields_names <- base::append(meta_fields_names, quartile_fields_names)
-                },
-                error = function(e){
-                    base::print(base::paste("Failed to add quartile metadata fields with error -", e))
-                }
-            )
+            custom_fields <- base::grep("^custom_", base::colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
+            custom_fields_names <- base::gsub("custom_", "Custom ", custom_fields)
+            meta_fields <- base::append(meta_fields, custom_fields)
+            meta_fields_names <- base::append(meta_fields_names, custom_fields_names)
+
+            quartile_fields <- base::grep("^quartile_", base::colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
+            quartile_fields_names <- base::gsub("quartile_", "Quartile ", quartile_fields)
+            meta_fields <- base::append(meta_fields, quartile_fields)
+            meta_fields_names <- base::append(meta_fields_names, quartile_fields_names)
 
             cb_build(
                 seurat_data,
                 slot=slot,
                 rootname=rootname,
-                cluster_field=cluster_field,
+                cluster_field=default_cluster_field,
                 features=features,
                 meta_fields=meta_fields,
                 meta_fields_names=meta_fields_names,
                 dot_radius=dot_radius,
-                dot_alpha=dot_alpha,
-                hide_labels=base::ifelse(cluster_field==default_cluster_field, TRUE, FALSE)
+                dot_alpha=dot_alpha
             )
             base::print(base::paste("Exporting UCSC Cellbrowser data to", rootname, sep=" "))
         },

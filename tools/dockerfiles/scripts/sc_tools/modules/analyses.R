@@ -7,7 +7,7 @@ import("magrittr", `%>%`, attach=TRUE)
 
 export(
     "gex_analyze",
-    "gex_cluster",
+    "add_clusters",
     "gex_preprocess",
     "gex_log_single",
     "gex_sct_single",
@@ -441,7 +441,7 @@ gex_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
         }
     }
     seurat_data <- gex_preprocess(seurat_data, args, cell_cycle_data)           # sets "gex_integrated" as a default assay for integrated data, and either "RNA" or "SCT" for not integrated data
-    if (length(backup_reductions) > 0){                                          # restoring backed up reductions
+    if (length(backup_reductions) > 0){                                         # restoring backed up reductions
         for (reduction_name in names(backup_reductions)){
             base::print(base::paste("Restoring reduction", reduction_name, "from backup"))
             seurat_data[[reduction_name]] <- backup_reductions[[reduction_name]]
@@ -470,14 +470,14 @@ gex_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
     return (seurat_data)
 }
 
-gex_cluster <- function(seurat_data, graph_name, args){
-    SeuratObject::DefaultAssay(seurat_data) <- "RNA"                            # safety measure
-    SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
+add_clusters <- function(seurat_data, assay, graph_name, reduction, dims, cluster_algorithm, args){
+    SeuratObject::DefaultAssay(seurat_data) <- assay                                  # safety measure
+    SeuratObject::Idents(seurat_data) <- "new.ident"                                  # safety measure
     seurat_data <- Seurat::FindNeighbors(
         seurat_data,
         annoy.metric=base::ifelse(is.null(args$ametric), "euclidean", args$ametric),
-        reduction="pca",
-        dims=args$gexndim,
+        reduction=reduction,
+        dims=dims,
         graph.name=base::paste(graph_name, c("_nn", ""), sep=""),
         verbose=FALSE
     )
@@ -485,6 +485,7 @@ gex_cluster <- function(seurat_data, graph_name, args){
         seurat_data,
         resolution=args$resolution,
         graph.name=graph_name,
+        algorithm=cluster_algorithm,
         verbose=FALSE
     )
     return (seurat_data)

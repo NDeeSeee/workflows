@@ -428,9 +428,13 @@ if (!is.null(args$genes)){
 }
 
 print(paste("Clustering GEX data using", paste(args$gexndim, collapse=", "), "principal components"))
-seurat_data <- analyses$gex_cluster(
+seurat_data <- analyses$add_clusters(
     seurat_data=seurat_data,
+    assay="RNA",
     graph_name="gex",                          # will be used on all the plot generating functions
+    reduction="pca",
+    dims=args$gexndim,
+    cluster_algorithm=1,                       # original Louvain algorithm
     args=args
 )
 debug$print_info(seurat_data, args)
@@ -448,8 +452,6 @@ if(args$cbbuild){
         assay="RNA",
         slot="counts",
         features=args$genes,                                   # can be NULL
-        resolution=args$resolution,
-        resolution_prefix="gex_res",
         rootname=paste(args$output, "_cellbrowser", sep=""),
     )
 }
@@ -459,7 +461,7 @@ if (!is.null(args$genes) || args$gexpttv) {
     DefaultAssay(seurat_data) <- "RNA"
     seurat_data <- NormalizeData(seurat_data, verbose=FALSE)
     if (!is.null(args$genes)){
-        print("Generating plot to evaluate genes expression")
+        print("Generating genes expression plots")
         export_all_expression_plots(seurat_data=seurat_data, suffix="clst", args=args)
     }
     if(args$gexpttv){
