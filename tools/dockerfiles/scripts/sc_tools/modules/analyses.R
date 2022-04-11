@@ -16,7 +16,7 @@ export(
     "get_vars_to_regress",
     "get_cell_cycle_scores",
     "get_min_ident_size",
-    "gex_putative_gene_markers",
+    "get_putative_markers",
     "atac_preprocess",
     "atac_analyze"
 )
@@ -457,7 +457,7 @@ gex_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
     seurat_data <- Seurat::RunUMAP(
         seurat_data,
         reduction="pca",
-        dims=args$gexndim,
+        dims=args$dimensions,
         reduction.name="rnaumap",
         reduction.key="RNAUMAP_",
         spread=base::ifelse(is.null(args$uspread), 1, args$uspread),
@@ -470,14 +470,14 @@ gex_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
     return (seurat_data)
 }
 
-add_clusters <- function(seurat_data, assay, graph_name, reduction, dims, cluster_algorithm, args){
+add_clusters <- function(seurat_data, assay, graph_name, reduction, cluster_algorithm, args){
     SeuratObject::DefaultAssay(seurat_data) <- assay                                  # safety measure
     SeuratObject::Idents(seurat_data) <- "new.ident"                                  # safety measure
     seurat_data <- Seurat::FindNeighbors(
         seurat_data,
         annoy.metric=base::ifelse(is.null(args$ametric), "euclidean", args$ametric),
         reduction=reduction,
-        dims=dims,
+        dims=args$dimensions,
         graph.name=base::paste(graph_name, c("_nn", ""), sep=""),
         verbose=FALSE
     )
@@ -491,8 +491,8 @@ add_clusters <- function(seurat_data, assay, graph_name, reduction, dims, cluste
     return (seurat_data)
 }
 
-gex_putative_gene_markers <- function(seurat_data, resolution_prefix, args, min_diff_pct=-Inf){
-    SeuratObject::DefaultAssay(seurat_data) <- "RNA"                            # safety measure
+get_putative_markers <- function(seurat_data, assay, resolution_prefix, args, latent_vars=NULL, min_diff_pct=-Inf){
+    SeuratObject::DefaultAssay(seurat_data) <- assay                            # safety measure
     SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
     all_putative_markers <- NULL
     for (i in 1:length(args$resolution)) {
@@ -502,13 +502,15 @@ gex_putative_gene_markers <- function(seurat_data, resolution_prefix, args, min_
                 SeuratObject::Idents(seurat_data) <- paste(resolution_prefix, resolution, sep=".")
                 markers <- Seurat::FindAllMarkers(
                     seurat_data,
-                    logfc.threshold=base::ifelse(is.null(args$gexlogfc), 0.25, args$gexlogfc),
-                    min.pct=base::ifelse(is.null(args$gexminpct), 0.1, args$gexminpct),
-                    only.pos=base::ifelse(is.null(args$gexonlypos), FALSE, args$gexonlypos),
-                    test.use=base::ifelse(is.null(args$gextestuse), "wilcox", args$gextestuse),
+                    logfc.threshold=base::ifelse(is.null(args$logfc), 0.25, args$logfc),
+                    min.pct=base::ifelse(is.null(args$minpct), 0.1, args$minpct),
+                    only.pos=base::ifelse(is.null(args$onlypos), FALSE, args$onlypos),
+                    test.use=base::ifelse(is.null(args$testuse), "wilcox", args$testuse),
                     min.diff.pct=min_diff_pct,
+                    latent.vars=latent_vars,
                     verbose=FALSE
-                ) %>% dplyr::relocate(cluster, gene, .before=1)
+                ) %>% dplyr::relocate(cluster, gene, .before=1) %>% dplyr::rename("feature"="gene")
+
                 if (base::nrow(markers) > 0) {
                     markers <- markers %>% base::cbind(resolution=resolution, .)
                 } else {
@@ -522,7 +524,7 @@ gex_putative_gene_markers <- function(seurat_data, resolution_prefix, args, min_
                 base::rm(markers)                                                             # remove unused data
             },
             error = function(e){
-                base::print(base::paste("Failed to identify putative gene markers for resolution", resolution, "with error -", e))
+                base::print(base::paste("Failed to identify putative markers for resolution", resolution, "with error -", e))
             },
             finally = {
                 SeuratObject::Idents(seurat_data) <- "new.ident"
@@ -610,7 +612,7 @@ atac_preprocess <- function(seurat_data, args) {
             splitted_seurat_data,
             anchor.features=base::rownames(seurat_data),                                        # peaks from our ATAC assay
             reduction="rlsi",                                                                   # will always search for "lsi" reductions in splitted_seurat_data
-            dims=args$atacndim,                                                                 # don't need to use more than we are going to use in UMAP
+            dims=args$dimensions,                                                               # don't need to use more than we are going to use in UMAP
             verbose=FALSE
         )
         integrated_seurat_data <- Seurat::IntegrateEmbeddings(
@@ -618,7 +620,7 @@ atac_preprocess <- function(seurat_data, args) {
             reductions=processed_seurat_data[["lsi"]],
             new.reduction.name="atac_lsi",                                                      # adding "atac_lsi" for consistency
             k.weight=min(get_min_ident_size(splitted_seurat_data), 100),                        # k.weight 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
-            dims.to.integrate=args$atacndim                                                     # don't need to use more than we are going to use in UMAP
+            dims.to.integrate=args$dimensions                                                   # don't need to use more than we are going to use in UMAP
         )
         processed_seurat_data <- integrated_seurat_data
         base::rm(integration_anchors, integrated_seurat_data)                                   # remove unused data
@@ -648,7 +650,7 @@ atac_analyze <- function(seurat_data, args){
     seurat_data <- Seurat::RunUMAP(
         seurat_data,
         reduction="atac_lsi",
-        dims=args$atacndim,
+        dims=args$dimensions,
         reduction.name="atacumap",
         reduction.key="ATACUMAP_",
         spread=base::ifelse(is.null(args$uspread), 1, args$uspread),

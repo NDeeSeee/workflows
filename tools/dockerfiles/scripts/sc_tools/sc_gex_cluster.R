@@ -38,7 +38,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
         graphics$silhouette_plot(
             data=seurat_data,
             reduction="pca",
-            dims=args$gexndim,
+            dims=args$dimensions,
             downsample=500,
             plot_title=paste("Silhouette scores per cell of downsampled GEX datasets. Max 500 cells per cluster. Resolution", current_resolution),
             legend_title="Cluster",
@@ -261,7 +261,7 @@ get_args <- function(){
         type="character", required="True"
     )
     parser$add_argument(
-        "--gexndim",
+        "--dimensions",
         help=paste(
             "Dimensionality used when constructing nearest-neighbor graph before",
             "clustering (from 1 to 50). If single value N is provided, use from 1 to N",
@@ -301,48 +301,48 @@ get_args <- function(){
         type="character", nargs="*"
     )
     parser$add_argument(
-        "--gexpttv",
+        "--diffgenes",
         help=paste(
-            "Identify putative gene markers for all clusters and all resolutions.",
+            "Identify differentially expressed genes between each pair of clusters for all resolutions.",
             "Default: false"
         ),
         action="store_true"
     )
     parser$add_argument(
-        "--gexlogfc",
+        "--logfc",
         help=paste(
             "For putative gene markers identification include only those genes that",
             "on average have log fold change difference in expression between every",
-            "tested pair of clusters not lower than this value. Ignored if --gexpttv",
+            "tested pair of clusters not lower than this value. Ignored if --diffgenes",
             "is not set.",
             "Default: 0.25"
         ),
         type="double", default=0.25
     )
     parser$add_argument(
-        "--gexminpct",
+        "--minpct",
         help=paste(
             "For putative gene markers identification include only those genes that",
             "are detected in not lower than this fraction of cells in either of the",
-            "two tested clusters. Ignored if --gexpttv is not set.",
+            "two tested clusters. Ignored if --diffgenes is not set.",
             "Default: 0.1"
         ),
         type="double", default=0.1
     )
     parser$add_argument(
-        "--gexonlypos",
+        "--onlypos",
         help=paste(
             "For putative gene markers identification return only positive markers.",
-            "Ignored if --gexpttv is not set.",
+            "Ignored if --diffgenes is not set.",
             "Default: false"
         ),
         action="store_true"
     )
     parser$add_argument(
-        "--gextestuse",
+        "--testuse",
         help=paste(
             "Statistical test to use for putative gene markers identification.",
-            "Ignored if --gexpttv is not set.",
+            "Ignored if --diffgenes is not set.",
             "Default: wilcox"
         ),
         type="character", default="wilcox",
@@ -395,10 +395,10 @@ args <- get_args()
 
 print("Input parameters")
 print(args)
-if (length(args$gexndim) == 1) {
-    print("Adjusting --gexndim parameter as only a single value was provided")
-    args$gexndim <- c(1:args$gexndim[1])
-    print(paste("--gexndim was adjusted to", paste(args$gexndim, collapse=", ")))
+if (length(args$dimensions) == 1) {
+    print("Adjusting --dimensions parameter as only a single value was provided")
+    args$dimensions <- c(1:args$dimensions[1])
+    print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
 }
 
 print(
@@ -420,13 +420,12 @@ if (!all(c("pca", "rnaumap") %in% names(seurat_data@reductions))){
     quit(save="no", status=1, runLast=FALSE)
 }
 
-print(paste("Clustering GEX data using", paste(args$gexndim, collapse=", "), "principal components"))
+print(paste("Clustering GEX data using", paste(args$dimensions, collapse=", "), "principal components"))
 seurat_data <- analyses$add_clusters(
     seurat_data=seurat_data,
     assay="RNA",
     graph_name="gex",                          # will be used on all the plot generating functions
     reduction="pca",
-    dims=args$gexndim,
     cluster_algorithm=1,                       # original Louvain algorithm
     args=args
 )
@@ -456,7 +455,7 @@ if(args$cbbuild){
     )
 }
 
-if (!is.null(args$genes) || args$gexpttv) {
+if (!is.null(args$genes) || args$diffgenes) {
     print("Normalizing counts in RNA assay before evaluating genes expression or identifying putative gene markers")
     DefaultAssay(seurat_data) <- "RNA"
     seurat_data <- NormalizeData(seurat_data, verbose=FALSE)
@@ -464,16 +463,17 @@ if (!is.null(args$genes) || args$gexpttv) {
         print("Generating genes expression plots")
         export_all_expression_plots(seurat_data=seurat_data, suffix="clst", args=args)
     }
-    if(args$gexpttv){
+    if(args$diffgenes){
         print("Identifying putative gene markers for all clusters and all resolutions")
-        all_putative_markers <- analyses$gex_putative_gene_markers(
+        all_putative_markers <- analyses$get_putative_markers(
             seurat_data=seurat_data,
+            assay="RNA",
             resolution_prefix="gex_res",
             args=args
         )
         io$export_data(
             all_putative_markers,
-            paste(args$output, "_clst_pttv_gene_markers.tsv", sep="")
+            paste(args$output, "_clst_pttv_gex_markers.tsv", sep="")
         )
     }
 }

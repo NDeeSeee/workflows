@@ -26,7 +26,7 @@ call_peaks <- function(seurat_data, args) {
         print(
             paste(
                 "Forced to group cell by GEX cluster identified from PCA",
-                "reduction using", paste(args$gexndim, collapse=", "),
+                "reduction using", paste(args$dimensions, collapse=", "),
                 "dimensions and", args$resolution, "resolution"
             )
         )
@@ -38,7 +38,7 @@ call_peaks <- function(seurat_data, args) {
         seurat_data <- FindNeighbors(
             seurat_data,
             reduction="pca",                                                # this is the same reduction we got after running RunPCA on our GEX data, it's bound to the specific assay
-            dims=args$gexndim,
+            dims=args$dimensions,
             graph.name=c("peak_calling_nn", "peak_calling"),
             verbose=FALSE
         )
@@ -94,7 +94,7 @@ export_all_dimensionality_plots <- function(seurat_data, suffix, args) {
     graphics$corr_plot(
         data=seurat_data,
         reduction="pca",
-        highlight_dims=args$gexndim,
+        highlight_dims=args$dimensions,
         qc_columns=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi"),
         qc_labels=c("GEX UMIs", "Genes", "Mitochondrial %", "Novelty score"),
         plot_title=paste(
@@ -719,7 +719,7 @@ get_args <- function(){
             "Peaks are called per identity (identity) or per GEX cluster (cluster) after applying",
             "all GEX related thresholds, maximum nucleosome signal, and minimum TSS enrichment",
             "score filters. If set to 'cluster' GEX clusters are identified based on the parameters",
-            "set with --resolution, --gexndim, --highvargex, --gexnorm, and --skipgexntrg.",
+            "set with --resolution, --dimensions, --highvargex, --gexnorm, and --ntgr.",
             "Default: do not call peaks"
         ),
         type="character",
@@ -762,7 +762,7 @@ get_args <- function(){
         choices=c("seurat", "none")
     )
     parser$add_argument(
-        "--gexndim",
+        "--dimensions",
         help=paste(
             "Dimensionality to use in GEX UMAP projection and clustering when identifying",
             "GEX based clusters for calling custom MACS2 peaks (from 1 to 50). If single",
@@ -877,8 +877,8 @@ for (key in names(args)){
         }
     }
 }
-if (length(args$gexndim) == 1) {                            # only one value was provided, so we need to inflate it to 1:N
-    args$gexndim <- c(1:args$gexndim[1])
+if (length(args$dimensions) == 1) {                            # only one value was provided, so we need to inflate it to 1:N
+    args$dimensions <- c(1:args$dimensions[1])
 }
 print("Adjusted parameters")
 print(args)

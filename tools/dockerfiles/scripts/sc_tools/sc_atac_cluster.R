@@ -39,7 +39,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
         graphics$silhouette_plot(
             data=seurat_data,
             reduction="atac_lsi",
-            dims=args$atacndim,
+            dims=args$dimensions,
             downsample=500,
             plot_title=paste("Silhouette scores per cell of downsampled ATAC datasets. Max 500 cells per cluster. Resolution", current_resolution),
             legend_title="Cluster",
@@ -202,7 +202,7 @@ get_args <- function(){
         type="character", required="True"
     )
     parser$add_argument(
-        "--atacndim",
+        "--dimensions",
         help=paste(
             "Dimensionality used when constructing nearest-neighbor graph before",
             "clustering (from 1 to 50). If single value N is provided, use from 2 to N",
@@ -255,13 +255,13 @@ get_args <- function(){
     parser$add_argument(
         "--diffpeaks",
         help=paste(
-            "Identify differentially accessible peaks for all clusters and all resolutions.",
+            "Identify differentially accessible peaks between each pair of clusters for all resolutions.",
             "Default: false"
         ),
         action="store_true"
     )
     parser$add_argument(
-        "--ataclogfc",
+        "--logfc",
         help=paste(
             "For differentially accessible peaks identification include only those peaks that",
             "on average have log fold change difference in the chromatin accessibility between",
@@ -272,7 +272,7 @@ get_args <- function(){
         type="double", default=0.25
     )
     parser$add_argument(
-        "--atacminpct",
+        "--minpct",
         help=paste(
             "For differentially accessible peaks identification include only those peaks that",
             "are detected in not lower than this fraction of cells in either of the two tested",
@@ -282,7 +282,7 @@ get_args <- function(){
         type="double", default=0.05
     )
     parser$add_argument(
-        "--atactestuse",
+        "--testuse",
         help=paste(
             "Statistical test to use for differentially accessible peaks identification.",
             "Ignored if --diffpeaks is not set.",
@@ -338,10 +338,10 @@ args <- get_args()
 
 print("Input parameters")
 print(args)
-if (length(args$atacndim) == 1) {
-    print("Adjusting --atacndim parameter as only a single value was provided")
-    args$atacndim <- c(2:args$atacndim[1])                                              # skipping the first LSI component
-    print(paste("--atacndim was adjusted to", paste(args$atacndim, collapse=", ")))
+if (length(args$dimensions) == 1) {
+    print("Adjusting --dimensions parameter as only a single value was provided")
+    args$dimensions <- c(2:args$dimensions[1])                                              # skipping the first LSI component
+    print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
 }
 
 print(
@@ -369,13 +369,12 @@ if (!is.null(args$fragments)){
     debug$print_info(seurat_data, args)
 }
 
-print(paste("Clustering ATAC data using", paste(args$atacndim, collapse=", "), "dimensions"))
+print(paste("Clustering ATAC data using", paste(args$dimensions, collapse=", "), "dimensions"))
 seurat_data <- analyses$add_clusters(
     seurat_data=seurat_data,
     assay="ATAC",
     graph_name="atac",                          # will be used on all the plot generating functions
     reduction="atac_lsi",
-    dims=args$atacndim,
     cluster_algorithm=3,                        # SLM algorithm
     args=args
 )
@@ -387,24 +386,29 @@ export_all_clustering_plots(
     args=args
 )
 
-regions <- NULL
+nearest_peaks <- NULL
 if (!is.null(args$genes)){
+    DefaultAssay(seurat_data) <- "ATAC"         # safety measure
     print("Adjusting genes of interest to include only those that are present in the loaded Seurat object")
     args$genes <- unique(args$genes)
     args$genes <- args$genes[args$genes %in% as.vector(as.character(Annotation(seurat_data)$gene_name))]
-    regions <- sapply(
+    all_peaks <- StringToGRanges(rownames(seurat_data), sep=c("-", "-"))
+    nearest_peaks <- sapply(
         args$genes,
         function(gene)
         GRangesToString(
-            grange=LookupGeneCoords(
-                seurat_data,
-                gene=gene,
-                assay="ATAC"
-            ),
-            sep=c("-", "-")
+            all_peaks[
+                subjectHits(
+                    distanceToNearest(
+                        LookupGeneCoords(seurat_data, gene=gene, assay="ATAC"),
+                        all_peaks
+                    )
+                )
+            ]
         )
     )
-    print(regions)
+    rm(all_peaks)
+    print(nearest_peaks)
 }
 
 if(args$cbbuild){
@@ -413,7 +417,7 @@ if(args$cbbuild){
         seurat_data=seurat_data,
         assay="ATAC",
         slot="counts",
-        features=regions,                                      # use regions that correspond to our genes of interest
+        features=nearest_peaks,                               # use neares to the genes if interest peaks
         rootname=paste(args$output, "_cellbrowser", sep=""),
     )
 }
@@ -437,6 +441,17 @@ if (!is.null(args$genes) && !is.null(args$fragments)){
 
 if (args$diffpeaks){
     print("Running differential accesibility analysis")
+    all_putative_markers <- analyses$get_putative_markers(
+        seurat_data=seurat_data,
+        assay="ATAC",
+        resolution_prefix="atac_res",
+        latent_vars="nCount_ATAC",                                  # to remove the influence of sequencing depth
+        args=args
+    )
+    io$export_data(
+        all_putative_markers,
+        paste(args$output, "_clst_pttv_atac_markers.tsv", sep="")
+    )
 }
 
 DefaultAssay(seurat_data) <- "ATAC"

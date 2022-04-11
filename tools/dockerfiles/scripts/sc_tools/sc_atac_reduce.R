@@ -26,7 +26,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$corr_plot(
         data=seurat_data,
         reduction="atac_lsi",
-        highlight_dims=args$atacndim,
+        highlight_dims=args$dimensions,
         qc_columns=selected_features,
         qc_labels=selected_labels,
         plot_title="Correlation plots between QC metrics and LSI dimensions of GEX datasets",
@@ -174,7 +174,7 @@ get_args <- function(){
         type="integer", default=0
     )
     parser$add_argument(
-        "--atacndim",
+        "--dimensions",
         help=paste(
             "Dimensionality to use for datasets integration and for ATAC UMAP projection (from 2 to 50).",
             "If single value N is provided, use from 2 to N LSI components. If multiple values",
@@ -286,10 +286,10 @@ args <- get_args()
 
 print("Input parameters")
 print(args)
-if (length(args$atacndim) == 1) {
-    print("Adjusting --atacndim parameter as only a single value was provided")
-    args$atacndim <- c(2:args$atacndim[1])                                              # skipping the first LSI component
-    print(paste("--atacndim was adjusted to", paste(args$atacndim, collapse=", ")))
+if (length(args$dimensions) == 1) {
+    print("Adjusting --dimensions parameter as only a single value was provided")
+    args$dimensions <- c(2:args$dimensions[1])                                              # skipping the first LSI component
+    print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
 }
 args$minvarperc <- paste0("q", args$minvarperc)                                         # need to have it in a form of "qN", for example "q0"
 

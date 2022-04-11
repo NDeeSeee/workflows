@@ -62,7 +62,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$corr_plot(
         data=seurat_data,
         reduction="pca",
-        highlight_dims=args$gexndim,
+        highlight_dims=args$dimensions,
         qc_columns=selected_features,
         qc_labels=selected_labels,
         plot_title="Correlation plots between QC metrics and principal components from PCA of GEX datasets",
@@ -503,7 +503,7 @@ get_args <- function(){
         action="store_true"
     )
     parser$add_argument(
-        "--gexndim",
+        "--dimensions",
         help=paste(
             "Dimensionality to use in GEX UMAP projection (from 1 to 50). If single",
             "value N is provided, use from 1 to N PCs. If multiple values are",
@@ -627,10 +627,10 @@ args <- get_args()
 
 print("Input parameters")
 print(args)
-if (length(args$gexndim) == 1) {
-    print("Adjusting --gexndim parameter as only a single value was provided")
-    args$gexndim <- c(1:args$gexndim[1])
-    print(paste("--gexndim was adjusted to", paste(args$gexndim, collapse=", ")))
+if (length(args$dimensions) == 1) {
+    print("Adjusting --dimensions parameter as only a single value was provided")
+    args$dimensions <- c(1:args$dimensions[1])
+    print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
 }
 
 print(
