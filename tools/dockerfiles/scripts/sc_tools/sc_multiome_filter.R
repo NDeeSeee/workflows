@@ -725,8 +725,9 @@ get_args <- function(){
     parser$add_argument(
         "--norm",
         help=paste(
-            "Normalization method to be used when identifying RNA based clusters for calling",
-            "custom MACS2 peaks. Ignored if --callpeaks is not set to 'cluster'.",
+            "Normalization method applied to genes expression counts when identifying RNA based",
+            "clusters before calling custom MACS2 peaks. Ignored if --callpeaks is not set to",
+            "'cluster'.",
             "Default: sct"
         ),
         type="character",
@@ -736,9 +737,9 @@ get_args <- function(){
     parser$add_argument(
         "--highvargenes",
         help=paste(
-            "Number of highly variable genes to detect. Used for RNA datasets integration,",
-            "scaling, and dimensionality reduction when identifying RNA based clusters for",
-            "calling custom MACS2 peaks. Ignored if --callpeaks is not set to 'cluster'.",
+            "Number of highly variable genes used in RNA datasets integration, scaling and",
+            "dimensionality reduction when identifying RNA based clusters for calling",
+            "custom MACS2 peaks. Ignored if --callpeaks is not set to 'cluster'.",
             "Default: 3000"
         ),
         type="integer", default=3000
@@ -746,8 +747,8 @@ get_args <- function(){
     parser$add_argument(
         "--ntgr",
         help=paste(
-            "Integration method for RNA datasets when identifying RNA based clusters",
-            "for calling custom MACS2 peaks. Automatically set to 'none' if --mex points",
+            "RNA datasets integration method used for identifying RNA based clusters",
+            "before calling custom MACS2 peaks. Automatically set to 'none' if --mex points",
             "to the Cell Ranger ARC Count outputs (single, not aggregated dataset that",
             "doesn't require any integration). Ignored if --callpeaks is not set to",
             "'cluster'.",

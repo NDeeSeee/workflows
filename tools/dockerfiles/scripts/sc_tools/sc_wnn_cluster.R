@@ -320,8 +320,8 @@ get_args <- function(){
     parser$add_argument(
         "--uspread",
         help=paste(
-            "The effective scale of embedded points on UMAP. In combination with",
-            "--mindist this determines how clustered/clumped the embedded points are.",
+            "The effective scale of embedded points on UMAP. In combination with '--mindist'",
+            "it determines how clustered/clumped the embedded points are.",
             "Default: 1"
         ),
         type="double", default=1

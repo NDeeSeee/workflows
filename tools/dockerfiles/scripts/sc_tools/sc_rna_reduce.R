@@ -409,9 +409,8 @@ get_args <- function(){
     parser$add_argument(
         "--query",
         help=paste(
-            "Path to the RDS file to load filtered Seurat object from. This file",
-            "can be produced by sc_multiome_filter.R, sc_rna_filter.R or sc_atac_reduce.R",
-            "scripts. It is mandatory to have gene expression information stored in the RNA assay."
+            "Path to the RDS file to load Seurat object from. This file should include genes",
+            "expression information stored in the RNA assay."
         ),
         type="character", required="True"
     )
@@ -419,8 +418,8 @@ get_args <- function(){
         "--barcodes",
         help=paste(
             "Path to the headerless TSV/CSV file with the list of barcodes to select",
-            "cells of interest (one barcode per line). Prefilters input feature-barcode",
-            "matrix to include only selected cells.",
+            "cells of interest (one barcode per line). Prefilters loaded Seurat object",
+            "to include only specific set of cells.",
             "Default: use all cells."
         ),
         type="character"
@@ -428,10 +427,10 @@ get_args <- function(){
     parser$add_argument(
         "--cellcycle",
         help=paste(
-            "Path to the TSV/CSV file with cell cycle data. First column - 'phase',",
-            "second column 'gene_id'. If Seurat object loaded from --query parameter",
-            "already includes cell cycle scores (S.Score G2M.Score metatada columns),",
-            "they will be removed.",
+            "Path to the TSV/CSV file with the information for cell cycle score assignment.",
+            "First column - 'phase', second column 'gene_id'. If loaded Seurat object already",
+            "includes cell cycle scores in 'S.Score' and 'G2M.Score' metatada columns they will",
+            "be removed.",
             "Default: skip cell cycle score assignment."
         ),
         type="character"
@@ -439,9 +438,9 @@ get_args <- function(){
     parser$add_argument(
         "--norm",
         help=paste(
-            "Normalization method to be used for RNA datasets. If provided Seurat object",
-            "includes multiple datasets, normalization will be run independently for each",
-            "of them, unless integration is disabled with --ntgr set to 'none'",
+            "Normalization method applied to genes expression counts. If loaded Seurat object",
+            "includes multiple datasets, normalization will be run independently for each of",
+            "them, unless integration is disabled with --ntgr set to 'none'",
             "Default: sct"
         ),
         type="character",
@@ -451,9 +450,8 @@ get_args <- function(){
     parser$add_argument(
         "--ntgr",
         help=paste(
-            "Integration method for the joint analysis of multiple RNA datasets present",
-            "in the provided with --query Seurat object. Automatically set to 'none' if",
-            "only one identity is found.",
+            "RNA datasets integration method used for joint analysis of multiple datasets.",
+            "Automatically set to 'none' if loaded Suerat object includes only one dataset.",
             "Default: seurat"
         ),
         type="character",
@@ -463,8 +461,8 @@ get_args <- function(){
     parser$add_argument(
         "--highvargenes",
         help=paste(
-            "Number of highly variable genes to detect. Used for RNA datasets integration,",
-            "scaling, and dimensionality reduction.",
+            "Number of highly variable genes used in RNA datasets integration, scaling and",
+            "dimensionality reduction.",
             "Default: 3000"
         ),
         type="integer", default=3000
@@ -472,7 +470,8 @@ get_args <- function(){
     parser$add_argument(
         "--regressmt",
         help=paste(
-            "Regress mitochondrial genes expression as a confounding source of variation.",
+            "Regress the percentage of transcripts mapped to mitochondrial genes as a",
+            "confounding source of variation.",
             "Default: false"
         ),
         action="store_true"
@@ -480,7 +479,7 @@ get_args <- function(){
     parser$add_argument(
         "--regressrnaumi",
         help=paste(
-            "Regress RNA UMIs per cell as a confounding source of variation.",
+            "Regress RNA UMIs per cell counts as a confounding source of variation.",
             "Default: false"
         ),
         action="store_true"
@@ -488,7 +487,7 @@ get_args <- function(){
     parser$add_argument(
         "--regressgenes",
         help=paste(
-            "Regress genes per cell as a confounding source of variation.",
+            "Regress genes per cell counts as a confounding source of variation.",
             "Default: false"
         ),
         action="store_true"
@@ -496,7 +495,7 @@ get_args <- function(){
     parser$add_argument(
         "--regresscellcycle",
         help=paste(
-            "Regress cell cycle as a confounding source of variation.",
+            "Regress cell cycle scores as a confounding source of variation.",
             "Ignored if --cellcycle is not provided.",
             "Default: false"
         ),
@@ -505,9 +504,9 @@ get_args <- function(){
     parser$add_argument(
         "--dimensions",
         help=paste(
-            "Dimensionality to use in RNA UMAP projection (from 1 to 50). If single",
-            "value N is provided, use from 1 to N PCs. If multiple values are",
-            "provided, subset to only selected PCs.",
+            "Dimensionality to use in RNA UMAP projection (from 1 to 50). If single value N",
+            "is provided, use from 1 to N PCs. If multiple values are provided, subset to",
+            "only selected PCs.",
             "Default: from 1 to 10"
         ),
         type="integer", default=10, nargs="*"
@@ -515,8 +514,8 @@ get_args <- function(){
     parser$add_argument(
         "--uspread",
         help=paste(
-            "The effective scale of embedded points on UMAP. In combination with",
-            "--mindist this determines how clustered/clumped the embedded points are.",
+            "The effective scale of embedded points on UMAP. In combination with '--mindist'",
+            "it determines how clustered/clumped the embedded points are.",
             "Default: 1"
         ),
         type="double", default=1
@@ -556,7 +555,6 @@ get_args <- function(){
             "rogerstanimoto", "sokalmichener", "sokalsneath", "yule"
         )
     )
-
     # The default method for RunUMAP has changed from calling Python UMAP via reticulate to
     # the R-native UWOT using the cosine metric. To use Python UMAP via reticulate, set
     # umap.method to 'umap-learn' and metric to 'correlation'
@@ -594,7 +592,7 @@ get_args <- function(){
         help=paste(
             "Attempts to minimize RAM usage when integrating multiple datasets",
             "with SCTransform algorithm (slows down the computation). Ignored if",
-            "--ntgr is not set to 'seurat' or if --norm is not set to either",
+            "'--ntgr' is not set to 'seurat' or if '--norm' is not set to either",
             "'sct' or 'sctglm'.",
             "Default: false"
         ),

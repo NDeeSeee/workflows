@@ -575,7 +575,7 @@ atac_preprocess <- function(seurat_data, args) {
     base::print(
         base::paste(
             "Applying TF-IDF normalization. Searching for top highly variable",
-            "features using", args$minvarperc, "as a lower percentile bound.",
+            "features using", args$minvarpeaks, "as a lower percentile bound.",
             "Analyzing all datasets jointly."
         )
     )
@@ -587,7 +587,7 @@ atac_preprocess <- function(seurat_data, args) {
     processed_seurat_data <- Signac::FindTopFeatures(
         processed_seurat_data,
         assay="ATAC",                                                                           # safety measure
-        min.cutoff=args$minvarperc,
+        min.cutoff=args$minvarpeaks,
         verbose=FALSE
     )
 
@@ -618,7 +618,7 @@ atac_preprocess <- function(seurat_data, args) {
             base::print(
                 base::paste(
                     "Applying TF-IDF normalization. Searching for top highly variable",
-                    "features using", args$minvarperc, "as a lower percentile bound.",
+                    "features using", args$minvarpeaks, "as a lower percentile bound.",
                     "Analyzing", SeuratObject::Idents(splitted_seurat_data[[i]])[1],
                     "dataset."
                 )
@@ -631,7 +631,7 @@ atac_preprocess <- function(seurat_data, args) {
             splitted_seurat_data[[i]] <- Signac::FindTopFeatures(
                 splitted_seurat_data[[i]],
                 assay="ATAC",                                                                   # safety measure
-                min.cutoff=args$minvarperc,
+                min.cutoff=args$minvarpeaks,
                 verbose=FALSE
             )
             splitted_seurat_data[[i]] <- Signac::RunSVD(

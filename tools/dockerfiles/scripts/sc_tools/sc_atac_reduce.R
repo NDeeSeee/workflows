@@ -133,10 +133,8 @@ get_args <- function(){
     parser$add_argument(
         "--query",
         help=paste(
-            "Path to the RDS file to load filtered Seurat object from. This file",
-            "can be produced by sc_multiome_filter.R or sc_rna_reduce.R scripts.",
-            "It is mandatory to have chromatin accessibility information stored",
-            "in the ATAC assay."
+            "Path to the RDS file to load Seurat object from. This file should include",
+            "chromatin accessibility information stored in the ATAC assay."
         ),
         type="character", required="True"
     )
@@ -144,8 +142,8 @@ get_args <- function(){
         "--barcodes",
         help=paste(
             "Path to the headerless TSV/CSV file with the list of barcodes to select",
-            "cells of interest (one barcode per line). Prefilters input feature-barcode",
-            "matrix to include only selected cells.",
+            "cells of interest (one barcode per line). Prefilters loaded Seurat object",
+            "to include only specific set of cells.",
             "Default: use all cells."
         ),
         type="character"
@@ -153,9 +151,8 @@ get_args <- function(){
     parser$add_argument(
         "--ntgr",
         help=paste(
-            "Integration method for the joint analysis of multiple ATAC datasets present",
-            "in the provided with --query Seurat object. Automatically set to 'none' if",
-            "only one identity is found.",
+            "ATAC datasets integration method used for joint analysis of multiple datasets.",
+            "Automatically set to 'none' if loaded Suerat object includes only one dataset.",
             "Default: signac"
         ),
         type="character",
@@ -163,11 +160,11 @@ get_args <- function(){
         choices=c("signac", "none")
     )
     parser$add_argument(
-        "--minvarperc",
+        "--minvarpeaks",
         help=paste(
-            "Minimum percentile to set the top most common ATAC features as highly variable.",
+            "Minimum percentile for identifying the top most common peaks as highly variable.",
             "For example, setting to 5 will use the the top 95 percent most common among all cells",
-            "ATAC features as highly variable. Used for ATAC datasets integration, scaling,",
+            "peaks as highly variable. These peaks are used for ATAC datasets integration, scaling",
             "and dimensionality reduction.",
             "Default: 0 (use all available ATAC features)"
         ),
@@ -176,9 +173,9 @@ get_args <- function(){
     parser$add_argument(
         "--dimensions",
         help=paste(
-            "Dimensionality to use for datasets integration and for ATAC UMAP projection (from 2 to 50).",
-            "If single value N is provided, use from 2 to N LSI components. If multiple values",
-            "are provided, subset to only selected LSI components.",
+            "Dimensionality to use for ATAC datasets integration and UMAP projection (from 2 to 50).",
+            "If single value N is provided, use from 2 to N LSI components. If multiple values are",
+            "provided, subset to only selected LSI components.",
             "Default: from 2 to 10"
         ),
         type="integer", default=10, nargs="*"
@@ -186,8 +183,8 @@ get_args <- function(){
     parser$add_argument(
         "--uspread",
         help=paste(
-            "The effective scale of embedded points on UMAP. In combination with",
-            "--mindist this determines how clustered/clumped the embedded points are.",
+            "The effective scale of embedded points on UMAP. In combination with '--mindist'",
+            "it determines how clustered/clumped the embedded points are.",
             "Default: 1"
         ),
         type="double", default=1
@@ -291,7 +288,7 @@ if (length(args$dimensions) == 1) {
     args$dimensions <- c(2:args$dimensions[1])                                              # skipping the first LSI component
     print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
 }
-args$minvarperc <- paste0("q", args$minvarperc)                                         # need to have it in a form of "qN", for example "q0"
+args$minvarpeaks <- paste0("q", args$minvarpeaks)                                         # need to have it in a form of "qN", for example "q0"
 
 print(
     paste(
