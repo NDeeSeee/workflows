@@ -18,7 +18,8 @@ export(
     "get_min_ident_size",
     "get_putative_markers",
     "atac_preprocess",
-    "atac_analyze"
+    "atac_analyze",
+    "add_wnn_clusters"
 )
 
 get_vars_to_regress <- function(seurat_data, args, exclude_columns=NULL) {
@@ -434,7 +435,7 @@ gex_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
     SeuratObject::DefaultAssay(seurat_data) <- "RNA"                            # safety measure
     SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
     backup_reductions <- c()                                                    # GEX integration main remove atac related reductions so we need to back them up
-    for (reduction_name in c("atac_lsi", "atacumap")){
+    for (reduction_name in c("atac_lsi", "atacumap", "wnnumap")){
         if (reduction_name %in% names(seurat_data@reductions)){
             base::print(base::paste("Backing up reduction", reduction_name))
             backup_reductions[[reduction_name]] <- seurat_data[[reduction_name]]
@@ -486,6 +487,38 @@ add_clusters <- function(seurat_data, assay, graph_name, reduction, cluster_algo
         resolution=args$resolution,
         graph.name=graph_name,
         algorithm=cluster_algorithm,
+        verbose=FALSE
+    )
+    return (seurat_data)
+}
+
+add_wnn_clusters <- function(seurat_data, graph_name, reductions, dimensions, cluster_algorithm, args){
+    SeuratObject::Idents(seurat_data) <- "new.ident"                                   # safety measure
+    seurat_data <- Seurat::FindMultiModalNeighbors(
+        seurat_data,
+        reduction.list=reductions,                                       # list("pca", "atac_lsi"),
+        dims.list=dimensions,
+        snn.graph.name=graph_name,                                       # "wsnn"
+        weighted.nn.name="weighted.nn",
+        verbose=FALSE
+    )
+    seurat_data <- Seurat::RunUMAP(
+        seurat_data,
+        nn.name="weighted.nn",
+        reduction.name="wnnumap",
+        reduction.key="WNNUMAP_",
+        spread=base::ifelse(is.null(args$uspread), 1, args$uspread),
+        min.dist=base::ifelse(is.null(args$umindist), 0.3, args$umindist),
+        n.neighbors=base::ifelse(is.null(args$uneighbors), 30, args$uneighbors),
+        metric=base::ifelse(is.null(args$umetric), "cosine", args$umetric),
+        umap.method=base::ifelse(is.null(args$umethod), "uwot", args$umethod),
+        verbose=FALSE
+    )
+    seurat_data <- Seurat::FindClusters(
+        seurat_data,
+        graph.name=graph_name,
+        algorithm=cluster_algorithm,                                    # 3
+        resolution=args$resolution,
         verbose=FALSE
     )
     return (seurat_data)
@@ -634,7 +667,7 @@ atac_analyze <- function(seurat_data, args){
     SeuratObject::DefaultAssay(seurat_data) <- "ATAC"                           # safety measure
     SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
     backup_reductions <- c()                                                    # ATAC integration main remove GEX related reductions so we need to back them up
-    for (reduction_name in c("pca", "rnaumap")){
+    for (reduction_name in c("pca", "rnaumap", "wnnumap")){
         if (reduction_name %in% names(seurat_data@reductions)){
             base::print(base::paste("Backing up reduction", reduction_name))
             backup_reductions[[reduction_name]] <- seurat_data[[reduction_name]]

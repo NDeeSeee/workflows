@@ -154,21 +154,23 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
                 rootname=paste(args$output, suffix, "gex_umap_spl_by_ph_res", current_resolution, sep="_"),
                 pdf=args$pdf
             )
-            graphics$composition_plot(
-                data=downsampled_data,
-                plot_title=paste(
-                    "Grouped by cell cycle phase split by identity composition plot of GEX datasets.",
-                    "Downsampled to", downsampled_to, "cells per dataset.",
-                    "Resolution", current_resolution),
-                legend_title="Phase",
-                group_by="Phase",
-                split_by="new.ident",
-                x_label="Identity",
-                y_label="Cells percentage",
-                palette_colors=graphics$D40_COLORS,
-                rootname=paste(args$output, suffix, "gex_comp_gr_by_ph_spl_by_idnt_res", current_resolution, sep="_"),
-                pdf=args$pdf
-            )
+            if (length(unique(as.vector(as.character(Idents(seurat_data))))) > 1){
+                graphics$composition_plot(
+                    data=downsampled_data,
+                    plot_title=paste(
+                        "Grouped by cell cycle phase split by identity composition plot of GEX datasets.",
+                        "Downsampled to", downsampled_to, "cells per dataset.",
+                        "Resolution", current_resolution),
+                    legend_title="Phase",
+                    group_by="Phase",
+                    split_by="new.ident",
+                    x_label="Identity",
+                    y_label="Cells percentage",
+                    palette_colors=graphics$D40_COLORS,
+                    rootname=paste(args$output, suffix, "gex_comp_gr_by_ph_spl_by_idnt_res", current_resolution, sep="_"),
+                    pdf=args$pdf
+                )
+            }
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
@@ -370,8 +372,8 @@ get_args <- function(){
     )
     parser$add_argument(
         "--output",
-        help="Output prefix. Default: ./seurat",
-        type="character", default="./seurat"
+        help="Output prefix. Default: ./sc",
+        type="character", default="./sc"
     )
     parser$add_argument(
         "--cpus",
@@ -424,7 +426,7 @@ print(paste("Clustering GEX data using", paste(args$dimensions, collapse=", "), 
 seurat_data <- analyses$add_clusters(
     seurat_data=seurat_data,
     assay="RNA",
-    graph_name="gex",                          # will be used on all the plot generating functions
+    graph_name="gex",                          # will be used in all the plot generating functions
     reduction="pca",
     cluster_algorithm=1,                       # original Louvain algorithm
     args=args
@@ -464,7 +466,7 @@ if (!is.null(args$genes) || args$diffgenes) {
         export_all_expression_plots(seurat_data=seurat_data, suffix="clst", args=args)
     }
     if(args$diffgenes){
-        print("Identifying putative gene markers for all clusters and all resolutions")
+        print("Identifying differentially expressed genes between each pair of clusters for all resolutions")
         all_putative_markers <- analyses$get_putative_markers(
             seurat_data=seurat_data,
             assay="RNA",
@@ -473,13 +475,15 @@ if (!is.null(args$genes) || args$diffgenes) {
         )
         io$export_data(
             all_putative_markers,
-            paste(args$output, "_clst_pttv_gex_markers.tsv", sep="")
+            paste(args$output, "_clst_gex_markers.tsv", sep="")
         )
     }
 }
 
 DefaultAssay(seurat_data) <- "RNA"                                                         # better to stick to RNA assay by default https://www.biostars.org/p/395951/#395954 
+print("Exporting results to RDS file")
 io$export_rds(seurat_data, paste(args$output, "_clst_data.rds", sep=""))
 if(args$h5seurat){
+    print("Exporting results to h5seurat file")
     io$export_h5seurat(seurat_data, paste(args$output, "_clst_data.h5seurat", sep=""))
 }

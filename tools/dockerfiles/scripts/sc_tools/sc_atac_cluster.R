@@ -313,8 +313,8 @@ get_args <- function(){
     )
     parser$add_argument(
         "--output",
-        help="Output prefix. Default: ./seurat",
-        type="character", default="./seurat"
+        help="Output prefix. Default: ./sc",
+        type="character", default="./sc"
     )
     parser$add_argument(
         "--cpus",
@@ -373,7 +373,7 @@ print(paste("Clustering ATAC data using", paste(args$dimensions, collapse=", "),
 seurat_data <- analyses$add_clusters(
     seurat_data=seurat_data,
     assay="ATAC",
-    graph_name="atac",                          # will be used on all the plot generating functions
+    graph_name="atac",                          # will be used in all the plot generating functions
     reduction="atac_lsi",
     cluster_algorithm=3,                        # SLM algorithm
     args=args
@@ -440,7 +440,7 @@ if (!is.null(args$genes) && !is.null(args$fragments)){
 }
 
 if (args$diffpeaks){
-    print("Running differential accesibility analysis")
+    print("Identifying differentially accessible peaks between each pair of clusters for all resolutions")
     all_putative_markers <- analyses$get_putative_markers(
         seurat_data=seurat_data,
         assay="ATAC",
@@ -450,12 +450,14 @@ if (args$diffpeaks){
     )
     io$export_data(
         all_putative_markers,
-        paste(args$output, "_clst_pttv_atac_markers.tsv", sep="")
+        paste(args$output, "_clst_atac_markers.tsv", sep="")
     )
 }
 
 DefaultAssay(seurat_data) <- "ATAC"
+print("Exporting results to RDS file")
 io$export_rds(seurat_data, paste(args$output, "_clst_data.rds", sep=""))
 if(args$h5seurat){
+    print("Exporting results to h5seurat file")
     io$export_h5seurat(seurat_data, paste(args$output, "_clst_data.h5seurat", sep=""))
 }
