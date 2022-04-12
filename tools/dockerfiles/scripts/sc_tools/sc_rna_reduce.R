@@ -437,7 +437,7 @@ get_args <- function(){
         type="character"
     )
     parser$add_argument(
-        "--rnanorm",
+        "--norm",
         help=paste(
             "Normalization method to be used for RNA datasets. If provided Seurat object",
             "includes multiple datasets, normalization will be run independently for each",
@@ -461,10 +461,10 @@ get_args <- function(){
         choices=c("seurat", "none")
     )
     parser$add_argument(
-        "--highvarrna",
+        "--highvargenes",
         help=paste(
-            "Number of highly variable RNA features to detect. Used for RNA datasets",
-            "integration, scaling, and dimensionality reduction.",
+            "Number of highly variable genes to detect. Used for RNA datasets integration,",
+            "scaling, and dimensionality reduction.",
             "Default: 3000"
         ),
         type="integer", default=3000
@@ -594,7 +594,7 @@ get_args <- function(){
         help=paste(
             "Attempts to minimize RAM usage when integrating multiple datasets",
             "with SCTransform algorithm (slows down the computation). Ignored if",
-            "--ntgr is not set to 'seurat' or if --rnanorm is not set to either",
+            "--ntgr is not set to 'seurat' or if --norm is not set to either",
             "'sct' or 'sctglm'.",
             "Default: false"
         ),

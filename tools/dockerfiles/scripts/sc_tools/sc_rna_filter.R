@@ -249,8 +249,8 @@ get_args <- function(){
         help=paste(
             "Path to the folder with feature-barcode matrix from Cell Ranger Count/Aggregate",
             "experiment in MEX format. If multiple locations provided data is assumed to be not",
-            "aggregated (outputs from multiple Cell Ranger Count experiments) and will be merged",
-            "before the analysis."
+            "aggregated (outputs from the multiple Cell Ranger Count experiments) and will be",
+            "merged before the analysis."
         ),
         type="character", required="True", nargs="+"
     )
@@ -269,10 +269,10 @@ get_args <- function(){
     parser$add_argument(
         "--grouping",
         help=paste(
-            "Path to the TSV/CSV file to define datasets grouping. First column -",
-            "'library_id' with the values provided in the same order as in the",
-            "correspondent column of the --identity file, second column 'condition'.",
-            "Default: each dataset is assigned to a separate group."
+            "Path to the TSV/CSV file to define datasets grouping. First column - 'library_id'",
+            "with the values provided in the same order as in the correspondent column from the",
+            "--identity file, second column 'condition'.",
+            "Default: each dataset is assigned to its own group."
         ),
         type="character"
     )
@@ -289,9 +289,9 @@ get_args <- function(){
     parser$add_argument(
         "--rnamincells",
         help=paste(
-            "Include only RNA features detected in at least this many cells. Ignored when",
-            "--mex points to the feature-barcode matrices from the multiple Cell Ranger",
-            "Count experiments.",
+            "Include only genes detected in at least this many cells. Ignored when --mex",
+            "points to the feature-barcode matrices from the multiple Cell Ranger Count",
+            "experiments.",
             "Default: 5 (applied to all datasets)"
         ),
         type="integer", default=5
@@ -299,10 +299,9 @@ get_args <- function(){
     parser$add_argument(
         "--mingenes",
         help=paste(
-            "Include cells where at least this many RNA features are detected.",
-            "If multiple values provided, each of them will be applied to the",
-            "correspondent dataset from the --mex input based on the --identity",
-            "file.",
+            "Include cells where at least this many genes are detected. If multiple values",
+            "provided, each of them will be applied to the correspondent dataset from the",
+            "--mex input based on the --identity file.",
             "Default: 250 (applied to all datasets)"
         ),
         type="integer", default=250, nargs="*"
@@ -310,9 +309,9 @@ get_args <- function(){
     parser$add_argument(
         "--maxgenes",
         help=paste(
-            "Include cells with the number of RNA features not bigger than this value.",
-            "If multiple values provided, each of them will be applied to the correspondent",
-            "dataset from the --mex input based on the --identity file.",
+            "Include cells with the number of genes not bigger than this value. If multiple",
+            "values provided, each of them will be applied to the correspondent dataset from",
+            "the --mex input based on the --identity file.",
             "Default: 5000 (applied to all datasets)"
         ),
         type="integer", default=5000, nargs="*"
@@ -341,7 +340,7 @@ get_args <- function(){
     parser$add_argument(
         "--mitopattern",
         help=paste(
-            "Regex pattern to identify mitochondrial RNA features.",
+            "Regex pattern to identify mitochondrial genes.",
             "Default: '^Mt-'"
         ),
         type="character", default="^Mt-"

@@ -142,16 +142,16 @@ apply_peak_qc_filters <- function(seurat_data, cell_identity_data, args) {
         identity <- cell_identity_data$library_id[i]
 
         minfrip <- args$minfrip[i]
-        maxblacklisted <- args$maxblacklisted[i]
+        maxblacklist <- args$maxblacklist[i]
 
         base::print(base::paste("Filtering", identity))
         base::print(base::paste(" ", "FRiP >=", minfrip))
-        base::print(base::paste(" ", "Ratio of reads in genomic blacklist regions <=", maxblacklisted))
+        base::print(base::paste(" ", "Ratio of reads in genomic blacklist regions <=", maxblacklist))
 
         filtered_seurat_data <- base::subset(
             seurat_data,
             idents=identity,
-            subset=(frip >= minfrip) & (blacklisted_fraction <= maxblacklisted)
+            subset=(frip >= minfrip) & (blacklist_fraction <= maxblacklist)
         )
         if (is.null(merged_seurat_data)){
             merged_seurat_data <- filtered_seurat_data

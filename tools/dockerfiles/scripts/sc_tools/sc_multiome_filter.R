@@ -110,7 +110,7 @@ export_all_dimensionality_plots <- function(seurat_data, suffix, args) {
 export_all_clustering_plots <- function(seurat_data, suffix, args, cluster_prefix, macs2_peaks=FALSE){
     Idents(seurat_data) <- "new.ident"                                    # safety measure
     peak_type <- ifelse(macs2_peaks, "- MACS2", "- 10x")
-    selected_features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "TSS.enrichment", "nucleosome_signal", "nFeature_ATAC", "frip", "blacklisted_fraction")
+    selected_features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "TSS.enrichment", "nucleosome_signal", "nFeature_ATAC", "frip", "blacklist_fraction")
     selected_labels=c(
         "RNA UMIs", "Genes", "Mitochondrial %", "Novelty score",
         paste(
@@ -150,7 +150,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args, cluster_prefi
 export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
     Idents(seurat_data) <- "new.ident"                                                                # safety measure
     peak_type <- ifelse(macs2_peaks, "- MACS2", "- 10x")
-    selected_features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "TSS.enrichment", "nucleosome_signal", "nFeature_ATAC", "frip", "blacklisted_fraction")
+    selected_features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "TSS.enrichment", "nucleosome_signal", "nFeature_ATAC", "frip", "blacklist_fraction")
     selected_labels=c(
         "RNA UMIs", "Genes", "Mitochondrial %", "Novelty score",
         paste(c("ATAC UMIs", "TSS enrichment score", "Nucl. signal", "Peaks", "FRiP", "Bl. regions"), peak_type)
@@ -329,14 +329,14 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
     )
     graphics$geom_density_plot(
         data=seurat_data@meta.data,
-        x_axis="blacklisted_fraction",
+        x_axis="blacklist_fraction",
         color_by="new.ident",
         facet_by="new.ident",
-        x_left_intercept=args$maxblacklisted,
-        x_label="Fraction of ATAC fragments within blacklisted regions per cell",
+        x_left_intercept=args$maxblacklist,
+        x_label="Fraction of ATAC fragments within genomic blacklist regions per cell",
         y_label="Density",
         legend_title="Identity",
-        plot_title=paste("Fraction of ATAC fragments within blacklisted regions per cell density (", suffix, ") ", peak_type, sep=""),
+        plot_title=paste("Fraction of ATAC fragments within genomic blacklist regions per cell density (", suffix, ") ", peak_type, sep=""),
         scale_x_log10=FALSE,
         zoom_on_intercept=TRUE,
         show_ranked=TRUE,
@@ -503,14 +503,14 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         )
         graphics$geom_density_plot(
             data=seurat_data@meta.data,
-            x_axis="blacklisted_fraction",
+            x_axis="blacklist_fraction",
             color_by="new.ident",
             facet_by="condition",
-            x_left_intercept=args$maxblacklisted,
-            x_label="Fraction of ATAC fragments within blacklisted regions per cell",
+            x_left_intercept=args$maxblacklist,
+            x_label="Fraction of ATAC fragments within genomic blacklist regions per cell",
             y_label="Density",
             legend_title="Identity",
-            plot_title=paste("Split by grouping condition the fraction of ATAC fragments within blacklisted regions per cell density (", suffix, ") ", peak_type, sep=""),
+            plot_title=paste("Split by grouping condition the fraction of ATAC fragments within genomic blacklist regions per cell density (", suffix, ") ", peak_type, sep=""),
             scale_x_log10=FALSE,
             zoom_on_intercept=TRUE,
             show_ranked=TRUE,
@@ -527,28 +527,26 @@ get_args <- function(){
         "--mex",
         help=paste(
             "Path to the folder with feature-barcode matrix from Cell Ranger ARC Count/Aggregate",
-            "experiment in MEX format. The rows consist of all the gene and peak features",
-            "concatenated together and the columns are restricted to those barcodes that are",
-            "identified as cells."
+            "experiment in MEX format. The rows consist of all the genes and peaks concatenated",
+            "together and the columns are restricted to those barcodes that are identified as cells."
         ),
         type="character", required="True"
     )
     parser$add_argument(
         "--identity",
         help=paste(
-            "Path to the metadata TSV/CSV file to set the datasets identities.",
-            "If --mex points to the Cell Ranger ARC Aggregate outputs, the aggr.csv",
-            "file can be used. If Cell Ranger ARC Count outputs have been used in",
-            "--mex, the file should include at least one column - 'library_id' and",
-            "one row with the alias for Cell Ranger ARC Count experiment."
+            "Path to the metadata TSV/CSV file to set the datasets identities. If --mex points to",
+            "the Cell Ranger ARC Aggregate outputs, the aggr.csv file can be used. If Cell Ranger",
+            "ARC Count outputs have been used in the --mex input, the file should include at least",
+            "one column - 'library_id' and one row with the alias for Cell Ranger ARC Count experiment."
         ),
         type="character", required="True"
     )
     parser$add_argument(
         "--fragments",
         help=paste(
-            "Count and barcode information for every ATAC fragment observed in",
-            "the experiment in TSV format. Tbi-index file is required."
+            "Count and barcode information for every ATAC fragment observed in the experiment in TSV",
+            "format. Tbi-index file is required."
         ),
         type="character", required="True"
     )
@@ -560,16 +558,16 @@ get_args <- function(){
     parser$add_argument(
         "--grouping",
         help=paste(
-            "Path to the TSV/CSV file to define datasets grouping. First column -",
-            "'library_id' with the values provided in the same order as in the",
-            "correspondent column of the --identity file, second column 'condition'.",
-            "Default: each dataset is assigned to a separate group."
+            "Path to the TSV/CSV file to define datasets grouping. First column - 'library_id'",
+            "with the values provided in the same order as in the correspondent column from the",
+            "--identity file, second column 'condition'.",
+            "Default: each dataset is assigned to its own group."
         ),
         type="character"
     )
     parser$add_argument(
-        "--blacklisted",
-        help="Path to the optional blacklisted regions file in BED format",
+        "--blacklist",
+        help="Path to the optional BED file with the genomic blacklist regions.",
         type="character"
     )
     parser$add_argument(
@@ -585,7 +583,7 @@ get_args <- function(){
     parser$add_argument(
         "--rnamincells",
         help=paste(
-            "Include only RNA features detected in at least this many cells.",
+            "Include only genes detected in at least this many cells.",
             "Default: 5 (applied to all datasets)"
         ),
         type="integer", default=5
@@ -593,10 +591,9 @@ get_args <- function(){
     parser$add_argument(
         "--mingenes",
         help=paste(
-            "Include cells where at least this many RNA features are detected.",
-            "If multiple values provided, each of them will be applied to the",
-            "correspondent dataset from the --mex input based on the --identity",
-            "file.",
+            "Include cells where at least this many genes are detected. If multiple values",
+            "provided, each of them will be applied to the correspondent dataset from the",
+            "--mex input based on the --identity file.",
             "Default: 250 (applied to all datasets)"
         ),
         type="integer", default=250, nargs="*"
@@ -604,9 +601,9 @@ get_args <- function(){
     parser$add_argument(
         "--maxgenes",
         help=paste(
-            "Include cells with the number of RNA features not bigger than this value.",
-            "If multiple values provided, each of them will be applied to the correspondent",
-            "dataset from the --mex input based on the --identity file.",
+            "Include cells with the number of genes not bigger than this value. If multiple",
+            "values provided, each of them will be applied to the correspondent dataset from",
+            "the --mex input based on the --identity file.",
             "Default: 5000 (applied to all datasets)"
         ),
         type="integer", default=5000, nargs="*"
@@ -624,7 +621,7 @@ get_args <- function(){
     parser$add_argument(
         "--mitopattern",
         help=paste(
-            "Regex pattern to identify mitochondrial RNA features.",
+            "Regex pattern to identify mitochondrial genes.",
             "Default: '^Mt-'"
         ),
         type="character", default="^Mt-"
@@ -652,7 +649,7 @@ get_args <- function(){
     parser$add_argument(
         "--atacmincells",
         help=paste(
-            "Include only ATAC features detected in at least this many cells.",
+            "Include only peaks detected in at least this many cells.",
             "Default: 5 (applied to all datasets)"
         ),
         type="integer", default=5
@@ -674,7 +671,7 @@ get_args <- function(){
             "Nucleosome signal quantifies the approximate ratio of mononucleosomal",
             "to nucleosome-free fragments. If multiple values provided, each of",
             "them will be applied to the correspondent dataset from the --mex input",
-            "based on the --identity file",
+            "based on the --identity file.",
             "Default: 4 (applied to all datasets)"
         ),
         type="double", default=4, nargs="*"
@@ -702,7 +699,7 @@ get_args <- function(){
         type="double", default=0.15, nargs="*"
     )
     parser$add_argument(
-        "--maxblacklisted",
+        "--maxblacklist",
         help=paste(
             "Include cells with the ratio of fragments in genomic blacklist regions",
             "not bigger than this value. If multiple values provided, each of them",
@@ -716,20 +713,20 @@ get_args <- function(){
         "--callpeaks",
         help=paste(
             "Call peaks with MACS2 instead of those that are provided by Cell Ranger ARC Count.",
-            "Peaks are called per identity (identity) or per RNA cluster (cluster) after applying",
-            "all RNA related thresholds, maximum nucleosome signal, and minimum TSS enrichment",
-            "score filters. If set to 'cluster' RNA clusters are identified based on the parameters",
-            "set with --resolution, --dimensions, --highvarrna, --rnanorm, and --ntgr.",
+            "Peaks are called per identity or per RNA cluster after applying all RNA related",
+            "thresholds, maximum nucleosome signal, and minimum TSS enrichment scores filters.",
+            "If set to 'cluster' RNA clusters are identified based on the parameters set with",
+            "--resolution, --dimensions, --highvargenes, --norm, and --ntgr.",
             "Default: do not call peaks"
         ),
         type="character",
         choices=c("identity", "cluster")
     )
     parser$add_argument(
-        "--rnanorm",
+        "--norm",
         help=paste(
-            "Normalization method to be used when identifying RNA based clusters for",
-            "calling custom MACS2 peaks. Ignored if --callpeaks is not set to 'cluster'.",
+            "Normalization method to be used when identifying RNA based clusters for calling",
+            "custom MACS2 peaks. Ignored if --callpeaks is not set to 'cluster'.",
             "Default: sct"
         ),
         type="character",
@@ -737,12 +734,11 @@ get_args <- function(){
         choices=c("sct", "log", "sctglm")
     )
     parser$add_argument(
-        "--highvarrna",
+        "--highvargenes",
         help=paste(
-            "Number of highly variable RNA features to detect. Used for RNA datasets",
-            "integration, scaling, and dimensionality reduction when identifying RNA based",
-            "clusters for calling custom MACS2 peaks. Ignored if --callpeaks is not set",
-            "to 'cluster'.",
+            "Number of highly variable genes to detect. Used for RNA datasets integration,",
+            "scaling, and dimensionality reduction when identifying RNA based clusters for",
+            "calling custom MACS2 peaks. Ignored if --callpeaks is not set to 'cluster'.",
             "Default: 3000"
         ),
         type="integer", default=3000
@@ -802,7 +798,7 @@ get_args <- function(){
             "Attempts to minimize RAM usage when integrating multiple datasets",
             "with SCTransform algorithm (slows down the computation).",
             "Ignored if --callpeaks is not set to 'cluster', if --ntgr is not set",
-            "to 'seurat', if --rnanorm is not set to either 'sct' or 'sctglm'.",
+            "to 'seurat', if --norm is not set to either 'sct' or 'sctglm'.",
             "Default: false"
         ),
         action="store_true"
@@ -850,8 +846,8 @@ cell_identity_data <- io$load_cell_identity_data(args$identity)
 print(paste("Loading datasets grouping from", args$grouping))
 grouping_data <- io$load_grouping_data(args$grouping, cell_identity_data)
 
-print(paste("Loading blacklisted regions from", args$blacklisted))
-blacklisted_data <- io$load_blacklisted_data(args$blacklisted)
+print(paste("Loading genomic blacklist regions from", args$blacklist))
+blacklist_data <- io$load_blacklist_data(args$blacklist)
 
 print(paste("Loading gene/peak-barcode matrices from", args$mex))
 print(paste("Loading fragments from", args$fragments))
@@ -866,7 +862,7 @@ debug$print_info(seurat_data, args)
 print("Adjusting input parameters")
 idents_count <- length(unique(as.vector(as.character(Idents(seurat_data)))))
 for (key in names(args)){
-    if (key %in% c("mingenes", "maxgenes", "rnaminumi", "minnovelty", "atacminumi", "maxnuclsignal", "mintssenrich", "minfrip", "maxblacklisted")){
+    if (key %in% c("mingenes", "maxgenes", "rnaminumi", "minnovelty", "atacminumi", "maxnuclsignal", "mintssenrich", "minfrip", "maxblacklist")){
         if (length(args[[key]]) != 1 && length(args[[key]]) != idents_count){
             print(paste("Filtering parameter", key, "has an ambiguous size. Exiting"))
             quit(save="no", status=1, runLast=FALSE)
@@ -894,7 +890,7 @@ seurat_data <- qc$add_rna_qc_metrics(seurat_data, args)
 print("Adding ATAC QC metrics for not filtered datasets")
 seurat_data <- qc$add_atac_qc_metrics(seurat_data, args)
 print("Adding peak QC metrics for peaks called by Cell Ranger ARC")
-seurat_data <- qc$add_peak_qc_metrics(seurat_data, blacklisted_data, args)
+seurat_data <- qc$add_peak_qc_metrics(seurat_data, blacklist_data, args)
 debug$print_info(seurat_data, args)
 
 export_all_qc_plots(
@@ -918,7 +914,7 @@ if (!is.null(args$callpeaks)){
     print("Updating ATAC QC metrics after calling MACS2 peaks")
     seurat_data <- qc$add_atac_qc_metrics(seurat_data, args)                               # with the new peaks, we have different number of ATAC UMIs counted per cell, so all the metrics should be updated
     print("Updating peak QC metrics after calling MACS2 peaks")
-    seurat_data <- qc$add_peak_qc_metrics(seurat_data, blacklisted_data, args)             # recalculate peak QC metrics
+    seurat_data <- qc$add_peak_qc_metrics(seurat_data, blacklist_data, args)             # recalculate peak QC metrics
     debug$print_info(seurat_data, args)
     export_all_qc_plots(                                                                   # after RNA and ATAC filters have been applied
         seurat_data=seurat_data,
@@ -949,7 +945,7 @@ seurat_data <- filter$apply_peak_qc_filters(seurat_data, cell_identity_data, arg
 print("Updating ATAC QC metrics after all filtering thresholds applied")
 seurat_data <- qc$add_atac_qc_metrics(seurat_data, args)                                   # recalculate ATAC QC metrics
 print("Updating peak QC metrics after all filtering thresholds applied")
-seurat_data <- qc$add_peak_qc_metrics(seurat_data, blacklisted_data, args)                 # recalculate peak QC metrics
+seurat_data <- qc$add_peak_qc_metrics(seurat_data, blacklist_data, args)                 # recalculate peak QC metrics
 debug$print_info(seurat_data, args)
 
 export_all_qc_plots(                                                                       # after all filters have been applied

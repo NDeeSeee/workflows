@@ -80,7 +80,7 @@ rna_log_single <- function(seurat_data, args, cell_cycle_data=NULL){
     }
     scaled_norm_seurat_data <- Seurat::FindVariableFeatures(
         scaled_norm_seurat_data,
-        nfeatures=args$highvarrna,
+        nfeatures=args$highvargenes,
         verbose=FALSE
     )
     vars_to_regress <- get_vars_to_regress(scaled_norm_seurat_data, args)                           # may or may not include S.Score and G2M.Score columns
@@ -96,7 +96,7 @@ rna_log_single <- function(seurat_data, args, cell_cycle_data=NULL){
 
 rna_sct_single <- function(seurat_data, args, cell_cycle_data=NULL){
     SeuratObject::DefaultAssay(seurat_data) <- "RNA"                                # safety measure
-    method <- base::ifelse(args$rnanorm=="sctglm", "glmGamPoi", "poisson")
+    method <- base::ifelse(args$norm=="sctglm", "glmGamPoi", "poisson")
     vars_to_regress <- get_vars_to_regress(seurat_data, args)                       # will never include "S.Score", "G2M.Score" columns as cell cycle scores are not assigned
     base::print(
         base::paste(
@@ -109,7 +109,7 @@ rna_sct_single <- function(seurat_data, args, cell_cycle_data=NULL){
         seurat_data,                                                                # use not splitted seurat_data
         assay="RNA",
         new.assay.name="SCT",
-        variable.features.n=args$highvarrna,
+        variable.features.n=args$highvargenes,
         method=method,
         vars.to.regress=vars_to_regress,                                            # first portion of variables to regress. will never include "S.Score" and "G2M.Score"
         conserve.memory=args$lowmem,
@@ -136,7 +136,7 @@ rna_sct_single <- function(seurat_data, args, cell_cycle_data=NULL){
                     seurat_data,
                     assay="RNA",
                     new.assay.name="SCT",
-                    variable.features.n=args$highvarrna,
+                    variable.features.n=args$highvargenes,
                     method=method,
                     vars.to.regress=vars_to_regress,
                     conserve.memory=args$lowmem,
@@ -220,13 +220,13 @@ rna_log_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
         }
         splitted_seurat_data[[i]] <- Seurat::FindVariableFeatures(
             splitted_seurat_data[[i]],
-            nfeatures=args$highvarrna,
+            nfeatures=args$highvargenes,
             verbose=FALSE
         )
     }
     integration_features <- Seurat::SelectIntegrationFeatures(
         splitted_seurat_data,
-        nfeatures=args$highvarrna,
+        nfeatures=args$highvargenes,
         verbose=FALSE
     )
     integration_anchors <- Seurat::FindIntegrationAnchors(
@@ -266,7 +266,7 @@ rna_log_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
 }
 
 rna_sct_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL){
-    method <- base::ifelse(args$rnanorm=="sctglm", "glmGamPoi", "poisson")
+    method <- base::ifelse(args$norm=="sctglm", "glmGamPoi", "poisson")
     failed_cell_cycle_scoring <- FALSE
     for (i in 1:length(splitted_seurat_data)) {
         SeuratObject::DefaultAssay(splitted_seurat_data[[i]]) <- "RNA"                            # safety measure
@@ -282,7 +282,7 @@ rna_sct_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
             splitted_seurat_data[[i]],
             assay="RNA",
             new.assay.name="SCT",
-            variable.features.n=args$highvarrna,
+            variable.features.n=args$highvargenes,
             method=method,
             vars.to.regress=vars_to_regress,
             conserve.memory=args$lowmem,
@@ -315,7 +315,7 @@ rna_sct_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
                             splitted_seurat_data[[i]],
                             assay="RNA",
                             new.assay.name="SCT",
-                            variable.features.n=args$highvarrna,
+                            variable.features.n=args$highvargenes,
                             method=method,
                             vars.to.regress=vars_to_regress,
                             conserve.memory=args$lowmem,
@@ -355,7 +355,7 @@ rna_sct_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
                     splitted_seurat_data[[i]],
                     assay="RNA",
                     new.assay.name="SCT",
-                    variable.features.n=args$highvarrna,
+                    variable.features.n=args$highvargenes,
                     method=method,
                     vars.to.regress=vars_to_regress,
                     conserve.memory=args$lowmem,
@@ -375,7 +375,7 @@ rna_sct_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
     }
     integration_features <- Seurat::SelectIntegrationFeatures(
         splitted_seurat_data,
-        nfeatures=args$highvarrna,
+        nfeatures=args$highvargenes,
         verbose=FALSE
     )
     splitted_seurat_data <- Seurat::PrepSCTIntegration(
@@ -413,14 +413,14 @@ rna_preprocess <- function(seurat_data, args, cell_cycle_data=NULL) {
                 "is present). Using the original not splitted seurat data."
             )
         )
-        if (args$rnanorm == "log"){
+        if (args$norm == "log"){
             processed_seurat_data <- rna_log_single(seurat_data, args, cell_cycle_data)                     # sets default assay to RNA
         } else {
             processed_seurat_data <- rna_sct_single(seurat_data, args, cell_cycle_data)                     # sets default assay to SCT
         }
     } else {
         base::print("Running datasets integration using splitted seurat data.")
-        if (args$rnanorm == "log"){
+        if (args$norm == "log"){
             processed_seurat_data <- rna_log_integrated(splitted_seurat_data, args, cell_cycle_data)        # sets default assay to rna_integrated
         } else {
             processed_seurat_data <- rna_sct_integrated(splitted_seurat_data, args, cell_cycle_data)        # sets default assay to rna_integrated

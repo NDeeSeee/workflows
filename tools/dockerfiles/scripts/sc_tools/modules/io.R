@@ -16,7 +16,7 @@ export(
     "load_cell_identity_data",
     "extend_metadata",
     "load_grouping_data",
-    "load_blacklisted_data",
+    "load_blacklist_data",
     "assign_identities",
     "load_10x_multiome_data",
     "load_10x_rna_data",
@@ -196,15 +196,15 @@ load_grouping_data <- function(location, cell_identity_data) {
     return (default_grouping_data)
 }
 
-load_blacklisted_data <- function(location) {
-    default_blacklisted_data <- NULL
+load_blacklist_data <- function(location) {
+    default_blacklist_data <- NULL
     if (!is.null(location)){
-        blacklisted_data <- rtracklayer::import(location, format="BED")
-        base::print(base::paste("Blacklisted regions data is successfully loaded from ", location))
-        return (blacklisted_data)
+        blacklist_data <- rtracklayer::import(location, format="BED")
+        base::print(base::paste("Genomic blacklist regions data is successfully loaded from ", location))
+        return (blacklist_data)
     }
-    base::print("Blacklisted regions data is not provided. Cells won't be filtered by --maxblacklisted")
-    return (default_blacklisted_data)
+    base::print("File with the genomic blacklist regions is not provided. Cells won't be filtered by --maxblacklist")
+    return (default_blacklist_data)
 }
 
 assign_identities <- function(seurat_data, cell_identity_data, grouping_data){

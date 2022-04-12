@@ -20,7 +20,7 @@ suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
 export_all_dimensionality_plots <- function(seurat_data, args) {
     Idents(seurat_data) <- "new.ident"                                                                                         # safety measure
-    selected_features=c("nCount_ATAC", "nFeature_ATAC", "TSS.enrichment", "nucleosome_signal", "frip", "blacklisted_fraction")
+    selected_features=c("nCount_ATAC", "nFeature_ATAC", "TSS.enrichment", "nucleosome_signal", "frip", "blacklist_fraction")
     selected_labels=c("ATAC UMIs", "Peaks", "TSS enrichment score", "Nucleosome signal", "FRiP", "Bl. regions")
 
     graphics$corr_plot(

@@ -100,7 +100,7 @@ add_atac_qc_metrics <- function(seurat_data, args){
     return (seurat_data)
 }
 
-add_peak_qc_metrics <- function(seurat_data, blacklisted_data, args){
+add_peak_qc_metrics <- function(seurat_data, blacklist_data, args){
     backup_assay <- SeuratObject::DefaultAssay(seurat_data)
     SeuratObject::DefaultAssay(seurat_data) <- "ATAC"
     fragments_data <- Signac::CountFragments(
@@ -117,14 +117,14 @@ add_peak_qc_metrics <- function(seurat_data, blacklisted_data, args){
         col.name="frip",
         verbose=FALSE
     )
-    if (!is.null(blacklisted_data)){
-        seurat_data$blacklisted_fraction <- Signac::FractionCountsInRegion(
+    if (!is.null(blacklist_data)){
+        seurat_data$blacklist_fraction <- Signac::FractionCountsInRegion(
             seurat_data,
             assay="ATAC",
-            regions=blacklisted_data
+            regions=blacklist_data
         )
     } else {
-        seurat_data$blacklisted_fraction <- 0                                                  # blacklisted regions file wasn't provided, so we set everything to 0
+        seurat_data$blacklist_fraction <- 0                                                  # blacklist regions file wasn't provided, so we set everything to 0
     }
     SeuratObject::DefaultAssay(seurat_data) <- backup_assay
     base::gc(verbose=FALSE)
