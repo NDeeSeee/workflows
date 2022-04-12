@@ -284,24 +284,20 @@ get_args <- function(){
     parser$add_argument(
         "--query",
         help=paste(
-            "Path to the RDS file to load Seurat object from. This file",
-            "can be produced by subsequent runs of sc_rna_[reduce/cluster].R",
-            "and sc_atac_[reduce/cluster].R scripts in any order. The Seurat",
-            "loaded object must include RNA dimensionality reduction information",
-            "stored in the 'pca' and ATAC dimensionality reduction information",
-            "stored in 'atac_lsi' slots. It is mandatory to have RNA information",
-            "stored in the RNA assay and chromatin accessibility information",
-            "stored in the ATAC assay."
+            "Path to the RDS file to load Seurat object from. This file should include",
+            "genes expression and chromatin accessibility information stored in the RNA",
+            "and ATAC assays correspondingly. Additionally, 'pca', 'rnaumap', 'atac_lsi'",
+            "and 'atacumap' dimensionality reductions should be present."
         ),
         type="character", required="True"
     )
     parser$add_argument(
         "--rnadimensions",
         help=paste(
-            "Dimensionality used from the 'pca' reduction when constructing",
-            "weighted nearest-neighbor graph before clustering (from 1 to 50).",
-            "If single value N is provided, use from 1 to N dimensions. If multiple",
-            "values are provided, subset to only selected dimensions.",
+            "Dimensionality from the 'pca' reduction to use when constructing weighted",
+            "nearest-neighbor graph before clustering (from 1 to 50). If single value N",
+            "is provided, use from 1 to N dimensions. If multiple values are provided,",
+            "subset to only selected dimensions.",
             "Default: from 1 to 10"
         ),
         type="integer", default=10, nargs="*"
@@ -309,10 +305,10 @@ get_args <- function(){
     parser$add_argument(
         "--atacdimensions",
         help=paste(
-            "Dimensionality used from the 'atac_lsi' reduction when constructing",
-            "weighted nearest-neighbor graph before clustering (from 1 to 50).",
-            "If single value N is provided, use from 2 to N dimensions. If multiple",
-            "values are provided, subset to only selected dimensions.",
+            "Dimensionality from the 'atac_lsi' reduction to use when constructing weighted",
+            "nearest-neighbor graph before clustering (from 1 to 50). If single value N",
+            "is provided, use from 2 to N dimensions. If multiple values are provided,",
+            "subset to only selected dimensions.",
             "Default: from 2 to 10"
         ),
         type="integer", default=10, nargs="*"
@@ -385,17 +381,17 @@ get_args <- function(){
     parser$add_argument(
         "--fragments",
         help=paste(
-            "Count and barcode information for every ATAC fragment used in the",
-            "construction of Seurat object loaded with --query parameter.",
-            "File should be saved in TSV format with tbi-index file."
+            "Count and barcode information for every ATAC fragment used in the loaded Seurat",
+            "object. File should be saved in TSV format with tbi-index file."
         ),
         type="character"
     )
     parser$add_argument(
         "--genes",
         help=paste(
-            "Genes of interest to evaluate expression and to build Tn5 insertion frequency",
-            "plots. If --fragments is not provided only gene expression plots will be built.",
+            "Genes of interest to build gene expression and Tn5 insertion frequency plots",
+            "for the nearest peaks. If '--fragments' is not provided only gene expression",
+            "plots will be built.",
             "Default: None"
         ),
         type="character", nargs="*"
@@ -403,7 +399,8 @@ get_args <- function(){
     parser$add_argument(
         "--diffgenes",
         help=paste(
-            "Identify differentially expressed genes between each pair of clusters for all resolutions.",
+            "Identify differentially expressed genes (putative gene markers) between each",
+            "pair of clusters for all resolutions.",
             "Default: false"
         ),
         action="store_true"
@@ -422,7 +419,7 @@ get_args <- function(){
         help=paste(
             "For putative gene markers identification include only those genes that",
             "on average have log fold change difference in expression between every",
-            "tested pair of clusters not lower than this value. Ignored if --diffgenes",
+            "tested pair of clusters not lower than this value. Ignored if '--diffgenes'",
             "is not set.",
             "Default: 0.25"
         ),
@@ -433,7 +430,7 @@ get_args <- function(){
         help=paste(
             "For putative gene markers identification include only those genes that",
             "are detected in not lower than this fraction of cells in either of the",
-            "two tested clusters. Ignored if --diffgenes is not set.",
+            "two tested clusters. Ignored if '--diffgenes' is not set.",
             "Default: 0.1"
         ),
         type="double", default=0.1
@@ -442,7 +439,7 @@ get_args <- function(){
         "--rnaonlypos",
         help=paste(
             "For putative gene markers identification return only positive markers.",
-            "Ignored if --diffgenes is not set.",
+            "Ignored if '--diffgenes' is not set.",
             "Default: false"
         ),
         action="store_true"
@@ -451,7 +448,7 @@ get_args <- function(){
         "--rnatestuse",
         help=paste(
             "Statistical test to use for putative gene markers identification.",
-            "Ignored if --diffgenes is not set.",
+            "Ignored if '--diffgenes' is not set.",
             "Default: wilcox"
         ),
         type="character", default="wilcox",
@@ -462,7 +459,7 @@ get_args <- function(){
         help=paste(
             "For differentially accessible peaks identification include only those peaks that",
             "on average have log fold change difference in the chromatin accessibility between",
-            "every tested pair of clusters not lower than this value. Ignored if --diffpeaks",
+            "every tested pair of clusters not lower than this value. Ignored if '--diffpeaks'",
             "is not set.",
             "Default: 0.25"
         ),
@@ -473,7 +470,7 @@ get_args <- function(){
         help=paste(
             "For differentially accessible peaks identification include only those peaks that",
             "are detected in not lower than this fraction of cells in either of the two tested",
-            "clusters. Ignored if --diffpeaks is not set.",
+            "clusters. Ignored if '--diffpeaks' is not set.",
             "Default: 0.05"
         ),
         type="double", default=0.05
@@ -482,7 +479,7 @@ get_args <- function(){
         "--atactestuse",
         help=paste(
             "Statistical test to use for differentially accessible peaks identification.",
-            "Ignored if --diffpeaks is not set.",
+            "Ignored if '--diffpeaks' is not set.",
             "Default: LR"
         ),
         type="character", default="LR",

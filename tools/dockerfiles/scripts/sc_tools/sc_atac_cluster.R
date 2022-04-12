@@ -193,21 +193,18 @@ get_args <- function(){
     parser$add_argument(
         "--query",
         help=paste(
-            "Path to the RDS file to load Seurat object from. This file",
-            "can be produced by sc_atac_reduce.R script and must include",
-            "dimensionality reduction information stored in the 'atac_lsi' and",
-            "'atacumap' slots. It is mandatory to have chromatin accessibility",
-            "information stored in the ATAC assay."
+            "Path to the RDS file to load Seurat object from. This file should include",
+            "chromatin accessibility information stored in the ATAC assay, as well as",
+            "'atac_lsi' and 'atacumap' dimensionality reductions applied to that assay."
         ),
         type="character", required="True"
     )
     parser$add_argument(
         "--dimensions",
         help=paste(
-            "Dimensionality used when constructing nearest-neighbor graph before",
-            "clustering (from 1 to 50). If single value N is provided, use from 2 to N",
-            "dimensions. If multiple values are provided, subset to only selected",
-            "dimensions.",
+            "Dimensionality to use when constructing nearest-neighbor graph before clustering",
+            "(from 1 to 50). If single value N is provided, use from 2 to N dimensions. If",
+            "multiple values are provided, subset to only selected dimensions.",
             "Default: from 2 to 10"
         ),
         type="integer", default=10, nargs="*"
@@ -215,8 +212,7 @@ get_args <- function(){
     parser$add_argument(
         "--ametric",
         help=paste(
-            "Distance metric used when constructing nearest-neighbor graph before",
-            "clustering.",
+            "Distance metric used when constructing nearest-neighbor graph before clustering.",
             "Default: euclidean"
         ),
         type="character", default="euclidean",
@@ -236,18 +232,18 @@ get_args <- function(){
     parser$add_argument(
         "--fragments",
         help=paste(
-            "Count and barcode information for every ATAC fragment used in the",
-            "construction of Seurat object loaded with --query parameter.",
-            "File should be saved in TSV format with tbi-index file."
+            "Count and barcode information for every ATAC fragment used in the loaded Seurat",
+            "object. File should be saved in TSV format with tbi-index file."
         ),
         type="character"
     )
     parser$add_argument(
         "--genes",
         help=paste(
-            "Genes of interest to build Tn5 insertion frequency plots. If loaded Seurat object",
-            "includes RNA assay it will be additionally shown on the side of the plots.",
-            "Ignored if --fragments is not provided.",
+            "Genes of interest to build Tn5 insertion frequency plots for the nearest peaks.",
+            "If loaded Seurat object includes genes expression information in the RNA assay",
+            "it will be additionally shown on the right side of the plots.",
+            "Ignored if '--fragments' is not provided.",
             "Default: None"
         ),
         type="character", nargs="*"
@@ -265,7 +261,7 @@ get_args <- function(){
         help=paste(
             "For differentially accessible peaks identification include only those peaks that",
             "on average have log fold change difference in the chromatin accessibility between",
-            "every tested pair of clusters not lower than this value. Ignored if --diffpeaks",
+            "every tested pair of clusters not lower than this value. Ignored if '--diffpeaks'",
             "is not set.",
             "Default: 0.25"
         ),
@@ -276,7 +272,7 @@ get_args <- function(){
         help=paste(
             "For differentially accessible peaks identification include only those peaks that",
             "are detected in not lower than this fraction of cells in either of the two tested",
-            "clusters. Ignored if --diffpeaks is not set.",
+            "clusters. Ignored if '--diffpeaks' is not set.",
             "Default: 0.05"
         ),
         type="double", default=0.05
@@ -285,7 +281,7 @@ get_args <- function(){
         "--testuse",
         help=paste(
             "Statistical test to use for differentially accessible peaks identification.",
-            "Ignored if --diffpeaks is not set.",
+            "Ignored if '--diffpeaks' is not set.",
             "Default: LR"
         ),
         type="character", default="LR",

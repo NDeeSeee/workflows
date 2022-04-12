@@ -254,21 +254,18 @@ get_args <- function(){
     parser$add_argument(
         "--query",
         help=paste(
-            "Path to the RDS file to load Seurat object from. This file",
-            "can be produced by sc_rna_reduce.R script and must include",
-            "dimensionality reduction information stored in the 'pca' and",
-            "'rnaumap' slots. It is mandatory to have RNA information",
-            "stored in the RNA assay."
+            "Path to the RDS file to load Seurat object from. This file should include genes",
+            "expression information stored in the RNA assay, as well as 'pca' and 'rnaumap'",
+            "dimensionality reductions applied to that assay."
         ),
         type="character", required="True"
     )
     parser$add_argument(
         "--dimensions",
         help=paste(
-            "Dimensionality used when constructing nearest-neighbor graph before",
-            "clustering (from 1 to 50). If single value N is provided, use from 1 to N",
-            "dimensions. If multiple values are provided, subset to only selected",
-            "dimensions.",
+            "Dimensionality to use when constructing nearest-neighbor graph before clustering",
+            "(from 1 to 50). If single value N is provided, use from 1 to N dimensions. If",
+            "multiple values are provided, subset to only selected dimensions.",
             "Default: from 1 to 10"
         ),
         type="integer", default=10, nargs="*"
@@ -276,8 +273,7 @@ get_args <- function(){
     parser$add_argument(
         "--ametric",
         help=paste(
-            "Distance metric used when constructing nearest-neighbor graph before",
-            "clustering.",
+            "Distance metric used when constructing nearest-neighbor graph before clustering.",
             "Default: euclidean"
         ),
         type="character", default="euclidean",
@@ -297,7 +293,7 @@ get_args <- function(){
     parser$add_argument(
         "--genes",
         help=paste(
-            "Genes of interest to evaluate expression.",
+            "Genes of interest to build genes expression plots.",
             "Default: None"
         ),
         type="character", nargs="*"
@@ -305,7 +301,8 @@ get_args <- function(){
     parser$add_argument(
         "--diffgenes",
         help=paste(
-            "Identify differentially expressed genes between each pair of clusters for all resolutions.",
+            "Identify differentially expressed genes (putative gene markers) between each",
+            "pair of clusters for all resolutions.",
             "Default: false"
         ),
         action="store_true"
@@ -315,7 +312,7 @@ get_args <- function(){
         help=paste(
             "For putative gene markers identification include only those genes that",
             "on average have log fold change difference in expression between every",
-            "tested pair of clusters not lower than this value. Ignored if --diffgenes",
+            "tested pair of clusters not lower than this value. Ignored if '--diffgenes'",
             "is not set.",
             "Default: 0.25"
         ),
@@ -326,7 +323,7 @@ get_args <- function(){
         help=paste(
             "For putative gene markers identification include only those genes that",
             "are detected in not lower than this fraction of cells in either of the",
-            "two tested clusters. Ignored if --diffgenes is not set.",
+            "two tested clusters. Ignored if '--diffgenes' is not set.",
             "Default: 0.1"
         ),
         type="double", default=0.1
@@ -335,7 +332,7 @@ get_args <- function(){
         "--onlypos",
         help=paste(
             "For putative gene markers identification return only positive markers.",
-            "Ignored if --diffgenes is not set.",
+            "Ignored if '--diffgenes' is not set.",
             "Default: false"
         ),
         action="store_true"
@@ -344,7 +341,7 @@ get_args <- function(){
         "--testuse",
         help=paste(
             "Statistical test to use for putative gene markers identification.",
-            "Ignored if --diffgenes is not set.",
+            "Ignored if '--diffgenes' is not set.",
             "Default: wilcox"
         ),
         type="character", default="wilcox",
