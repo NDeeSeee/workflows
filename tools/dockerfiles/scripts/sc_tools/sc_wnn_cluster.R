@@ -285,7 +285,7 @@ get_args <- function(){
         "--query",
         help=paste(
             "Path to the RDS file to load Seurat object from. This file",
-            "can be produced by subsequent runs of sc_gex_[reduce/cluster].R",
+            "can be produced by subsequent runs of sc_rna_[reduce/cluster].R",
             "and sc_atac_[reduce/cluster].R scripts in any order. The Seurat",
             "loaded object must include RNA dimensionality reduction information",
             "stored in the 'pca' and ATAC dimensionality reduction information",
@@ -296,7 +296,7 @@ get_args <- function(){
         type="character", required="True"
     )
     parser$add_argument(
-        "--gexdimensions",
+        "--rnadimensions",
         help=paste(
             "Dimensionality used from the 'pca' reduction when constructing",
             "weighted nearest-neighbor graph before clustering (from 1 to 50).",
@@ -418,7 +418,7 @@ get_args <- function(){
     )
 
     parser$add_argument(
-        "--gexlogfc",
+        "--rnalogfc",
         help=paste(
             "For putative gene markers identification include only those genes that",
             "on average have log fold change difference in expression between every",
@@ -429,7 +429,7 @@ get_args <- function(){
         type="double", default=0.25
     )
     parser$add_argument(
-        "--gexminpct",
+        "--rnaminpct",
         help=paste(
             "For putative gene markers identification include only those genes that",
             "are detected in not lower than this fraction of cells in either of the",
@@ -439,7 +439,7 @@ get_args <- function(){
         type="double", default=0.1
     )
     parser$add_argument(
-        "--gexonlypos",
+        "--rnaonlypos",
         help=paste(
             "For putative gene markers identification return only positive markers.",
             "Ignored if --diffgenes is not set.",
@@ -448,7 +448,7 @@ get_args <- function(){
         action="store_true"
     )
     parser$add_argument(
-        "--gextestuse",
+        "--rnatestuse",
         help=paste(
             "Statistical test to use for putative gene markers identification.",
             "Ignored if --diffgenes is not set.",
@@ -535,10 +535,10 @@ args <- get_args()
 
 print("Input parameters")
 print(args)
-if (length(args$gexdimensions) == 1) {
-    print("Adjusting --gexdimensions parameter as only a single value was provided")
-    args$gexdimensions <- c(1:args$gexdimensions[1])
-    print(paste("--gexdimensions was adjusted to", paste(args$gexdimensions, collapse=", ")))
+if (length(args$rnadimensions) == 1) {
+    print("Adjusting --rnadimensions parameter as only a single value was provided")
+    args$rnadimensions <- c(1:args$rnadimensions[1])
+    print(paste("--rnadimensions was adjusted to", paste(args$rnadimensions, collapse=", ")))
 }
 if (length(args$atacdimensions) == 1) {
     print("Adjusting --atacdimensions parameter as only a single value was provided")
@@ -573,7 +573,7 @@ if (!is.null(args$fragments)){
 
 print(
     paste(
-        "Running weighted nearest-neighbor analysis using", paste(args$gexdimensions, collapse=", "),
+        "Running weighted nearest-neighbor analysis using", paste(args$rnadimensions, collapse=", "),
         "dimensions from 'pca' and", paste(args$atacdimensions, collapse=", "), "dimensions from 'atac_lsi'",
         "dimensionality reductions."
     )
@@ -582,7 +582,7 @@ seurat_data <- analyses$add_wnn_clusters(                       # will add 'wnnu
     seurat_data=seurat_data,
     graph_name="wsnn",                                          # will be used in all the plot generating functions
     reductions=list("pca", "atac_lsi"),
-    dimensions=list(args$gexdimensions, args$atacdimensions),   # should be the same order as reductions
+    dimensions=list(args$rnadimensions, args$atacdimensions),   # should be the same order as reductions
     cluster_algorithm=3,                                        # SLM algorithm
     args=args
 )
@@ -630,7 +630,7 @@ if(args$cbbuild){
         short_label="RNA",
         features=args$genes,                                   # can be NULL
         is_nested=TRUE,
-        rootname=paste(args$output, "_cellbrowser/gex", sep=""),
+        rootname=paste(args$output, "_cellbrowser/rna", sep=""),
     )
     print("Exporting ATAC assay to UCSC Cellbrowser")
     ucsc$export_cellbrowser(
@@ -658,21 +658,21 @@ if (!is.null(args$genes) || args$diffgenes) {
     }
     if(args$diffgenes){
         print("Identifying differentially expressed genes between each pair of clusters for all resolutions")
-        args$logfc <- args$gexlogfc                                  # need the proper names for get_putative_markers
-        args$minpct <- args$gexminpct
-        args$onlypos <- args$gexonlypos
-        args$testuse <- args$gextestuse
-        all_gex_putative_markers <- analyses$get_putative_markers(   # will change default assay to RNA
+        args$logfc <- args$rnalogfc                                  # need the proper names for get_putative_markers
+        args$minpct <- args$rnaminpct
+        args$onlypos <- args$rnaonlypos
+        args$testuse <- args$rnatestuse
+        all_rna_putative_markers <- analyses$get_putative_markers(   # will change default assay to RNA
             seurat_data=seurat_data,
             assay="RNA",
             resolution_prefix="wsnn_res",
             args=args
         )
         io$export_data(
-            all_gex_putative_markers,
-            paste(args$output, "_clst_gex_markers.tsv", sep="")
+            all_rna_putative_markers,
+            paste(args$output, "_clst_rna_markers.tsv", sep="")
         )
-        rm(all_gex_putative_markers)
+        rm(all_rna_putative_markers)
     }
 }
 

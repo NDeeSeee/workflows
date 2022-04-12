@@ -134,7 +134,7 @@ get_args <- function(){
         "--query",
         help=paste(
             "Path to the RDS file to load filtered Seurat object from. This file",
-            "can be produced by sc_multiome_filter.R or sc_gex_reduce.R scripts.",
+            "can be produced by sc_multiome_filter.R or sc_rna_reduce.R scripts.",
             "It is mandatory to have chromatin accessibility information stored",
             "in the ATAC assay."
         ),

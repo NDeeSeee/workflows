@@ -19,7 +19,7 @@ export(
     "load_blacklisted_data",
     "assign_identities",
     "load_10x_multiome_data",
-    "load_10x_gex_data",
+    "load_10x_rna_data",
     "export_h5seurat",
     "load_cell_cycle_data",
     "replace_fragments"
@@ -230,7 +230,7 @@ load_10x_multiome_data <- function(args, cell_identity_data, grouping_data) {
     base::suppressMessages(raw_data <- Seurat::Read10X(data.dir=args$mex))
     seurat_data <- SeuratObject::CreateSeuratObject(
         counts=raw_data$`Gene Expression`,
-        min.cells=args$gexmincells,
+        min.cells=args$rnamincells,
         names.delim="-",
         names.field=2
     )
@@ -284,12 +284,12 @@ load_10x_multiome_data <- function(args, cell_identity_data, grouping_data) {
     return (seurat_data)
 }
 
-load_10x_gex_data <- function(args, cell_identity_data, grouping_data) {
+load_10x_rna_data <- function(args, cell_identity_data, grouping_data) {
     if (length(args$mex) == 1){
         base::print("Single feature-barcode matrix is provided. Using the original barcode suffixes")
         seurat_data <- SeuratObject::CreateSeuratObject(
             counts=Seurat::Read10X(data.dir=args$mex),
-            min.cells=args$gexmincells,
+            min.cells=args$rnamincells,
             names.delim="-",
             names.field=2
         )

@@ -6,13 +6,13 @@ import("glmGamPoi", attach=FALSE)  # safety measure. we don't use it directly, b
 import("magrittr", `%>%`, attach=TRUE)
 
 export(
-    "gex_analyze",
+    "rna_analyze",
     "add_clusters",
-    "gex_preprocess",
-    "gex_log_single",
-    "gex_sct_single",
-    "gex_log_integrated",
-    "gex_sct_integrated",
+    "rna_preprocess",
+    "rna_log_single",
+    "rna_sct_single",
+    "rna_log_integrated",
+    "rna_sct_integrated",
     "get_vars_to_regress",
     "get_cell_cycle_scores",
     "get_min_ident_size",
@@ -24,7 +24,7 @@ export(
 
 get_vars_to_regress <- function(seurat_data, args, exclude_columns=NULL) {
     vars_to_regress <- NULL
-    arguments <- c(args$regressmt, args$regressgexumi,  args$regressgenes, args$regresscellcycle)   # any of then can be also NULL
+    arguments <- c(args$regressmt, args$regressrnaumi,  args$regressgenes, args$regresscellcycle)   # any of then can be also NULL
     metadata_columns <- c("mito_percentage", "nCount_RNA", "nFeature_RNA", "S.Score&G2M.Score")
     for (i in 1:length(arguments)) {
         current_argument <- arguments[i]
@@ -59,7 +59,7 @@ get_cell_cycle_scores <- function(seurat_data, assay, cell_cycle_data){   # we n
     return (seurat_data)
 }
 
-gex_log_single <- function(seurat_data, args, cell_cycle_data=NULL){
+rna_log_single <- function(seurat_data, args, cell_cycle_data=NULL){
     SeuratObject::DefaultAssay(seurat_data) <- "RNA"                                                # safety measure
     base::print("Applying LogNormalize")
     scaled_norm_seurat_data <- Seurat::NormalizeData(seurat_data, verbose=FALSE)
@@ -80,7 +80,7 @@ gex_log_single <- function(seurat_data, args, cell_cycle_data=NULL){
     }
     scaled_norm_seurat_data <- Seurat::FindVariableFeatures(
         scaled_norm_seurat_data,
-        nfeatures=args$highvargex,
+        nfeatures=args$highvarrna,
         verbose=FALSE
     )
     vars_to_regress <- get_vars_to_regress(scaled_norm_seurat_data, args)                           # may or may not include S.Score and G2M.Score columns
@@ -94,9 +94,9 @@ gex_log_single <- function(seurat_data, args, cell_cycle_data=NULL){
     return (scaled_norm_seurat_data)
 }
 
-gex_sct_single <- function(seurat_data, args, cell_cycle_data=NULL){
+rna_sct_single <- function(seurat_data, args, cell_cycle_data=NULL){
     SeuratObject::DefaultAssay(seurat_data) <- "RNA"                                # safety measure
-    method <- base::ifelse(args$gexnorm=="sctglm", "glmGamPoi", "poisson")
+    method <- base::ifelse(args$rnanorm=="sctglm", "glmGamPoi", "poisson")
     vars_to_regress <- get_vars_to_regress(seurat_data, args)                       # will never include "S.Score", "G2M.Score" columns as cell cycle scores are not assigned
     base::print(
         base::paste(
@@ -109,7 +109,7 @@ gex_sct_single <- function(seurat_data, args, cell_cycle_data=NULL){
         seurat_data,                                                                # use not splitted seurat_data
         assay="RNA",
         new.assay.name="SCT",
-        variable.features.n=args$highvargex,
+        variable.features.n=args$highvarrna,
         method=method,
         vars.to.regress=vars_to_regress,                                            # first portion of variables to regress. will never include "S.Score" and "G2M.Score"
         conserve.memory=args$lowmem,
@@ -136,7 +136,7 @@ gex_sct_single <- function(seurat_data, args, cell_cycle_data=NULL){
                     seurat_data,
                     assay="RNA",
                     new.assay.name="SCT",
-                    variable.features.n=args$highvargex,
+                    variable.features.n=args$highvarrna,
                     method=method,
                     vars.to.regress=vars_to_regress,
                     conserve.memory=args$lowmem,
@@ -173,7 +173,7 @@ get_min_ident_size <- function(splitted_seurat_data){
 }
 
 
-gex_log_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL){
+rna_log_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL){
     failed_cell_cycle_scoring <- FALSE
     for (i in 1:length(splitted_seurat_data)){
         SeuratObject::DefaultAssay(splitted_seurat_data[[i]]) <- "RNA"                            # safety measure
@@ -220,13 +220,13 @@ gex_log_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
         }
         splitted_seurat_data[[i]] <- Seurat::FindVariableFeatures(
             splitted_seurat_data[[i]],
-            nfeatures=args$highvargex,
+            nfeatures=args$highvarrna,
             verbose=FALSE
         )
     }
     integration_features <- Seurat::SelectIntegrationFeatures(
         splitted_seurat_data,
-        nfeatures=args$highvargex,
+        nfeatures=args$highvarrna,
         verbose=FALSE
     )
     integration_anchors <- Seurat::FindIntegrationAnchors(
@@ -237,7 +237,7 @@ gex_log_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
     )
     integrated_seurat_data <- Seurat::IntegrateData(
         integration_anchors, 
-        new.assay.name="gex_integrated",
+        new.assay.name="rna_integrated",
         normalization.method="LogNormalize",
         k.weight=min(get_min_ident_size(splitted_seurat_data), 100),        # k.weight 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
         verbose=FALSE
@@ -259,14 +259,14 @@ gex_log_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
         vars.to.regress=vars_to_regress,
         verbose=FALSE
     )
-    SeuratObject::DefaultAssay(integrated_seurat_data) <- "gex_integrated"
+    SeuratObject::DefaultAssay(integrated_seurat_data) <- "rna_integrated"
     base::rm(integration_features, integration_anchors)                                 # remove unused data
     base::gc(verbose=FALSE)
     return (integrated_seurat_data)
 }
 
-gex_sct_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL){
-    method <- base::ifelse(args$gexnorm=="sctglm", "glmGamPoi", "poisson")
+rna_sct_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL){
+    method <- base::ifelse(args$rnanorm=="sctglm", "glmGamPoi", "poisson")
     failed_cell_cycle_scoring <- FALSE
     for (i in 1:length(splitted_seurat_data)) {
         SeuratObject::DefaultAssay(splitted_seurat_data[[i]]) <- "RNA"                            # safety measure
@@ -282,7 +282,7 @@ gex_sct_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
             splitted_seurat_data[[i]],
             assay="RNA",
             new.assay.name="SCT",
-            variable.features.n=args$highvargex,
+            variable.features.n=args$highvarrna,
             method=method,
             vars.to.regress=vars_to_regress,
             conserve.memory=args$lowmem,
@@ -315,7 +315,7 @@ gex_sct_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
                             splitted_seurat_data[[i]],
                             assay="RNA",
                             new.assay.name="SCT",
-                            variable.features.n=args$highvargex,
+                            variable.features.n=args$highvarrna,
                             method=method,
                             vars.to.regress=vars_to_regress,
                             conserve.memory=args$lowmem,
@@ -355,7 +355,7 @@ gex_sct_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
                     splitted_seurat_data[[i]],
                     assay="RNA",
                     new.assay.name="SCT",
-                    variable.features.n=args$highvargex,
+                    variable.features.n=args$highvarrna,
                     method=method,
                     vars.to.regress=vars_to_regress,
                     conserve.memory=args$lowmem,
@@ -375,7 +375,7 @@ gex_sct_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
     }
     integration_features <- Seurat::SelectIntegrationFeatures(
         splitted_seurat_data,
-        nfeatures=args$highvargex,
+        nfeatures=args$highvarrna,
         verbose=FALSE
     )
     splitted_seurat_data <- Seurat::PrepSCTIntegration(
@@ -391,18 +391,18 @@ gex_sct_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
     )
     integrated_seurat_data <- Seurat::IntegrateData(
         integration_anchors, 
-        new.assay.name="gex_integrated",
+        new.assay.name="rna_integrated",
         normalization.method="SCT",
         k.weight=min(get_min_ident_size(splitted_seurat_data), 100),        # k.weight 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
         verbose=FALSE
     )
-    SeuratObject::DefaultAssay(integrated_seurat_data) <- "gex_integrated"
+    SeuratObject::DefaultAssay(integrated_seurat_data) <- "rna_integrated"
     base::rm(integration_features, integration_anchors)                         # remove unused data
     base::gc(verbose=FALSE)
     return (integrated_seurat_data)
 }
 
-gex_preprocess <- function(seurat_data, args, cell_cycle_data=NULL) {
+rna_preprocess <- function(seurat_data, args, cell_cycle_data=NULL) {
     SeuratObject::DefaultAssay(seurat_data) <- "RNA"                                                        # safety measure
     SeuratObject::Idents(seurat_data) <- "new.ident"                                                        # safety measure
     splitted_seurat_data <- Seurat::SplitObject(seurat_data, split.by="new.ident")                          # to check if we have aggregated datasets
@@ -413,17 +413,17 @@ gex_preprocess <- function(seurat_data, args, cell_cycle_data=NULL) {
                 "is present). Using the original not splitted seurat data."
             )
         )
-        if (args$gexnorm == "log"){
-            processed_seurat_data <- gex_log_single(seurat_data, args, cell_cycle_data)                     # sets default assay to RNA
+        if (args$rnanorm == "log"){
+            processed_seurat_data <- rna_log_single(seurat_data, args, cell_cycle_data)                     # sets default assay to RNA
         } else {
-            processed_seurat_data <- gex_sct_single(seurat_data, args, cell_cycle_data)                     # sets default assay to SCT
+            processed_seurat_data <- rna_sct_single(seurat_data, args, cell_cycle_data)                     # sets default assay to SCT
         }
     } else {
         base::print("Running datasets integration using splitted seurat data.")
-        if (args$gexnorm == "log"){
-            processed_seurat_data <- gex_log_integrated(splitted_seurat_data, args, cell_cycle_data)        # sets default assay to gex_integrated
+        if (args$rnanorm == "log"){
+            processed_seurat_data <- rna_log_integrated(splitted_seurat_data, args, cell_cycle_data)        # sets default assay to rna_integrated
         } else {
-            processed_seurat_data <- gex_sct_integrated(splitted_seurat_data, args, cell_cycle_data)        # sets default assay to gex_integrated
+            processed_seurat_data <- rna_sct_integrated(splitted_seurat_data, args, cell_cycle_data)        # sets default assay to rna_integrated
         }
     }
     base::rm(splitted_seurat_data)
@@ -431,7 +431,7 @@ gex_preprocess <- function(seurat_data, args, cell_cycle_data=NULL) {
     return (processed_seurat_data)
 }
 
-gex_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
+rna_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
     SeuratObject::DefaultAssay(seurat_data) <- "RNA"                            # safety measure
     SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
     backup_reductions <- c()                                                    # RNA integration main remove atac related reductions so we need to back them up
@@ -441,7 +441,7 @@ gex_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
             backup_reductions[[reduction_name]] <- seurat_data[[reduction_name]]
         }
     }
-    seurat_data <- gex_preprocess(seurat_data, args, cell_cycle_data)           # sets "gex_integrated" as a default assay for integrated data, and either "RNA" or "SCT" for not integrated data
+    seurat_data <- rna_preprocess(seurat_data, args, cell_cycle_data)           # sets "rna_integrated" as a default assay for integrated data, and either "RNA" or "SCT" for not integrated data
     if (length(backup_reductions) > 0){                                         # restoring backed up reductions
         for (reduction_name in names(backup_reductions)){
             base::print(base::paste("Restoring reduction", reduction_name, "from backup"))

@@ -10,7 +10,7 @@ import("magrittr", `%>%`, attach=TRUE)
 
 export(
     "qc_metrics_pca",
-    "add_gex_qc_metrics",
+    "add_rna_qc_metrics",
     "add_atac_qc_metrics",
     "add_peak_qc_metrics",
     "quartile_qc_metrics"
@@ -68,7 +68,7 @@ qc_metrics_pca <- function(seurat_data, qc_columns, qc_labels, orq_transform=FAL
     )
 }
 
-add_gex_qc_metrics <- function(seurat_data, args){
+add_rna_qc_metrics <- function(seurat_data, args){
     backup_assay <- SeuratObject::DefaultAssay(seurat_data)
     SeuratObject::DefaultAssay(seurat_data) <- "RNA"
     seurat_data$log10_gene_per_log10_umi <- log10(seurat_data$nFeature_RNA) / log10(seurat_data$nCount_RNA)

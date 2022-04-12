@@ -31,7 +31,7 @@ call_peaks <- function(seurat_data, args) {
             )
         )
         print("Running RNA analysis before calling peaks by cluster")
-        seurat_data <- analyses$gex_analyze(seurat_data, args)
+        seurat_data <- analyses$rna_analyze(seurat_data, args)
         seurat_data <- filter$collapse_fragments_list(seurat_data)                 # collapse repetitive fragments as we could split the datasets before integration
         debug$print_info(seurat_data, args)
         group_by <- paste0("peak_calling_res.", args$resolution)
@@ -88,7 +88,7 @@ export_all_dimensionality_plots <- function(seurat_data, suffix, args) {
         data=seurat_data,
         ndims=50,
         plot_title=paste("Elbow plot built from PCA of RNA datasets (", suffix, ")", sep=""),
-        rootname=paste(args$output, suffix, "gex_elbow", sep="_"),
+        rootname=paste(args$output, suffix, "rna_elbow", sep="_"),
         pdf=args$pdf
     )
     graphics$corr_plot(
@@ -102,7 +102,7 @@ export_all_dimensionality_plots <- function(seurat_data, suffix, args) {
             "from PCA of RNA datasets (", suffix, ")", sep=""
         ),
         combine_guides="collect",
-        rootname=paste(args$output, suffix, "gex_qc_dim_corr", sep="_"),
+        rootname=paste(args$output, suffix, "rna_qc_dim_corr", sep="_"),
         pdf=args$pdf
     )
 }
@@ -126,7 +126,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args, cluster_prefi
         group_by=paste(paste(cluster_prefix, "res", sep="_"), args$resolution, sep="."),
         label=TRUE,
         palette_colors=graphics$D40_COLORS,
-        rootname=paste(args$output, suffix, "gex_umap_res", args$resolution, sep="_"),
+        rootname=paste(args$output, suffix, "rna_umap_res", args$resolution, sep="_"),
         pdf=args$pdf
     )
     Idents(seurat_data) <- paste(paste(cluster_prefix, "res", sep="_"), args$resolution, sep=".")
@@ -141,7 +141,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args, cluster_prefi
         alpha=0.4,
         max_cutoff="q99",  # to prevent outlier cells to distort coloring
         combine_guides="keep",
-        rootname=paste(args$output, suffix, "gex_umap_qc_mtrcs_res", args$resolution, sep="_"),
+        rootname=paste(args$output, suffix, "rna_umap_qc_mtrcs_res", args$resolution, sep="_"),
         pdf=args$pdf
     )
     Idents(seurat_data) <- "new.ident"
@@ -213,7 +213,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         x_axis="nCount_RNA",
         color_by="new.ident",
         facet_by="new.ident",
-        x_left_intercept=args$gexminumi,
+        x_left_intercept=args$rnaminumi,
         x_label="RNA UMIs per cell",
         y_label="Density",
         legend_title="Identity",
@@ -221,7 +221,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         scale_x_log10=TRUE,
         zoom_on_intercept=TRUE,
         palette_colors=graphics$D40_COLORS,
-        rootname=paste(args$output, suffix, "gex_umi_dnst", sep="_"),
+        rootname=paste(args$output, suffix, "rna_umi_dnst", sep="_"),
         pdf=args$pdf
     )
     graphics$geom_density_plot(
@@ -247,7 +247,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         x_axis="nCount_RNA",
         y_axis="nFeature_RNA",
         facet_by="new.ident",
-        x_left_intercept=args$gexminumi,
+        x_left_intercept=args$rnaminumi,
         y_low_intercept=args$mingenes,
         y_high_intercept=args$maxgenes,
         color_by="mito_percentage",
@@ -261,7 +261,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         scale_x_log10=TRUE,
         scale_y_log10=TRUE,
         palette_colors=graphics$D40_COLORS,
-        rootname=paste(args$output, suffix, "gene_gex_umi_corr", sep="_"),
+        rootname=paste(args$output, suffix, "gene_rna_umi_corr", sep="_"),
         pdf=args$pdf
     )
     graphics$geom_density_plot(
@@ -352,7 +352,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         y_axis="nCount_RNA",
         y_label="RNA UMIs per cell",
         x_left_intercept=args$atacminumi,
-        y_low_intercept=args$gexminumi,
+        y_low_intercept=args$rnaminumi,
         alpha_intercept=1,
         color_by="mito_percentage",
         gradient_colors=c("lightslateblue", "red", "green"),
@@ -363,7 +363,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         scale_x_log10=TRUE,
         scale_y_log10=TRUE,
         palette_colors=graphics$D40_COLORS,
-        rootname=paste(args$output, suffix, "gex_atac_umi_corr", sep="_"),
+        rootname=paste(args$output, suffix, "rna_atac_umi_corr", sep="_"),
         pdf=args$pdf
     )
     graphics$vln_plot(
@@ -409,7 +409,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             x_axis="nCount_RNA",
             color_by="new.ident",
             facet_by="condition",
-            x_left_intercept=args$gexminumi,
+            x_left_intercept=args$rnaminumi,
             x_label="RNA UMIs per cell",
             y_label="Density",
             legend_title="Identity",
@@ -417,7 +417,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             scale_x_log10=TRUE,
             zoom_on_intercept=TRUE,
             palette_colors=graphics$D40_COLORS,
-            rootname=paste(args$output, suffix, "gex_umi_dnst_spl_by_cond", sep="_"),
+            rootname=paste(args$output, suffix, "rna_umi_dnst_spl_by_cond", sep="_"),
             pdf=args$pdf
         )
         graphics$geom_density_plot(
@@ -583,7 +583,7 @@ get_args <- function(){
         type="character"
     )
     parser$add_argument(
-        "--gexmincells",
+        "--rnamincells",
         help=paste(
             "Include only RNA features detected in at least this many cells.",
             "Default: 5 (applied to all datasets)"
@@ -612,7 +612,7 @@ get_args <- function(){
         type="integer", default=5000, nargs="*"
     )
     parser$add_argument(
-        "--gexminumi",
+        "--rnaminumi",
         help=paste(
             "Include cells where at least this many RNA UMIs (transcripts) are detected.",
             "If multiple values provided, each of them will be applied to the correspondent",
@@ -719,14 +719,14 @@ get_args <- function(){
             "Peaks are called per identity (identity) or per RNA cluster (cluster) after applying",
             "all RNA related thresholds, maximum nucleosome signal, and minimum TSS enrichment",
             "score filters. If set to 'cluster' RNA clusters are identified based on the parameters",
-            "set with --resolution, --dimensions, --highvargex, --gexnorm, and --ntgr.",
+            "set with --resolution, --dimensions, --highvarrna, --rnanorm, and --ntgr.",
             "Default: do not call peaks"
         ),
         type="character",
         choices=c("identity", "cluster")
     )
     parser$add_argument(
-        "--gexnorm",
+        "--rnanorm",
         help=paste(
             "Normalization method to be used when identifying RNA based clusters for",
             "calling custom MACS2 peaks. Ignored if --callpeaks is not set to 'cluster'.",
@@ -737,7 +737,7 @@ get_args <- function(){
         choices=c("sct", "log", "sctglm")
     )
     parser$add_argument(
-        "--highvargex",
+        "--highvarrna",
         help=paste(
             "Number of highly variable RNA features to detect. Used for RNA datasets",
             "integration, scaling, and dimensionality reduction when identifying RNA based",
@@ -802,7 +802,7 @@ get_args <- function(){
             "Attempts to minimize RAM usage when integrating multiple datasets",
             "with SCTransform algorithm (slows down the computation).",
             "Ignored if --callpeaks is not set to 'cluster', if --ntgr is not set",
-            "to 'seurat', if --gexnorm is not set to either 'sct' or 'sctglm'.",
+            "to 'seurat', if --rnanorm is not set to either 'sct' or 'sctglm'.",
             "Default: false"
         ),
         action="store_true"
@@ -866,7 +866,7 @@ debug$print_info(seurat_data, args)
 print("Adjusting input parameters")
 idents_count <- length(unique(as.vector(as.character(Idents(seurat_data)))))
 for (key in names(args)){
-    if (key %in% c("mingenes", "maxgenes", "gexminumi", "minnovelty", "atacminumi", "maxnuclsignal", "mintssenrich", "minfrip", "maxblacklisted")){
+    if (key %in% c("mingenes", "maxgenes", "rnaminumi", "minnovelty", "atacminumi", "maxnuclsignal", "mintssenrich", "minfrip", "maxblacklisted")){
         if (length(args[[key]]) != 1 && length(args[[key]]) != idents_count){
             print(paste("Filtering parameter", key, "has an ambiguous size. Exiting"))
             quit(save="no", status=1, runLast=FALSE)
@@ -890,7 +890,7 @@ seurat_data <- filter$apply_cell_filters(seurat_data, barcodes_data)
 debug$print_info(seurat_data, args)
 
 print("Adding RNA QC metrics for not filtered datasets")
-seurat_data <- qc$add_gex_qc_metrics(seurat_data, args)
+seurat_data <- qc$add_rna_qc_metrics(seurat_data, args)
 print("Adding ATAC QC metrics for not filtered datasets")
 seurat_data <- qc$add_atac_qc_metrics(seurat_data, args)
 print("Adding peak QC metrics for peaks called by Cell Ranger ARC")
@@ -905,7 +905,7 @@ export_all_qc_plots(
 )
 
 print("Applying filters based on RNA QC metrics")
-seurat_data <- filter$apply_gex_qc_filters(seurat_data, cell_identity_data, args)          # cleans up all reductions
+seurat_data <- filter$apply_rna_qc_filters(seurat_data, cell_identity_data, args)          # cleans up all reductions
 debug$print_info(seurat_data, args)
 print("Applying filters based on ATAC QC metrics")
 seurat_data <- filter$apply_atac_qc_filters(seurat_data, cell_identity_data, args)         # cleans up all reductions

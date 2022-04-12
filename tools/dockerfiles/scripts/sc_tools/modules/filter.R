@@ -3,7 +3,7 @@ import("Signac")
 
 export(
     "apply_cell_filters",
-    "apply_gex_qc_filters",
+    "apply_rna_qc_filters",
     "apply_atac_qc_filters",
     "apply_peak_qc_filters",
     "collapse_fragments_list"
@@ -56,21 +56,21 @@ apply_cell_filters <- function(seurat_data, barcodes_data) {
     return (filtered_seurat_data)
 }
 
-apply_gex_qc_filters <- function(seurat_data, cell_identity_data, args) {
+apply_rna_qc_filters <- function(seurat_data, cell_identity_data, args) {
     base::print(base::paste("Cells before filtering:", length(SeuratObject::Cells(seurat_data))))
     merged_seurat_data <- NULL
     SeuratObject::Idents(seurat_data) <- "new.ident"                                                 # safety measure
-    for (i in 1:length(args$gexminumi)){
+    for (i in 1:length(args$rnaminumi)){
         identity <- cell_identity_data$library_id[i]
 
         mingenes <- args$mingenes[i]
         maxgenes <- args$maxgenes[i]
-        gexminumi <- args$gexminumi[i]
+        rnaminumi <- args$rnaminumi[i]
         minnovelty <- args$minnovelty[i]
 
         base::print(base::paste("Filtering", identity))
         base::print(base::paste(" ", mingenes, "<= Genes per cell <=", maxgenes))
-        base::print(base::paste(" ", "RNA UMIs per cell >=", gexminumi))
+        base::print(base::paste(" ", "RNA UMIs per cell >=", rnaminumi))
         base::print(base::paste(" ", "RNA novelty score >=", minnovelty))
         base::print(base::paste(" ", "Percentage of RNA transcripts mapped to mitochondrial genes <=", args$maxmt))
 
@@ -79,7 +79,7 @@ apply_gex_qc_filters <- function(seurat_data, cell_identity_data, args) {
             idents=identity,
             subset=(nFeature_RNA >= mingenes) &
                    (nFeature_RNA <= maxgenes) &
-                   (nCount_RNA >= gexminumi) &
+                   (nCount_RNA >= rnaminumi) &
                    (log10_gene_per_log10_umi >= minnovelty) &
                    (mito_percentage <= args$maxmt)
         )

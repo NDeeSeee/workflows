@@ -29,7 +29,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         ndims=50,
         reduction="pca",
         plot_title="Elbow plot built from PCA of RNA datasets",
-        rootname=paste(args$output, "gex_elbow", sep="_"),
+        rootname=paste(args$output, "rna_elbow", sep="_"),
         pdf=args$pdf
     )
     graphics$dim_heatmap(
@@ -43,7 +43,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         ncol=3,
         height=6500,
         combine_guides="collect",
-        rootname=paste(args$output, "gex_pca_heatmap", sep="_"),
+        rootname=paste(args$output, "rna_pca_heatmap", sep="_"),
         pdf=args$pdf
     )
     graphics$dim_loadings_plot(
@@ -56,7 +56,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         ncol=3,
         height=6500,
         combine_guides="collect",
-        rootname=paste(args$output, "gex_pca_loadings", sep="_"),
+        rootname=paste(args$output, "rna_pca_loadings", sep="_"),
         pdf=args$pdf
     )
     graphics$corr_plot(
@@ -67,7 +67,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         qc_labels=selected_labels,
         plot_title="Correlation plots between QC metrics and principal components from PCA of RNA datasets",
         combine_guides="collect",
-        rootname=paste(args$output, "gex_qc_dim_corr", sep="_"),
+        rootname=paste(args$output, "rna_qc_dim_corr", sep="_"),
         pdf=args$pdf
     )
     graphics$feature_plot(
@@ -81,7 +81,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         alpha=0.4,
         max_cutoff="q99",                                                                   # to prevent outlier cells to distort coloring
         combine_guides="keep",
-        rootname=paste(args$output, "gex_umap_qc_mtrcs", sep="_"),
+        rootname=paste(args$output, "rna_umap_qc_mtrcs", sep="_"),
         pdf=args$pdf
     )
 
@@ -93,7 +93,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         group_by="new.ident",
         label=FALSE,
         palette_colors=graphics$D40_COLORS,
-        rootname=paste(args$output, "gex_pca", sep="_"),
+        rootname=paste(args$output, "rna_pca", sep="_"),
         pdf=args$pdf
     )
     graphics$dim_plot(
@@ -104,7 +104,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         group_by="new.ident",
         label=FALSE,
         palette_colors=graphics$D40_COLORS,
-        rootname=paste(args$output, "gex_umap", sep="_"),
+        rootname=paste(args$output, "rna_umap", sep="_"),
         pdf=args$pdf
     )
     graphics$dim_plot(
@@ -119,7 +119,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         palette_colors=graphics$D40_COLORS,
         width=1200,
         height=400,
-        rootname=paste(args$output, "gex_pca_spl_by_ph", sep="_"),
+        rootname=paste(args$output, "rna_pca_spl_by_ph", sep="_"),
         pdf=args$pdf
     )
     graphics$dim_plot(
@@ -134,7 +134,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         palette_colors=graphics$D40_COLORS,
         width=1200,
         height=400,
-        rootname=paste(args$output, "gex_umap_spl_by_ph", sep="_"),
+        rootname=paste(args$output, "rna_umap_spl_by_ph", sep="_"),
         pdf=args$pdf
     )
     graphics$dim_plot(
@@ -149,7 +149,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         palette_colors=graphics$D40_COLORS,
         width=1200,
         height=400,
-        rootname=paste(args$output, "gex_pca_spl_by_mito_qrtl", sep="_"),
+        rootname=paste(args$output, "rna_pca_spl_by_mito_qrtl", sep="_"),
         pdf=args$pdf
     )
     graphics$dim_plot(
@@ -164,7 +164,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         palette_colors=graphics$D40_COLORS,
         width=1200,
         height=400,
-        rootname=paste(args$output, "gex_umap_spl_by_mito_qrtl", sep="_"),
+        rootname=paste(args$output, "rna_umap_spl_by_mito_qrtl", sep="_"),
         pdf=args$pdf
     )
     graphics$dim_plot(
@@ -179,7 +179,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         palette_colors=graphics$D40_COLORS,
         width=1200,
         height=400,
-        rootname=paste(args$output, "gex_pca_spl_by_umi_qrtl", sep="_"),
+        rootname=paste(args$output, "rna_pca_spl_by_umi_qrtl", sep="_"),
         pdf=args$pdf
     )
     graphics$dim_plot(
@@ -194,7 +194,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         palette_colors=graphics$D40_COLORS,
         width=1200,
         height=400,
-        rootname=paste(args$output, "gex_umap_spl_by_umi_qrtl", sep="_"),
+        rootname=paste(args$output, "rna_umap_spl_by_umi_qrtl", sep="_"),
         pdf=args$pdf
     )
     graphics$dim_plot(
@@ -209,7 +209,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         palette_colors=graphics$D40_COLORS,
         width=1200,
         height=400,
-        rootname=paste(args$output, "gex_pca_spl_by_gene_qrtl", sep="_"),
+        rootname=paste(args$output, "rna_pca_spl_by_gene_qrtl", sep="_"),
         pdf=args$pdf
     )
     graphics$dim_plot(
@@ -224,7 +224,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         palette_colors=graphics$D40_COLORS,
         width=1200,
         height=400,
-        rootname=paste(args$output, "gex_umap_spl_by_gene_qrtl", sep="_"),
+        rootname=paste(args$output, "rna_umap_spl_by_gene_qrtl", sep="_"),
         pdf=args$pdf
     )
 
@@ -238,7 +238,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             split_by="new.ident",
             label=FALSE,
             palette_colors=graphics$D40_COLORS,
-            rootname=paste(args$output, "gex_pca_spl_by_idnt", sep="_"),
+            rootname=paste(args$output, "rna_pca_spl_by_idnt", sep="_"),
             pdf=args$pdf
         )
         graphics$dim_plot(
@@ -250,7 +250,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             split_by="new.ident",
             label=FALSE,
             palette_colors=graphics$D40_COLORS,
-            rootname=paste(args$output, "gex_umap_spl_by_idnt", sep="_"),
+            rootname=paste(args$output, "rna_umap_spl_by_idnt", sep="_"),
             pdf=args$pdf
         )
     }
@@ -265,7 +265,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             split_by="condition",
             label=FALSE,
             palette_colors=graphics$D40_COLORS,
-            rootname=paste(args$output, "gex_pca_spl_by_cond", sep="_"),
+            rootname=paste(args$output, "rna_pca_spl_by_cond", sep="_"),
             pdf=args$pdf
         )
         graphics$dim_plot(
@@ -277,7 +277,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             split_by="condition",
             label=FALSE,
             palette_colors=graphics$D40_COLORS,
-            rootname=paste(args$output, "gex_umap_spl_by_cond", sep="_"),
+            rootname=paste(args$output, "rna_umap_spl_by_cond", sep="_"),
             pdf=args$pdf
         )
         graphics$dim_plot(
@@ -292,7 +292,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             palette_colors=graphics$D40_COLORS,
             width=1200,
             height=400,
-            rootname=paste(args$output, "gex_pca_gr_by_cond_spl_by_ph", sep="_"),
+            rootname=paste(args$output, "rna_pca_gr_by_cond_spl_by_ph", sep="_"),
             pdf=args$pdf
         )
         graphics$dim_plot(
@@ -307,7 +307,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             palette_colors=graphics$D40_COLORS,
             width=1200,
             height=400,
-            rootname=paste(args$output, "gex_umap_gr_by_cond_spl_by_ph", sep="_"),
+            rootname=paste(args$output, "rna_umap_gr_by_cond_spl_by_ph", sep="_"),
             pdf=args$pdf
         )
         graphics$dim_plot(
@@ -322,7 +322,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             palette_colors=graphics$D40_COLORS,
             width=1200,
             height=400,
-            rootname=paste(args$output, "gex_pca_gr_by_cond_spl_by_mito_qrtl", sep="_"),
+            rootname=paste(args$output, "rna_pca_gr_by_cond_spl_by_mito_qrtl", sep="_"),
             pdf=args$pdf
         )
         graphics$dim_plot(
@@ -337,7 +337,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             palette_colors=graphics$D40_COLORS,
             width=1200,
             height=400,
-            rootname=paste(args$output, "gex_umap_gr_by_cond_spl_by_mito_qrtl", sep="_"),
+            rootname=paste(args$output, "rna_umap_gr_by_cond_spl_by_mito_qrtl", sep="_"),
             pdf=args$pdf
         )
         graphics$dim_plot(
@@ -352,7 +352,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             palette_colors=graphics$D40_COLORS,
             width=1200,
             height=400,
-            rootname=paste(args$output, "gex_pca_gr_by_cond_spl_by_umi_qrtl", sep="_"),
+            rootname=paste(args$output, "rna_pca_gr_by_cond_spl_by_umi_qrtl", sep="_"),
             pdf=args$pdf
         )
         graphics$dim_plot(
@@ -367,7 +367,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             palette_colors=graphics$D40_COLORS,
             width=1200,
             height=400,
-            rootname=paste(args$output, "gex_umap_gr_by_cond_spl_by_umi_qrtl", sep="_"),
+            rootname=paste(args$output, "rna_umap_gr_by_cond_spl_by_umi_qrtl", sep="_"),
             pdf=args$pdf
         )
         graphics$dim_plot(
@@ -382,7 +382,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             palette_colors=graphics$D40_COLORS,
             width=1200,
             height=400,
-            rootname=paste(args$output, "gex_pca_gr_by_cond_spl_by_gene_qrtl", sep="_"),
+            rootname=paste(args$output, "rna_pca_gr_by_cond_spl_by_gene_qrtl", sep="_"),
             pdf=args$pdf
         )
         graphics$dim_plot(
@@ -397,7 +397,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             palette_colors=graphics$D40_COLORS,
             width=1200,
             height=400,
-            rootname=paste(args$output, "gex_umap_gr_by_cond_spl_by_gene_qrtl", sep="_"),
+            rootname=paste(args$output, "rna_umap_gr_by_cond_spl_by_gene_qrtl", sep="_"),
             pdf=args$pdf
         )
     } 
@@ -410,7 +410,7 @@ get_args <- function(){
         "--query",
         help=paste(
             "Path to the RDS file to load filtered Seurat object from. This file",
-            "can be produced by sc_multiome_filter.R, sc_gex_filter.R or sc_atac_reduce.R",
+            "can be produced by sc_multiome_filter.R, sc_rna_filter.R or sc_atac_reduce.R",
             "scripts. It is mandatory to have gene expression information stored in the RNA assay."
         ),
         type="character", required="True"
@@ -437,7 +437,7 @@ get_args <- function(){
         type="character"
     )
     parser$add_argument(
-        "--gexnorm",
+        "--rnanorm",
         help=paste(
             "Normalization method to be used for RNA datasets. If provided Seurat object",
             "includes multiple datasets, normalization will be run independently for each",
@@ -461,7 +461,7 @@ get_args <- function(){
         choices=c("seurat", "none")
     )
     parser$add_argument(
-        "--highvargex",
+        "--highvarrna",
         help=paste(
             "Number of highly variable RNA features to detect. Used for RNA datasets",
             "integration, scaling, and dimensionality reduction.",
@@ -478,7 +478,7 @@ get_args <- function(){
         action="store_true"
     )
     parser$add_argument(
-        "--regressgexumi",
+        "--regressrnaumi",
         help=paste(
             "Regress RNA UMIs per cell as a confounding source of variation.",
             "Default: false"
@@ -594,7 +594,7 @@ get_args <- function(){
         help=paste(
             "Attempts to minimize RAM usage when integrating multiple datasets",
             "with SCTransform algorithm (slows down the computation). Ignored if",
-            "--ntgr is not set to 'seurat' or if --gexnorm is not set to either",
+            "--ntgr is not set to 'seurat' or if --rnanorm is not set to either",
             "'sct' or 'sctglm'.",
             "Default: false"
         ),
@@ -668,7 +668,7 @@ seurat_data <- filter$apply_cell_filters(seurat_data, barcodes_data)
 debug$print_info(seurat_data, args)
 
 print("Running RNA analysis")
-seurat_data <- analyses$gex_analyze(seurat_data, args, cell_cycle_data)   # adds "pca" and "rnaumap" reductions
+seurat_data <- analyses$rna_analyze(seurat_data, args, cell_cycle_data)   # adds "pca" and "rnaumap" reductions
 seurat_data <- filter$collapse_fragments_list(seurat_data)                # collapse repetitive fragments if ATAC assay was present in the Seurat object and was splitted
 debug$print_info(seurat_data, args)
 

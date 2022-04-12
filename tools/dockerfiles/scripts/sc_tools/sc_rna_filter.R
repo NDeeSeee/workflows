@@ -78,7 +78,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         x_axis="nCount_RNA",
         color_by="new.ident",
         facet_by="new.ident",
-        x_left_intercept=args$gexminumi,
+        x_left_intercept=args$rnaminumi,
         x_label="RNA UMIs per cell",
         y_label="Density",
         legend_title="Identity",
@@ -86,7 +86,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         scale_x_log10=TRUE,
         zoom_on_intercept=TRUE,
         palette_colors=graphics$D40_COLORS,
-        rootname=paste(args$output, suffix, "gex_umi_dnst", sep="_"),
+        rootname=paste(args$output, suffix, "rna_umi_dnst", sep="_"),
         pdf=args$pdf
     )
     graphics$geom_density_plot(
@@ -112,7 +112,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         x_axis="nCount_RNA",
         y_axis="nFeature_RNA",
         facet_by="new.ident",
-        x_left_intercept=args$gexminumi,
+        x_left_intercept=args$rnaminumi,
         y_low_intercept=args$mingenes,
         y_high_intercept=args$maxgenes,
         color_by="mito_percentage",
@@ -126,7 +126,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         scale_x_log10=TRUE,
         scale_y_log10=TRUE,
         palette_colors=graphics$D40_COLORS,
-        rootname=paste(args$output, suffix, "gene_gex_umi_corr", sep="_"),
+        rootname=paste(args$output, suffix, "gene_rna_umi_corr", sep="_"),
         pdf=args$pdf
     )
     graphics$geom_density_plot(
@@ -180,7 +180,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
             x_axis="nCount_RNA",
             color_by="new.ident",
             facet_by="condition",
-            x_left_intercept=args$gexminumi,
+            x_left_intercept=args$rnaminumi,
             x_label="RNA UMIs per cell",
             y_label="Density",
             legend_title="Identity",
@@ -188,7 +188,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
             scale_x_log10=TRUE,
             zoom_on_intercept=TRUE,
             palette_colors=graphics$D40_COLORS,
-            rootname=paste(args$output, suffix, "gex_umi_dnst_spl_by_cond", sep="_"),
+            rootname=paste(args$output, suffix, "rna_umi_dnst_spl_by_cond", sep="_"),
             pdf=args$pdf
         )
         graphics$geom_density_plot(
@@ -287,7 +287,7 @@ get_args <- function(){
         type="character"
     )
     parser$add_argument(
-        "--gexmincells",
+        "--rnamincells",
         help=paste(
             "Include only RNA features detected in at least this many cells. Ignored when",
             "--mex points to the feature-barcode matrices from the multiple Cell Ranger",
@@ -318,7 +318,7 @@ get_args <- function(){
         type="integer", default=5000, nargs="*"
     )
     parser$add_argument(
-        "--gexminumi",
+        "--rnaminumi",
         help=paste(
             "Include cells where at least this many RNA UMIs (transcripts) are detected.",
             "If multiple values provided, each of them will be applied to the correspondent",
@@ -416,7 +416,7 @@ grouping_data <- io$load_grouping_data(args$grouping, cell_identity_data)
 print("Loading feature-barcode matrices from:")
 for (location in args$mex){print(location)}
 
-seurat_data <- io$load_10x_gex_data(                                                    # identities are set to the "new.ident" column
+seurat_data <- io$load_10x_rna_data(                                                    # identities are set to the "new.ident" column
     args=args,
     cell_identity_data=cell_identity_data,
     grouping_data=grouping_data
@@ -426,7 +426,7 @@ debug$print_info(seurat_data, args)
 print("Adjusting input parameters")
 idents_count <- length(unique(as.vector(as.character(Idents(seurat_data)))))
 for (key in names(args)){
-    if (key %in% c("mingenes", "maxgenes", "gexminumi", "minnovelty")){
+    if (key %in% c("mingenes", "maxgenes", "rnaminumi", "minnovelty")){
         if (length(args[[key]]) != 1 && length(args[[key]]) != idents_count){
             print(paste("Filtering parameter", key, "has an ambiguous size. Exiting"))
             quit(save="no", status=1, runLast=FALSE)
@@ -447,7 +447,7 @@ seurat_data <- filter$apply_cell_filters(seurat_data, barcodes_data)
 debug$print_info(seurat_data, args)
 
 print("Adding RNA QC metrics for not filtered datasets")
-seurat_data <- qc$add_gex_qc_metrics(seurat_data, args)
+seurat_data <- qc$add_rna_qc_metrics(seurat_data, args)
 debug$print_info(seurat_data, args)
 
 export_all_qc_plots(
@@ -457,7 +457,7 @@ export_all_qc_plots(
 )
 
 print("Applying filters based on RNA QC metrics")
-seurat_data <- filter$apply_gex_qc_filters(seurat_data, cell_identity_data, args)          # cleans up all reductions
+seurat_data <- filter$apply_rna_qc_filters(seurat_data, cell_identity_data, args)          # cleans up all reductions
 debug$print_info(seurat_data, args)
 
 export_all_qc_plots(                                                                       # after all filters have been applied
