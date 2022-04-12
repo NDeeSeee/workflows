@@ -324,11 +324,12 @@ export_all_dimensionality_plots(
 )
 
 if(args$cbbuild){
-    print("Exporting UCSC Cellbrowser data")
+    print("Exporting ATAC assay to UCSC Cellbrowser")
     ucsc$export_cellbrowser(
         seurat_data=seurat_data,
         assay="ATAC",
         slot="counts",
+        short_label="ATAC",
         rootname=paste(args$output, "_cellbrowser", sep=""),
     )
 }

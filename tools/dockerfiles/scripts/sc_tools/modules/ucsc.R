@@ -48,9 +48,9 @@ write_matrix <- function(inMat, outFname, sliceSize=1000){
     base::unlink(fnames)
 }
 
-cb_build <- function(object, slot, rootname, cluster_field, features, meta_fields, meta_fields_names, dot_radius, dot_alpha) {
+cb_build <- function(object, slot, short_label, rootname, cluster_field, features, meta_fields, meta_fields_names, is_nested, dot_radius, dot_alpha) {
     if (!base::dir.exists(rootname)) {
-        base::dir.create(rootname)
+        base::dir.create(rootname, recursive=TRUE)
     }
     idents <- SeuratObject::Idents(object)
     meta <- object@meta.data
@@ -112,19 +112,10 @@ cb_build <- function(object, slot, rootname, cluster_field, features, meta_field
         quote=FALSE,
         row.names=FALSE
     )
-    if (!is.null(features)){
-        utils::write.table(
-            features,
-            sep="\t",
-            file=base::file.path(rootname, "quickGenes.tsv"),
-            quote=FALSE,
-            row.names=FALSE,
-            col.names=FALSE
-        )
-    }
-    config <- '
-name="cellbrowser"
-shortLabel="cellbrowser"
+
+    local_config <- '
+name="%s"
+shortLabel="%s"
 geneLabel="Feature"
 exprMatrix="exprMatrix.tsv.gz"
 meta="meta.tsv"
@@ -136,28 +127,56 @@ labelField="%s"
 enumFields=%s
 showLabels=False
 coords=%s'
-    enum_string <- base::paste0("[", base::paste(base::paste0('"', enum_fields, '"'), collapse=", "), "]")
-    coords_string <- base::paste0("[", base::paste(embeddings_conf, collapse = ",\n"), "]")
-    config <- base::sprintf(
-        config,
+
+    local_config <- base::sprintf(
+        local_config,
+        short_label,
+        short_label,
         dot_radius,
         dot_alpha,
         cluster_field,
         cluster_field,
-        enum_string,
-        coords_string
+        base::paste0("[", base::paste(base::paste0('"', enum_fields, '"'), collapse=", "), "]"),
+        base::paste0("[", base::paste(embeddings_conf, collapse = ",\n"), "]")
     )
+
     if (!is.null(features)){
-        config <- base::paste(config, 'quickGenesFile="quickGenes.tsv"', sep="\n")
+        utils::write.table(
+            features,
+            sep="\t",
+            file=base::file.path(rootname, "quickGenes.tsv"),
+            quote=FALSE,
+            row.names=FALSE,
+            col.names=FALSE
+        )
+        local_config <- base::paste(local_config, 'quickGenesFile="quickGenes.tsv"', sep="\n")
     }
-    conf_path = base::file.path(rootname, "cellbrowser.conf")
-    base::cat(config, file=conf_path)
-    cb_dir <- base::paste(rootname, "html_data", sep="/")
+
+    html_data_dir <- base::file.path(rootname, "html_data")
+    if (is_nested){
+        local_config <- base::paste(local_config, 'dataRoot="../"', sep="\n")
+        desc <- 'title="%s"\nabstract=""\nmethods=""\nbiorxiv_url=""\ncustom={}'
+        desc <- base::sprintf(desc, short_label)
+        base::cat(
+            desc,
+            file=base::file.path(rootname, "desc.conf")
+        )
+        base::cat(
+            'shortLabel="Multiple datasets"',
+            file=base::file.path(rootname, "../cellbrowser.conf")
+        )
+        html_data_dir <- base::file.path(rootname, "../html_data")
+    }
+
+    base::cat(
+        local_config,
+        file=base::file.path(rootname, "cellbrowser.conf")
+    )
     cb <- reticulate::import(module = "cellbrowser")
-    cb$cellbrowser$build(rootname, cb_dir)
+    cb$cellbrowser$build(rootname, html_data_dir)
 }
 
-export_cellbrowser <- function(seurat_data, assay, slot, rootname, dot_radius=3, dot_alpha=0.5, features=NULL, meta_fields=NULL, meta_fields_names=NULL){
+export_cellbrowser <- function(seurat_data, assay, slot, rootname, dot_radius=3, dot_alpha=0.5, short_label="cellbrowser", is_nested=FALSE, features=NULL, meta_fields=NULL, meta_fields_names=NULL){
     base::tryCatch(
         expr = {
             backup_assay <- SeuratObject::DefaultAssay(seurat_data)
@@ -215,11 +234,13 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, dot_radius=3,
             cb_build(
                 seurat_data,
                 slot=slot,
+                short_label=short_label,
                 rootname=rootname,
                 cluster_field=default_cluster_field,
                 features=features,
                 meta_fields=meta_fields,
                 meta_fields_names=meta_fields_names,
+                is_nested=is_nested,
                 dot_radius=dot_radius,
                 dot_alpha=dot_alpha
             )

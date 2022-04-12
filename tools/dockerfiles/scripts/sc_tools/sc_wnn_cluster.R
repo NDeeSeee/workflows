@@ -622,14 +622,25 @@ if (!is.null(args$genes)){
 }
 
 if(args$cbbuild){
-    print("Exporting UCSC Cellbrowser data")
-    DefaultAssay(seurat_data) <- "RNA"                         # for now we better export only RNA counts
+    print("Exporting RNA assay to UCSC Cellbrowser")
     ucsc$export_cellbrowser(
         seurat_data=seurat_data,
         assay="RNA",
         slot="counts",
+        short_label="GEX",
         features=args$genes,                                   # can be NULL
-        rootname=paste(args$output, "_cellbrowser", sep=""),
+        is_nested=TRUE,
+        rootname=paste(args$output, "_cellbrowser/gex", sep=""),
+    )
+    print("Exporting ATAC assay to UCSC Cellbrowser")
+    ucsc$export_cellbrowser(
+        seurat_data=seurat_data,
+        assay="ATAC",
+        slot="counts",
+        short_label="ATAC",
+        features=nearest_peaks,                               # use nearest to the genes if interest peaks
+        is_nested=TRUE,
+        rootname=paste(args$output, "_cellbrowser/atac", sep=""),
     )
 }
 

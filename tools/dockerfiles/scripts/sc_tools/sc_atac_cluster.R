@@ -412,11 +412,12 @@ if (!is.null(args$genes)){
 }
 
 if(args$cbbuild){
-    print("Exporting UCSC Cellbrowser data")
+    print("Exporting ATAC assay to UCSC Cellbrowser")
     ucsc$export_cellbrowser(
         seurat_data=seurat_data,
         assay="ATAC",
         slot="counts",
+        short_label="ATAC",
         features=nearest_peaks,                               # use neares to the genes if interest peaks
         rootname=paste(args$output, "_cellbrowser", sep=""),
     )
