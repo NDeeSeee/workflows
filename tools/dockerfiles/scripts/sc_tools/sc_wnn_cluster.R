@@ -623,6 +623,7 @@ if (!is.null(args$genes)){
 
 if(args$cbbuild){
     print("Exporting UCSC Cellbrowser data")
+    DefaultAssay(seurat_data) <- "RNA"                         # for now we better export only RNA counts
     ucsc$export_cellbrowser(
         seurat_data=seurat_data,
         assay="RNA",
