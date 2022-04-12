@@ -93,7 +93,7 @@ export_all_dimensionality_plots <- function(seurat_data, suffix, args) {
     graphics$elbow_plot(
         data=seurat_data,
         ndims=50,
-        plot_title=paste("Elbow plot for RNA assay (", suffix, ")", sep=""),
+        plot_title=paste("Elbow plot (from cells PCA) for RNA assay (", suffix, ")", sep=""),
         rootname=paste(args$output, suffix, "elbow", sep="_"),
         pdf=args$pdf
     )
@@ -104,11 +104,11 @@ export_all_dimensionality_plots <- function(seurat_data, suffix, args) {
         qc_columns=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi"),
         qc_labels=c("UMI(RNA)", "Genes", "Mitochondrial %", "Novelty score"),
         plot_title=paste(
-            "Correlation plots between QC metrics and PCA components for RNA assay ",
+            "Correlation plots between QC metrics and cells PCA components for RNA assay ",
             "(", suffix, ")", sep=""
         ),
         combine_guides="collect",
-        rootname=paste(args$output, suffix, "rna_qc_pc_corr", sep="_"),
+        rootname=paste(args$output, suffix, "qc_dim_corr", sep="_"),
         pdf=args$pdf
     )
 }
@@ -127,12 +127,12 @@ export_all_clustering_plots <- function(seurat_data, suffix, args, cluster_prefi
     graphics$dim_plot(
         data=seurat_data,
         reduction="rnaumap",
-        plot_title=paste("Clustered UMAP for RNA assay (", suffix, "). Resolution ", args$resolution, sep=""),
+        plot_title=paste("Clustered cells UMAP for RNA assay (", suffix, "). Resolution ", args$resolution, sep=""),
         legend_title="Cluster",
         group_by=paste(paste(cluster_prefix, "res", sep="_"), args$resolution, sep="."),
         label=TRUE,
         palette_colors=graphics$D40_COLORS,
-        rootname=paste(args$output, suffix, "rna_umap_res", args$resolution, sep="_"),
+        rootname=paste(args$output, suffix, "umap_res", args$resolution, sep="_"),
         pdf=args$pdf
     )
     Idents(seurat_data) <- paste(paste(cluster_prefix, "res", sep="_"), args$resolution, sep=".")
@@ -142,12 +142,12 @@ export_all_clustering_plots <- function(seurat_data, suffix, args, cluster_prefi
         labels=selected_labels,
         from_meta=TRUE,
         reduction="rnaumap",
-        plot_title=paste("QC metrics UMAP for RNA assay (", suffix, "). Resolution ", args$resolution, sep=""),
+        plot_title=paste("QC metrics on cells UMAP for RNA assay (", suffix, "). Resolution ", args$resolution, sep=""),
         label=TRUE,
         alpha=0.4,
         max_cutoff="q99",                    # to prevent outlier cells to distort coloring
         combine_guides="keep",
-        rootname=paste(args$output, suffix, "rna_umap_qc_mtrcs_res", args$resolution, sep="_"),
+        rootname=paste(args$output, suffix, "umap_qc_mtrcs_res", args$resolution, sep="_"),
         pdf=args$pdf
     )
     Idents(seurat_data) <- "new.ident"
@@ -767,7 +767,7 @@ get_args <- function(){
     parser$add_argument(
         "--dimensions",
         help=paste(
-            "Dimensionality to use in RNA UMAP projection and clustering when identifying",
+            "Dimensionality to use in projection and clustering for RNA assay when identifying",
             "RNA based clusters for calling custom MACS2 peaks (from 1 to 50). If single",
             "number N is provided, use from 1 to N PCs. If multiple numbers are provided,",
             "subset to only selected PCs. Ignored if '--callpeaks' is not set to 'cluster'.",
@@ -964,8 +964,8 @@ export_all_qc_plots(                                                            
 
 DefaultAssay(seurat_data) <- "RNA"                                                         # better to stick to RNA assay by default https://www.biostars.org/p/395951/#395954 
 print("Exporting results to RDS file")
-io$export_rds(seurat_data, paste(args$output, "_fltr_data.rds", sep=""))
+io$export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
 if(args$h5seurat){
     print("Exporting results to h5seurat file")
-    io$export_h5seurat(seurat_data, paste(args$output, "_fltr_data.h5seurat", sep=""))
+    io$export_h5seurat(seurat_data, paste(args$output, "_data.h5seurat", sep=""))
 }

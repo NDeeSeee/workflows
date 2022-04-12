@@ -21,7 +21,7 @@ suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 export_all_dimensionality_plots <- function(seurat_data, args) {
     Idents(seurat_data) <- "new.ident"                                                                                         # safety measure
     selected_features=c("nCount_ATAC", "nFeature_ATAC", "TSS.enrichment", "nucleosome_signal", "frip", "blacklist_fraction")
-    selected_labels=c("ATAC UMIs", "Peaks", "TSS enrichment score", "Nucleosome signal", "FRiP", "Bl. regions")
+    selected_labels=c("UMI", "Peaks", "TSS enrichment score", "Nucleosome signal", "FRiP", "Bl. regions")
 
     graphics$corr_plot(
         data=seurat_data,
@@ -29,9 +29,9 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         highlight_dims=args$dimensions,
         qc_columns=selected_features,
         qc_labels=selected_labels,
-        plot_title="Correlation plots between QC metrics and LSI dimensions of ATAC datasets",
+        plot_title="Correlation plots between QC metrics and cells LSI dimensions",
         combine_guides="collect",
-        rootname=paste(args$output, "atac_qc_dim_corr", sep="_"),
+        rootname=paste(args$output, "qc_dim_corr", sep="_"),
         pdf=args$pdf
     )
     graphics$feature_plot(
@@ -40,61 +40,38 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         labels=selected_labels,
         from_meta=TRUE,
         reduction="atacumap",
-        plot_title="QC metrics on UMAP projected LSI of ATAC datasets",
+        plot_title="QC metrics on cells UMAP",
         label=FALSE,
         alpha=0.4,
         max_cutoff="q99",                                                                   # to prevent outlier cells to distort coloring
         combine_guides="keep",
-        rootname=paste(args$output, "atac_umap_qc_mtrcs", sep="_"),
+        rootname=paste(args$output, "umap_qc_mtrcs", sep="_"),
         pdf=args$pdf
     )
 
     graphics$dim_plot(
         data=seurat_data,
-        reduction="atac_lsi",
-        plot_title="LSI of ATAC datasets",
-        legend_title="Identity",
-        group_by="new.ident",
-        label=FALSE,
-        palette_colors=graphics$D40_COLORS,
-        rootname=paste(args$output, "atac_lsi", sep="_"),
-        pdf=args$pdf
-    )
-    graphics$dim_plot(
-        data=seurat_data,
         reduction="atacumap",
-        plot_title="UMAP projected LSI of ATAC datasets",
-        legend_title="Identity",
+        plot_title="Cells UMAP",
+        legend_title="Dataset",
         group_by="new.ident",
         label=FALSE,
         palette_colors=graphics$D40_COLORS,
-        rootname=paste(args$output, "atac_umap", sep="_"),
+        rootname=paste(args$output, "umap", sep="_"),
         pdf=args$pdf
     )
 
     if (length(unique(as.vector(as.character(Idents(seurat_data))))) > 1){
         graphics$dim_plot(
             data=seurat_data,
-            reduction="atac_lsi",
-            plot_title="Split by identity LSI of ATAC datasets",
-            legend_title="Identity",
-            group_by="new.ident",
-            split_by="new.ident",
-            label=FALSE,
-            palette_colors=graphics$D40_COLORS,
-            rootname=paste(args$output, "atac_lsi_spl_by_idnt", sep="_"),
-            pdf=args$pdf
-        )
-        graphics$dim_plot(
-            data=seurat_data,
             reduction="atacumap",
-            plot_title="Split by identity UMAP projected LSI of ATAC datasets",
-            legend_title="Identity",
+            plot_title="Split by dataset cells UMAP",
+            legend_title="Dataset",
             group_by="new.ident",
             split_by="new.ident",
             label=FALSE,
             palette_colors=graphics$D40_COLORS,
-            rootname=paste(args$output, "atac_umap_spl_by_idnt", sep="_"),
+            rootname=paste(args$output, "umap_spl_idnt", sep="_"),
             pdf=args$pdf
         )
     }
@@ -102,26 +79,14 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     if (seurat_data@meta.data$new.ident != seurat_data@meta.data$condition){
         graphics$dim_plot(
             data=seurat_data,
-            reduction="atac_lsi",
-            plot_title="Split by grouping condition LSI of ATAC datasets",
-            legend_title="Identity",
-            group_by="new.ident",
-            split_by="condition",
-            label=FALSE,
-            palette_colors=graphics$D40_COLORS,
-            rootname=paste(args$output, "atac_lsi_spl_by_cond", sep="_"),
-            pdf=args$pdf
-        )
-        graphics$dim_plot(
-            data=seurat_data,
             reduction="atacumap",
-            plot_title="Split by grouping condition UMAP projected LSI of ATAC datasets",
-            legend_title="Identity",
+            plot_title="Split by grouping condition cells UMAP",
+            legend_title="Dataset",
             group_by="new.ident",
             split_by="condition",
             label=FALSE,
             palette_colors=graphics$D40_COLORS,
-            rootname=paste(args$output, "atac_umap_spl_by_cond", sep="_"),
+            rootname=paste(args$output, "umap_spl_cnd", sep="_"),
             pdf=args$pdf
         )
     } 
@@ -151,8 +116,8 @@ get_args <- function(){
     parser$add_argument(
         "--ntgr",
         help=paste(
-            "ATAC datasets integration method used for joint analysis of multiple datasets.",
-            "Automatically set to 'none' if loaded Suerat object includes only one dataset.",
+            "Integration method used for joint analysis of multiple datasets. Automatically",
+            "set to 'none' if loaded Suerat object includes only one dataset.",
             "Default: signac"
         ),
         type="character",
@@ -164,16 +129,16 @@ get_args <- function(){
         help=paste(
             "Minimum percentile for identifying the top most common peaks as highly variable.",
             "For example, setting to 5 will use the the top 95 percent most common among all cells",
-            "peaks as highly variable. These peaks are used for ATAC datasets integration, scaling",
+            "peaks as highly variable. These peaks are used for datasets integration, scaling",
             "and dimensionality reduction.",
-            "Default: 0 (use all available ATAC features)"
+            "Default: 0 (use all available peaks)"
         ),
         type="integer", default=0
     )
     parser$add_argument(
         "--dimensions",
         help=paste(
-            "Dimensionality to use for ATAC datasets integration and UMAP projection (from 2 to 50).",
+            "Dimensionality to use for datasets integration and UMAP projection (from 2 to 50).",
             "If single value N is provided, use from 2 to N LSI components. If multiple values are",
             "provided, subset to only selected LSI components.",
             "Default: from 2 to 10"
@@ -333,8 +298,8 @@ if(args$cbbuild){
 
 DefaultAssay(seurat_data) <- "ATAC"
 print("Exporting results to RDS file")
-io$export_rds(seurat_data, paste(args$output, "_rdcd_data.rds", sep=""))
+io$export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
 if(args$h5seurat){
     print("Exporting results to h5seurat file")
-    io$export_h5seurat(seurat_data, paste(args$output, "_rdcd_data.h5seurat", sep=""))
+    io$export_h5seurat(seurat_data, paste(args$output, "_data.h5seurat", sep=""))
 }

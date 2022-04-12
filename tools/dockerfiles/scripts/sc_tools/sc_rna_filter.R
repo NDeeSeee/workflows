@@ -467,8 +467,8 @@ export_all_qc_plots(                                                            
 
 DefaultAssay(seurat_data) <- "RNA"                                                         # better to stick to RNA assay by default https://www.biostars.org/p/395951/#395954 
 print("Exporting results to RDS file")
-io$export_rds(seurat_data, paste(args$output, "_fltr_data.rds", sep=""))
+io$export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
 if(args$h5seurat){
     print("Exporting results to h5seurat file")
-    io$export_h5seurat(seurat_data, paste(args$output, "_fltr_data.h5seurat", sep=""))
+    io$export_h5seurat(seurat_data, paste(args$output, "_data.h5seurat", sep=""))
 }

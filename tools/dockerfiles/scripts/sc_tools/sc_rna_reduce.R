@@ -22,41 +22,14 @@ suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 export_all_dimensionality_plots <- function(seurat_data, args) {
     Idents(seurat_data) <- "new.ident"                                                                                         # safety measure
     selected_features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "S.Score", "G2M.Score")
-    selected_labels=c("RNA UMIs", "Genes", "Mitochondrial %", "Novelty score", "S score", "G to M score")
+    selected_labels=c("UMI", "Genes", "Mitochondrial %", "Novelty score", "S score", "G to M score")
 
     graphics$elbow_plot(
         data=seurat_data,
         ndims=50,
         reduction="pca",
-        plot_title="Elbow plot built from PCA of RNA datasets",
-        rootname=paste(args$output, "rna_elbow", sep="_"),
-        pdf=args$pdf
-    )
-    graphics$dim_heatmap(
-        data=seurat_data,
-        dims=1:50,
-        plot_title="Genes per cell expression heatmap built from PCA of RNA datasets (sorted by PC scores)",
-        x_label="Cells",
-        y_label="Genes",
-        cells=500,
-        nfeatures=30,
-        ncol=3,
-        height=6500,
-        combine_guides="collect",
-        rootname=paste(args$output, "rna_pca_heatmap", sep="_"),
-        pdf=args$pdf
-    )
-    graphics$dim_loadings_plot(
-        data=seurat_data,
-        dims=1:50,
-        plot_title="Loadings plot built from PCA of RNA datasets (includes the most variable genes)",
-        x_label="PC scores",
-        y_label="Genes",
-        nfeatures=30,
-        ncol=3,
-        height=6500,
-        combine_guides="collect",
-        rootname=paste(args$output, "rna_pca_loadings", sep="_"),
+        plot_title="Elbow plot (from cells PCA)",
+        rootname=paste(args$output, "elbow", sep="_"),
         pdf=args$pdf
     )
     graphics$corr_plot(
@@ -65,9 +38,9 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         highlight_dims=args$dimensions,
         qc_columns=selected_features,
         qc_labels=selected_labels,
-        plot_title="Correlation plots between QC metrics and principal components from PCA of RNA datasets",
+        plot_title="Correlation plots between QC metrics and cells PCA components",
         combine_guides="collect",
-        rootname=paste(args$output, "rna_qc_dim_corr", sep="_"),
+        rootname=paste(args$output, "qc_dim_corr", sep="_"),
         pdf=args$pdf
     )
     graphics$feature_plot(
@@ -76,72 +49,47 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         labels=selected_labels,
         from_meta=TRUE,
         reduction="rnaumap",
-        plot_title="QC metrics on UMAP projected PCA of RNA datasets",
+        plot_title="QC metrics on cells UMAP",
         label=FALSE,
         alpha=0.4,
         max_cutoff="q99",                                                                   # to prevent outlier cells to distort coloring
         combine_guides="keep",
-        rootname=paste(args$output, "rna_umap_qc_mtrcs", sep="_"),
-        pdf=args$pdf
-    )
-
-    graphics$dim_plot(
-        data=seurat_data,
-        reduction="pca",
-        plot_title="PCA of RNA datasets",
-        legend_title="Identity",
-        group_by="new.ident",
-        label=FALSE,
-        palette_colors=graphics$D40_COLORS,
-        rootname=paste(args$output, "rna_pca", sep="_"),
+        rootname=paste(args$output, "umap_qc_mtrcs", sep="_"),
         pdf=args$pdf
     )
     graphics$dim_plot(
         data=seurat_data,
         reduction="rnaumap",
-        plot_title="UMAP projected PCA of RNA datasets",
-        legend_title="Identity",
+        plot_title="Cells UMAP",
+        legend_title="Dataset",
         group_by="new.ident",
         label=FALSE,
         palette_colors=graphics$D40_COLORS,
-        rootname=paste(args$output, "rna_umap", sep="_"),
+        rootname=paste(args$output, "umap", sep="_"),
         pdf=args$pdf
     )
-    graphics$dim_plot(
-        data=seurat_data,
-        reduction="pca",
-        plot_title="Split by cell cycle phase PCA of RNA datasets",
-        legend_title="Identity",
-        group_by="new.ident",
-        split_by="Phase",
-        label=FALSE,
-        alpha=0.5,
-        palette_colors=graphics$D40_COLORS,
-        width=1200,
-        height=400,
-        rootname=paste(args$output, "rna_pca_spl_by_ph", sep="_"),
-        pdf=args$pdf
-    )
+    if ("Phase" %in% colnames(seurat_data@meta.data)){
+        graphics$dim_plot(
+            data=seurat_data,
+            reduction="rnaumap",
+            plot_title="Split by cell cycle phase cells UMAP",
+            legend_title="Dataset",
+            group_by="new.ident",
+            split_by="Phase",
+            label=FALSE,
+            alpha=0.5,
+            palette_colors=graphics$D40_COLORS,
+            width=1200,
+            height=400,
+            rootname=paste(args$output, "umap_spl_ph", sep="_"),
+            pdf=args$pdf
+        )
+    }
     graphics$dim_plot(
         data=seurat_data,
         reduction="rnaumap",
-        plot_title="Split by cell cycle phase UMAP projected PCA of RNA datasets",
-        legend_title="Identity",
-        group_by="new.ident",
-        split_by="Phase",
-        label=FALSE,
-        alpha=0.5,
-        palette_colors=graphics$D40_COLORS,
-        width=1200,
-        height=400,
-        rootname=paste(args$output, "rna_umap_spl_by_ph", sep="_"),
-        pdf=args$pdf
-    )
-    graphics$dim_plot(
-        data=seurat_data,
-        reduction="pca",
-        plot_title="Split by quartiles the percentage of transcripts mapped to mitochondrial genes on PCA of RNA datasets",
-        legend_title="Identity",
+        plot_title="Split by the percentage of transcripts mapped to mitochondrial genes cells UMAP",
+        legend_title="Dataset",
         group_by="new.ident",
         split_by="quartile_mito_percentage",
         label=FALSE,
@@ -149,29 +97,14 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         palette_colors=graphics$D40_COLORS,
         width=1200,
         height=400,
-        rootname=paste(args$output, "rna_pca_spl_by_mito_qrtl", sep="_"),
+        rootname=paste(args$output, "umap_spl_mito", sep="_"),
         pdf=args$pdf
     )
     graphics$dim_plot(
         data=seurat_data,
         reduction="rnaumap",
-        plot_title="Split by quartiles the percentage of transcripts mapped to mitochondrial genes on UMAP projected PCA of RNA datasets",
-        legend_title="Identity",
-        group_by="new.ident",
-        split_by="quartile_mito_percentage",
-        label=FALSE,
-        alpha=0.5,
-        palette_colors=graphics$D40_COLORS,
-        width=1200,
-        height=400,
-        rootname=paste(args$output, "rna_umap_spl_by_mito_qrtl", sep="_"),
-        pdf=args$pdf
-    )
-    graphics$dim_plot(
-        data=seurat_data,
-        reduction="pca",
-        plot_title="Split by quartiles the UMIs per cell counts on PCA of RNA datasets",
-        legend_title="Identity",
+        plot_title="Split by the UMI per cell counts cells UMAP",
+        legend_title="Dataset",
         group_by="new.ident",
         split_by="quartile_nCount_RNA",
         label=FALSE,
@@ -179,29 +112,14 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         palette_colors=graphics$D40_COLORS,
         width=1200,
         height=400,
-        rootname=paste(args$output, "rna_pca_spl_by_umi_qrtl", sep="_"),
+        rootname=paste(args$output, "umap_spl_umi", sep="_"),
         pdf=args$pdf
     )
     graphics$dim_plot(
         data=seurat_data,
         reduction="rnaumap",
-        plot_title="Split by quartiles the UMIs per cell counts on UMAP projected PCA of RNA datasets",
-        legend_title="Identity",
-        group_by="new.ident",
-        split_by="quartile_nCount_RNA",
-        label=FALSE,
-        alpha=0.5,
-        palette_colors=graphics$D40_COLORS,
-        width=1200,
-        height=400,
-        rootname=paste(args$output, "rna_umap_spl_by_umi_qrtl", sep="_"),
-        pdf=args$pdf
-    )
-    graphics$dim_plot(
-        data=seurat_data,
-        reduction="pca",
-        plot_title="Split by quartiles the genes per cell counts on PCA of RNA datasets",
-        legend_title="Identity",
+        plot_title="Split by the genes per cell counts cells UMAP",
+        legend_title="Dataset",
         group_by="new.ident",
         split_by="quartile_nFeature_RNA",
         label=FALSE,
@@ -209,48 +127,21 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         palette_colors=graphics$D40_COLORS,
         width=1200,
         height=400,
-        rootname=paste(args$output, "rna_pca_spl_by_gene_qrtl", sep="_"),
-        pdf=args$pdf
-    )
-    graphics$dim_plot(
-        data=seurat_data,
-        reduction="rnaumap",
-        plot_title="Split by quartiles the genes per cell counts on UMAP projected PCA of RNA datasets",
-        legend_title="Identity",
-        group_by="new.ident",
-        split_by="quartile_nFeature_RNA",
-        label=FALSE,
-        alpha=0.5,
-        palette_colors=graphics$D40_COLORS,
-        width=1200,
-        height=400,
-        rootname=paste(args$output, "rna_umap_spl_by_gene_qrtl", sep="_"),
+        rootname=paste(args$output, "umap_spl_gene", sep="_"),
         pdf=args$pdf
     )
 
     if (length(unique(as.vector(as.character(Idents(seurat_data))))) > 1){
         graphics$dim_plot(
             data=seurat_data,
-            reduction="pca",
-            plot_title="Split by identity PCA of RNA datasets",
-            legend_title="Identity",
-            group_by="new.ident",
-            split_by="new.ident",
-            label=FALSE,
-            palette_colors=graphics$D40_COLORS,
-            rootname=paste(args$output, "rna_pca_spl_by_idnt", sep="_"),
-            pdf=args$pdf
-        )
-        graphics$dim_plot(
-            data=seurat_data,
             reduction="rnaumap",
-            plot_title="Split by identity UMAP projected PCA of RNA datasets",
-            legend_title="Identity",
+            plot_title="Split by dataset cells UMAP",
+            legend_title="Dataset",
             group_by="new.ident",
             split_by="new.ident",
             label=FALSE,
             palette_colors=graphics$D40_COLORS,
-            rootname=paste(args$output, "rna_umap_spl_by_idnt", sep="_"),
+            rootname=paste(args$output, "umap_spl_idnt", sep="_"),
             pdf=args$pdf
         )
     }
@@ -258,62 +149,37 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     if (seurat_data@meta.data$new.ident != seurat_data@meta.data$condition){
         graphics$dim_plot(
             data=seurat_data,
-            reduction="pca",
-            plot_title="Split by grouping condition PCA of RNA datasets",
-            legend_title="Identity",
+            reduction="rnaumap",
+            plot_title="Split by grouping condition cells UMAP",
+            legend_title="Dataset",
             group_by="new.ident",
             split_by="condition",
             label=FALSE,
             palette_colors=graphics$D40_COLORS,
-            rootname=paste(args$output, "rna_pca_spl_by_cond", sep="_"),
+            rootname=paste(args$output, "umap_spl_cnd", sep="_"),
             pdf=args$pdf
         )
+        if ("Phase" %in% colnames(seurat_data@meta.data)){
+            graphics$dim_plot(
+                data=seurat_data,
+                reduction="rnaumap",
+                plot_title="Grouped by condition split by cell cycle cells UMAP",
+                legend_title="Condition",
+                group_by="condition",
+                split_by="Phase",
+                label=FALSE,
+                alpha=0.5,
+                palette_colors=graphics$D40_COLORS,
+                width=1200,
+                height=400,
+                rootname=paste(args$output, "umap_gr_cnd_spl_ph", sep="_"),
+                pdf=args$pdf
+            )
+        }
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
-            plot_title="Split by grouping condition UMAP projected PCA of RNA datasets",
-            legend_title="Identity",
-            group_by="new.ident",
-            split_by="condition",
-            label=FALSE,
-            palette_colors=graphics$D40_COLORS,
-            rootname=paste(args$output, "rna_umap_spl_by_cond", sep="_"),
-            pdf=args$pdf
-        )
-        graphics$dim_plot(
-            data=seurat_data,
-            reduction="pca",
-            plot_title="Grouped by condition split by cell cycle phase PCA of RNA datasets",
-            legend_title="Condition",
-            group_by="condition",
-            split_by="Phase",
-            label=FALSE,
-            alpha=0.5,
-            palette_colors=graphics$D40_COLORS,
-            width=1200,
-            height=400,
-            rootname=paste(args$output, "rna_pca_gr_by_cond_spl_by_ph", sep="_"),
-            pdf=args$pdf
-        )
-        graphics$dim_plot(
-            data=seurat_data,
-            reduction="rnaumap",
-            plot_title="Grouped by condition split by cell cycle phase UMAP projected PCA of RNA datasets",
-            legend_title="Condition",
-            group_by="condition",
-            split_by="Phase",
-            label=FALSE,
-            alpha=0.5,
-            palette_colors=graphics$D40_COLORS,
-            width=1200,
-            height=400,
-            rootname=paste(args$output, "rna_umap_gr_by_cond_spl_by_ph", sep="_"),
-            pdf=args$pdf
-        )
-        graphics$dim_plot(
-            data=seurat_data,
-            reduction="pca",
-            plot_title="Grouped by condition split by quartiles the percentage of transcripts mapped to mitochondrial genes on PCA of RNA datasets",
+            plot_title="Grouped by condition split by the percentage of transcripts mapped to mitochondrial genes cells UMAP",
             legend_title="Condition",
             group_by="condition",
             split_by="quartile_mito_percentage",
@@ -322,28 +188,13 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             palette_colors=graphics$D40_COLORS,
             width=1200,
             height=400,
-            rootname=paste(args$output, "rna_pca_gr_by_cond_spl_by_mito_qrtl", sep="_"),
+            rootname=paste(args$output, "umap_gr_cnd_spl_mito", sep="_"),
             pdf=args$pdf
         )
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
-            plot_title="Grouped by condition split by quartiles the percentage of transcripts mapped to mitochondrial genes on UMAP projected PCA of RNA datasets",
-            legend_title="Condition",
-            group_by="condition",
-            split_by="quartile_mito_percentage",
-            label=FALSE,
-            alpha=0.5,
-            palette_colors=graphics$D40_COLORS,
-            width=1200,
-            height=400,
-            rootname=paste(args$output, "rna_umap_gr_by_cond_spl_by_mito_qrtl", sep="_"),
-            pdf=args$pdf
-        )
-        graphics$dim_plot(
-            data=seurat_data,
-            reduction="pca",
-            plot_title="Grouped by condition split by quartiles the UMIs per cell counts on PCA of RNA datasets",
+            plot_title="Grouped by condition split by the UMI per cell counts cells UMAP",
             legend_title="Condition",
             group_by="condition",
             split_by="quartile_nCount_RNA",
@@ -352,28 +203,13 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             palette_colors=graphics$D40_COLORS,
             width=1200,
             height=400,
-            rootname=paste(args$output, "rna_pca_gr_by_cond_spl_by_umi_qrtl", sep="_"),
+            rootname=paste(args$output, "umap_gr_cnd_spl_umi", sep="_"),
             pdf=args$pdf
         )
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
-            plot_title="Grouped by condition split by quartiles the UMIs per cell counts on UMAP projected PCA of RNA datasets",
-            legend_title="Condition",
-            group_by="condition",
-            split_by="quartile_nCount_RNA",
-            label=FALSE,
-            alpha=0.5,
-            palette_colors=graphics$D40_COLORS,
-            width=1200,
-            height=400,
-            rootname=paste(args$output, "rna_umap_gr_by_cond_spl_by_umi_qrtl", sep="_"),
-            pdf=args$pdf
-        )
-        graphics$dim_plot(
-            data=seurat_data,
-            reduction="pca",
-            plot_title="Grouped by condition split by quartiles the genes per cell counts on PCA of RNA datasets",
+            plot_title="Grouped by condition split by the genes per cell counts cells UMAP",
             legend_title="Condition",
             group_by="condition",
             split_by="quartile_nFeature_RNA",
@@ -382,22 +218,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             palette_colors=graphics$D40_COLORS,
             width=1200,
             height=400,
-            rootname=paste(args$output, "rna_pca_gr_by_cond_spl_by_gene_qrtl", sep="_"),
-            pdf=args$pdf
-        )
-        graphics$dim_plot(
-            data=seurat_data,
-            reduction="rnaumap",
-            plot_title="Grouped by condition split by quartiles the genes per cell counts on UMAP projected PCA of RNA datasets",
-            legend_title="Condition",
-            group_by="condition",
-            split_by="quartile_nFeature_RNA",
-            label=FALSE,
-            alpha=0.5,
-            palette_colors=graphics$D40_COLORS,
-            width=1200,
-            height=400,
-            rootname=paste(args$output, "rna_umap_gr_by_cond_spl_by_gene_qrtl", sep="_"),
+            rootname=paste(args$output, "umap_gr_cnd_spl_gene", sep="_"),
             pdf=args$pdf
         )
     } 
@@ -450,8 +271,8 @@ get_args <- function(){
     parser$add_argument(
         "--ntgr",
         help=paste(
-            "RNA datasets integration method used for joint analysis of multiple datasets.",
-            "Automatically set to 'none' if loaded Suerat object includes only one dataset.",
+            "Integration method used for joint analysis of multiple datasets. Automatically",
+            "set to 'none' if loaded Suerat object includes only one dataset.",
             "Default: seurat"
         ),
         type="character",
@@ -461,7 +282,7 @@ get_args <- function(){
     parser$add_argument(
         "--highvargenes",
         help=paste(
-            "Number of highly variable genes used in RNA datasets integration, scaling and",
+            "Number of highly variable genes used in datasets integration, scaling and",
             "dimensionality reduction.",
             "Default: 3000"
         ),
@@ -479,7 +300,7 @@ get_args <- function(){
     parser$add_argument(
         "--regressrnaumi",
         help=paste(
-            "Regress RNA UMIs per cell counts as a confounding source of variation.",
+            "Regress UMI per cell counts as a confounding source of variation.",
             "Default: false"
         ),
         action="store_true"
@@ -504,7 +325,7 @@ get_args <- function(){
     parser$add_argument(
         "--dimensions",
         help=paste(
-            "Dimensionality to use in RNA UMAP projection (from 1 to 50). If single value N",
+            "Dimensionality to use in UMAP projection (from 1 to 50). If single value N",
             "is provided, use from 1 to N PCs. If multiple values are provided, subset to",
             "only selected PCs.",
             "Default: from 1 to 10"
@@ -696,8 +517,8 @@ if(args$cbbuild){
 
 DefaultAssay(seurat_data) <- "RNA"                                                         # better to stick to RNA assay by default https://www.biostars.org/p/395951/#395954 
 print("Exporting results to RDS file")
-io$export_rds(seurat_data, paste(args$output, "_rdcd_data.rds", sep=""))
+io$export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
 if(args$h5seurat){
     print("Exporting results to h5seurat file")
-    io$export_h5seurat(seurat_data, paste(args$output, "_rdcd_data.h5seurat", sep=""))
+    io$export_h5seurat(seurat_data, paste(args$output, "_data.h5seurat", sep=""))
 }
