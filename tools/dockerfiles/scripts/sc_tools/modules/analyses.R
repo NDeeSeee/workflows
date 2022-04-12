@@ -434,7 +434,7 @@ gex_preprocess <- function(seurat_data, args, cell_cycle_data=NULL) {
 gex_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
     SeuratObject::DefaultAssay(seurat_data) <- "RNA"                            # safety measure
     SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
-    backup_reductions <- c()                                                    # GEX integration main remove atac related reductions so we need to back them up
+    backup_reductions <- c()                                                    # RNA integration main remove atac related reductions so we need to back them up
     for (reduction_name in c("atac_lsi", "atacumap", "wnnumap")){
         if (reduction_name %in% names(seurat_data@reductions)){
             base::print(base::paste("Backing up reduction", reduction_name))
@@ -666,7 +666,7 @@ atac_preprocess <- function(seurat_data, args) {
 atac_analyze <- function(seurat_data, args){
     SeuratObject::DefaultAssay(seurat_data) <- "ATAC"                           # safety measure
     SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
-    backup_reductions <- c()                                                    # ATAC integration main remove GEX related reductions so we need to back them up
+    backup_reductions <- c()                                                    # ATAC integration main remove RNA related reductions so we need to back them up
     for (reduction_name in c("pca", "rnaumap", "wnnumap")){
         if (reduction_name %in% names(seurat_data@reductions)){
             base::print(base::paste("Backing up reduction", reduction_name))

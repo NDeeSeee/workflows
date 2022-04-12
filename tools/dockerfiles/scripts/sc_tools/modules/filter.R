@@ -70,9 +70,9 @@ apply_gex_qc_filters <- function(seurat_data, cell_identity_data, args) {
 
         base::print(base::paste("Filtering", identity))
         base::print(base::paste(" ", mingenes, "<= Genes per cell <=", maxgenes))
-        base::print(base::paste(" ", "GEX UMIs per cell >=", gexminumi))
-        base::print(base::paste(" ", "GEX novelty score >=", minnovelty))
-        base::print(base::paste(" ", "Percentage of GEX transcripts mapped to mitochondrial genes <=", args$maxmt))
+        base::print(base::paste(" ", "RNA UMIs per cell >=", gexminumi))
+        base::print(base::paste(" ", "RNA novelty score >=", minnovelty))
+        base::print(base::paste(" ", "Percentage of RNA transcripts mapped to mitochondrial genes <=", args$maxmt))
 
         filtered_seurat_data <- base::subset(
             seurat_data,

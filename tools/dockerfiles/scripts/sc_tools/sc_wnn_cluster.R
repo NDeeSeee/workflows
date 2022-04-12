@@ -280,16 +280,16 @@ export_all_coverage_plots <- function(seurat_data, suffix, args) {
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Seurat GEX Cluster Analysis")
+    parser <- ArgumentParser(description="Seurat WNN Cluster Analysis")
     parser$add_argument(
         "--query",
         help=paste(
             "Path to the RDS file to load Seurat object from. This file",
             "can be produced by subsequent runs of sc_gex_[reduce/cluster].R",
             "and sc_atac_[reduce/cluster].R scripts in any order. The Seurat",
-            "loaded object must include GEX dimensionality reduction information",
+            "loaded object must include RNA dimensionality reduction information",
             "stored in the 'pca' and ATAC dimensionality reduction information",
-            "stored in 'atac_lsi' slots. It is mandatory to have GEX information",
+            "stored in 'atac_lsi' slots. It is mandatory to have RNA information",
             "stored in the RNA assay and chromatin accessibility information",
             "stored in the ATAC assay."
         ),
@@ -627,7 +627,7 @@ if(args$cbbuild){
         seurat_data=seurat_data,
         assay="RNA",
         slot="counts",
-        short_label="GEX",
+        short_label="RNA",
         features=args$genes,                                   # can be NULL
         is_nested=TRUE,
         rootname=paste(args$output, "_cellbrowser/gex", sep=""),

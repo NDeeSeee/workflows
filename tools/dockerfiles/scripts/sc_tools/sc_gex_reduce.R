@@ -22,20 +22,20 @@ suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 export_all_dimensionality_plots <- function(seurat_data, args) {
     Idents(seurat_data) <- "new.ident"                                                                                         # safety measure
     selected_features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "S.Score", "G2M.Score")
-    selected_labels=c("GEX UMIs", "Genes", "Mitochondrial %", "Novelty score", "S score", "G to M score")
+    selected_labels=c("RNA UMIs", "Genes", "Mitochondrial %", "Novelty score", "S score", "G to M score")
 
     graphics$elbow_plot(
         data=seurat_data,
         ndims=50,
         reduction="pca",
-        plot_title="Elbow plot built from PCA of GEX datasets",
+        plot_title="Elbow plot built from PCA of RNA datasets",
         rootname=paste(args$output, "gex_elbow", sep="_"),
         pdf=args$pdf
     )
     graphics$dim_heatmap(
         data=seurat_data,
         dims=1:50,
-        plot_title="Genes per cell expression heatmap built from PCA of GEX datasets (sorted by PC scores)",
+        plot_title="Genes per cell expression heatmap built from PCA of RNA datasets (sorted by PC scores)",
         x_label="Cells",
         y_label="Genes",
         cells=500,
@@ -49,7 +49,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$dim_loadings_plot(
         data=seurat_data,
         dims=1:50,
-        plot_title="Loadings plot built from PCA of GEX datasets (includes the most variable genes)",
+        plot_title="Loadings plot built from PCA of RNA datasets (includes the most variable genes)",
         x_label="PC scores",
         y_label="Genes",
         nfeatures=30,
@@ -65,7 +65,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         highlight_dims=args$dimensions,
         qc_columns=selected_features,
         qc_labels=selected_labels,
-        plot_title="Correlation plots between QC metrics and principal components from PCA of GEX datasets",
+        plot_title="Correlation plots between QC metrics and principal components from PCA of RNA datasets",
         combine_guides="collect",
         rootname=paste(args$output, "gex_qc_dim_corr", sep="_"),
         pdf=args$pdf
@@ -76,7 +76,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         labels=selected_labels,
         from_meta=TRUE,
         reduction="rnaumap",
-        plot_title="QC metrics on UMAP projected PCA of GEX datasets",
+        plot_title="QC metrics on UMAP projected PCA of RNA datasets",
         label=FALSE,
         alpha=0.4,
         max_cutoff="q99",                                                                   # to prevent outlier cells to distort coloring
@@ -88,7 +88,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$dim_plot(
         data=seurat_data,
         reduction="pca",
-        plot_title="PCA of GEX datasets",
+        plot_title="PCA of RNA datasets",
         legend_title="Identity",
         group_by="new.ident",
         label=FALSE,
@@ -99,7 +99,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$dim_plot(
         data=seurat_data,
         reduction="rnaumap",
-        plot_title="UMAP projected PCA of GEX datasets",
+        plot_title="UMAP projected PCA of RNA datasets",
         legend_title="Identity",
         group_by="new.ident",
         label=FALSE,
@@ -110,7 +110,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$dim_plot(
         data=seurat_data,
         reduction="pca",
-        plot_title="Split by cell cycle phase PCA of GEX datasets",
+        plot_title="Split by cell cycle phase PCA of RNA datasets",
         legend_title="Identity",
         group_by="new.ident",
         split_by="Phase",
@@ -125,7 +125,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$dim_plot(
         data=seurat_data,
         reduction="rnaumap",
-        plot_title="Split by cell cycle phase UMAP projected PCA of GEX datasets",
+        plot_title="Split by cell cycle phase UMAP projected PCA of RNA datasets",
         legend_title="Identity",
         group_by="new.ident",
         split_by="Phase",
@@ -140,7 +140,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$dim_plot(
         data=seurat_data,
         reduction="pca",
-        plot_title="Split by quartiles the percentage of transcripts mapped to mitochondrial genes on PCA of GEX datasets",
+        plot_title="Split by quartiles the percentage of transcripts mapped to mitochondrial genes on PCA of RNA datasets",
         legend_title="Identity",
         group_by="new.ident",
         split_by="quartile_mito_percentage",
@@ -155,7 +155,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$dim_plot(
         data=seurat_data,
         reduction="rnaumap",
-        plot_title="Split by quartiles the percentage of transcripts mapped to mitochondrial genes on UMAP projected PCA of GEX datasets",
+        plot_title="Split by quartiles the percentage of transcripts mapped to mitochondrial genes on UMAP projected PCA of RNA datasets",
         legend_title="Identity",
         group_by="new.ident",
         split_by="quartile_mito_percentage",
@@ -170,7 +170,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$dim_plot(
         data=seurat_data,
         reduction="pca",
-        plot_title="Split by quartiles the UMIs per cell counts on PCA of GEX datasets",
+        plot_title="Split by quartiles the UMIs per cell counts on PCA of RNA datasets",
         legend_title="Identity",
         group_by="new.ident",
         split_by="quartile_nCount_RNA",
@@ -185,7 +185,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$dim_plot(
         data=seurat_data,
         reduction="rnaumap",
-        plot_title="Split by quartiles the UMIs per cell counts on UMAP projected PCA of GEX datasets",
+        plot_title="Split by quartiles the UMIs per cell counts on UMAP projected PCA of RNA datasets",
         legend_title="Identity",
         group_by="new.ident",
         split_by="quartile_nCount_RNA",
@@ -200,7 +200,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$dim_plot(
         data=seurat_data,
         reduction="pca",
-        plot_title="Split by quartiles the genes per cell counts on PCA of GEX datasets",
+        plot_title="Split by quartiles the genes per cell counts on PCA of RNA datasets",
         legend_title="Identity",
         group_by="new.ident",
         split_by="quartile_nFeature_RNA",
@@ -215,7 +215,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$dim_plot(
         data=seurat_data,
         reduction="rnaumap",
-        plot_title="Split by quartiles the genes per cell counts on UMAP projected PCA of GEX datasets",
+        plot_title="Split by quartiles the genes per cell counts on UMAP projected PCA of RNA datasets",
         legend_title="Identity",
         group_by="new.ident",
         split_by="quartile_nFeature_RNA",
@@ -232,7 +232,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="pca",
-            plot_title="Split by identity PCA of GEX datasets",
+            plot_title="Split by identity PCA of RNA datasets",
             legend_title="Identity",
             group_by="new.ident",
             split_by="new.ident",
@@ -244,7 +244,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
-            plot_title="Split by identity UMAP projected PCA of GEX datasets",
+            plot_title="Split by identity UMAP projected PCA of RNA datasets",
             legend_title="Identity",
             group_by="new.ident",
             split_by="new.ident",
@@ -259,7 +259,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="pca",
-            plot_title="Split by grouping condition PCA of GEX datasets",
+            plot_title="Split by grouping condition PCA of RNA datasets",
             legend_title="Identity",
             group_by="new.ident",
             split_by="condition",
@@ -271,7 +271,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
-            plot_title="Split by grouping condition UMAP projected PCA of GEX datasets",
+            plot_title="Split by grouping condition UMAP projected PCA of RNA datasets",
             legend_title="Identity",
             group_by="new.ident",
             split_by="condition",
@@ -283,7 +283,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="pca",
-            plot_title="Grouped by condition split by cell cycle phase PCA of GEX datasets",
+            plot_title="Grouped by condition split by cell cycle phase PCA of RNA datasets",
             legend_title="Condition",
             group_by="condition",
             split_by="Phase",
@@ -298,7 +298,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
-            plot_title="Grouped by condition split by cell cycle phase UMAP projected PCA of GEX datasets",
+            plot_title="Grouped by condition split by cell cycle phase UMAP projected PCA of RNA datasets",
             legend_title="Condition",
             group_by="condition",
             split_by="Phase",
@@ -313,7 +313,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="pca",
-            plot_title="Grouped by condition split by quartiles the percentage of transcripts mapped to mitochondrial genes on PCA of GEX datasets",
+            plot_title="Grouped by condition split by quartiles the percentage of transcripts mapped to mitochondrial genes on PCA of RNA datasets",
             legend_title="Condition",
             group_by="condition",
             split_by="quartile_mito_percentage",
@@ -328,7 +328,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
-            plot_title="Grouped by condition split by quartiles the percentage of transcripts mapped to mitochondrial genes on UMAP projected PCA of GEX datasets",
+            plot_title="Grouped by condition split by quartiles the percentage of transcripts mapped to mitochondrial genes on UMAP projected PCA of RNA datasets",
             legend_title="Condition",
             group_by="condition",
             split_by="quartile_mito_percentage",
@@ -343,7 +343,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="pca",
-            plot_title="Grouped by condition split by quartiles the UMIs per cell counts on PCA of GEX datasets",
+            plot_title="Grouped by condition split by quartiles the UMIs per cell counts on PCA of RNA datasets",
             legend_title="Condition",
             group_by="condition",
             split_by="quartile_nCount_RNA",
@@ -358,7 +358,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
-            plot_title="Grouped by condition split by quartiles the UMIs per cell counts on UMAP projected PCA of GEX datasets",
+            plot_title="Grouped by condition split by quartiles the UMIs per cell counts on UMAP projected PCA of RNA datasets",
             legend_title="Condition",
             group_by="condition",
             split_by="quartile_nCount_RNA",
@@ -373,7 +373,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="pca",
-            plot_title="Grouped by condition split by quartiles the genes per cell counts on PCA of GEX datasets",
+            plot_title="Grouped by condition split by quartiles the genes per cell counts on PCA of RNA datasets",
             legend_title="Condition",
             group_by="condition",
             split_by="quartile_nFeature_RNA",
@@ -388,7 +388,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
-            plot_title="Grouped by condition split by quartiles the genes per cell counts on UMAP projected PCA of GEX datasets",
+            plot_title="Grouped by condition split by quartiles the genes per cell counts on UMAP projected PCA of RNA datasets",
             legend_title="Condition",
             group_by="condition",
             split_by="quartile_nFeature_RNA",
@@ -405,13 +405,13 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Seurat GEX Dimensionality Reduction Analysis")
+    parser <- ArgumentParser(description="Seurat RNA Dimensionality Reduction Analysis")
     parser$add_argument(
         "--query",
         help=paste(
             "Path to the RDS file to load filtered Seurat object from. This file",
             "can be produced by sc_multiome_filter.R, sc_gex_filter.R or sc_atac_reduce.R",
-            "scripts. It is mandatory to have GEX information stored in the RNA assay."
+            "scripts. It is mandatory to have gene expression information stored in the RNA assay."
         ),
         type="character", required="True"
     )
@@ -439,7 +439,7 @@ get_args <- function(){
     parser$add_argument(
         "--gexnorm",
         help=paste(
-            "Normalization method to be used for GEX datasets. If provided Seurat object",
+            "Normalization method to be used for RNA datasets. If provided Seurat object",
             "includes multiple datasets, normalization will be run independently for each",
             "of them, unless integration is disabled with --ntgr set to 'none'",
             "Default: sct"
@@ -451,7 +451,7 @@ get_args <- function(){
     parser$add_argument(
         "--ntgr",
         help=paste(
-            "Integration method for the joint analysis of multiple GEX datasets present",
+            "Integration method for the joint analysis of multiple RNA datasets present",
             "in the provided with --query Seurat object. Automatically set to 'none' if",
             "only one identity is found.",
             "Default: seurat"
@@ -463,7 +463,7 @@ get_args <- function(){
     parser$add_argument(
         "--highvargex",
         help=paste(
-            "Number of highly variable GEX features to detect. Used for GEX datasets",
+            "Number of highly variable RNA features to detect. Used for RNA datasets",
             "integration, scaling, and dimensionality reduction.",
             "Default: 3000"
         ),
@@ -480,7 +480,7 @@ get_args <- function(){
     parser$add_argument(
         "--regressgexumi",
         help=paste(
-            "Regress GEX UMIs per cell as a confounding source of variation.",
+            "Regress RNA UMIs per cell as a confounding source of variation.",
             "Default: false"
         ),
         action="store_true"
@@ -505,7 +505,7 @@ get_args <- function(){
     parser$add_argument(
         "--dimensions",
         help=paste(
-            "Dimensionality to use in GEX UMAP projection (from 1 to 50). If single",
+            "Dimensionality to use in RNA UMAP projection (from 1 to 50). If single",
             "value N is provided, use from 1 to N PCs. If multiple values are",
             "provided, subset to only selected PCs.",
             "Default: from 1 to 10"
@@ -667,7 +667,7 @@ print("Applying cell filters based on the loaded barcodes of interest")
 seurat_data <- filter$apply_cell_filters(seurat_data, barcodes_data)
 debug$print_info(seurat_data, args)
 
-print("Running GEX analysis")
+print("Running RNA analysis")
 seurat_data <- analyses$gex_analyze(seurat_data, args, cell_cycle_data)   # adds "pca" and "rnaumap" reductions
 seurat_data <- filter$collapse_fragments_list(seurat_data)                # collapse repetitive fragments if ATAC assay was present in the Seurat object and was splitted
 debug$print_info(seurat_data, args)
@@ -691,7 +691,7 @@ if(args$cbbuild){
         seurat_data=seurat_data,
         assay="RNA",
         slot="counts",
-        short_label="GEX",
+        short_label="RNA",
         rootname=paste(args$output, "_cellbrowser", sep=""),
     )
 }

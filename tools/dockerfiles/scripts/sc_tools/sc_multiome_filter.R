@@ -25,19 +25,19 @@ call_peaks <- function(seurat_data, args) {
     if (args$callpeaks == "cluster"){
         print(
             paste(
-                "Forced to group cell by GEX cluster identified from PCA",
+                "Forced to group cell by RNA cluster identified from PCA",
                 "reduction using", paste(args$dimensions, collapse=", "),
                 "dimensions and", args$resolution, "resolution"
             )
         )
-        print("Running GEX analysis before calling peaks by cluster")
+        print("Running RNA analysis before calling peaks by cluster")
         seurat_data <- analyses$gex_analyze(seurat_data, args)
         seurat_data <- filter$collapse_fragments_list(seurat_data)                 # collapse repetitive fragments as we could split the datasets before integration
         debug$print_info(seurat_data, args)
         group_by <- paste0("peak_calling_res.", args$resolution)
         seurat_data <- FindNeighbors(
             seurat_data,
-            reduction="pca",                                                # this is the same reduction we got after running RunPCA on our GEX data, it's bound to the specific assay
+            reduction="pca",                                                # this is the same reduction we got after running RunPCA on our RNA data, it's bound to the specific assay
             dims=args$dimensions,
             graph.name=c("peak_calling_nn", "peak_calling"),
             verbose=FALSE
@@ -87,7 +87,7 @@ export_all_dimensionality_plots <- function(seurat_data, suffix, args) {
     graphics$elbow_plot(
         data=seurat_data,
         ndims=50,
-        plot_title=paste("Elbow plot built from PCA of GEX datasets (", suffix, ")", sep=""),
+        plot_title=paste("Elbow plot built from PCA of RNA datasets (", suffix, ")", sep=""),
         rootname=paste(args$output, suffix, "gex_elbow", sep="_"),
         pdf=args$pdf
     )
@@ -96,10 +96,10 @@ export_all_dimensionality_plots <- function(seurat_data, suffix, args) {
         reduction="pca",
         highlight_dims=args$dimensions,
         qc_columns=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi"),
-        qc_labels=c("GEX UMIs", "Genes", "Mitochondrial %", "Novelty score"),
+        qc_labels=c("RNA UMIs", "Genes", "Mitochondrial %", "Novelty score"),
         plot_title=paste(
             "Correlation plots between QC metrics and principal components ",
-            "from PCA of GEX datasets (", suffix, ")", sep=""
+            "from PCA of RNA datasets (", suffix, ")", sep=""
         ),
         combine_guides="collect",
         rootname=paste(args$output, suffix, "gex_qc_dim_corr", sep="_"),
@@ -112,7 +112,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args, cluster_prefi
     peak_type <- ifelse(macs2_peaks, "- MACS2", "- 10x")
     selected_features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "TSS.enrichment", "nucleosome_signal", "nFeature_ATAC", "frip", "blacklisted_fraction")
     selected_labels=c(
-        "GEX UMIs", "Genes", "Mitochondrial %", "Novelty score",
+        "RNA UMIs", "Genes", "Mitochondrial %", "Novelty score",
         paste(
             c("ATAC UMIs", "TSS enrichment score", "Nucl. signal", "Peaks", "FRiP", "Bl. regions"),
             peak_type
@@ -121,7 +121,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args, cluster_prefi
     graphics$dim_plot(
         data=seurat_data,
         reduction="rnaumap",
-        plot_title=paste("Clustered UMAP projected PCA of GEX datasets (", suffix, "). Resolution ", args$resolution, sep=""),
+        plot_title=paste("Clustered UMAP projected PCA of RNA datasets (", suffix, "). Resolution ", args$resolution, sep=""),
         legend_title="Cluster",
         group_by=paste(paste(cluster_prefix, "res", sep="_"), args$resolution, sep="."),
         label=TRUE,
@@ -136,7 +136,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args, cluster_prefi
         labels=selected_labels,
         from_meta=TRUE,
         reduction="rnaumap",
-        plot_title=paste("QC metrics on clustered UMAP projected PCA of GEX datasets (", suffix, "). Resolution ", args$resolution, sep=""),
+        plot_title=paste("QC metrics on clustered UMAP projected PCA of RNA datasets (", suffix, "). Resolution ", args$resolution, sep=""),
         label=TRUE,
         alpha=0.4,
         max_cutoff="q99",  # to prevent outlier cells to distort coloring
@@ -152,7 +152,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
     peak_type <- ifelse(macs2_peaks, "- MACS2", "- 10x")
     selected_features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "TSS.enrichment", "nucleosome_signal", "nFeature_ATAC", "frip", "blacklisted_fraction")
     selected_labels=c(
-        "GEX UMIs", "Genes", "Mitochondrial %", "Novelty score",
+        "RNA UMIs", "Genes", "Mitochondrial %", "Novelty score",
         paste(c("ATAC UMIs", "TSS enrichment score", "Nucl. signal", "Peaks", "FRiP", "Bl. regions"), peak_type)
     )
 
@@ -214,10 +214,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         color_by="new.ident",
         facet_by="new.ident",
         x_left_intercept=args$gexminumi,
-        x_label="GEX UMIs per cell",
+        x_label="RNA UMIs per cell",
         y_label="Density",
         legend_title="Identity",
-        plot_title=paste("GEX UMIs per cell density (", suffix, ")", sep=""),
+        plot_title=paste("RNA UMIs per cell density (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
         zoom_on_intercept=TRUE,
         palette_colors=graphics$D40_COLORS,
@@ -254,10 +254,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         gradient_colors=c("lightslateblue", "red", "green"),
         color_limits=c(0, 100),
         color_break=args$maxmt,
-        x_label="GEX UMIs per cell",
+        x_label="RNA UMIs per cell",
         y_label="Genes per cell",
         legend_title="Mitochondrial %",
-        plot_title=paste("Genes vs GEX UMIs per cell correlation (", suffix, ")", sep=""),
+        plot_title=paste("Genes vs RNA UMIs per cell correlation (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
         scale_y_log10=TRUE,
         palette_colors=graphics$D40_COLORS,
@@ -285,7 +285,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         color_by="new.ident",
         facet_by="new.ident",
         x_left_intercept=args$minnovelty,
-        x_label="log10 Genes / log10 GEX UMIs per cell",
+        x_label="log10 Genes / log10 RNA UMIs per cell",
         y_label="Density",
         legend_title="Identity",
         plot_title=paste("Novelty score per cell density (", suffix, ")", sep=""),
@@ -350,7 +350,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         x_axis="nCount_ATAC",
         x_label="ATAC UMIs per cell",
         y_axis="nCount_RNA",
-        y_label="GEX UMIs per cell",
+        y_label="RNA UMIs per cell",
         x_left_intercept=args$atacminumi,
         y_low_intercept=args$gexminumi,
         alpha_intercept=1,
@@ -359,7 +359,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         color_limits=c(0, 100),
         color_break=args$maxmt,
         legend_title="Mitochondrial %",
-        plot_title=paste("GEX vs ATAC UMIs per cell correlation (", suffix, ") ", peak_type, sep=""),
+        plot_title=paste("RNA vs ATAC UMIs per cell correlation (", suffix, ") ", peak_type, sep=""),
         scale_x_log10=TRUE,
         scale_y_log10=TRUE,
         palette_colors=graphics$D40_COLORS,
@@ -410,10 +410,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             color_by="new.ident",
             facet_by="condition",
             x_left_intercept=args$gexminumi,
-            x_label="GEX UMIs per cell",
+            x_label="RNA UMIs per cell",
             y_label="Density",
             legend_title="Identity",
-            plot_title=paste("Split by grouping condition GEX UMIs per cell density (", suffix, ")", sep=""),
+            plot_title=paste("Split by grouping condition RNA UMIs per cell density (", suffix, ")", sep=""),
             scale_x_log10=TRUE,
             zoom_on_intercept=TRUE,
             palette_colors=graphics$D40_COLORS,
@@ -459,7 +459,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             color_by="new.ident",
             facet_by="condition",
             x_left_intercept=args$minnovelty,
-            x_label="log10 Genes / log10 GEX UMIs per cell",
+            x_label="log10 Genes / log10 RNA UMIs per cell",
             y_label="Density",
             legend_title="Identity",
             plot_title=paste("Split by grouping condition the novelty score per cell density (", suffix, ")", sep=""),
@@ -585,7 +585,7 @@ get_args <- function(){
     parser$add_argument(
         "--gexmincells",
         help=paste(
-            "Include only GEX features detected in at least this many cells.",
+            "Include only RNA features detected in at least this many cells.",
             "Default: 5 (applied to all datasets)"
         ),
         type="integer", default=5
@@ -593,7 +593,7 @@ get_args <- function(){
     parser$add_argument(
         "--mingenes",
         help=paste(
-            "Include cells where at least this many GEX features are detected.",
+            "Include cells where at least this many RNA features are detected.",
             "If multiple values provided, each of them will be applied to the",
             "correspondent dataset from the --mex input based on the --identity",
             "file.",
@@ -604,7 +604,7 @@ get_args <- function(){
     parser$add_argument(
         "--maxgenes",
         help=paste(
-            "Include cells with the number of GEX features not bigger than this value.",
+            "Include cells with the number of RNA features not bigger than this value.",
             "If multiple values provided, each of them will be applied to the correspondent",
             "dataset from the --mex input based on the --identity file.",
             "Default: 5000 (applied to all datasets)"
@@ -614,7 +614,7 @@ get_args <- function(){
     parser$add_argument(
         "--gexminumi",
         help=paste(
-            "Include cells where at least this many GEX UMIs (transcripts) are detected.",
+            "Include cells where at least this many RNA UMIs (transcripts) are detected.",
             "If multiple values provided, each of them will be applied to the correspondent",
             "dataset from the --mex input based on the --identity file.",
             "Default: 500 (applied to all datasets)"
@@ -624,7 +624,7 @@ get_args <- function(){
     parser$add_argument(
         "--mitopattern",
         help=paste(
-            "Regex pattern to identify mitochondrial GEX features.",
+            "Regex pattern to identify mitochondrial RNA features.",
             "Default: '^Mt-'"
         ),
         type="character", default="^Mt-"
@@ -632,7 +632,7 @@ get_args <- function(){
     parser$add_argument(
         "--maxmt",
         help=paste(
-            "Include cells with the percentage of GEX transcripts mapped to mitochondrial",
+            "Include cells with the percentage of RNA transcripts mapped to mitochondrial",
             "genes not bigger than this value.",
             "Default: 5 (applied to all datasets)"
         ),
@@ -642,7 +642,7 @@ get_args <- function(){
         "--minnovelty",
         help=paste(
             "Include cells with the novelty score not lower than this value, calculated for",
-            "GEX as log10(genes)/log10(UMIs). If multiple values provided, each of them will",
+            "RNA as log10(genes)/log10(UMIs). If multiple values provided, each of them will",
             "be applied to the correspondent dataset from the --mex input based on the",
             "--identity file.",
             "Default: 0.8 (applied to all datasets)"
@@ -716,9 +716,9 @@ get_args <- function(){
         "--callpeaks",
         help=paste(
             "Call peaks with MACS2 instead of those that are provided by Cell Ranger ARC Count.",
-            "Peaks are called per identity (identity) or per GEX cluster (cluster) after applying",
-            "all GEX related thresholds, maximum nucleosome signal, and minimum TSS enrichment",
-            "score filters. If set to 'cluster' GEX clusters are identified based on the parameters",
+            "Peaks are called per identity (identity) or per RNA cluster (cluster) after applying",
+            "all RNA related thresholds, maximum nucleosome signal, and minimum TSS enrichment",
+            "score filters. If set to 'cluster' RNA clusters are identified based on the parameters",
             "set with --resolution, --dimensions, --highvargex, --gexnorm, and --ntgr.",
             "Default: do not call peaks"
         ),
@@ -728,7 +728,7 @@ get_args <- function(){
     parser$add_argument(
         "--gexnorm",
         help=paste(
-            "Normalization method to be used when identifying GEX based clusters for",
+            "Normalization method to be used when identifying RNA based clusters for",
             "calling custom MACS2 peaks. Ignored if --callpeaks is not set to 'cluster'.",
             "Default: sct"
         ),
@@ -739,8 +739,8 @@ get_args <- function(){
     parser$add_argument(
         "--highvargex",
         help=paste(
-            "Number of highly variable GEX features to detect. Used for GEX datasets",
-            "integration, scaling, and dimensionality reduction when identifying GEX based",
+            "Number of highly variable RNA features to detect. Used for RNA datasets",
+            "integration, scaling, and dimensionality reduction when identifying RNA based",
             "clusters for calling custom MACS2 peaks. Ignored if --callpeaks is not set",
             "to 'cluster'.",
             "Default: 3000"
@@ -750,7 +750,7 @@ get_args <- function(){
     parser$add_argument(
         "--ntgr",
         help=paste(
-            "Integration method for GEX datasets when identifying GEX based clusters",
+            "Integration method for RNA datasets when identifying RNA based clusters",
             "for calling custom MACS2 peaks. Automatically set to 'none' if --mex points",
             "to the Cell Ranger ARC Count outputs (single, not aggregated dataset that",
             "doesn't require any integration). Ignored if --callpeaks is not set to",
@@ -764,8 +764,8 @@ get_args <- function(){
     parser$add_argument(
         "--dimensions",
         help=paste(
-            "Dimensionality to use in GEX UMAP projection and clustering when identifying",
-            "GEX based clusters for calling custom MACS2 peaks (from 1 to 50). If single",
+            "Dimensionality to use in RNA UMAP projection and clustering when identifying",
+            "RNA based clusters for calling custom MACS2 peaks (from 1 to 50). If single",
             "number N is provided, use from 1 to N PCs. If multiple numbers are provided,",
             "subset to only selected PCs. Ignored if --callpeaks is not set to 'cluster'.",
             "Default: from 1 to 10"
@@ -775,7 +775,7 @@ get_args <- function(){
     parser$add_argument(
         "--resolution",
         help=paste(
-            "Resolution to be used when identifying GEX based clusters for calling",
+            "Resolution to be used when identifying RNA based clusters for calling",
             "custom MACS2 peaks. Ignored if --callpeaks is not set to 'cluster'.",
             "Default: 0.3"
         ),
@@ -889,7 +889,7 @@ print("Applying cell filters based on the loaded barcodes of interest")
 seurat_data <- filter$apply_cell_filters(seurat_data, barcodes_data)
 debug$print_info(seurat_data, args)
 
-print("Adding GEX QC metrics for not filtered datasets")
+print("Adding RNA QC metrics for not filtered datasets")
 seurat_data <- qc$add_gex_qc_metrics(seurat_data, args)
 print("Adding ATAC QC metrics for not filtered datasets")
 seurat_data <- qc$add_atac_qc_metrics(seurat_data, args)
@@ -904,7 +904,7 @@ export_all_qc_plots(
     macs2_peaks=FALSE
 )
 
-print("Applying filters based on GEX QC metrics")
+print("Applying filters based on RNA QC metrics")
 seurat_data <- filter$apply_gex_qc_filters(seurat_data, cell_identity_data, args)          # cleans up all reductions
 debug$print_info(seurat_data, args)
 print("Applying filters based on ATAC QC metrics")
@@ -920,13 +920,13 @@ if (!is.null(args$callpeaks)){
     print("Updating peak QC metrics after calling MACS2 peaks")
     seurat_data <- qc$add_peak_qc_metrics(seurat_data, blacklisted_data, args)             # recalculate peak QC metrics
     debug$print_info(seurat_data, args)
-    export_all_qc_plots(                                                                   # after GEX and ATAC filters have been applied
+    export_all_qc_plots(                                                                   # after RNA and ATAC filters have been applied
         seurat_data=seurat_data,
         suffix="mid_fltr",
         args=args,
         macs2_peaks=TRUE
     )
-    if (args$callpeaks == "cluster"){                                                      # we have this plots only when we run GEX clustering for calling peaks per cluster
+    if (args$callpeaks == "cluster"){                                                      # we have this plots only when we run RNA clustering for calling peaks per cluster
         export_all_dimensionality_plots(
             seurat_data=seurat_data,
             suffix="mid_fltr",

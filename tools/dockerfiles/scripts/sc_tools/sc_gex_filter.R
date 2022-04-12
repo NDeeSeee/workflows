@@ -19,7 +19,7 @@ suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 export_all_qc_plots <- function(seurat_data, suffix, args){
     Idents(seurat_data) <- "new.ident"                                                                # safety measure
     selected_features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi")
-    selected_labels=c("GEX UMIs", "Genes", "Mitochondrial %", "Novelty score")
+    selected_labels=c("RNA UMIs", "Genes", "Mitochondrial %", "Novelty score")
 
     qc_metrics_pca <- qc$qc_metrics_pca(
         seurat_data=seurat_data,
@@ -36,7 +36,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
                 paste0("PC", c(1, 2)),
                 collapse=" and "
             ),
-            " from PCA of GEX datasets' QC metrics (", suffix, ")", sep=""
+            " from PCA of RNA datasets' QC metrics (", suffix, ")", sep=""
         ),
         legend_title="QC metrics",
         color_by="labels",
@@ -52,7 +52,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
                 paste0("PC", c(2, 3)),
                 collapse=" and "
             ),
-            " from PCA of GEX datasets' QC metrics (", suffix, ")", sep=""
+            " from PCA of RNA datasets' QC metrics (", suffix, ")", sep=""
         ),
         legend_title="QC metrics",
         color_by="labels",
@@ -67,7 +67,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         x_label="Identity",
         y_label="Cells",
         legend_title="Identity",
-        plot_title=paste("Number of cells per GEX dataset (", suffix, ")", sep=""),
+        plot_title=paste("Number of cells per RNA dataset (", suffix, ")", sep=""),
         palette_colors=graphics$D40_COLORS,
         rootname=paste(args$output, suffix, "cell_count", sep="_"),
         pdf=args$pdf
@@ -79,10 +79,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         color_by="new.ident",
         facet_by="new.ident",
         x_left_intercept=args$gexminumi,
-        x_label="GEX UMIs per cell",
+        x_label="RNA UMIs per cell",
         y_label="Density",
         legend_title="Identity",
-        plot_title=paste("GEX UMIs per cell density (", suffix, ")", sep=""),
+        plot_title=paste("RNA UMIs per cell density (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
         zoom_on_intercept=TRUE,
         palette_colors=graphics$D40_COLORS,
@@ -119,10 +119,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         gradient_colors=c("lightslateblue", "red", "green"),
         color_limits=c(0, 100),
         color_break=args$maxmt,
-        x_label="GEX UMIs per cell",
+        x_label="RNA UMIs per cell",
         y_label="Genes per cell",
         legend_title="Mitochondrial %",
-        plot_title=paste("Genes vs GEX UMIs per cell correlation (", suffix, ")", sep=""),
+        plot_title=paste("Genes vs RNA UMIs per cell correlation (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
         scale_y_log10=TRUE,
         palette_colors=graphics$D40_COLORS,
@@ -150,7 +150,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         color_by="new.ident",
         facet_by="new.ident",
         x_left_intercept=args$minnovelty,
-        x_label="log10 Genes / log10 GEX UMIs per cell",
+        x_label="log10 Genes / log10 RNA UMIs per cell",
         y_label="Density",
         legend_title="Identity",
         plot_title=paste("Novelty score per cell density (", suffix, ")", sep=""),
@@ -181,10 +181,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
             color_by="new.ident",
             facet_by="condition",
             x_left_intercept=args$gexminumi,
-            x_label="GEX UMIs per cell",
+            x_label="RNA UMIs per cell",
             y_label="Density",
             legend_title="Identity",
-            plot_title=paste("Split by grouping condition GEX UMIs per cell density (", suffix, ")", sep=""),
+            plot_title=paste("Split by grouping condition RNA UMIs per cell density (", suffix, ")", sep=""),
             scale_x_log10=TRUE,
             zoom_on_intercept=TRUE,
             palette_colors=graphics$D40_COLORS,
@@ -230,7 +230,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
             color_by="new.ident",
             facet_by="condition",
             x_left_intercept=args$minnovelty,
-            x_label="log10 Genes / log10 GEX UMIs per cell",
+            x_label="log10 Genes / log10 RNA UMIs per cell",
             y_label="Density",
             legend_title="Identity",
             plot_title=paste("Split by grouping condition the novelty score per cell density (", suffix, ")", sep=""),
@@ -243,7 +243,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
 }
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Seurat GEX Filtering Analysis")
+    parser <- ArgumentParser(description="Seurat RNA Filtering Analysis")
     parser$add_argument(
         "--mex",
         help=paste(
@@ -289,7 +289,7 @@ get_args <- function(){
     parser$add_argument(
         "--gexmincells",
         help=paste(
-            "Include only GEX features detected in at least this many cells. Ignored when",
+            "Include only RNA features detected in at least this many cells. Ignored when",
             "--mex points to the feature-barcode matrices from the multiple Cell Ranger",
             "Count experiments.",
             "Default: 5 (applied to all datasets)"
@@ -299,7 +299,7 @@ get_args <- function(){
     parser$add_argument(
         "--mingenes",
         help=paste(
-            "Include cells where at least this many GEX features are detected.",
+            "Include cells where at least this many RNA features are detected.",
             "If multiple values provided, each of them will be applied to the",
             "correspondent dataset from the --mex input based on the --identity",
             "file.",
@@ -310,7 +310,7 @@ get_args <- function(){
     parser$add_argument(
         "--maxgenes",
         help=paste(
-            "Include cells with the number of GEX features not bigger than this value.",
+            "Include cells with the number of RNA features not bigger than this value.",
             "If multiple values provided, each of them will be applied to the correspondent",
             "dataset from the --mex input based on the --identity file.",
             "Default: 5000 (applied to all datasets)"
@@ -320,7 +320,7 @@ get_args <- function(){
     parser$add_argument(
         "--gexminumi",
         help=paste(
-            "Include cells where at least this many GEX UMIs (transcripts) are detected.",
+            "Include cells where at least this many RNA UMIs (transcripts) are detected.",
             "If multiple values provided, each of them will be applied to the correspondent",
             "dataset from the --mex input based on the --identity file.",
             "Default: 500 (applied to all datasets)"
@@ -331,7 +331,7 @@ get_args <- function(){
         "--minnovelty",
         help=paste(
             "Include cells with the novelty score not lower than this value, calculated for",
-            "GEX as log10(genes)/log10(UMIs). If multiple values provided, each of them will",
+            "RNA as log10(genes)/log10(UMIs). If multiple values provided, each of them will",
             "be applied to the correspondent dataset from the --mex input based on the",
             "--identity file.",
             "Default: 0.8 (applied to all datasets)"
@@ -341,7 +341,7 @@ get_args <- function(){
     parser$add_argument(
         "--mitopattern",
         help=paste(
-            "Regex pattern to identify mitochondrial GEX features.",
+            "Regex pattern to identify mitochondrial RNA features.",
             "Default: '^Mt-'"
         ),
         type="character", default="^Mt-"
@@ -349,7 +349,7 @@ get_args <- function(){
     parser$add_argument(
         "--maxmt",
         help=paste(
-            "Include cells with the percentage of GEX transcripts mapped to mitochondrial",
+            "Include cells with the percentage of RNA transcripts mapped to mitochondrial",
             "genes not bigger than this value.",
             "Default: 5 (applied to all datasets)"
         ),
@@ -446,7 +446,7 @@ print("Applying cell filters based on the loaded barcodes of interest")
 seurat_data <- filter$apply_cell_filters(seurat_data, barcodes_data)
 debug$print_info(seurat_data, args)
 
-print("Adding GEX QC metrics for not filtered datasets")
+print("Adding RNA QC metrics for not filtered datasets")
 seurat_data <- qc$add_gex_qc_metrics(seurat_data, args)
 debug$print_info(seurat_data, args)
 
@@ -456,7 +456,7 @@ export_all_qc_plots(
     args=args
 )
 
-print("Applying filters based on GEX QC metrics")
+print("Applying filters based on RNA QC metrics")
 seurat_data <- filter$apply_gex_qc_filters(seurat_data, cell_identity_data, args)          # cleans up all reductions
 debug$print_info(seurat_data, args)
 

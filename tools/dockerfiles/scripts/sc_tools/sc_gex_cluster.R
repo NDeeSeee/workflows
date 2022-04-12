@@ -26,7 +26,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
-            plot_title=paste("Clustered UMAP projected PCA of GEX datasets. Resolution", current_resolution),
+            plot_title=paste("Clustered UMAP projected PCA of RNA datasets. Resolution", current_resolution),
             legend_title="Cluster",
             group_by=paste("gex_res", current_resolution, sep="."),
             label=TRUE,
@@ -40,7 +40,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
             reduction="pca",
             dims=args$dimensions,
             downsample=500,
-            plot_title=paste("Silhouette scores per cell of downsampled GEX datasets. Max 500 cells per cluster. Resolution", current_resolution),
+            plot_title=paste("Silhouette scores per cell of downsampled RNA datasets. Max 500 cells per cluster. Resolution", current_resolution),
             legend_title="Cluster",
             group_by=paste("gex_res", current_resolution, sep="."),
             palette_colors=graphics$D40_COLORS,
@@ -51,7 +51,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
             graphics$dim_plot(
                 data=seurat_data,
                 reduction="rnaumap",
-                plot_title=paste("Split by identity clustered UMAP projected PCA of GEX datasets. Resolution", current_resolution),
+                plot_title=paste("Split by identity clustered UMAP projected PCA of RNA datasets. Resolution", current_resolution),
                 legend_title="Cluster",
                 group_by=paste("gex_res", current_resolution, sep="."),
                 split_by="new.ident",
@@ -64,7 +64,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
-                    "Grouped by cluster split by identity composition plot of GEX datasets.",
+                    "Grouped by cluster split by identity composition plot of RNA datasets.",
                     "Downsampled to", downsampled_to, "cells per dataset.",
                     "Resolution", current_resolution),
                 legend_title="Cluster",
@@ -79,7 +79,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
-                    "Grouped by identity split by cluster composition plot of GEX datasets.",
+                    "Grouped by identity split by cluster composition plot of RNA datasets.",
                     "Downsampled to", downsampled_to, "cells per dataset.",
                     "Resolution", current_resolution),
                 legend_title="Identity",
@@ -96,7 +96,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
             graphics$dim_plot(
                 data=seurat_data,
                 reduction="rnaumap",
-                plot_title=paste("Split by grouping condition clustered UMAP projected PCA of GEX datasets. Resolution", current_resolution),
+                plot_title=paste("Split by grouping condition clustered UMAP projected PCA of RNA datasets. Resolution", current_resolution),
                 legend_title="Cluster",
                 group_by=paste("gex_res", current_resolution, sep="."),
                 split_by="condition",
@@ -109,7 +109,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
-                    "Grouped by cluster split by condition composition plot of GEX datasets.",
+                    "Grouped by cluster split by condition composition plot of RNA datasets.",
                     "Downsampled to", downsampled_to, "cells per dataset.",
                     "Resolution", current_resolution
                 ),
@@ -125,7 +125,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
-                    "Grouped by condition split by cluster composition plot of GEX datasets.",
+                    "Grouped by condition split by cluster composition plot of RNA datasets.",
                     "Downsampled to", downsampled_to, "cells per dataset.",
                     "Resolution", current_resolution
                 ),
@@ -143,7 +143,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
             graphics$dim_plot(
                 data=seurat_data,
                 reduction="rnaumap",
-                plot_title=paste("Split by cell cycle phase clustered UMAP projected PCA of GEX datasets. Resolution", current_resolution),
+                plot_title=paste("Split by cell cycle phase clustered UMAP projected PCA of RNA datasets. Resolution", current_resolution),
                 legend_title="Cluster",
                 group_by=paste("gex_res", current_resolution, sep="."),
                 split_by="Phase",
@@ -158,7 +158,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
                 graphics$composition_plot(
                     data=downsampled_data,
                     plot_title=paste(
-                        "Grouped by cell cycle phase split by identity composition plot of GEX datasets.",
+                        "Grouped by cell cycle phase split by identity composition plot of RNA datasets.",
                         "Downsampled to", downsampled_to, "cells per dataset.",
                         "Resolution", current_resolution),
                     legend_title="Phase",
@@ -174,7 +174,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
-                    "Grouped by cell cycle phase split by cluster composition plot of GEX datasets.",
+                    "Grouped by cell cycle phase split by cluster composition plot of RNA datasets.",
                     "Downsampled to", downsampled_to, "cells per dataset.",
                     "Resolution", current_resolution),
                 legend_title="Phase",
@@ -250,14 +250,14 @@ export_all_expression_plots <- function(seurat_data, suffix, args) {
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Seurat GEX Cluster Analysis")
+    parser <- ArgumentParser(description="Seurat RNA Cluster Analysis")
     parser$add_argument(
         "--query",
         help=paste(
             "Path to the RDS file to load Seurat object from. This file",
             "can be produced by sc_gex_reduce.R script and must include",
             "dimensionality reduction information stored in the 'pca' and",
-            "'rnaumap' slots. It is mandatory to have GEX information",
+            "'rnaumap' slots. It is mandatory to have RNA information",
             "stored in the RNA assay."
         ),
         type="character", required="True"
@@ -422,7 +422,7 @@ if (!all(c("pca", "rnaumap") %in% names(seurat_data@reductions))){
     quit(save="no", status=1, runLast=FALSE)
 }
 
-print(paste("Clustering GEX data using", paste(args$dimensions, collapse=", "), "principal components"))
+print(paste("Clustering RNA data using", paste(args$dimensions, collapse=", "), "principal components"))
 seurat_data <- analyses$add_clusters(
     seurat_data=seurat_data,
     assay="RNA",
@@ -452,7 +452,7 @@ if(args$cbbuild){
         seurat_data=seurat_data,
         assay="RNA",
         slot="counts",
-        short_label="GEX",
+        short_label="RNA",
         features=args$genes,                                   # can be NULL
         rootname=paste(args$output, "_cellbrowser", sep=""),
     )
