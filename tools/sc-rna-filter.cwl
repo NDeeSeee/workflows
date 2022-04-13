@@ -34,7 +34,7 @@ inputs:
     type: File?
     doc: |
       Path to the metadata TSV/CSV file to set the datasets identities. If '--mex' points to
-      the Cell Ranger Aggregate outputs, the aggregation.csv file can be used. If inputs is not
+      the Cell Ranger Aggregate outputs, the aggregation.csv file can be used. If input is not
       provided, the default dummy_metadata.csv will be used instead.
 
   grouping_data:
@@ -43,7 +43,7 @@ inputs:
       prefix: "--grouping"
     doc: |
       Path to the TSV/CSV file to define datasets grouping. First column - 'library_id'
-      with the values provided in the same order as in the correspondent column from the
+      with the values and order that correspond to the 'library_id' column from the
       '--identity' file, second column 'condition'.
       Default: each dataset is assigned to its own group.
 
