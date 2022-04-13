@@ -243,7 +243,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
 }
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Seurat RNA Filtering Analysis")
+    parser <- ArgumentParser(description="Single-cell RNA Filtering Analysis")
     parser$add_argument(
         "--mex",
         help=paste(

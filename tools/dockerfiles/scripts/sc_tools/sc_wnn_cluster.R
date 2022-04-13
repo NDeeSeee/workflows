@@ -280,7 +280,7 @@ export_all_coverage_plots <- function(seurat_data, args) {
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Seurat WNN Cluster Analysis")
+    parser <- ArgumentParser(description="Single-cell WNN Cluster Analysis")
     parser$add_argument(
         "--query",
         help=paste(
