@@ -34,5 +34,7 @@ print_info <- function(seurat_data, args) {
             }
         }
         base::print(base::gc())
+    } else {
+        base::gc(verbose=FALSE)    # silently clean gc
     }
 }
