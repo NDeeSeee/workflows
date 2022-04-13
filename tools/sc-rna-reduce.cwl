@@ -4,12 +4,6 @@ class: CommandLineTool
 
 requirements:
 - class: InlineJavascriptRequirement
-- class: InitialWorkDirRequirement
-  listing:
-  - entryname: dummy_metadata.csv
-    entry: |
-      library_id
-      Experiment
 - class: EnvVarRequirement
   envDef:
     R_MAX_VSIZE: $(inputs.vector_memory_limit * 1000000000)
