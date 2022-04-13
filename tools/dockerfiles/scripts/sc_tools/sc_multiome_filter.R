@@ -565,7 +565,7 @@ get_args <- function(){
         "--grouping",
         help=paste(
             "Path to the TSV/CSV file to define datasets grouping. First column - 'library_id'",
-            "with the values provided in the same order as in the correspondent column from the",
+            "with the values and order that correspond to the 'library_id' column from the",
             "'--identity' file, second column 'condition'.",
             "Default: each dataset is assigned to its own group."
         ),
@@ -698,7 +698,7 @@ get_args <- function(){
         "--minfrip",
         help=paste(
             "Include cells with the FRiP not lower than this value. If multiple values",
-            "provided, each of them will be applied to the correspondent dataset from the ",
+            "provided, each of them will be applied to the correspondent dataset from the",
             "'--mex' input based on the '--identity' file. FRiP is calculated for fragments.",
             "Default: 0.15 (applied to all datasets)"
         ),
@@ -707,7 +707,7 @@ get_args <- function(){
     parser$add_argument(
         "--maxblacklist",
         help=paste(
-            "Include cells with the ratio of fragments in genomic blacklist regions",
+            "Include cells with the fraction of fragments in genomic blacklist regions",
             "not bigger than this value. If multiple values provided, each of them",
             "will be applied to the correspondent dataset from the '--mex' input based",
             "on the '--identity' file.",

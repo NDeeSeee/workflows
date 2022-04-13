@@ -270,7 +270,7 @@ get_args <- function(){
         "--grouping",
         help=paste(
             "Path to the TSV/CSV file to define datasets grouping. First column - 'library_id'",
-            "with the values provided in the same order as in the correspondent column from the",
+            "with the values and order that correspond to the 'library_id' column from the",
             "'--identity' file, second column 'condition'.",
             "Default: each dataset is assigned to its own group."
         ),
