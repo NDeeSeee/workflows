@@ -17,7 +17,7 @@ suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
 
-export_all_clustering_plots <- function(seurat_data, suffix, args){
+export_all_clustering_plots <- function(seurat_data, args){
     Idents(seurat_data) <- "new.ident"                                                               # safety measure
     downsampled_to <- analyses$get_min_ident_size(SplitObject(seurat_data, split.by="new.ident"))    # need to split it for consistency
     downsampled_data <- subset(seurat_data, downsample=downsampled_to)
@@ -26,13 +26,13 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
-            plot_title=paste("Clustered UMAP projected PCA of RNA datasets. Resolution", current_resolution),
+            plot_title=paste("Clustered cells UMAP. Resolution", current_resolution),
             legend_title="Cluster",
             group_by=paste("rna_res", current_resolution, sep="."),
             label=TRUE,
             label_color="black",
             palette_colors=graphics$D40_COLORS,
-            rootname=paste(args$output, suffix, "rna_umap_res", current_resolution, sep="_"),
+            rootname=paste(args$output, "umap_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
         graphics$silhouette_plot(
@@ -40,55 +40,55 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
             reduction="pca",
             dims=args$dimensions,
             downsample=500,
-            plot_title=paste("Silhouette scores per cell of downsampled RNA datasets. Max 500 cells per cluster. Resolution", current_resolution),
+            plot_title=paste("Silhouette scores. Downsampled to max 500 cells per cluster. Resolution", current_resolution),
             legend_title="Cluster",
             group_by=paste("rna_res", current_resolution, sep="."),
             palette_colors=graphics$D40_COLORS,
-            rootname=paste(args$output, suffix, "rna_silh_res", current_resolution, sep="_"),
+            rootname=paste(args$output, "slh_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
         if (length(unique(as.vector(as.character(Idents(seurat_data))))) > 1){
             graphics$dim_plot(
                 data=seurat_data,
                 reduction="rnaumap",
-                plot_title=paste("Split by identity clustered UMAP projected PCA of RNA datasets. Resolution", current_resolution),
+                plot_title=paste("Split by dataset clustered cells UMAP. Resolution", current_resolution),
                 legend_title="Cluster",
                 group_by=paste("rna_res", current_resolution, sep="."),
                 split_by="new.ident",
                 label=TRUE,
                 label_color="black",
                 palette_colors=graphics$D40_COLORS,
-                rootname=paste(args$output, suffix, "rna_umap_spl_by_idnt_res", current_resolution, sep="_"),
+                rootname=paste(args$output, "umap_spl_idnt_res", current_resolution, sep="_"),
                 pdf=args$pdf
             )
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
-                    "Grouped by cluster split by identity composition plot of RNA datasets.",
+                    "Grouped by cluster split by dataset cells composition plot.",
                     "Downsampled to", downsampled_to, "cells per dataset.",
                     "Resolution", current_resolution),
                 legend_title="Cluster",
                 group_by=paste("rna_res", current_resolution, sep="."),
                 split_by="new.ident",
-                x_label="Identity",
+                x_label="Dataset",
                 y_label="Cells percentage",
                 palette_colors=graphics$D40_COLORS,
-                rootname=paste(args$output, suffix, "rna_comp_gr_by_clst_spl_by_idnt_res", current_resolution, sep="_"),
+                rootname=paste(args$output, "cmp_gr_clst_spl_idnt_res", current_resolution, sep="_"),
                 pdf=args$pdf
             )
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
-                    "Grouped by identity split by cluster composition plot of RNA datasets.",
+                    "Grouped by dataset split by cluster cells composition plot.",
                     "Downsampled to", downsampled_to, "cells per dataset.",
                     "Resolution", current_resolution),
-                legend_title="Identity",
+                legend_title="Dataset",
                 group_by="new.ident",
                 split_by=paste("rna_res", current_resolution, sep="."),
                 x_label="Cluster",
                 y_label="Cells percentage",
                 palette_colors=graphics$D40_COLORS,
-                rootname=paste(args$output, suffix, "rna_comp_gr_by_idnt_spl_by_clst_res", current_resolution, sep="_"),
+                rootname=paste(args$output, "cmp_gr_idnt_spl_clst_res", current_resolution, sep="_"),
                 pdf=args$pdf
             )
         }
@@ -96,20 +96,20 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
             graphics$dim_plot(
                 data=seurat_data,
                 reduction="rnaumap",
-                plot_title=paste("Split by grouping condition clustered UMAP projected PCA of RNA datasets. Resolution", current_resolution),
+                plot_title=paste("Split by grouping condition clustered cells UMAP. Resolution", current_resolution),
                 legend_title="Cluster",
                 group_by=paste("rna_res", current_resolution, sep="."),
                 split_by="condition",
                 label=TRUE,
                 label_color="black",
                 palette_colors=graphics$D40_COLORS,
-                rootname=paste(args$output, suffix, "rna_umap_spl_by_cond_res", current_resolution, sep="_"),
+                rootname=paste(args$output, "umap_spl_cnd_res", current_resolution, sep="_"),
                 pdf=args$pdf
             )
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
-                    "Grouped by cluster split by condition composition plot of RNA datasets.",
+                    "Grouped by cluster split by condition cells composition plot.",
                     "Downsampled to", downsampled_to, "cells per dataset.",
                     "Resolution", current_resolution
                 ),
@@ -119,13 +119,13 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
                 x_label="Condition",
                 y_label="Cells percentage",
                 palette_colors=graphics$D40_COLORS,
-                rootname=paste(args$output, suffix, "rna_comp_gr_by_clst_spl_by_cond_res", current_resolution, sep="_"),
+                rootname=paste(args$output, "cmp_gr_clst_spl_cnd_res", current_resolution, sep="_"),
                 pdf=args$pdf
             )
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
-                    "Grouped by condition split by cluster composition plot of RNA datasets.",
+                    "Grouped by condition split by cluster cells composition plot.",
                     "Downsampled to", downsampled_to, "cells per dataset.",
                     "Resolution", current_resolution
                 ),
@@ -135,7 +135,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
                 x_label="Cluster",
                 y_label="Cells percentage",
                 palette_colors=graphics$D40_COLORS,
-                rootname=paste(args$output, suffix, "rna_comp_gr_by_cond_spl_by_clst_res", current_resolution, sep="_"),
+                rootname=paste(args$output, "cmp_gr_cnd_spl_clst_res", current_resolution, sep="_"),
                 pdf=args$pdf
             )
         }
@@ -143,7 +143,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
             graphics$dim_plot(
                 data=seurat_data,
                 reduction="rnaumap",
-                plot_title=paste("Split by cell cycle phase clustered UMAP projected PCA of RNA datasets. Resolution", current_resolution),
+                plot_title=paste("Split by cell cycle phase clustered cells UMAP. Resolution", current_resolution),
                 legend_title="Cluster",
                 group_by=paste("rna_res", current_resolution, sep="."),
                 split_by="Phase",
@@ -151,30 +151,30 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
                 label_color="black",
                 alpha=0.5,
                 palette_colors=graphics$D40_COLORS,
-                rootname=paste(args$output, suffix, "rna_umap_spl_by_ph_res", current_resolution, sep="_"),
+                rootname=paste(args$output, "umap_spl_ph_res", current_resolution, sep="_"),
                 pdf=args$pdf
             )
             if (length(unique(as.vector(as.character(Idents(seurat_data))))) > 1){
                 graphics$composition_plot(
                     data=downsampled_data,
                     plot_title=paste(
-                        "Grouped by cell cycle phase split by identity composition plot of RNA datasets.",
+                        "Grouped by cell cycle phase split by dataset cells composition plot.",
                         "Downsampled to", downsampled_to, "cells per dataset.",
                         "Resolution", current_resolution),
                     legend_title="Phase",
                     group_by="Phase",
                     split_by="new.ident",
-                    x_label="Identity",
+                    x_label="Dataset",
                     y_label="Cells percentage",
                     palette_colors=graphics$D40_COLORS,
-                    rootname=paste(args$output, suffix, "rna_comp_gr_by_ph_spl_by_idnt_res", current_resolution, sep="_"),
+                    rootname=paste(args$output, "cmp_gr_ph_spl_idnt_res", current_resolution, sep="_"),
                     pdf=args$pdf
                 )
             }
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
-                    "Grouped by cell cycle phase split by cluster composition plot of RNA datasets.",
+                    "Grouped by cell cycle phase split by cluster cells composition plot.",
                     "Downsampled to", downsampled_to, "cells per dataset.",
                     "Resolution", current_resolution),
                 legend_title="Phase",
@@ -183,7 +183,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
                 x_label="Cluster",
                 y_label="Cells percentage",
                 palette_colors=graphics$D40_COLORS,
-                rootname=paste(args$output, suffix, "rna_comp_gr_by_ph_spl_by_clst_res", current_resolution, sep="_"),
+                rootname=paste(args$output, "cmp_gr_ph_spl_clst_res", current_resolution, sep="_"),
                 pdf=args$pdf
             )
         }
@@ -193,7 +193,7 @@ export_all_clustering_plots <- function(seurat_data, suffix, args){
 }
 
 
-export_all_expression_plots <- function(seurat_data, suffix, args) {
+export_all_expression_plots <- function(seurat_data, args) {
     SeuratObject::DefaultAssay(seurat_data) <- "RNA"                            # safety measure
     SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
     for (i in 1:length(args$resolution)) {
@@ -206,7 +206,7 @@ export_all_expression_plots <- function(seurat_data, suffix, args) {
             x_label="Genes",
             y_label="Clusters",
             cluster_idents=FALSE,
-            rootname=paste(args$output, suffix, "expr_avg_res", current_resolution, sep="_"),
+            rootname=paste(args$output, "xpr_avg_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
         if (length(args$genes) > 0){
@@ -217,14 +217,14 @@ export_all_expression_plots <- function(seurat_data, suffix, args) {
                     features=current_gene,
                     labels=current_gene,
                     reduction="rnaumap",
-                    plot_title=paste("Log normalized gene expression per cell. Resolution", current_resolution),
+                    plot_title=paste("Log normalized gene expression on cells UMAP. Resolution", current_resolution),
                     label=TRUE,
                     order=TRUE,
                     max_cutoff="q99",  # to prevent cells with overexpressed gene from distoring the color bar
                     combine_guides="keep",
                     width=800,
                     height=800,
-                    rootname=paste(args$output, suffix, "expr_per_cell_res", current_resolution, current_gene, sep="_"),
+                    rootname=paste(args$output, "xpr_per_cell_res", current_resolution, current_gene, sep="_"),
                     pdf=args$pdf
                 )
                 graphics$vln_plot(
@@ -239,7 +239,7 @@ export_all_expression_plots <- function(seurat_data, suffix, args) {
                     width=800,
                     height=600,
                     palette_colors=graphics$D40_COLORS,
-                    rootname=paste(args$output, suffix, "expr_dnst_res", current_resolution, current_gene, sep="_"),
+                    rootname=paste(args$output, "xpr_dnst_res", current_resolution, current_gene, sep="_"),
                     pdf=args$pdf
                 )
             }
@@ -432,7 +432,6 @@ debug$print_info(seurat_data, args)
 
 export_all_clustering_plots(
     seurat_data=seurat_data,
-    suffix="clst",
     args=args
 )
 
@@ -461,7 +460,7 @@ if (!is.null(args$genes) || args$diffgenes) {
     seurat_data <- NormalizeData(seurat_data, verbose=FALSE)
     if (!is.null(args$genes)){
         print("Generating genes expression plots")
-        export_all_expression_plots(seurat_data=seurat_data, suffix="clst", args=args)
+        export_all_expression_plots(seurat_data=seurat_data, args=args)
     }
     if(args$diffgenes){
         print("Identifying differentially expressed genes between each pair of clusters for all resolutions")
@@ -473,15 +472,15 @@ if (!is.null(args$genes) || args$diffgenes) {
         )
         io$export_data(
             all_putative_markers,
-            paste(args$output, "_clst_rna_markers.tsv", sep="")
+            paste(args$output, "_gene_markers.tsv", sep="")
         )
     }
 }
 
 DefaultAssay(seurat_data) <- "RNA"                                                         # better to stick to RNA assay by default https://www.biostars.org/p/395951/#395954 
 print("Exporting results to RDS file")
-io$export_rds(seurat_data, paste(args$output, "_clst_data.rds", sep=""))
+io$export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
 if(args$h5seurat){
     print("Exporting results to h5seurat file")
-    io$export_h5seurat(seurat_data, paste(args$output, "_clst_data.h5seurat", sep=""))
+    io$export_h5seurat(seurat_data, paste(args$output, "_data.h5seurat", sep=""))
 }
