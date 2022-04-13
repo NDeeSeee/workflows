@@ -528,7 +528,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
 }
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Single-cell Multiome Filtering Analysis")
+    parser <- ArgumentParser(description="Single-cell Multiome ATAC and RNA-Seq Filtering Analysis")
     parser$add_argument(
         "--mex",
         help=paste(

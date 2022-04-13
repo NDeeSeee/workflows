@@ -189,7 +189,7 @@ export_all_coverage_plots <- function(seurat_data, show_expression, args) {
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Single-cell ATAC Cluster Analysis")
+    parser <- ArgumentParser(description="Single-cell ATAC-Seq Cluster Analysis")
     parser$add_argument(
         "--query",
         help=paste(

@@ -659,9 +659,9 @@ $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
 
-label: "Single-cell RNA Filtering Analysis"
-s:name: "Single-cell RNA Filtering Analysis"
-s:alternateName: "Filters single-cell RNA datasets based on the common QC metrics"
+label: "Single-cell RNA-Seq Filtering Analysis"
+s:name: "Single-cell RNA-Seq Filtering Analysis"
+s:alternateName: "Filters single-cell RNA-Seq datasets based on the common QC metrics"
 
 s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows/master/tools/sc-rna-filter.cwl
 s:codeRepository: https://github.com/Barski-lab/workflows
@@ -699,9 +699,9 @@ s:creator:
 
 
 doc: |
-  Single-cell RNA Filtering Analysis
+  Single-cell RNA-Seq Filtering Analysis
   ================================================================
-  Filters single-cell RNA datasets based on the common QC metrics.
+  Filters single-cell RNA-Seq datasets based on the common QC metrics.
 
 
 s:about: |
@@ -713,7 +713,7 @@ s:about: |
         [--mitopattern MITOPATTERN] [--maxmt MAXMT] [--pdf] [--verbose]
         [--h5seurat] [--output OUTPUT] [--cpus CPUS] [--memory MEMORY]
 
-  Single-cell RNA Filtering Analysis
+  Single-cell RNA-Seq Filtering Analysis
 
   optional arguments:
     -h, --help            show this help message and exit

@@ -250,7 +250,7 @@ export_all_expression_plots <- function(seurat_data, args) {
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Single-cell RNA Cluster Analysis")
+    parser <- ArgumentParser(description="Single-cell RNA-Seq Cluster Analysis")
     parser$add_argument(
         "--query",
         help=paste(

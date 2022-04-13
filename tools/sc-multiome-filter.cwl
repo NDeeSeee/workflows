@@ -1568,9 +1568,9 @@ $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
 
-label: "Single-cell Multiome Filtering Analysis"
-s:name: "Single-cell Multiome Filtering Analysis"
-s:alternateName: "Filters single-cell multiome datasets based on the common QC metrics"
+label: "Single-cell Multiome ATAC and RNA-Seq Filtering Analysis"
+s:name: "Single-cell Multiome ATAC and RNA-Seq Filtering Analysis"
+s:alternateName: "Filters single-cell multiome ATAC and RNA-Seq datasets based on the common QC metrics"
 
 s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows/master/tools/sc-multiome-filter.cwl
 s:codeRepository: https://github.com/Barski-lab/workflows
@@ -1608,9 +1608,9 @@ s:creator:
 
 
 doc: |
-  Single-cell Multiome Filtering Analysis
-  =====================================================================
-  Filters single-cell multiome datasets based on the common QC metrics.
+  Single-cell Multiome ATAC and RNA-Seq Filtering Analysis
+  ======================================================================================
+  Filters single-cell multiome ATAC and RNA-Seq datasets based on the common QC metrics.
 
 
 s:about: |
@@ -1634,7 +1634,7 @@ s:about: |
         [--pdf] [--verbose] [--h5seurat] [--lowmem] [--output OUTPUT]
         [--cpus CPUS] [--memory MEMORY]
 
-  Single-cell Multiome Filtering Analysis
+  Single-cell Multiome ATAC and RNA-Seq Filtering Analysis
 
   optional arguments:
     -h, --help            show this help message and exit
