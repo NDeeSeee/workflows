@@ -14,7 +14,14 @@
 #
 # v0.0.4
 # - add/update scripts
-#
+#   sc_rna_filter.R
+#   sc_multiome_filter.R
+#   sc_rna_reduce.R
+#   sc_atac_reduce.R
+#   sc_rna_cluster.R
+#   sc_atac_cluster.R
+#   sc_wnn_cluster.R
+# - install MACS2 after numba as it fails on numpy
 #
 # v0.0.3
 # - add sc_gex_reduce.R script
@@ -61,8 +68,8 @@ RUN apt-get update && \
     apt-get install libgcc-10-dev python3-dev python3-pip libxml2-dev libcurl4-openssl-dev libssl-dev pandoc libudunits2-dev libgdal-dev libcairo2-dev libharfbuzz-dev libfribidi-dev libbz2-dev -y && \
     pip3 install scipy numpy && \
     pip3 install cellbrowser==${CB_VERSION} && \
-    pip3 install MACS2==${MACS2_VERSION} && \
     pip3 install -U numba && \
+    pip3 install MACS2==${MACS2_VERSION} && \
     R -e 'install.packages("argparse", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("tidyverse", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("modules", repo = "https://cloud.r-project.org/")' && \
