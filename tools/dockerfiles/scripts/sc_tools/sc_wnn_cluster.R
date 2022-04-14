@@ -673,7 +673,6 @@ if (args$diffpeaks){
     print("Identifying differentially accessible peaks between each pair of clusters for all resolutions")
     args$logfc <- args$ataclogfc                                     # need the proper names for get_putative_markers
     args$minpct <- args$atacminpct
-    args$onlypos <- args$ataconlypos
     args$testuse <- args$atactestuse
     all_atac_putative_markers <- analyses$get_putative_markers(      # will change default assay to ATAC
         seurat_data=seurat_data,
