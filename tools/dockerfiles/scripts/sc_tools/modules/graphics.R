@@ -973,7 +973,8 @@ coverage_plot <- function(data, assay, region, group_by, plot_title, rootname, i
                 sep=c("-", "-")
             ) + patchwork::plot_annotation(title=plot_title)
 
-            plot[[1]][[1]] <- plot[[1]][[1]] + ggplot2::scale_fill_manual(values=palette_colors)
+            plot[[1]][[1]] <- plot[[1]][[1]] + ggplot2::scale_fill_manual(values=palette_colors)    # for genome coverage plots
+            plot[[1]][[2]] <- plot[[1]][[2]] + ggplot2::scale_fill_manual(values=palette_colors)    # for gene expression plots
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(plot))
