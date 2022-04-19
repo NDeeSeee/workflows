@@ -1,0 +1,6 @@
+{
+  "file_to_extract": {
+    "class": "File",
+    "location": "./data/dm3_chr4/generated_inputs/tar/rsem_bowtie2_dm3_chr4.tar.gz"
+  }
+}
