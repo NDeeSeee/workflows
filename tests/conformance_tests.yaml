@@ -6064,3 +6064,14 @@
     collected_statistics_yaml:
       class: File
       location: "arc_res.yaml"
+
+# ========================================================
+# tar-extract
+# ========================================================
+
+- job: ./tar-extract-1.json
+  tool: ../tools/tar-extract.cwl
+  output:
+    extracted_folder:
+      class: Directory
+      location: "rsem_bowtie2_dm3_chr4"
