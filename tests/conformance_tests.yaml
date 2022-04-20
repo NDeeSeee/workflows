@@ -3225,6 +3225,16 @@
       class: File
       location: upstream_bismark_bt2_SE_report.txt
 
+- job: ./bismark-align-2.json
+  tool: ../tools/bismark-align.cwl
+  output:
+    bam_file:
+      class: File
+      location: upstream_bismark_bt2_pe.bam
+    alignment_report:
+      class: File
+      location: upstream_bismark_bt2_PE_report.txt
+
 # ========================================================
 # bismark-extract-methylation
 # ========================================================
@@ -3249,7 +3259,7 @@
       location: upstream_bismark_bt2.M-bias.txt
       size: 2054
     mbias_plot_png:
-      class: File
+    - class: File
       location: upstream_bismark_bt2.M-bias_R1.png
     bedgraph_coverage_file:
       class: File
@@ -3264,6 +3274,45 @@
       class: File
       location: upstream_bismark_bt2_splitting_report.txt
       size: 742
+
+- job: ./bismark-extract-methylation-2.json
+  tool: ../tools/bismark-extract-methylation.cwl
+  output:
+    chg_context_file:
+      class: File
+      location: CHG_context_upstream_bismark_bt2_pe.txt
+      size: 8114
+    chh_context_file:
+      class: File
+      location: CHH_context_upstream_bismark_bt2_pe.txt
+      size: 25300
+    cpg_context_file:
+      class: File
+      location: CpG_context_upstream_bismark_bt2_pe.txt
+      size: 7680
+    mbias_plot:
+      class: File
+      location: upstream_bismark_bt2_pe.M-bias.txt
+      size: 2054
+    mbias_plot_png:
+    - class: File
+      location: upstream_bismark_bt2_pe.M-bias_R1.png
+    - class: File
+      location: upstream_bismark_bt2_pe.M-bias_R2.png
+    bedgraph_coverage_file:
+      class: File
+      location: upstream_bismark_bt2_pe.bedGraph.gz
+    bismark_coverage_file:
+      class: File
+      location: upstream_bismark_bt2_pe.bismark.cov.gz
+    genome_wide_methylation_report:
+      class: File
+      location: upstream_bismark_bt2_pe.CpG_report.txt
+    splitting_report:
+      class: File
+      location: upstream_bismark_bt2_pe_splitting_report.txt
+      size: 742
+
 
 # ========================================================
 # samtools-filter
@@ -3312,6 +3361,14 @@
     collected_report:
       class: File
       location: upstream_bismark_bt2_SE_report.html
+      size: 2860497
+
+- job: ./bismark-report-2.json
+  tool: ../tools/bismark-report.cwl
+  output:
+    collected_report:
+      class: File
+      location: upstream_bismark_bt2_PE_report.html
       size: 2860497
 
 # ========================================================
