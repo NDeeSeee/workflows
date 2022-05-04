@@ -35,13 +35,28 @@ inputs:
 
   max_multimap:
     type: int?
-    default: 1
+    default: 10
     doc: "Maximum number of loci the read is allowed to map to"
 
   max_multimap_anchor:
     type: int?
     default: 50
     doc: "Maximum number of loci anchors are allowed to map to"
+
+  out_filter_mismatch_nmax:
+    type: int?
+    default: 10
+    doc: "Alignment will be output only if it has no more mismatches than this value"
+
+  align_sjdb_overhang_min:
+    type: int?
+    default: 3
+    doc: "Minimum overhang (i.e. block size) for annotated (sjdb) spliced alignments"
+
+  seed_search_start_lmax:
+    type: int?
+    default: 50 
+    doc: "Defines the search start point through the read - the read is split into pieces no longer than this value"
 
   threads:
     type: int?
@@ -145,12 +160,9 @@ steps:
       genomeDir: indices_folder
       outFilterMultimapNmax: max_multimap
       winAnchorMultimapNmax: max_multimap_anchor
-      outFilterMismatchNmax:
-        default: 5
-      alignSJDBoverhangMin:
-        default: 1
-      seedSearchStartLmax:
-        default: 15
+      outFilterMismatchNmax: out_filter_mismatch_nmax
+      alignSJDBoverhangMin: align_sjdb_overhang_min
+      seedSearchStartLmax: seed_search_start_lmax
       outSAMattributes:
         default: "All"                              # for SplAdder we need NM tag
       clip3pNbases: clip_3p_nbases
