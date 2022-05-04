@@ -165,6 +165,8 @@ steps:
       seedSearchStartLmax: seed_search_start_lmax
       outSAMattributes:
         default: "All"                              # for SplAdder we need NM tag
+      twopassMode:
+        default: "Basic"
       clip3pNbases: clip_3p_nbases
       clip5pNbases: clip_5p_nbases
       threads: threads
