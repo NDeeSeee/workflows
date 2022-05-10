@@ -3381,6 +3381,7 @@
     collected_report_formatted:
       class: File
       location: collected_report_formatted.tsv
+      mapped_reads: 87
 
 - job: ./python-get-stat-bismark-2.json
   tool: ../tools/python-get-stat-bismark.cwl
@@ -3388,6 +3389,7 @@
     collected_report_formatted:
       class: File
       location: collected_report_formatted.tsv
+    mapped_reads: 8
 
 # ========================================================
 # deeptools-alignmentsieve
