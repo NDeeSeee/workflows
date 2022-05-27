@@ -32,7 +32,7 @@ inputs:
       prefix: "--celltypes"
     doc: |
       Path to the TSV/CSV file for manual cell type assignment for each of the clusters.
-      First column - 'cluster', second column 'type'.
+      First column - 'cluster', second column may have arbitrary name.
 
   query_source_column:
     type: string
@@ -724,7 +724,7 @@ doc: |
 s:about: |
   usage: sc_ctype_assign.R
         [-h] --query QUERY --celltypes CELLTYPES --source SOURCE --target
-        TARGET [--fragments FRAGMENTS] [--genes [GENES ...]] [--pdf]
+        TARGET [--fragments FRAGMENTS] [--genes [GENES [GENES ...]]] [--pdf]
         [--verbose] [--h5seurat] [--cbbuild] [--output OUTPUT] [--cpus CPUS]
         [--memory MEMORY]
 
@@ -741,7 +741,7 @@ s:about: |
     --celltypes CELLTYPES
                           Path to the TSV/CSV file for manual cell type
                           assignment for each of the clusters. First column -
-                          'cluster', second column 'type'.
+                          'cluster', second column may have arbitrary name.
     --source SOURCE       Column from the metadata of the loaded Seurat object
                           to select clusters from.
     --target TARGET       Column from the metadata of the loaded Seurat object
@@ -751,7 +751,8 @@ s:about: |
                           used in the loaded Seurat object. File should be saved
                           in TSV format with tbi-index file. Ignored if the
                           loaded Seurat object doesn't include ATAC assay.
-    --genes [GENES ...]   Genes of interest to build gene expression and/or Tn5
+    --genes [GENES [GENES ...]]
+                          Genes of interest to build gene expression and/or Tn5
                           insertion frequency plots for the nearest peaks. To
                           build gene expression plots the loaded Seurat object
                           should include RNA assay. To build Tn5 insertion
