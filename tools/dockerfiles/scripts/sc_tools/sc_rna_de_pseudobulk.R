@@ -17,45 +17,48 @@ suppressMessages(graphics <- modules::use(file.path(HERE, "modules/graphics.R"))
 suppressMessages(io <- modules::use(file.path(HERE, "modules/io.R")))
 suppressMessages(qc <- modules::use(file.path(HERE, "modules/qc.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
-suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
 
 export_raw_plots <- function(seurat_data, args){
     DefaultAssay(seurat_data) <- "RNA"                            # safety measure
     Idents(seurat_data) <- "new.ident"                            # safety measure
-    graphics$dim_plot(
-        data=seurat_data,
-        reduction="rnaumap",
-        plot_title=paste(
-            "Cells UMAP split by", args$splitby, "column",
-            ifelse(
+    for (reduction in c("rnaumap", "atacumap", "wnnumap")) {
+        if (!(reduction %in% names(seurat_data@reductions))) {next}                                  # skip missing reductions
+        graphics$dim_plot(
+            data=seurat_data,
+            reduction=reduction,
+            plot_title=paste0(
+                "Cells UMAP split by ", args$splitby, " column ",
+                ifelse(
+                    (!is.null(args$groupby) && !is.null(args$subset)),
+                    paste("subsetted to", paste(args$subset, collapse=", "), "values from", args$groupby, "column "),
+                    ""
+                ),
+                "(", reduction, " dim. reduction)"
+            ),
+            legend_title=ifelse(
                 (!is.null(args$groupby) && !is.null(args$subset)),
-                paste("subsetted to", paste(args$subset, collapse=", "), "values from", args$groupby, "column"),
-                ""
-            )
-        ),
-        legend_title=ifelse(
-            (!is.null(args$groupby) && !is.null(args$subset)),
-            args$groupby,
-            args$splitby
-        ),
-        split_by=args$splitby,
-        group_by=ifelse(
-            (!is.null(args$groupby) && !is.null(args$subset)),
-            args$groupby,
-            args$splitby
-        ),
-        highlight_group=if(!is.null(args$groupby) && !is.null(args$subset)) args$subset else NULL,
-        label=ifelse(
-            (!is.null(args$groupby) && !is.null(args$subset)),
-            TRUE,
-            FALSE
-        ),
-        label_color="black",
-        palette_colors=graphics$D40_COLORS,
-        rootname=paste(args$output, "umap", sep="_"),
-        pdf=args$pdf
-    )
+                args$groupby,
+                args$splitby
+            ),
+            split_by=args$splitby,
+            group_by=ifelse(
+                (!is.null(args$groupby) && !is.null(args$subset)),
+                args$groupby,
+                args$splitby
+            ),
+            highlight_group=if(!is.null(args$groupby) && !is.null(args$subset)) args$subset else NULL,
+            label=ifelse(
+                (!is.null(args$groupby) && !is.null(args$subset)),
+                TRUE,
+                FALSE
+            ),
+            label_color="black",
+            palette_colors=graphics$D40_COLORS,
+            rootname=paste(args$output, "umap_rd", reduction, sep="_"),
+            pdf=args$pdf
+        )
+    }
     gc(verbose=FALSE)
 }
 
@@ -169,26 +172,30 @@ export_processed_plots <- function(seurat_data, de_results, args){
                 rootname=paste(args$output, "xpr_dnst", current_gene, sep="_"),
                 pdf=args$pdf
             )
-            graphics$feature_plot(
-                data=seurat_data,
-                features=current_gene,
-                labels=current_gene,
-                reduction="rnaumap",
-                plot_title=paste(
-                    "Log normalized gene expression on cells UMAP per dataset",
-                    ifelse(
-                        (!is.null(args$groupby) && !is.null(args$subset)),
-                        paste("subsetted to", paste(args$subset, collapse=", "), "values from", args$groupby, "column"),
-                        ""
-                    )
-                ),
-                label=FALSE,
-                order=TRUE,
-                split_by="new.ident",
-                combine_guides="collect",
-                rootname=paste(args$output, "xpr_per_cell", current_gene, sep="_"),
-                pdf=args$pdf
-            )
+            for (reduction in c("rnaumap", "atacumap", "wnnumap")) {
+                if (!(reduction %in% names(seurat_data@reductions))) {next}                                  # skip missing reductions
+                graphics$feature_plot(
+                    data=seurat_data,
+                    features=current_gene,
+                    labels=current_gene,
+                    reduction=reduction,
+                    plot_title=paste0(
+                        "Log normalized gene expression on cells UMAP per dataset ",
+                        ifelse(
+                            (!is.null(args$groupby) && !is.null(args$subset)),
+                            paste("subsetted to", paste(args$subset, collapse=", "), "values from", args$groupby, "column "),
+                            ""
+                        ),
+                        "(", reduction, " dim. reduction)"
+                    ),
+                    label=FALSE,
+                    order=TRUE,
+                    split_by="new.ident",
+                    combine_guides="collect",
+                    rootname=paste(args$output, "xpr_per_cell_rd", reduction, current_gene, sep="_"),
+                    pdf=args$pdf
+                )
+            }
         }
         graphics$feature_heatmap(
             data=seurat_data,
@@ -240,8 +247,8 @@ get_args <- function(){
         "--query",
         help=paste(
             "Path to the RDS file to load Seurat object from. This file should include genes",
-            "expression information stored in the RNA assay. Certain plots require 'rnaumap'",
-            "dimensionality reduction to be present."
+            "expression information stored in the RNA assay. Additionally, 'rnaumap', and/or",
+            "'atacumap', and/or 'wnnumap' dimensionality reductions should be present."
         ),
         type="character", required="True"
     )
@@ -410,6 +417,27 @@ prod$parallel(args)
 
 print(paste("Loading Seurat data from", args$query))
 seurat_data <- readRDS(args$query)
+
+if (!any(c("rnaumap", "atacumap", "wnnumap") %in% names(seurat_data@reductions))){
+    print(
+        paste(
+            "Loaded Seurat object includes neither of the required reductions:",
+            "'rnaumap', and/or 'atacumap', and/or 'wnnumap'.",
+            "Exiting."
+        )
+    )
+    quit(save="no", status=1, runLast=FALSE)
+}
+if (!("RNA" %in% names(seurat_data@assays))){
+    print(
+        paste(
+            "Loaded Seurat object doesn't include required RNA assay.",
+            "Exiting."
+        )
+    )
+    quit(save="no", status=1, runLast=FALSE)
+}
+
 print("Setting default assay to RNA")
 DefaultAssay(seurat_data) <- "RNA"
 debug$print_info(seurat_data, args)
@@ -444,14 +472,17 @@ if (!is.null(args$genes) && length(args$genes) > 0){
     print(args$genes)
 }
 
-print("Extending Seurat object with the extra metadata fields")
-seurat_data <- io$extend_metadata(
-    seurat_data=seurat_data,
-    location=args$metadata,
-    seurat_ref_column="new.ident",
-    meta_ref_column="library_id"
-)
-debug$print_info(seurat_data, args)
+if (!is.null(args$metadata)){
+    print("Extending Seurat object with the extra metadata fields")
+    seurat_data <- io$extend_metadata(
+        seurat_data=seurat_data,
+        location=args$metadata,
+        seurat_ref_column="new.ident",
+        meta_ref_column="library_id"
+    )
+    debug$print_info(seurat_data, args)
+}
+
 export_raw_plots(seurat_data, args)
 
 print("Filtering Seurat object to include only selected groups of cells")

@@ -3,6 +3,7 @@ import("purrr", attach=FALSE)
 import("Seurat", attach=FALSE)
 import("Signac", attach=FALSE)
 import("tibble", attach=FALSE)
+import("sceasy", attach=FALSE)
 import("SeuratDisk", attach=FALSE)
 import("rtracklayer", attach=FALSE)
 import("GenomicRanges", attach=FALSE)
@@ -23,6 +24,7 @@ export(
     "load_10x_multiome_data",
     "load_10x_rna_data",
     "export_h5seurat",
+    "export_h5ad",
     "load_cell_cycle_data",
     "replace_fragments"
 )
@@ -122,6 +124,18 @@ export_h5seurat <- function(data, location, overwrite=TRUE){
     )
 }
 
+export_h5ad <- function(data, location){
+    base::tryCatch(
+        expr = {
+            sceasy::convertFormat(data, from="seurat", to="anndata", outFile=location)
+            base::print(base::paste("Exporting data as h5ad to", location, sep=" "))
+        },
+        error = function(e){
+            base::print(base::paste("Failed to export data as h5ad to", location, sep=" "))
+        }
+    )
+}
+
 load_cell_identity_data <- function(location) {
     cell_identity_data <- utils::read.table(
         location,
@@ -163,7 +177,9 @@ extend_metadata <- function(seurat_data, location, seurat_ref_column, meta_ref_c
         current_meta_source_column <- meta_source_columns[i]
         current_seurat_target_column <- seurat_target_columns[i]
         base::print(base::paste("Adding", current_meta_source_column, "as", current_seurat_target_column, "column"))
-        seurat_data[[current_seurat_target_column]] <- metadata[[current_meta_source_column]][base::match(seurat_ref_values, meta_ref_values)]
+        seurat_data[[current_seurat_target_column]] <- base::as.factor(                                  # need as.factor, otherwise the order on the plots might be mismatched
+            metadata[[current_meta_source_column]][base::match(seurat_ref_values, meta_ref_values)]
+        )
     }
     base::rm(metadata, seurat_ref_values, meta_ref_values)
     return (seurat_data)
