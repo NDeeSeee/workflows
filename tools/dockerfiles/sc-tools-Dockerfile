@@ -80,7 +80,7 @@ ENV DEBIAN_FRONTEND noninteractive
 WORKDIR /tmp
 
 ENV R_MAX_VSIZE=200000000000
-ENV CB_VERSION "1.2.1"
+ENV CB_VERSION "1.1.1"
 ENV MACS2_VERSION "2.2.7.1"
 
 COPY ./scripts/sc_tools/sc_rna_filter.R /usr/local/bin/sc_rna_filter.R
