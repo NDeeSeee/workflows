@@ -3,17 +3,20 @@ import("limma", attach=FALSE)
 import("DAseq", attach=FALSE)
 import("Seurat", attach=FALSE)
 import("Signac", attach=FALSE)
+import("sceasy", attach=FALSE)
 import("DESeq2", attach=FALSE)
 import("harmony", attach=FALSE)
 import("tibble", attach=FALSE)
 import("glmGamPoi", attach=FALSE)  # safety measure. we don't use it directly, but SCTransform with method="glmGamPoi" needs it
 import("S4Vectors", attach=FALSE)
 import("magrittr", `%>%`, attach=TRUE)
+import("reticulate", attach=FALSE)
 import("SummarizedExperiment", attach=FALSE)
 
 export(
     "rna_analyze",
     "add_clusters",
+    "integrate_labels",
     "rna_preprocess",
     "rna_log_single",
     "rna_sct_single",
@@ -31,6 +34,18 @@ export(
     "get_de_sample_data",
     "get_aggregated_expession"
 )
+
+get_tf_idf_method <- function(method_name){
+    return (
+        switch(
+            method_name,
+            "log-tfidf"    = 1,
+            "tf-logidf"    = 2,
+            "logtf-logidf" = 3,
+            "idf"         = 4
+        )
+    )
+}
 
 get_vars_to_regress <- function(seurat_data, args, exclude_columns=NULL) {
     vars_to_regress <- NULL
@@ -546,6 +561,88 @@ add_clusters <- function(seurat_data, assay, graph_name, reduction, cluster_algo
     return (seurat_data)
 }
 
+integrate_labels <- function(seurat_data, source_columns, args){
+    base::print(
+        base::paste(
+            "Running scTriangulate for", base::paste(source_columns, collapse=", "), "columns.",
+            base::ifelse(
+                !is.null(args$target),
+                base::paste("The results will be saved into the columns with the suffix", args$target),
+                ""
+            )
+        )
+    )
+    temporary_file <- base::tempfile(                                      # will be automatically removed when R exits
+        pattern="sctri",
+        tmpdir=base::tempdir(),
+        fileext=".h5ad"
+    )
+    base::print(base::paste("Saving temporary h5ad file to", temporary_file))
+    sceasy::convertFormat(seurat_data, from="seurat", to="anndata", outFile=temporary_file)
+    script_file <- base::tempfile(                                         # will be automatically removed when R exits
+        pattern="sctri",
+        tmpdir=base::tempdir(),
+        fileext=".py"
+    )
+    output_stream <- base::file(script_file)
+    base::writeLines(
+        c(
+            "import os",
+            "import scanpy",
+            "import resource",
+            "import sctriangulate",
+            "try:",
+            "    R_MAX_VSIZE = int(os.getenv('R_MAX_VSIZE'))",
+            "    resource.setrlimit(resource.RLIMIT_AS, (R_MAX_VSIZE, R_MAX_VSIZE))",         # ignored if run not on Linux
+            "    print(f'Attempting to set the maximum memory limits to {R_MAX_VSIZE}')",
+            "except Exception:",
+            "    print('Failed to set maximum memory limits')",
+            "def sc_triangulate(location, clustering_columns, tmp_dir, cores=None):",
+            "    cores = 1 if cores is None else int(cores)",
+            "    sctri_data = sctriangulate.ScTriangulate(",
+            "        dir=tmp_dir,",
+            "        adata=scanpy.read(location),",
+            "        query=clustering_columns,",
+            "        predict_doublet=False",
+            "    )",
+            "    sctri_data.compute_metrics(",
+            "        cores=cores,",
+            "        scale_sccaf=True",
+            "    )",
+            "    sctri_data.compute_shapley(cores=cores)",
+            "    sctri_data.prune_result()",
+            "    return sctri_data.adata.obs"
+        ),
+        output_stream
+    )
+    base::close(output_stream)
+    reticulate::source_python(script_file)
+    pruned_clusters <- sc_triangulate(
+                           temporary_file,
+                           source_columns,
+                           base::tempdir(),
+                           args$cpus
+                       )[, c("pruned", "confidence", "final_annotation")] %>%
+                       dplyr::mutate("pruned"=base::gsub("@", "__", .$pruned)) %>%  # @ is not good if it somehow appears in any of the filenames
+                       dplyr::rename(
+                           !!tidyselect::all_of(base::paste("custom", args$target, "pruned", sep="_")):="pruned"       # need "custom" prefix for UCSC Browser
+                       ) %>%
+                       dplyr::rename(
+                           !!tidyselect::all_of(base::paste("custom", args$target, "confidence", sep="_")):="confidence"
+                       ) %>%
+                       dplyr::rename(
+                           !!tidyselect::all_of(base::paste("custom", args$target, "final_annotation", sep="_")):="final_annotation"
+                       )
+    base::print(utils::head(pruned_clusters))
+    seurat_data <- SeuratObject::AddMetaData(
+        seurat_data,
+        pruned_clusters[SeuratObject::Cells(seurat_data), , drop=FALSE]    # to guarantee the proper cells order
+    )
+    base::rm(pruned_clusters)  # remove unused data
+    base::gc(verbose=FALSE)
+    return (seurat_data)
+}
+
 add_wnn_clusters <- function(seurat_data, graph_name, reductions, dimensions, cluster_algorithm, args){
     SeuratObject::Idents(seurat_data) <- "new.ident"                                   # safety measure
     seurat_data <- Seurat::FindMultiModalNeighbors(
@@ -628,14 +725,15 @@ atac_preprocess <- function(seurat_data, args) {
 
     base::print(
         base::paste(
-            "Applying TF-IDF normalization. Searching for top highly variable",
-            "features using", args$minvarpeaks, "as a lower percentile bound.",
-            "Analyzing all datasets jointly."
+            "Applying TF-IDF normalization using", args$norm, "method.",
+            "Searching for top highly variable features using", args$minvarpeaks,
+            "as a lower percentile bound. Analyzing all datasets jointly."
         )
     )
     processed_seurat_data <- Signac::RunTFIDF(
         seurat_data,
         assay="ATAC",                                                                           # safety measure
+        method=get_tf_idf_method(args$norm),
         verbose=FALSE
     )
     processed_seurat_data <- Signac::FindTopFeatures(
@@ -646,11 +744,12 @@ atac_preprocess <- function(seurat_data, args) {
     )
 
     splitted_seurat_data <- Seurat::SplitObject(seurat_data, split.by="new.ident")              # need to use original seurat_data for possible integration below
-    if (args$ntgr == "none" | length(splitted_seurat_data) == 1){
+    if (args$ntgr == "none" | args$ntgr == "harmony" | length(splitted_seurat_data) == 1){
         base::print(
             base::paste(
-                "Skipping datasets integration (either forced or only one identity",
-                "is present). Using the original not splitted seurat data."
+                "Skipping datasets integration (either forced to skip, or will be attempted",
+                "to run later with harmony, or only one identity is present). Using the",
+                "original not splitted seurat data."
             )
         )
         processed_seurat_data <- Signac::RunSVD(
@@ -659,8 +758,37 @@ atac_preprocess <- function(seurat_data, args) {
             reduction.name="atac_lsi",                                                          # adding "atac_lsi" for consistency
             verbose=FALSE
         )
+        if (args$ntgr == "harmony"){
+            if (is.null(args$ntgrby) || length(splitted_seurat_data) == 1){
+                base::print(
+                    base::paste(
+                        "Skipping datasets integration with Harmony. Either --ntgrby",
+                        "wasn't provided or data included only a single dataset."
+                    )
+                )
+            } else {
+                base::print(
+                    base::paste(
+                        "Running datasets integration with harmony using",
+                        SeuratObject::DefaultAssay(processed_seurat_data), "assay.",
+                        "Integrating over", base::paste(args$ntgrby, collapse=", "),
+                        "covariates. Dimensions used:", base::paste(args$dimensions, collapse=", ")
+                    )
+                )
+                processed_seurat_data <- harmony::RunHarmony(
+                    object=processed_seurat_data,
+                    group.by.vars=args$ntgrby,
+                    reduction="atac_lsi",
+                    reduction.save="atac_lsi",                                    # overwriting old atac_lsi reduction
+                    dims.use=args$dimensions,
+                    assay.use=SeuratObject::DefaultAssay(processed_seurat_data),
+                    project.dim=FALSE,                                            # for ATAC we don't need to project
+                    verbose=FALSE
+                )
+            }
+        }
     } else {
-        base::print("Running datasets integration using splitted seurat data.")
+        base::print("Running datasets integration using Signac on splitted data.")
         processed_seurat_data <- Signac::RunSVD(
             processed_seurat_data,
             n=50,                                                                               # by default computes 50 singular values
@@ -671,15 +799,16 @@ atac_preprocess <- function(seurat_data, args) {
             SeuratObject::DefaultAssay(splitted_seurat_data[[i]]) <- "ATAC"                     # safety measure
             base::print(
                 base::paste(
-                    "Applying TF-IDF normalization. Searching for top highly variable",
-                    "features using", args$minvarpeaks, "as a lower percentile bound.",
-                    "Analyzing", SeuratObject::Idents(splitted_seurat_data[[i]])[1],
-                    "dataset."
+                    "Applying TF-IDF normalization using", args$norm, "method.",
+                    "Searching for top highly variable features using", args$minvarpeaks,
+                    "as a lower percentile bound. Analyzing",
+                    SeuratObject::Idents(splitted_seurat_data[[i]])[1], "dataset."
                 )
             )
             splitted_seurat_data[[i]] <- Signac::RunTFIDF(
                 splitted_seurat_data[[i]],
                 assay="ATAC",                                                                   # safety measure
+                method=get_tf_idf_method(args$norm),
                 verbose=FALSE
             )
             splitted_seurat_data[[i]] <- Signac::FindTopFeatures(
