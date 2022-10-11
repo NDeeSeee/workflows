@@ -6140,3 +6140,17 @@
     extracted_folder:
       class: Directory
       location: "rsem_bowtie2_dm3_chr4"
+
+# ========================================================
+# volcanot-plot
+# ========================================================
+
+- job: ./volcanot-plot-1.json
+  tool: ../tools/volcanot-plot.cwl
+  output:
+    html_data:
+      class: Directory
+      location: "html_data"
+    html_file:
+      class: File
+      location: "index.html"

@@ -1,0 +1,45 @@
+#################################################################
+# Dockerfile
+#
+# Software:         Visualization Plugins
+# Software Version: v0.0.1
+# Description:      Visualization Plugins
+# Website:          https://github.com/Barski-lab/visualization_plugins.git
+# Provides:         Visualization Plugins
+# Base Image:       ubuntu:20.04
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/visualization:v0.0.1 -f visualization-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/visualization:v0.0.1
+# Run Cmd:          docker run --rm -ti biowardrobe2/visualization:v0.0.1 /bin/bash
+#################################################################
+
+### Base Image
+FROM ubuntu:20.04
+LABEL maintainer="misha.kotliar@gmail.com"
+ENV DEBIAN_FRONTEND noninteractive
+
+
+################## BEGIN INSTALLATION ######################
+
+WORKDIR /tmp
+
+ENV VP_COMMIT "256037ebd8166799eb72b4be1caf6c46049524a8"
+ENV VP_URL "https://github.com/Barski-lab/visualization_plugins.git"
+
+COPY ./scripts/volcano_plot.sh /usr/local/bin/volcano_plot.sh
+
+### Installing dependencies
+RUN apt-get update && \
+    apt-get install git -y && \
+### Installing Visualization Plugins
+    cd /opt && \
+    git clone ${VP_URL} && \
+    cd visualization_plugins && \
+    git checkout ${VP_COMMIT} && \
+    rm -rf .git && \
+### Installing R scripts
+    chmod +x /usr/local/bin/volcano_plot.sh && \
+### Cleaning
+    apt-get clean && \
+    apt-get purge && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /usr/share/doc/* && \
+    strip /usr/local/bin/*; true
