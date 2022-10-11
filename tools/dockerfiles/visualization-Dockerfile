@@ -22,7 +22,7 @@ ENV DEBIAN_FRONTEND noninteractive
 
 WORKDIR /tmp
 
-ENV VP_COMMIT "256037ebd8166799eb72b4be1caf6c46049524a8"
+ENV VP_COMMIT "c095b6595e5008171628010fe8b63bb00f0bb3c3"
 ENV VP_URL "https://github.com/Barski-lab/visualization_plugins.git"
 
 COPY ./scripts/volcano_plot.sh /usr/local/bin/volcano_plot.sh
