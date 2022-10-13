@@ -6148,9 +6148,12 @@
 - job: ./volcanot-plot-1.json
   tool: ../tools/volcanot-plot.cwl
   output:
-    html_data:
-      class: Directory
-      location: "html_data"
     html_file:
       class: File
       location: "index.html"
+    css_file:
+      class: File
+      location: "index.css"
+    js_file:
+      class: File
+      location: "index.js"

@@ -2,15 +2,23 @@
 # Dockerfile
 #
 # Software:         Visualization Plugins
-# Software Version: v0.0.2
+# Software Version: v0.0.3
 # Description:      Visualization Plugins
 # Website:          https://github.com/Barski-lab/visualization_plugins.git
 # Provides:         Visualization Plugins
 # Base Image:       ubuntu:20.04
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/visualization:v0.0.2 -f visualization-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/visualization:v0.0.2
-# Run Cmd:          docker run --rm -ti biowardrobe2/visualization:v0.0.2 /bin/bash
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/visualization:v0.0.3 -f visualization-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/visualization:v0.0.3
+# Run Cmd:          docker run --rm -ti biowardrobe2/visualization:v0.0.3 /bin/bash
 #################################################################
+#
+# v0.0.3
+# - Volcano plot always reads data from the deseq_report.tsv file
+# - volcano_plot.sh need to copy all related to the Volcano Plot
+#   files into the current directory, because glob can't accept
+#   the absolute path, so we need to use relative to the current
+#   working directory locations.
+#
 # v0.0.2
 # - make volcano plot configurable
 #
@@ -26,7 +34,7 @@ ENV DEBIAN_FRONTEND noninteractive
 
 WORKDIR /tmp
 
-ENV VP_COMMIT "d9db8ac099008929d8dbde5b630d4f052e2f6493"
+ENV VP_COMMIT "28e32d856f9f59962ac2ae59f097ec7b8e5a0bb2"
 ENV VP_URL "https://github.com/Barski-lab/visualization_plugins.git"
 
 COPY ./scripts/volcano_plot.sh /usr/local/bin/volcano_plot.sh
