@@ -5809,27 +5809,29 @@
 - job: ./deseq-multi-factor-1.json
   tool: ../tools/deseq-multi-factor.cwl
   output:
-    counts_plot_pdf: null
-    counts_plot_png:
+    diff_expr_features:
       class: File
-      location: deseq_counts_plot.png
+      location: deseq_diff_expr_features.tsv
+    mds_plot_html:
+      class: File
+      location: deseq_mds_plot.html
     pca_plot_pdf: null
     pca_plot_png:
       class: File
       location: deseq_pca_plot.png
+    read_counts_gct:
+      class: File
+      location: deseq_norm_read_counts.gct
     volcano_plot_pdf: null
     volcano_plot_png:
       class: File
       location: deseq_volcano_plot.png
-    diff_expr_features:
-      class: File
-      location: deseq_diff_expr_features.tsv
     stdout_log:
       class: File
-      location: deseq_multi_factor_stdout.log
+      location: deseq_manual_factor_stdout.log
     stderr_log:
       class: File
-      location: deseq_multi_factor_stderr.log
+      location: deseq_manual_factor_stderr.log
 
 # ========================================================
 # mixcr-shotgun
@@ -6157,3 +6159,20 @@
     js_file:
       class: File
       location: "index.js"
+
+# ========================================================
+# morpheus-heatmap
+# ========================================================
+
+- job: ./morpheus-heatmap-1.json
+  tool: ../tools/morpheus-heatmap.cwl
+  output:
+    heatmap_html:
+      class: File
+      location: "heatmap.html"
+    stdout_log:
+      class: File
+      location: "morpheus_stdout.log"
+    stderr_log:
+      class: File
+      location: "morpheus_stderr.log"

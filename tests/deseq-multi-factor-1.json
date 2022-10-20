@@ -34,9 +34,5 @@
   "contrast": "KO - WT",
   "base": ["day5", "WT"],
   "feature_type": "transcript",
-  "minimum_counts": 0,
-  "use_wald": true,
-  "splitby": "condition",
-  "groupby": "time",
-
+  "normalization_method": "rlog"
 }

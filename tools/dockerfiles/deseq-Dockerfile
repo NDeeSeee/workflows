@@ -1,53 +1,53 @@
-#################################################################
-# Dockerfile
+###################################################################################################
+# Software:         DESeq2
+# Software Version: v0.0.2
+# Description:      DESeq2
+# Website:          https://bioconductor.org/packages/release/bioc/html/DESeq2.html
+# Provides:         DESeq2
+# Base Image:       r-base:4.2.1
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/deseq:v0.0.2 -f deseq-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/deseq:v0.0.2
+# Run Cmd:          docker run --rm -ti biowardrobe2/deseq:v0.0.2 /bin/bash
+###################################################################################################
 #
-# Software:         DESeq, DESeq2
-# Software Version: 1.22.1 1.10.1
-# Description:      R package to run differential analysis
-# Website:          https://www.bioconductor.org/packages/3.2/bioc/html/DESeq.html
-#                   https://www.bioconductor.org/packages/3.2/bioc/html/DESeq2.html
-# Provides:         DESeq, DESeq2
-# Base Image:       biowardrobe2/scidap-addons:v0.0.6
-# Build Cmd:        docker build --rm -t biowardrobe2/deseq:v0.0.1 -f deseq-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/deseq:v0.0.1
-# Run Cmd:          docker run --rm -ti biowardrobe2/deseq:v0.0.1
-#################################################################
-# DESeq and DESeq2 versions depend on Bioconductor version.
-# For biowardrobe2/scidap-addons:v0.0.6 Bioconductor 3.2 is used,
-# so there is no way to set version for DESeq other than 1.22.1 and
-# for DESeq2 other than 1.10.1.
-# Latest RcppArmadillo (DeSeq2 dependency) requires R >= 3.3.0,
-# so 0.6.500.4.0 version is used instead.
-#################################################################
-
+# v0.0.2
+# - reuse this image for run_deseq_manual.R script as v0.0.1 is not used in any of the CWL tools
+# - installing custom michael-kotliar/morpheus.R to disable clustering completely
+#
+###################################################################################################
 
 ### Base Image
-FROM biowardrobe2/scidap-addons:v0.0.6
-MAINTAINER Michael Kotliar "misha.kotliar@gmail.com"
+FROM r-base:4.2.1
+LABEL maintainer="misha.kotliar@gmail.com"
 ENV DEBIAN_FRONTEND noninteractive
-
 
 ################## BEGIN INSTALLATION ######################
 
 WORKDIR /tmp
 
-ENV VERSION_RCPPARMADILLO 0.6.500.4.0
-ENV URL_RCPPARMADILLO "https://cran.r-project.org/src/contrib/Archive/RcppArmadillo/RcppArmadillo_${VERSION_RCPPARMADILLO}.tar.gz"
+ENV R_MAX_VSIZE=200000000000
 
-COPY ./scripts/install_from_source.R /tmp/install_from_source.R
-COPY ./scripts/install_from_bioconductor.R /tmp/install_from_bioconductor.R
+COPY ./scripts/run_deseq_manual.R /usr/local/bin/run_deseq_manual.R
+COPY ./scripts/run_morpheus.R /usr/local/bin/run_morpheus.R
 
-### Installing dependencies
+### Installing python3, pip3 and argparse
 RUN apt-get update && \
-    apt-get install libxml2-dev -y && \
-
-### Installing RcppArmadillo from source
-    Rscript /tmp/install_from_source.R "${URL_RCPPARMADILLO}" && \
-
-### Installing DeSeq & DeSeq2 packages from Bioconductor
-    Rscript /tmp/install_from_bioconductor.R DESeq && \
-    Rscript /tmp/install_from_bioconductor.R DESeq2 && \
-
+    apt-get install -y vim pandoc gcc-10-base libgcc-10-dev python3-dev python3-pip libxml2-dev libssl-dev \
+                       libcurl4-openssl-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev \
+                       libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev && \
+    pip3 install argparse && \
+### Installing R packages
+    R -e "install.packages('BiocManager')" && \
+    R -e "BiocManager::install(version = '3.15')" && \
+    R -e "BiocManager::install(c('BiocParallel', 'DESeq2', 'limma', 'EnhancedVolcano', 'hopach', 'cmapR', 'Glimma'))" && \
+    R -e 'install.packages("tidyverse", repo = "https://cloud.r-project.org/")' && \
+    R -e 'install.packages("patchwork", repo = "https://cloud.r-project.org/")' && \
+    R -e 'install.packages("argparse", repo = "https://cloud.r-project.org/")' && \
+    R -e 'install.packages("devtools", repo = "https://cloud.r-project.org/")' && \
+    R -e 'devtools::install_github("michael-kotliar/morpheus.R")' && \
+### Installing run_deseq_manual.R and run_morpheus.R scripts
+    chmod +x /usr/local/bin/run_deseq_manual.R && \
+    chmod +x /usr/local/bin/run_morpheus.R && \
 ### Cleaning
     apt-get clean && \
     apt-get purge && \

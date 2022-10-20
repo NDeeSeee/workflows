@@ -1,0 +1,6 @@
+{
+    "read_counts_gct": {
+        "class": "File",
+        "location": "./data/dm3_chr4/main_inputs/gsea/read_counts.gct"
+    }
+  }
