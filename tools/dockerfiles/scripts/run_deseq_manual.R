@@ -520,14 +520,33 @@ get_clustered_data <- function(expression_data, center, dist, transpose) {
     print("Running HOPACH")
     hopach_results <- hopach(expression_data, dmat=distance_matrix)
 
-    print("Reordering expression data")
-    expression_data <- expression_data[as.vector(hopach_results$final$order),]
     if (transpose){
         print("Transposing expression data")
         expression_data = t(expression_data)
     }
 
-    return (list(order=as.vector(hopach_results$final$order), expression=expression_data))
+    print("Parsing cluster labels")
+    clusters = as.data.frame(hopach_results$clustering$labels)
+    colnames(clusters) = "label"
+    clusters = cbind(
+        clusters,
+        "HCL"=outer(
+            clusters$label,
+            10^c((nchar(trunc(clusters$label))[1]-1):0),
+            function(a, b) {
+                paste0("c", a %/% b %% 10)
+            }
+        )
+    )
+    clusters = clusters[, c(-1), drop=FALSE]
+
+    return (
+        list(
+            order=as.vector(hopach_results$clustering$order),
+            expression=expression_data,
+            clusters=clusters
+        )
+    )
 }
 
 
@@ -678,6 +697,24 @@ get_args <- function(){
         choices=c("row", "column", "both")
     )
     parser$add_argument(
+        "--rowdist",
+        help=paste(
+            "Distance metric for HOPACH row clustering. Ignored if --cluster is not",
+            "provided. Default: cosangle"
+        ),
+        type="character", default="cosangle",
+        choices=c("cosangle", "abscosangle", "euclid", "abseuclid", "cor", "abscor")
+    )
+    parser$add_argument(
+        "--columndist",
+        help=paste(
+            "Distance metric for HOPACH column clustering. Ignored if --cluster is not",
+            "provided. Default: euclid"
+        ),
+        type="character", default="euclid",
+        choices=c("cosangle", "abscosangle", "euclid", "abseuclid", "cor", "abscor")
+    )
+    parser$add_argument(
         "--center",
         help=paste(
             "Apply mean centering for feature expression prior to running",
@@ -781,12 +818,12 @@ if (!is.null(args$cluster)){
         print("Clustering filtered read counts by columns")
         clustered_data = get_clustered_data(
             expression_data=norm_counts_mat,
-            center=NULL,                                            # centering doesn't influence on the samples order
-            dist="euclid",                                          # "euclidean distance is often a good choice for clustering arrays"
+            center=NULL,                                              # centering doesn't influence on the samples order
+            dist=args$columndist,
             transpose=TRUE
         )
-        # norm_counts_mat <- clustered_data$expression              # no need to update norm_counts_mat as it should be the same because center=NULL
-        col_metadata <- col_metadata[clustered_data$order, ]        # reordering samples order based on the HOPACH clustering resutls
+        col_metadata <- cbind(col_metadata, clustered_data$clusters)  # adding cluster labels
+        col_metadata <- col_metadata[clustered_data$order, ]          # reordering samples order based on the HOPACH clustering resutls
         print("Reordered samples")
         print(col_metadata)
     }
@@ -794,21 +831,26 @@ if (!is.null(args$cluster)){
         print("Clustering filtered normalized read counts by rows")
         clustered_data = get_clustered_data(
             expression_data=norm_counts_mat,
-            center=if(args$center) "mean" else NULL,                # about centering normalized data https://www.biostars.org/p/387863/
-            dist="cosangle",                                        # "cosangle distance metric is often a good choice for clustering genes"
+            center=if(args$center) "mean" else NULL,                  # about centering normalized data https://www.biostars.org/p/387863/
+            dist=args$rowdist,
             transpose=FALSE
         )
-        norm_counts_mat <- clustered_data$expression                # can be different because of centering by rows mean
-        row_metadata <- row_metadata[clustered_data$order, ]        # reordering features order based on the HOPACH clustering results
+        norm_counts_mat <- clustered_data$expression                  # can be different because of centering by rows mean
+        row_metadata <- cbind(row_metadata, clustered_data$clusters)  # adding cluster labels
+        row_metadata <- row_metadata[clustered_data$order, ]          # reordering features order based on the HOPACH clustering results
         print("Reordered features")
-        print(head(col_metadata))
+        print(head(row_metadata))
     }
 }
+
+# we do not reorder norm_counts_mat based on the clustering order
+# because when exportin to GCT we use row_metadata and col_metadata
+# to force the proper order of rows and columns
 
 print("Exporting normalized read counts to GCT format")
 export_gct(
     counts_mat=norm_counts_mat,
-    row_metadata=row_metadata,                                      # includes features as row names
-    col_metadata=col_metadata,                                      # includes samples as row names
+    row_metadata=row_metadata,                                        # includes features as row names
+    col_metadata=col_metadata,                                        # includes samples as row names
     location=paste(args$output, "_norm_read_counts.gct", sep="")
 )
