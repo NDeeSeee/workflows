@@ -85,7 +85,7 @@ export_all_clustering_plots <- function(seurat_data, args){
                 pdf=args$pdf
             )
         }
-        if (seurat_data@meta.data$new.ident != seurat_data@meta.data$condition){
+        if (all(as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition)))){
             graphics$dim_plot(
                 data=seurat_data,
                 reduction="wnnumap",
@@ -338,6 +338,17 @@ get_args <- function(){
             "Default: from 2 to 10"
         ),
         type="integer", default=10, nargs="*"
+    )
+    parser$add_argument(
+        "--algorithm",
+        help=paste(
+            "Algorithm for modularity optimization when running clustering.",
+            "Default: louvain"
+        ),
+        type="character", default="slm",
+        choices=c(
+            "louvain", "mult-louvain", "slm", "leiden"
+        )
     )
     parser$add_argument(
         "--uspread",
@@ -620,7 +631,6 @@ seurat_data <- analyses$add_wnn_clusters(                       # will add 'wnnu
     graph_name="wsnn",                                          # will be used in all the plot generating functions
     reductions=list("pca", "atac_lsi"),
     dimensions=list(args$rnadimensions, args$atacdimensions),   # should be the same order as reductions
-    cluster_algorithm=3,                                        # SLM algorithm
     args=args
 )
 debug$print_info(seurat_data, args)
