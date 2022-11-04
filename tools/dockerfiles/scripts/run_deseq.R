@@ -1,16 +1,27 @@
 #!/usr/bin/env Rscript
 options(warn=-1)
 options("width"=300)
+options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
 
 suppressMessages(library(argparse))
 suppressMessages(library(BiocParallel))
 suppressMessages(library(pheatmap))
+suppressMessages(library(Glimma))
+suppressMessages(library(SummarizedExperiment))
+suppressMessages(library(dplyr))
+suppressMessages(library(tidyverse))
+suppressMessages(library(hopach))
+suppressMessages(library(cmapR))
 suppressMessages(library(ggplot2))
 suppressMessages(library(ggrepel))
 
 
 ##########################################################################################
+#
+# v0.0.25
+#
+# - Add MDS plot and updated GCT export
 #
 # v0.0.24
 #
@@ -108,6 +119,138 @@ get_file_type <- function (filename) {
 }
 
 
+export_mds_html_plot <- function(norm_counts_data, location){
+    tryCatch(
+        expr = {
+            htmlwidgets::saveWidget(
+                glimmaMDS(
+                    x=assay(norm_counts_data),
+                    groups=as.data.frame(SummarizedExperiment::colData(norm_counts_data)),
+                    labels=rownames(SummarizedExperiment::colData(norm_counts_data))
+                ),
+                file=location
+            )
+        },
+        error = function(e){
+            print(paste0("Failed to export MDS plot to ", location, " with error - ", e))
+        }
+    )
+}
+
+
+export_gct <- function(counts_mat, row_metadata, col_metadata, location){
+    tryCatch(
+        expr = {
+            row_metadata <- row_metadata %>% rownames_to_column("id") %>% mutate_at("id", as.vector)
+            col_metadata <- col_metadata %>% rownames_to_column("id") %>% mutate_at("id", as.vector)
+            gct_data <- new(
+                "GCT",
+                mat=counts_mat[row_metadata$id, col_metadata$id],       # to guarantee the order and number of row/columns
+                rdesc=row_metadata,
+                cdesc=col_metadata
+            )
+            write_gct(
+                ds=gct_data,
+                ofile=location,
+                appenddim=FALSE
+            )
+            print(paste("Exporting GCT data to", location, sep=" "))
+        },
+        error = function(e){
+            print(paste("Failed to export GCT data to", location, sep=" "))
+        }
+    )
+}
+
+
+export_cls <- function(categories, location){
+    base::tryCatch(
+        expr = {
+            output_stream <- base::file(location, "w")
+            on.exit(base::close(output_stream), add=TRUE)           # can't put it in 'finally' as there is no access to output_stream variable
+            base::cat(
+                base::paste(
+                    length(categories),                             # number of datasets
+                    length(base::levels(categories)),               # number of different categories
+                    "1",                                            # should be always 1
+                    sep="\t"
+                ),
+                base::paste(
+                    "#",
+                    base::paste(
+                        base::unique(as.character(categories)),     # preserves the order, but removes duplicates
+                        collapse="\t"
+                    ),
+                    sep="\t"
+                ),
+                base::paste(
+                    base::paste(
+                        as.character(categories),
+                        collapse="\t"
+                    ),
+                    sep="\t"
+                ),
+                file=output_stream,
+                sep="\n"
+            )
+            base::print(base::paste("Exporting CLS data to", location, sep=" "))
+        },
+        error = function(e){
+            base::print(base::paste("Failed to export CLS data to ", location, "with error - ", e, sep=""))
+        }
+    )
+}
+
+
+get_clustered_data <- function(expression_data, center, dist, transpose) {
+
+    if (transpose){
+        print("Transposing expression data")
+        expression_data = t(expression_data)
+    }
+    if (!is.null(center)) {
+        print(paste("Centering expression data by ", center, sep=""))
+        if (center == "mean"){
+            expression_data = expression_data - rowMeans(expression_data)    
+        } else {
+            expression_data = expression_data - rowMedians(data.matrix(expression_data))    
+        }
+    }
+    print("Creating distance matrix")
+    distance_matrix <- distancematrix(expression_data, dist)
+    print("Running HOPACH")
+    hopach_results <- hopach(expression_data, dmat=distance_matrix)
+
+    if (transpose){
+        print("Transposing expression data")
+        expression_data = t(expression_data)
+    }
+
+    print("Parsing cluster labels")
+    clusters = as.data.frame(hopach_results$clustering$labels)
+    colnames(clusters) = "label"
+    clusters = cbind(
+        clusters,
+        "HCL"=outer(
+            clusters$label,
+            10^c((nchar(trunc(clusters$label))[1]-1):0),
+            function(a, b) {
+                paste0("c", a %/% b %% 10)
+            }
+        )
+    )
+    clusters = clusters[, c(-1), drop=FALSE]
+
+    return (
+        list(
+            order=as.vector(hopach_results$clustering$order),
+            expression=expression_data,
+            clusters=clusters
+        )
+    )
+}
+
+
 load_isoform_set <- function(filenames, prefixes, read_colname, rpkm_colname, rpkm_colname_alias, conditions, intersect_by, digits, batch_metadata, collected_data=NULL) {
     for (i in 1:length(filenames)) {
         isoforms <- read.table(filenames[i], sep=get_file_type(filenames[i]), header=TRUE, stringsAsFactors=FALSE)
@@ -135,53 +278,6 @@ load_isoform_set <- function(filenames, prefixes, read_colname, rpkm_colname, rp
     collected_data$rpkm_colnames = c(collected_data$rpkm_colnames, rpkm_colname_alias)
     collected_data$collected_isoforms <- collected_data$collected_isoforms[, !colnames(collected_data$collected_isoforms) %in% rpkm_columns]
     return( collected_data )
-}
-
-
-write.gct <- function(gct, filename) {
-	rows <- dim(gct$data)[1]
-	columns <- dim(gct$data)[2]
-	rowDescriptions <- gct$rowDescriptions
-	m <- cbind(row.names(gct$data), rowDescriptions, gct$data)
-	f <- file(filename, "w")
-	on.exit(close(f))
-	cat("#1.2", "\n", file=f, append=TRUE, sep="")
-	cat(rows, "\t", columns, "\n", file=f, append=TRUE, sep="")
-	cat("Name", "\t", file=f, append=TRUE, sep="")
-	cat("Description", file=f, append=TRUE, sep="")
-	names <- colnames(gct$data)
-	for(j in 1:length(names)) {
-		cat("\t", names[j], file=f, append=TRUE, sep="")
-	}
-	cat("\n", file=f, append=TRUE, sep="")
-	write.table(m, file=f, append=TRUE, quote=FALSE, sep="\t", eol="\n", col.names=FALSE, row.names=FALSE)
-}
-
-
-write.cls <- function(factor, filename) {
-	file <- file(filename, "w")
-	on.exit(close(file))
- 	codes <- as.character(factor)
-	cat(file=file, length(codes), length(levels(factor)), "1\n")
-	levels <- levels(factor)
-	cat(file=file, "# ")
-	num.levels <- length(levels)
-    if(num.levels-1 != 0) {
-	    for(i in 1:(num.levels-1)) {
-		    cat(file=file, levels[i])
-		    cat(file=file, " ")
-	    }
-	}
-	cat(file=file, levels[num.levels])
-	cat(file=file, "\n")
-	num.samples <- length(codes)
-	if(num.samples-1 != 0) {
-	    for(i in 1:(num.samples-1)) {
-		    cat(file=file, codes[i])
-		    cat(file=file, " ")
-	    }
-	}
-	cat(file=file, codes[num.samples])
 }
 
 
@@ -251,6 +347,7 @@ export_heatmap <- function(mat_data, column_data, rootname, width=800, height=80
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             pheatmap(
                 mat=mat_data,
+                main="Top 30 genes from VST normalized read counts",
                 annotation_col=column_data,
                 cluster_rows=FALSE,
                 show_rownames=TRUE,
@@ -261,6 +358,7 @@ export_heatmap <- function(mat_data, column_data, rootname, width=800, height=80
             pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
             pheatmap(
                 mat=mat_data,
+                main="Top 30 genes from VST normalized read counts",
                 annotation_col=column_data,
                 cluster_rows=FALSE,
                 show_rownames=TRUE,
@@ -330,17 +428,110 @@ assert_args <- function(args){
 
 get_args <- function(){
     parser <- ArgumentParser(description='Run BioWardrobe DESeq/DESeq2 for untreated-vs-treated groups (condition-1-vs-condition-2)')
-    parser$add_argument("-u",  "--untreated", help='Untreated (condition 1) CSV/TSV isoforms expression files',    type="character", required="True", nargs='+')
-    parser$add_argument("-t",  "--treated",   help='Treated (condition 2) CSV/TSV isoforms expression files',      type="character", required="True", nargs='+')
-    parser$add_argument("-ua", "--ualias",    help='Unique aliases for untreated (condition 1) expression files. Default: basenames of -u without extensions', type="character", nargs='*')
-    parser$add_argument("-ta", "--talias",    help='Unique aliases for treated (condition 2) expression files. Default: basenames of -t without extensions',   type="character", nargs='*')
-    parser$add_argument("-un", "--uname",     help='Name for untreated (condition 1), use only letters and numbers', type="character", default="untreated")
-    parser$add_argument("-tn", "--tname",     help='Name for treated (condition 2), use only letters and numbers',   type="character", default="treated")
-    parser$add_argument("-bf", "--batchfile", help='Metadata file for multi-factor analysis. Headerless TSV/CSV file. First column - names from --ualias and --talias, second column - batch group name. Default: None', type="character")
-    parser$add_argument("-cu", "--cutoff",    help='Minimum threshold for rpkm filtering. Default: 5', type="double", default=5)
-    parser$add_argument("-o",  "--output",    help='Output prefix. Default: deseq',    type="character", default="./deseq")
-    parser$add_argument("-d",  "--digits",    help='Precision, number of digits to print. Default: 3', type="integer", default=3)
-    parser$add_argument("-p",  "--threads",   help='Threads',            type="integer",   default=1)
+    parser$add_argument(
+        "-u", "--untreated",
+        help="Untreated (condition 1) CSV/TSV isoforms expression files",
+        type="character",required="True",
+        nargs="+"
+    )
+    parser$add_argument(
+        "-t", "--treated",
+        help="Treated (condition 2) CSV/TSV isoforms expression files",
+        type="character", required="True",
+        nargs="+"
+    )
+    parser$add_argument(
+        "-ua", "--ualias",
+        help="Unique aliases for untreated (condition 1) expression files. Default: basenames of -u without extensions",
+        type="character",
+        nargs="*"
+    )
+    parser$add_argument(
+        "-ta", "--talias",
+        help="Unique aliases for treated (condition 2) expression files. Default: basenames of -t without extensions",
+        type="character",
+        nargs="*"
+    )
+    parser$add_argument(
+        "-un", "--uname",
+        help="Name for untreated (condition 1), use only letters and numbers",
+        type="character", default="untreated"
+    )
+    parser$add_argument(
+        "-tn", "--tname",
+        help="Name for treated (condition 2), use only letters and numbers",
+        type="character", default="treated"
+    )
+    parser$add_argument(
+        "-bf", "--batchfile",
+        help="Metadata file for multi-factor analysis. Headerless TSV/CSV file. First column - names from --ualias and --talias, second column - batch group name. Default: None",
+        type="character"
+    )
+    parser$add_argument(
+        "-cu", "--cutoff",
+        help="Minimum threshold for rpkm filtering. Default: 5",
+        type="double", default=5
+    )
+    parser$add_argument(
+        "--padj",
+        help=paste(
+            "In the exploratory visualization part of the analysis output only features",
+            "with adjusted P-value not bigger than this value. Default: 0.05"
+        ),
+        type="double", default=0.05
+    )
+    parser$add_argument(
+        "--cluster",
+        help=paste(
+            "Hopach clustering method to be run on normalized read counts for the",
+            "exploratory visualization part of the analysis. Default: do not run",
+            "clustering"
+        ),
+        type="character",
+        choices=c("row", "column", "both")
+    )
+    parser$add_argument(
+        "--rowdist",
+        help=paste(
+            "Distance metric for HOPACH row clustering. Ignored if --cluster is not",
+            "provided. Default: cosangle"
+        ),
+        type="character", default="cosangle",
+        choices=c("cosangle", "abscosangle", "euclid", "abseuclid", "cor", "abscor")
+    )
+    parser$add_argument(
+        "--columndist",
+        help=paste(
+            "Distance metric for HOPACH column clustering. Ignored if --cluster is not",
+            "provided. Default: euclid"
+        ),
+        type="character", default="euclid",
+        choices=c("cosangle", "abscosangle", "euclid", "abseuclid", "cor", "abscor")
+    )
+    parser$add_argument(
+        "--center",
+        help=paste(
+            "Apply mean centering for feature expression prior to running",
+            "clustering by row. Ignored when --cluster is not row or both.",
+            "Default: do not centered"
+        ),
+        action="store_true"
+    )
+    parser$add_argument(
+        "-o", "--output",
+        help="Output prefix. Default: deseq",
+        type="character", default="./deseq"
+    )
+    parser$add_argument(
+        "-d", "--digits", 
+        help="Precision, number of digits to print. Default: 3",
+        type="integer", default=3
+    )
+    parser$add_argument(
+        "-p", "--threads", 
+        help="Threads", 
+        type="integer", default=1
+    )
     args <- assert_args(parser$parse_args(gsub("'|\"| ", "_", commandArgs(trailingOnly = TRUE))))
     return (args)
 }
@@ -393,13 +584,20 @@ if (length(args$treated) > 1 && length(args$untreated) > 1){
     vst <- varianceStabilizingTransformation(dse)
 
     if (!is.null(args$batchfile)){
-        assay(vst) <- limma::removeBatchEffect(assay(vst), vst$batch)
+        assay(vst) <- limma::removeBatchEffect(
+            assay(vst),
+            vst$batch,
+            design=stats::model.matrix(stats::as.formula("~conditions"), column_data)
+        )
         pca_intgroup <- c("conditions", "batch")
     } else {
         pca_intgroup <- c("conditions")
     }
     export_pca_plot(vst, paste(args$output, "_pca_plot", sep=""), pca_intgroup)
-
+    export_mds_html_plot(                                                          # need it only whne we have at least three samples
+        norm_counts_data=vst,
+        location=paste(args$output, "mds_plot.html", sep="_")
+    )
     vsd <- assay(vst)
     rownames(vsd) <- collected_isoforms[,c("GeneId")]
     mat <- vsd[order(rowMeans(counts(dsq, normalized=TRUE)), decreasing=TRUE)[1:30],]
@@ -427,24 +625,13 @@ if (length(args$treated) > 1 && length(args$untreated) > 1){
     colnames(DESeqRes)[2] <- "pvalue"  # in DESeq2 it's pvalue, need to use the same here
 }
 
-
-# Normalized counts table for GCT export
-normCountsGct <- list(rowDescriptions=c(rep("na", times=length(row.names(normCounts)))), data=as.matrix(normCounts))
-
-
-# Create phenotype table for CLS export
-phenotype_labels <- gsub("\\s|\\t", "_", column_data[colnames(normCounts), "conditions"])
-phenotype_data <- as.factor(phenotype_labels)
-phenotype_data <- factor(phenotype_data, levels=unique(phenotype_labels))
-
 # Expression data heatmap of the 30 most highly expressed genes
 export_heatmap(mat, column_data, paste(args$output, "_expression_heatmap", sep=""))
 
 # Filter DESeq/DESeq2 output
 DESeqRes$log2FoldChange[is.na(DESeqRes$log2FoldChange)] <- 0;
 DESeqRes[is.na(DESeqRes)] <- 1;
-DESeqRes <- format(DESeqRes, digits=args$digits)
-
+# DESeqRes <- format(DESeqRes, digits=args$digits)   # when applied, can't be used as numbers anymore
 
 # Add metadata columns to the DESeq results
 collected_isoforms <- data.frame(cbind(collected_isoforms[, !colnames(collected_isoforms) %in% read_count_cols], DESeqRes), check.names=F, check.rows=F)
@@ -462,14 +649,75 @@ write.table(collected_isoforms,
             quote=FALSE)
 print(paste("Export DESeq report to ", collected_isoforms_filename, sep=""))
 
+print(
+    paste(
+        "Filtering normalized read counts matrix to include",
+        "only differentially expressed features with padj <= ", args$padj
+    )
+)
 
-# Export DESeq normalized counts to GSEA compatible file
-gct_filename <- paste(args$output, "_counts.gct", sep="")
-write.gct(normCountsGct, file=gct_filename)
-print(paste("Export normalized counts to ", gct_filename, sep=""))
+row_metadata <- collected_isoforms %>%
+                dplyr::filter(.$padj<=args$padj) %>%
+                dplyr::mutate_at("GeneId", toupper) %>%
+                dplyr::distinct(GeneId, .keep_all=TRUE) %>%                      # to prevent from failing when input files are not grouped by GeneId
+                remove_rownames() %>%
+                column_to_rownames("GeneId") %>%                                 # fails if GeneId is not unique (when run with not grouped by gene data)
+                dplyr::select(log2FoldChange, pvalue, padj)  %>%                 # we are interested only in these three columns
+                arrange(desc(log2FoldChange))
 
+col_metadata <- column_data %>%
+                mutate_at(colnames(.), as.vector)                                # need to convert to vector, because in our metadata everything was a factor
 
-# Export phenotype data to GSEA compatible file
-cls_filename <- paste(args$output, "_phenotypes.cls", sep="")
-write.cls(phenotype_data, file=cls_filename)
-print(paste("Export phenotype data to ", cls_filename, sep=""))
+print("Size of the normalized read counts matrix before filtering")
+print(dim(normCounts))
+normCounts <- normCounts[as.vector(rownames(row_metadata)), ]
+print("Size of the normalized read counts matrix after filtering")
+print(dim(normCounts))
+
+if (!is.null(args$cluster)){
+    if (args$cluster == "column" || args$cluster == "both") {
+        print("Clustering filtered read counts by columns")
+        clustered_data = get_clustered_data(
+            expression_data=normCounts,
+            center=NULL,                                              # centering doesn't influence on the samples order
+            dist=args$columndist,
+            transpose=TRUE
+        )
+        col_metadata <- cbind(col_metadata, clustered_data$clusters)  # adding cluster labels
+        col_metadata <- col_metadata[clustered_data$order, ]          # reordering samples order based on the HOPACH clustering resutls
+        print("Reordered samples")
+        print(col_metadata)
+    }
+    if (args$cluster == "row" || args$cluster == "both") {
+        print("Clustering filtered normalized read counts by rows")
+        clustered_data = get_clustered_data(
+            expression_data=normCounts,
+            center=if(args$center) "mean" else NULL,                  # about centering normalized data https://www.biostars.org/p/387863/
+            dist=args$rowdist,
+            transpose=FALSE
+        )
+        normCounts <- clustered_data$expression                  # can be different because of centering by rows mean
+        row_metadata <- cbind(row_metadata, clustered_data$clusters)  # adding cluster labels
+        row_metadata <- row_metadata[clustered_data$order, ]          # reordering features order based on the HOPACH clustering results
+        print("Reordered features")
+        print(head(row_metadata))
+    }
+}
+
+# we do not reorder normCounts based on the clustering order
+# because when exportin to GCT we use row_metadata and col_metadata
+# to force the proper order of rows and columns
+
+print("Exporting normalized read counts to GCT format")
+export_gct(
+    counts_mat=normCounts,
+    row_metadata=row_metadata,                                        # includes features as row names
+    col_metadata=col_metadata,                                        # includes samples as row names
+    location=paste(args$output, "_counts.gct", sep="")
+)
+
+print("Exporting CLS phenotype data")
+export_cls(
+    categories=col_metadata[, "conditions"],
+    paste(args$output, "_phenotypes.cls", sep="")
+)

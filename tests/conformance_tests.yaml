@@ -2579,6 +2579,9 @@
     read_counts_file:
       class: File
       location: custom_counts.gct
+    mds_plot_html:
+      class: File
+      location: custom_mds_plot.html
     phenotypes_file:
       class: File
       location: custom_phenotypes.cls
@@ -2715,6 +2718,9 @@
     read_counts_file:
       class: File
       location: deseq_counts.gct
+    mds_plot_html:
+      class: File
+      location: deseq_mds_plot.html
     phenotypes_file:
       class: File
       location: deseq_phenotypes.cls
@@ -2752,6 +2758,9 @@
     read_counts_file:
       class: File
       location: deseq_counts.gct
+    mds_plot_html:
+      class: File
+      location: deseq_mds_plot.html
     phenotypes_file:
       class: File
       location: deseq_phenotypes.cls
@@ -2789,6 +2798,9 @@
     read_counts_file:
       class: File
       location: custom_counts.gct
+    mds_plot_html:
+      class: File
+      location: custom_mds_plot.html
     phenotypes_file:
       class: File
       location: custom_phenotypes.cls
@@ -2826,6 +2838,9 @@
     read_counts_file:
       class: File
       location: custom_counts.gct
+    mds_plot_html:
+      class: File
+      location: custom_mds_plot.html
     phenotypes_file:
       class: File
       location: custom_phenotypes.cls
