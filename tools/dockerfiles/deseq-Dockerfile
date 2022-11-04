@@ -41,13 +41,11 @@ RUN apt-get update && \
     pip3 install argparse && \
 ### Installing R packages
     R -e "install.packages('BiocManager')" && \
-    R -e "BiocManager::install(version = '3.15')" && \
+    R -e "BiocManager::install(version = '3.15', update = FALSE, ask = FALSE)" && \
     R -e "BiocManager::install(c('BiocParallel', 'DESeq2', 'limma', 'EnhancedVolcano', 'hopach', 'cmapR', 'Glimma'))" && \
     R -e 'install.packages("tidyverse", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("patchwork", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("argparse", repo = "https://cloud.r-project.org/")' && \
-    R -e 'install.packages("devtools", repo = "https://cloud.r-project.org/")' && \
-    R -e 'devtools::install_github("michael-kotliar/morpheus.R")' && \
 ### Installing run_deseq_manual.R and run_morpheus.R scripts
     chmod +x /usr/local/bin/run_deseq_manual.R && \
     chmod +x /usr/local/bin/run_morpheus.R && \
