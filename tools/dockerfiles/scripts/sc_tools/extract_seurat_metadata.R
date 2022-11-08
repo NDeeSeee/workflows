@@ -42,7 +42,7 @@ get_file_type <- function (filename) {
 
 
 export_metadata <- function(data, suffix, args){
-    cluster_data <- cbind(Cells(data), data@meta.data[, args$source])
+    cluster_data <- cbind(Cells(data), as.vector(data@meta.data[, args$source]))  # need to make sure we don't take levels instead of the values. Otherwise the order is not correct
     export_data(
         cluster_data,
         location=paste(args$output, suffix, "clusters.tsv", sep="_"),

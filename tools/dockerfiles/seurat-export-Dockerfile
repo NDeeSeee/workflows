@@ -2,15 +2,19 @@
 # Dockerfile
 #
 # Software:         seurat related scripts
-# Software Version: v0.0.2
+# Software Version: v0.0.3
 # Description:      Dockerized version of seurat related scripts
 # Website:          https://satijalab.org/seurat/index.html
 # Provides:         seurat related scripts
-# Base Image:       satijalab/seurat:4.0.3
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat-export:v0.0.2 -f seurat-export-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/seurat-export:v0.0.2
-# Run Cmd:          docker run --rm -ti biowardrobe2/seurat-export:v0.0.2 /bin/bash
+# Base Image:       satijalab/seurat:4.0.6
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/seurat-export:v0.0.3 -f seurat-export-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/seurat-export:v0.0.3
+# Run Cmd:          docker run --rm -ti biowardrobe2/seurat-export:v0.0.3 /bin/bash
 #################################################################
+#
+# v0.0.3
+# - Fix bug with clusters order in extract_seurat_metadata.R script
+# - Updated base image to satijalab/seurat:4.0.6
 #
 # v0.0.2
 # - Updated extract_seurat_metadata.R to export custom reductions
@@ -19,7 +23,7 @@
 
 
 ### Base Image
-FROM satijalab/seurat:4.0.3
+FROM satijalab/seurat:4.0.6
 LABEL maintainer="misha.kotliar@gmail.com"
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -32,7 +36,7 @@ COPY ./scripts/sc_tools/extract_seurat_metadata.R /usr/local/bin/extract_seurat_
 
 ### Installing dependencies
 RUN apt-get update && \
-    apt-get install libgcc-10-dev python3-dev python3-pip libbz2-dev liblzma-dev -y && \
+    apt-get install libgcc-10-dev python3-dev python3-pip libbz2-dev liblzma-dev vim -y && \
     R -e 'install.packages("argparse", repo = "https://cloud.r-project.org/")' && \
     R -e "BiocManager::install(c('Rsamtools'))" && \
     R -e 'install.packages("Signac", repo = "https://cloud.r-project.org/")' && \
