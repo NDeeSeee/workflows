@@ -2,15 +2,20 @@
 # Dockerfile
 #
 # Software:         Visualization Plugins
-# Software Version: v0.0.3
+# Software Version: v0.0.4
 # Description:      Visualization Plugins
 # Website:          https://github.com/Barski-lab/visualization_plugins.git
 # Provides:         Visualization Plugins
 # Base Image:       ubuntu:20.04
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/visualization:v0.0.3 -f visualization-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/visualization:v0.0.3
-# Run Cmd:          docker run --rm -ti biowardrobe2/visualization:v0.0.3 /bin/bash
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/visualization:v0.0.4 -f visualization-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/visualization:v0.0.4
+# Run Cmd:          docker run --rm -ti biowardrobe2/visualization:v0.0.4 /bin/bash
 #################################################################
+#
+# v0.0.4
+# - Updated volcano plot
+#   To build, need to clone private repository to the current directory
+#   https://github.com/scrowley-Datirium/volcano_plot
 #
 # v0.0.3
 # - Volcano plot always reads data from the deseq_report.tsv file
@@ -32,23 +37,23 @@ ENV DEBIAN_FRONTEND noninteractive
 
 ################## BEGIN INSTALLATION ######################
 
-WORKDIR /tmp
+WORKDIR /opt/volcano_plot
 
-ENV VP_COMMIT "28e32d856f9f59962ac2ae59f097ec7b8e5a0bb2"
-ENV VP_URL "https://github.com/Barski-lab/visualization_plugins.git"
+ENV VP_COMMIT "f4d45e638fa8403ef1c20f9c10eae5b9ad40216e"
 
+COPY ./volcano_plot/ /opt/volcano_plot
 COPY ./scripts/volcano_plot.sh /usr/local/bin/volcano_plot.sh
 
 ### Installing dependencies
 RUN apt-get update && \
     apt-get install git -y && \
 ### Installing Visualization Plugins
-    cd /opt && \
-    git clone ${VP_URL} && \
-    cd visualization_plugins && \
+    cd /opt/volcano_plot && \
     git checkout ${VP_COMMIT} && \
     rm -rf .git && \
+    rm README.md README_old.md LICENSE && \
 ### Installing R scripts
+    chmod +x /opt/volcano_plot/setVars.sh && \
     chmod +x /usr/local/bin/volcano_plot.sh && \
 ### Cleaning
     apt-get clean && \

@@ -2,5 +2,8 @@
     "diff_expr_file": {
         "class": "File",
         "location": "./data/dm3_chr4/generated_inputs/deseq/custom_report.tsv"
-    }
+    },
+    "x_axis_column": "log2FoldChange",
+    "y_axis_column": "padj",
+    "label_column": "GeneId"
 }
