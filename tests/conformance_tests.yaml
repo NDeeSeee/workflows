@@ -6191,3 +6191,35 @@
     stderr_log:
       class: File
       location: "morpheus_stderr.log"
+
+# ========================================================
+# extract-7z
+# ========================================================
+
+- job: ./extract-7z-1.json
+  tool: ../tools/extract-7z.cwl
+  output:
+    extracted_file:
+      class: File
+      location: extracted.txt
+
+- job: ./extract-7z-2.json
+  tool: ../tools/extract-7z.cwl
+  output:
+    extracted_file:
+      class: File
+      location: extracted.txt
+
+- job: ./extract-7z-3.json
+  tool: ../tools/extract-7z.cwl
+  output:
+    extracted_file:
+      class: File
+      location: extracted.txt
+
+- job: ./extract-7z-4.json
+  tool: ../tools/extract-7z.cwl
+  output:
+    extracted_file:
+      class: File
+      location: extracted.txt
