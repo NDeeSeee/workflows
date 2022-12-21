@@ -2,15 +2,18 @@
 # Dockerfile
 #
 # Software:         GSEApy
-# Software Version: v0.0.5
+# Software Version: v0.0.6
 # Description:      Gene Set Enrichment Analysis in Python
 # Website:          https://gseapy.readthedocs.io/en/latest/index.html
 # Provides:         GSEApy 0.9.18 (modified: works without Internet)
 # Base Image:       python:3.7
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/gseapy:v0.0.5 -f gseapy-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/gseapy:v0.0.5
-# Run Cmd:          docker run --rm -ti biowardrobe2/gseapy:v0.0.5 /bin/bash
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/gseapy:v0.0.6 -f gseapy-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/gseapy:v0.0.6
+# Run Cmd:          docker run --rm -ti biowardrobe2/gseapy:v0.0.6 /bin/bash
 #################################################################
+#
+# v0.0.6
+# - support GCT v1.3 as input
 #
 # v0.0.5
 # - updated to the latest msigdb 2022.1.Hs release
@@ -37,7 +40,7 @@ ENV DEBIAN_FRONTEND noninteractive
 
 WORKDIR /tmp
 
-ENV COMMIT_GSEAPY "e20527fd50237dbb035e35c7bcd36e4fbda5cf8d"
+ENV COMMIT_GSEAPY "88af566f4148cda61d7269b654ba8776ff67a188"
 ENV URL_GSEAPY "https://github.com/michael-kotliar/GSEApy.git"
 
 COPY ./scripts/gseapy_download_datasets.py /tmp/gseapy_download_datasets.py
