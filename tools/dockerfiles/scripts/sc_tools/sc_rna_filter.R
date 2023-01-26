@@ -3,6 +3,7 @@ options(warn=-1)
 options("width"=200)
 options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
+suppressMessages(library(dplyr))
 suppressMessages(library(Seurat))
 suppressMessages(library(modules))
 suppressMessages(library(argparse))
@@ -14,6 +15,7 @@ suppressMessages(graphics <- modules::use(file.path(HERE, "modules/graphics.R"))
 suppressMessages(io <- modules::use(file.path(HERE, "modules/io.R")))
 suppressMessages(qc <- modules::use(file.path(HERE, "modules/qc.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
+suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
 
 export_all_qc_plots <- function(seurat_data, suffix, args){
@@ -355,9 +357,9 @@ get_args <- function(){
         "--mitopattern",
         help=paste(
             "Regex pattern to identify mitochondrial genes.",
-            "Default: '^Mt-'"
+            "Default: '^mt-|^MT-'"
         ),
-        type="character", default="^Mt-"
+        type="character", default="^mt-|^MT-"
     )
     parser$add_argument(
         "--maxmt",
@@ -386,6 +388,11 @@ get_args <- function(){
     parser$add_argument(
         "--h5ad",
         help="Save Seurat data to h5ad file. Default: false",
+        action="store_true"
+    )
+    parser$add_argument(
+        "--cbbuild",
+        help="Export results to UCSC Cell Browser. Default: false",
         action="store_true"
     )
     parser$add_argument(
@@ -435,7 +442,7 @@ print(
 prod$parallel(args)
 
 print(paste("Loading datasets identities from", args$identity))
-cell_identity_data <- io$load_cell_identity_data(args$identity)
+cell_identity_data <- io$load_cell_identity_data(args$identity)                         # identities are always prepended with letters to keep the order
 
 print(paste("Loading datasets grouping from", args$grouping))
 grouping_data <- io$load_grouping_data(args$grouping, cell_identity_data)
@@ -450,28 +457,52 @@ seurat_data <- io$load_10x_rna_data(                                            
 )
 debug$print_info(seurat_data, args)
 
-print("Adjusting input parameters")
-idents_count <- length(unique(as.vector(as.character(Idents(seurat_data)))))
-for (key in names(args)){
-    if (key %in% c("mingenes", "maxgenes", "rnaminumi", "minnovelty")){
-        if (length(args[[key]]) != 1 && length(args[[key]]) != idents_count){
-            print(paste("Filtering parameter", key, "has an ambiguous size. Exiting"))
-            quit(save="no", status=1, runLast=FALSE)
-        }
-        if (length(args[[key]]) == 1){
-            print(paste("Extending filtering parameter", key, "to have a proper size"))
-            args[[key]] <- rep(args[[key]][1], idents_count)
-        }
-    }
-}
-print("Adjusted parameters")
-print(args)
-
+idents_before_filtering <- sort(unique(as.vector(as.character(Idents(seurat_data)))))    # A->Z sorted identities
 if (!is.null(args$barcodes)){
     print("Applying cell filters based on the barcodes of interest")
     seurat_data <- io$extend_metadata_by_barcode(seurat_data, args$barcodes, TRUE)
 }
 debug$print_info(seurat_data, args)
+idents_after_filtering <- sort(unique(as.vector(as.character(Idents(seurat_data)))))     # A->Z sorted identities
+
+print("Adjusting input parameters")
+for (key in names(args)){
+    if (key %in% c("mingenes", "maxgenes", "rnaminumi", "minnovelty")){
+        if (length(args[[key]]) == 1){
+            print(paste("Extending filtering parameter", key, "to have a proper size"))
+            args[[key]] <- rep(args[[key]][1], length(idents_after_filtering))           # we use number of identities after filtering as we may have potentially removed some of them
+        } else {
+            if (length(args[[key]]) != length(idents_before_filtering)){                 # we use the original number of identities to make sure
+                print(                                                                   # that a user provided the the correct number of filtering
+                    paste(                                                               # parameter from the very beginning (a.k.a the same as in --identity)
+                        "The size of the filtering parameter", key, "is not",
+                        "equal to the number of originally provided datasets.",
+                        "Exiting"
+                    )
+                )
+                quit(save="no", status=1, runLast=FALSE)
+            }
+            if (length(idents_after_filtering) != length(idents_before_filtering)){
+                filtered_params <- c()
+                for (i in 1:length(idents_before_filtering)){
+                    if (idents_before_filtering[i] %in% idents_after_filtering){
+                        filtered_params <- append(filtered_params, args[[key]][i])
+                    } else {
+                        print(
+                            paste(
+                                "Excluding value", args[[key]][i], "from the", key, "parameter as",
+                                "identity", idents_before_filtering[i], "is not present anymore"
+                            )
+                        )
+                    }
+                }
+                args[[key]] <- filtered_params
+            }
+        }
+    }
+}
+print("Adjusted parameters")
+print(args)
 
 print("Adding QC metrics for not filtered datasets")
 seurat_data <- qc$add_rna_qc_metrics(seurat_data, args)
@@ -484,7 +515,7 @@ export_all_qc_plots(
 )
 
 print("Applying filters based on QC metrics")
-seurat_data <- filter$apply_rna_qc_filters(seurat_data, cell_identity_data, args)          # cleans up all reductions
+seurat_data <- filter$apply_rna_qc_filters(seurat_data, args)                              # cleans up all reductions
 debug$print_info(seurat_data, args)
 
 export_all_qc_plots(                                                                       # after all filters have been applied
@@ -492,6 +523,28 @@ export_all_qc_plots(                                                            
     suffix="fltr",
     args=args
 )
+
+print("Adding genes vs RNA UMI per cell correlation as gene_rnaumi dimensionality reduction")
+seurat_data@reductions[["gene_rnaumi"]] <- CreateDimReducObject(
+    embeddings=as.matrix(
+        seurat_data@meta.data[, c("nCount_RNA", "nFeature_RNA"), drop=FALSE] %>%           # can't be include into the add_rna_qc_metrics function
+        dplyr::rename("GRU_1"="nCount_RNA", "GRU_2"="nFeature_RNA") %>%                    # as apply_rna_qc_filters removes all reductions
+        dplyr::mutate(GRU_1=log10(GRU_1), GRU_2=log10(GRU_2))
+    ),
+    key="GRU_",
+    assay="RNA"
+)
+
+if(args$cbbuild){
+    print("Exporting filtering results to UCSC Cellbrowser")
+    ucsc$export_cellbrowser(
+        seurat_data=seurat_data,
+        assay="RNA",
+        slot="counts",
+        short_label="RNA",
+        rootname=paste(args$output, "_cellbrowser", sep=""),
+    )
+}
 
 DefaultAssay(seurat_data) <- "RNA"                                                         # better to stick to RNA assay by default https://www.biostars.org/p/395951/#395954 
 print("Exporting results to RDS file")
