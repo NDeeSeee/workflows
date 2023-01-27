@@ -104,7 +104,7 @@ assert_args <- function(args){
             design_formula = as.formula(args$design)
         },
         error = function(e){ 
-            print(paste("Exiting: failed to load --design '", args$design, "' as formula",  sep=""))
+            print(paste("Exiting: failed to load --design ", args$design, " as formula",  sep=""))
             quit(save = "no", status = 1, runLast = FALSE)
         }
     )
@@ -114,7 +114,7 @@ assert_args <- function(args){
             reduced_formula = as.formula(args$reduced)
         },
         error = function(e){ 
-            print(paste("Exiting: failed to load --reduced '", args$reduced, "' as formula",  sep=""))
+            print(paste("Exiting: failed to load --reduced ", args$reduced, " as formula",  sep=""))
             quit(save = "no", status = 1, runLast = FALSE)
         }
     )
@@ -124,14 +124,14 @@ assert_args <- function(args){
 
 get_args <- function(){
     parser <- ArgumentParser(description="Run DeSeq2 for multi-factor analysis using LRT (likelihood ratio or chi-squared test)")
-    parser$add_argument("-i", "--input",    help='Grouped by gene / TSS/ isoform expression files, formatted as CSV/TSV',                                                       type="character", required="True", nargs='+')
-    parser$add_argument("-n", "--name",     help='Unique names for input files, no special characters, spaces are allowed. Number and order corresponds to --input',            type="character", required="True", nargs='+')
-    parser$add_argument("-m", "--meta",     help='Metadata file to describe relation between samples, where first column corresponds to --name, formatted as CSV/TSV',          type="character", required="True")
-    parser$add_argument("-d", "--design",   help='Design formula. Should start with ~. See DeSeq2 manual for details',                                                          type="character", required="True")
-    parser$add_argument("-r", "--reduced",  help='Reduced formula to compare against with the term(s) of interest removed. Should start with ~. See DeSeq2 manual for details', type="character", required="True")
-    parser$add_argument("-c", "--contrast", help='Contrast to be be applied for output, formatted as Factor Numerator Denominator or "Factor Numerator Denominator"',           type="character", required="True", nargs='+')
-    parser$add_argument("-o", "--output",   help='Output prefix for generated files', type="character", default="./deseq")
-    parser$add_argument("-p", "--threads",  help='Threads number',                    type="integer",   default=1)
+    parser$add_argument("-i", "--input",    help="Grouped by gene / TSS/ isoform expression files, formatted as CSV/TSV",                                                       type="character", required="True", nargs="+")
+    parser$add_argument("-n", "--name",     help="Unique names for input files, no special characters, spaces are allowed. Number and order corresponds to --input",            type="character", required="True", nargs="+")
+    parser$add_argument("-m", "--meta",     help="Metadata file to describe relation between samples, where first column corresponds to --name, formatted as CSV/TSV",          type="character", required="True")
+    parser$add_argument("-d", "--design",   help="Design formula. Should start with ~. See DeSeq2 manual for details",                                                          type="character", required="True")
+    parser$add_argument("-r", "--reduced",  help="Reduced formula to compare against with the term(s) of interest removed. Should start with ~. See DeSeq2 manual for details", type="character", required="True")
+    parser$add_argument("-c", "--contrast", help="Contrast to be be applied for output, formatted as Factor Numerator Denominator or Factor Numerator Denominator",           type="character", required="True", nargs="+")
+    parser$add_argument("-o", "--output",   help="Output prefix for generated files", type="character", default="./deseq")
+    parser$add_argument("-p", "--threads",  help="Threads number",                    type="integer",   default=1)
     args <- assert_args(parser$parse_args(commandArgs(trailingOnly = TRUE)))
     return (args)
 }

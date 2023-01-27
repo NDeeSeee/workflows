@@ -427,7 +427,7 @@ assert_args <- function(args){
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description='Run BioWardrobe DESeq/DESeq2 for untreated-vs-treated groups (condition-1-vs-condition-2)')
+    parser <- ArgumentParser(description="Run BioWardrobe DESeq/DESeq2 for untreated-vs-treated groups (condition-1-vs-condition-2)")
     parser$add_argument(
         "-u", "--untreated",
         help="Untreated (condition 1) CSV/TSV isoforms expression files",
@@ -601,8 +601,7 @@ if (length(args$treated) > 1 && length(args$untreated) > 1){
     vsd <- assay(vst)
     rownames(vsd) <- collected_isoforms[,c("GeneId")]
     mat <- vsd[order(rowMeans(counts(dsq, normalized=TRUE)), decreasing=TRUE)[1:30],]
-
-    DESeqRes <- as.data.frame(res[,c(2,5,6)])
+    DESeqRes <- as.data.frame(res[, c(1, 2, 5, 6)])
 } else {
     print("Run DESeq analysis")
     suppressMessages(library(DESeq))
@@ -620,9 +619,8 @@ if (length(args$treated) > 1 && length(args$untreated) > 1){
     vsd <- exprs(varianceStabilizingTransformation(cdsD))
     rownames(vsd) <- collected_isoforms[,c("GeneId")]
     mat <- vsd[order(rowMeans(counts(cdsD, normalized=TRUE)), decreasing=TRUE)[1:30],]
-
-    DESeqRes <- res[,c(6,7,8)]
-    colnames(DESeqRes)[2] <- "pvalue"  # in DESeq2 it's pvalue, need to use the same here
+    DESeqRes <- res[, c(2, 6, 7, 8)]
+    colnames(DESeqRes)[3] <- "pvalue"  # in DESeq2 it's pvalue, need to use the same here
 }
 
 # Expression data heatmap of the 30 most highly expressed genes
@@ -630,7 +628,8 @@ export_heatmap(mat, column_data, paste(args$output, "_expression_heatmap", sep="
 
 # Filter DESeq/DESeq2 output
 DESeqRes$log2FoldChange[is.na(DESeqRes$log2FoldChange)] <- 0;
-DESeqRes[is.na(DESeqRes)] <- 1;
+DESeqRes$pvalue[is.na(DESeqRes$pvalue)] <- 1;
+DESeqRes$padj[is.na(DESeqRes$padj)] <- 1;
 # DESeqRes <- format(DESeqRes, digits=args$digits)   # when applied, can't be used as numbers anymore
 
 # Add metadata columns to the DESeq results

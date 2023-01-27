@@ -2,7 +2,7 @@
 # Dockerfile
 #
 # Software:         BioWardrobe DESeq/DESeq2 script
-# Software Version: v0.0.26
+# Software Version: v0.0.27
 # Description:      Dockerized version of DESeq/DESeq2 script from BioWardrobe
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         run_deseq.R
@@ -16,10 +16,14 @@
 #                   argparse          latest
 #                   pheatmap          latest
 # Base Image:       r-base:4.0.4
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/scidap-deseq:v0.0.26 -f scidap-deseq-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/scidap-deseq:v0.0.26
-# Run Cmd:          docker run --rm -ti biowardrobe2/scidap-deseq:v0.0.26 /bin/bash
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/scidap-deseq:v0.0.27 -f scidap-deseq-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/scidap-deseq:v0.0.27
+# Run Cmd:          docker run --rm -ti biowardrobe2/scidap-deseq:v0.0.27 /bin/bash
 #################################################################
+#
+# v0.0.27
+# - Update run_deseq.R to export baseMean column
+#   needed for MA-plot
 #
 # v0.0.26
 #

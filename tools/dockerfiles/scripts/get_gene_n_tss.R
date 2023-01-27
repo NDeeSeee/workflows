@@ -53,10 +53,10 @@ load_isoform <- function(filename, combine_type) {
 
 
 # Parser
-parser <- ArgumentParser(description='Group isoform expression data by gene and common TSS')
-parser$add_argument("--isoforms",  help='Input CSV isoform expression file',     type="character", required="True")
-parser$add_argument("--gene",      help='Output TSV gene expression file',       type="character")
-parser$add_argument("--tss",       help='Output TSV common tss expression file', type="character")
+parser <- ArgumentParser(description="Group isoform expression data by gene and common TSS")
+parser$add_argument("--isoforms",  help="Input CSV isoform expression file",     type="character", required="True")
+parser$add_argument("--gene",      help="Output TSV gene expression file",       type="character")
+parser$add_argument("--tss",       help="Output TSV common tss expression file", type="character")
 args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
 
 
