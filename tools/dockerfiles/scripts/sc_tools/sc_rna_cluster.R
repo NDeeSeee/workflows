@@ -3,10 +3,13 @@ options(warn=-1)
 options("width"=200)
 options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
+suppressMessages(library(dplyr))
 suppressMessages(library(Seurat))
 suppressMessages(library(Signac))
 suppressMessages(library(modules))
+suppressMessages(library(forcats))
 suppressMessages(library(argparse))
+suppressMessages(library(tidyselect))
 
 HERE <- (function() {return (dirname(sub("--file=", "", commandArgs(trailingOnly=FALSE)[grep("--file=", commandArgs(trailingOnly=FALSE))])))})()
 suppressMessages(analyses <- modules::use(file.path(HERE, "modules/analyses.R")))
@@ -117,7 +120,10 @@ export_all_clustering_plots <- function(seurat_data, args){
                 pdf=args$pdf
             )
         }
-        if (all(as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition)))){
+        if (
+            all(as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition))) &&
+            length(unique(as.vector(as.character(seurat_data@meta.data$condition)))) > 1
+        ){
             graphics$dim_plot(
                 data=seurat_data,
                 reduction="rnaumap",
@@ -207,8 +213,8 @@ export_all_clustering_plots <- function(seurat_data, args){
 
 
 export_all_expression_plots <- function(seurat_data, args) {
-    SeuratObject::DefaultAssay(seurat_data) <- "RNA"                            # safety measure
-    SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
+    DefaultAssay(seurat_data) <- "RNA"                            # safety measure
+    Idents(seurat_data) <- "new.ident"                            # safety measure
     if (!is.null(args$genes) && length(args$genes) > 0){
         for (i in 1:length(args$genes)){
             current_gene <- args$genes[i]
@@ -278,7 +284,54 @@ export_all_expression_plots <- function(seurat_data, args) {
             }
         }
     }
-    SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
+    Idents(seurat_data) <- "new.ident"                            # safety measure
+}
+
+
+export_heatmaps <- function(seurat_data, markers, args){
+    DefaultAssay(seurat_data) <- "RNA"                            # safety measure
+    Idents(seurat_data) <- "new.ident"                            # safety measure
+    for (i in 1:length(args$resolution)) {
+        current_resolution <- args$resolution[i]
+        grouped_markers <- markers %>%
+                           dplyr::filter(.$resolution==current_resolution) %>%                     # shouldn't fail even if resolution is not present
+                           dplyr::select(-c("resolution")) %>%
+                           dplyr::group_by(cluster) %>%
+                           dplyr::top_n(
+                               n=tidyselect::all_of(floor(60/length(unique(markers$cluster)))),
+                               wt=avg_log2FC
+                           )
+        if (nrow(grouped_markers) > 0){                                                            # in case we don't have any markers for specific resolution
+            column_annotations <- c(paste("rna_res", current_resolution, sep="."))
+            if (length(unique(as.vector(as.character(seurat_data@meta.data$new.ident)))) > 1){
+                column_annotations <- c(column_annotations, "new.ident")                           # several datasets found
+            }
+            if (
+                all(as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition))) &&
+                length(unique(as.vector(as.character(seurat_data@meta.data$condition)))) > 1
+            ){
+                column_annotations <- c(column_annotations, "condition")                           # several conditions found
+            }
+            graphics$feature_heatmap(                                                              # install.packages("magick") for better rasterization
+                data=seurat_data,
+                assay="RNA",
+                slot="data",
+                features=grouped_markers$feature,
+                split_rows=forcats::fct_inorder(as.character(grouped_markers$cluster)),            # fct_inorder fails with numeric
+                show_rownames=TRUE,
+                scale_to_max=TRUE,
+                group_by=column_annotations,
+                palette_colors=graphics$D40_COLORS,
+                heatmap_colors=c("black", "yellow"),
+                plot_title=paste(
+                    "Normalized gene expression heatmap. Resolution", current_resolution
+                ),
+                rootname=paste(args$output, "xpr_htmp_res", current_resolution, sep="_"),
+                pdf=args$pdf
+            )
+        }
+    }
+    Idents(seurat_data) <- "new.ident"                            # safety measure
 }
 
 
@@ -329,7 +382,9 @@ get_args <- function(){
         "--resolution",
         help=paste(
             "Clustering resolution applied to the constructed nearest-neighbor graph.",
-            "Can be set as an array.",
+            "Can be set as an array but only the first item from the list will be used",
+            "for cluster labels and gene markers in the UCSC Cell Browser when running",
+            "with --cbbuild and --diffgenes parameters.",
             "Default: 0.3, 0.5, 1.0"
         ),
         type="double", default=c(0.3, 0.5, 1.0), nargs="*"
@@ -499,18 +554,7 @@ if (!is.null(args$genes)){
     print(args$genes)
 }
 
-if(args$cbbuild){
-    print("Exporting RNA assay to UCSC Cellbrowser")
-    ucsc$export_cellbrowser(
-        seurat_data=seurat_data,
-        assay="RNA",
-        slot="counts",
-        short_label="RNA",
-        features=args$genes,                                   # can be NULL
-        rootname=paste(args$output, "_cellbrowser", sep=""),
-    )
-}
-
+all_markers <- NULL
 if (!is.null(args$genes) || args$diffgenes) {
     print("Normalizing counts in RNA assay before evaluating genes expression or identifying putative gene markers")
     DefaultAssay(seurat_data) <- "RNA"
@@ -521,17 +565,47 @@ if (!is.null(args$genes) || args$diffgenes) {
     }
     if(args$diffgenes){
         print("Identifying differentially expressed genes between each pair of clusters for all resolutions")
-        all_putative_markers <- analyses$get_putative_markers(
+        all_markers <- analyses$get_markers_by_res(                                        # either NULL or definitely not empty
             seurat_data=seurat_data,
             assay="RNA",
             resolution_prefix="rna_res",
             args=args
         )
-        io$export_data(
-            all_putative_markers,
-            paste(args$output, "_gene_markers.tsv", sep="")
-        )
+        if (!is.null(all_markers)){
+            io$export_data(
+                all_markers,
+                paste(args$output, "_gene_markers.tsv", sep="")
+            )
+            export_heatmaps(
+                seurat_data=seurat_data,
+                markers=all_markers,
+                args=args
+            )
+        }
     }
+}
+
+if(args$cbbuild){
+    print("Exporting RNA assay to UCSC Cellbrowser")
+    if(!is.null(all_markers)){
+        all_markers <- all_markers %>%
+                       dplyr::filter(.$resolution==args$resolution[1]) %>%                 # won't fail even if resolution is not present
+                       dplyr::select(-c("resolution"))
+    }
+    print("Reordering reductions to have rnaumap on the first place")                      # will be shown first in UCSC Cellbrowser
+    reduc_names <- names(seurat_data@reductions)
+    ordered_reduc_names <- c("rnaumap", reduc_names[reduc_names!="rnaumap"])               # we checked before that rnaumap is present
+    seurat_data@reductions <- seurat_data@reductions[ordered_reduc_names]
+    debug$print_info(seurat_data, args)
+    ucsc$export_cellbrowser(
+        seurat_data=seurat_data,
+        assay="RNA",
+        slot="counts",
+        short_label="RNA",
+        markers=all_markers,                                                               # can be NULL
+        label_field=paste0("Clustering (rna ", args$resolution[1], ")"),                   # always use only the first resolution
+        rootname=paste(args$output, "_cellbrowser", sep="")
+    )
 }
 
 DefaultAssay(seurat_data) <- "RNA"                                                         # better to stick to RNA assay by default https://www.biostars.org/p/395951/#395954 

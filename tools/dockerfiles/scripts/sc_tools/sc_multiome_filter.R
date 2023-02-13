@@ -337,6 +337,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         features=selected_features,
         labels=selected_labels,
         from_meta=TRUE,
+        show_stats=TRUE,
         plot_title=paste("QC metrics per cell density (", suffix, ")", sep=""),
         legend_title="Dataset",
         hide_x_text=TRUE,
@@ -372,7 +373,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
     )
     DefaultAssay(seurat_data) <- backup_assay
 
-    if (all(as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition)))){
+    if (
+        all(as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition))) &&
+        length(unique(as.vector(as.character(seurat_data@meta.data$condition)))) > 1
+    ){
         graphics$geom_density_plot(
             data=seurat_data@meta.data,
             x_axis="nCount_RNA",

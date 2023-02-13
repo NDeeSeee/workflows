@@ -174,7 +174,10 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         )
     }
 
-    if (all(as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition)))){
+    if (
+        all(as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition))) &&
+        length(unique(as.vector(as.character(seurat_data@meta.data$condition)))) > 1
+    ){
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
@@ -606,6 +609,11 @@ export_all_dimensionality_plots(
 
 if(args$cbbuild){
     print("Exporting RNA assay to UCSC Cellbrowser")
+    print("Reordering reductions to have rnaumap on the first place")                      # will be shown first in UCSC Cellbrowser
+    reduc_names <- names(seurat_data@reductions)
+    ordered_reduc_names <- c("rnaumap", reduc_names[reduc_names!="rnaumap"])               # rnaumap will be added by this time
+    seurat_data@reductions <- seurat_data@reductions[ordered_reduc_names]
+    debug$print_info(seurat_data, args)
     ucsc$export_cellbrowser(
         seurat_data=seurat_data,
         assay="RNA",

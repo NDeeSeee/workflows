@@ -1,3 +1,4 @@
+import("grid", attach=FALSE)
 import("dplyr", attach=FALSE)
 import("purrr", attach=FALSE)
 import("tidyr", attach=FALSE)
@@ -13,6 +14,7 @@ import("reshape2", attach=FALSE)
 import("dittoSeq", attach=FALSE)
 import("Nebulosa", attach=FALSE)
 import("patchwork", attach=FALSE)
+import("tidyselect", attach=FALSE)
 import("htmlwidgets", attach=FALSE)
 import("RColorBrewer", attach=FALSE)
 import("magrittr", `%>%`, attach=TRUE)
@@ -135,7 +137,7 @@ geom_density_plot <- function(data, rootname, x_axis, color_by, facet_by, x_left
                         )
             }
 
-            if (scale_x_log10){ plot <- plot + ggplot2::scale_x_log10() }
+            if (scale_x_log10){ plot <- plot + ggplot2::scale_x_log10() + ggplot2::annotation_logticks(sides="b", alpha=0.3) }
             if (scale_y_log10){ plot <- plot + ggplot2::scale_y_log10() }
 
             if (zoom_on_intercept) {
@@ -163,7 +165,7 @@ geom_density_plot <- function(data, rootname, x_axis, color_by, facet_by, x_left
                 } else {
                     zoomed_plot <- zoomed_plot + ggplot2::coord_cartesian(xlim=c(NA, max(intercept_data$x_left)))
                 }
-                if (scale_x_log10){ zoomed_plot <- zoomed_plot + ggplot2::scale_x_log10() }
+                if (scale_x_log10){ zoomed_plot <- zoomed_plot + ggplot2::scale_x_log10() + ggplot2::annotation_logticks(sides="b", alpha=0.3) }
                 if (scale_y_log10){ zoomed_plot <- zoomed_plot + ggplot2::scale_y_log10() }
                 plot <- plot / zoomed_plot
             }
@@ -268,8 +270,8 @@ geom_point_plot <- function(data, rootname, x_axis, y_axis, facet_by, x_left_int
                         )
             }
 
-            if (scale_x_log10){ plot <- plot + ggplot2::scale_x_log10() }
-            if (scale_y_log10){ plot <- plot + ggplot2::scale_y_log10() }
+            if (scale_x_log10){ plot <- plot + ggplot2::scale_x_log10() + ggplot2::annotation_logticks(sides="b", alpha=0.3) }
+            if (scale_y_log10){ plot <- plot + ggplot2::scale_y_log10() + ggplot2::annotation_logticks(sides="l", alpha=0.3) }
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(plot))
@@ -341,7 +343,7 @@ feature_scatter_plot <- function(data, rootname, x_axis, y_axis, x_label, y_labe
     )
 }
 
-vln_plot <- function(data, features, labels, rootname, plot_title, legend_title, from_meta=FALSE, log=FALSE, group_by=NULL, split_by=NULL, hide_x_text=FALSE, pt_size=NULL, palette_colors=NULL, combine_guides=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+vln_plot <- function(data, features, labels, rootname, plot_title, legend_title, from_meta=FALSE, log=FALSE, group_by=NULL, split_by=NULL, show_stats=FALSE, hide_x_text=FALSE, pt_size=NULL, palette_colors=NULL, combine_guides=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
 
@@ -383,6 +385,17 @@ vln_plot <- function(data, features, labels, rootname, plot_title, legend_title,
                               ggplot2::stat_boxplot(width=0.15, geom="errorbar") +
                               ggplot2::geom_boxplot(width=0.15, outlier.alpha=0) +
                               Seurat::RotatedAxis()
+                if (show_stats){                        # https://stackoverflow.com/questions/56434187/label-whiskers-on-ggplot-boxplot-when-there-are-outliers
+                    plots[[i]] <- plots[[i]] +
+                                  ggplot2::stat_summary(
+                                      ggplot2::aes(label=round(..y.., digits=2)),
+                                      geom="text",
+                                      fun.y=function(y) grDevices::boxplot.stats(y)$stats[c(1, 5)],
+                                      position=ggplot2::position_nudge(x=0.35), 
+                                      size=2.5,
+                                      color="darkblue"
+                                  )
+                }
                 if (!is.null(palette_colors)){ plots[[i]] <- plots[[i]] + ggplot2::scale_fill_manual(values=palette_colors) }
                 if (hide_x_text){ plots[[i]] <- plots[[i]] + ggplot2::theme(axis.text.x=ggplot2::element_blank()) }
                 return (plots[[i]])
@@ -1255,7 +1268,7 @@ volcano_plot <- function(data, rootname, x_axis, y_axis, x_cutoff, y_cutoff, x_l
     )
 }
 
-feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", slot="data", cells=NULL, scale_to_max=TRUE, scale="none", heatmap_colors=c("blue", "black", "yellow"), group_by="new.ident", show_rownames=FALSE, palette_colors=D40_COLORS, pdf=FALSE, width=1200, height=800, resolution=100){
+feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", slot="data", cells=NULL, scale_to_max=TRUE, scale="none", split_rows=NULL, legend_title="Expression", heatmap_colors=c("blue", "black", "yellow"), group_by="new.ident", show_rownames=FALSE, palette_colors=D40_COLORS, pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
 
@@ -1273,11 +1286,17 @@ feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", s
                 main=plot_title,
                 heatmap.colors=grDevices::colorRampPalette(heatmap_colors)(50),
                 heatmap.colors.max.scaled=grDevices::colorRampPalette(heatmap_colors[1:2])(25),  # only two colors needed
-                scale=scale,                  # can be "row"/"column"/"none" but will be forced to "none" if scaled.to.max is TRUE
-                annot.by=group_by,            # the first item will be used to order the cells
-                annot.colors=palette_colors,  # defines colors for the first item set in annot.by
-                drop_levels=TRUE,             # to drop factor levels that are not present in factor values
-                silent=TRUE                   # to prevent saving to file
+                scale=scale,                        # can be "row"/"column"/"none" but will be forced to "none" if scaled.to.max is TRUE
+                annot.by=group_by,                  # the first item will be used to order the cells
+                annot.colors=palette_colors,        # defines colors for the first item set in annot.by
+                drop_levels=TRUE,                   # to drop factor levels that are not present in factor values
+                use_raster=TRUE,
+                silent=TRUE,                        # to prevent saving to file
+                complex=TRUE,                       # to use ComplexHeatmap instead of pheatmap
+                row_split=split_rows,               # defines rows order and grouping
+                cluster_row_slices=FALSE,           # to prevent an additional clustering applied to the mean of row slices
+                row_gap = grid::unit(0.5, "mm"),    # instead of the default 1 mm
+                name=legend_title                   # to give the heatmap color scale a custom title
             )
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)

@@ -97,7 +97,7 @@ export_data <- function(data, location, row_names=FALSE, col_names=TRUE, quote=F
             base::print(base::paste("Exporting data to", location, sep=" "))
         },
         error = function(e){
-            base::print(base::paste("Failed to export data to", location, sep=" "))
+            base::print(base::paste("Failed to export data to", location, "due to", e))
         }
     )
 }
