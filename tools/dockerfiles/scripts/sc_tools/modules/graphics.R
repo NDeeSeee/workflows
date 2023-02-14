@@ -1268,7 +1268,7 @@ volcano_plot <- function(data, rootname, x_axis, y_axis, x_cutoff, y_cutoff, x_l
     )
 }
 
-feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", slot="data", cells=NULL, scale_to_max=TRUE, scale="none", split_rows=NULL, legend_title="Expression", heatmap_colors=c("blue", "black", "yellow"), group_by="new.ident", show_rownames=FALSE, palette_colors=D40_COLORS, pdf=FALSE, width=1200, height=800, resolution=100){
+feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", slot="data", cells=NULL, scale_to_max=TRUE, scale="none", split_rows=NULL, legend_title="Expression", heatmap_colors=c("blue", "black", "yellow"), group_by="new.ident", show_rownames=FALSE, palette_colors=D40_COLORS, pdf=FALSE, width=1200, height=900, resolution=100){
     base::tryCatch(
         expr = {
 

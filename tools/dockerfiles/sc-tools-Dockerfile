@@ -23,6 +23,8 @@
 # - Add gene expression heatmap with "magick" and "ComplexHeatmap"
 # - Install MACS2 from source because of the known bug
 #   https://github.com/macs3-project/MACS/issues/544
+# - Need to patch /etc/ImageMagick-6/policy.xml because of
+#   https://askubuntu.com/questions/1041349/imagemagick-command-line-convert-limit-values
 #
 # v0.0.14
 # - updated to seurat:4.1.0
@@ -152,6 +154,9 @@ RUN apt-get update && \
                     libssl-dev pandoc libudunits2-dev libgdal-dev libcairo2-dev libharfbuzz-dev \
                     libfribidi-dev libbz2-dev tk libfontconfig1-dev libfreetype6-dev libpng-dev \
                     libtiff5-dev libjpeg-dev libmagick++-dev vim -y && \
+    sed -i -e 's/name="disk" value="1GiB"/name="disk" value="15GiB"/g' /etc/ImageMagick-6/policy.xml && \
+    sed -i -e 's/name="width" value="16KP"/name="width" value="25MP"/g' /etc/ImageMagick-6/policy.xml && \
+    sed -i -e 's/name="height" value="16KP"/name="height" value="25MP"/g' /etc/ImageMagick-6/policy.xml && \
     pip3 install --no-binary="numpy" numpy==${NUMPY_VERSION} --ignore-installed && \
     pip3 install scipy==${SCIPY_VERSION} && \
     pip3 install anndata && \
