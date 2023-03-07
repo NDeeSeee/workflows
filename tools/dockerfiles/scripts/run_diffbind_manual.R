@@ -231,19 +231,38 @@ export_overlap_plot <- function(data, rootname, plot_title, highlight=NULL, pdf=
             if(!is.null(highlight) && highlight > 0 && highlight <= length(data)){
                 colors[highlight] <- "steelblue4"
             }
+            peaksets <- factor(
+                as.character(1:length(data)),                   # need to have it as character, otherwise some labels will be skipped,
+                levels=as.character(1:length(data))             # but the levels shouldn't be alphabetical, so we force the proper order
+            )
             data_df <- data.frame(
                 overlaps=data,
-                peaksets=as.character(1:length(data)),            # need to convert it to character, otherwise some labels will be skipped
+                peaksets=peaksets,
                 color=colors,
                 check.names=FALSE
             )
+            vjust <- 1.6
+            hjust <- 0.5
+            angle <- 0
+            if(length(data) > 5){
+                vjust <- 0.5
+                hjust <- -0.2
+                angle <- 90
+            }
             plot <- ggplot(data_df, aes(x=peaksets, y=overlaps, fill=peaksets)) +
-            geom_bar(stat="identity", show.legend=FALSE) +
-            scale_fill_manual(values=data_df$color) +
-            geom_text(aes(label=overlaps), vjust=1.6, color="white", size=3.5) +
-            xlab("Min peakset overlap") +
-            ylab("Number of consensus peaks") +
-            ggtitle(plot_title)
+                    geom_bar(stat="identity", show.legend=FALSE) +
+                    scale_fill_manual(values=data_df$color) +
+                    geom_text(
+                        aes(label=scales::comma(overlaps)),
+                        vjust=vjust,
+                        hjust=hjust,
+                        angle=angle,
+                        y=0,
+                        color="darkblue", size=3.5
+                    ) +
+                    xlab("Min peakset overlap") +
+                    ylab("Number of consensus peaks") +
+                    ggtitle(plot_title)
 
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             suppressMessages(print(plot))
@@ -619,6 +638,7 @@ export_plots <- function(data, metadata, args){
         plot_title="PCA (1,2) of not filtered normalized counts",
         legend_title="Dataset",
         color_by="group",
+        width=ifelse(length(args$aliases) > 13, 1600, 1200),       # need to make it wider if we have a lot of samples
         rootname=paste(args$output, "nr_rds_pca_1_2", sep="_"),
         pdf=args$pdf
     )
@@ -629,6 +649,7 @@ export_plots <- function(data, metadata, args){
         plot_title="PCA (2,3) of not filtered normalized counts",
         legend_title="Dataset",
         color_by="group",
+        width=ifelse(length(args$aliases) > 13, 1600, 1200),       # need to make it wider if we have a lot of samples
         rootname=paste(args$output, "nr_rds_pca_2_3", sep="_"),
         pdf=args$pdf
     )
@@ -1172,6 +1193,7 @@ export_profile_heatmap(
     rootname=paste(
         args$output, "pk_prfl", sep="_"
     ),
+    width=ifelse(length(args$aliases) > 5, length(args$aliases) * 150, 800),       # need to make it wider if we have a lot of samples
     pdf=args$pdf
 )
 
