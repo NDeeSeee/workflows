@@ -1,13 +1,17 @@
 #################################################################
-# Software Version: v0.0.14
+# Software Version: v0.0.15
 # Description:      Differential Binding Analysis
 # Website:          http://www.bioconductor.org/packages/release/bioc/html/DiffBind.html
 # Provides:         diffbind
 # Base Image:       r-base:4.2.2
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/diffbind:v0.0.14 -f diffbind-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/diffbind:v0.0.14
-# Run Cmd:          docker run --rm -ti biowardrobe2/diffbind:v0.0.14 /bin/bash
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/diffbind:v0.0.15 -f diffbind-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/diffbind:v0.0.15
+# Run Cmd:          docker run --rm -ti biowardrobe2/diffbind:v0.0.15 /bin/bash
 #################################################################
+#
+# v0.0.15
+# - Updated run_diffbind_manual.R to build better plots
+# - Changed to the way how --groupby and --minoverlap parameters work
 #
 # v0.0.14
 # - Updated from r-base:3.6.0 to r-base:4.2.2
