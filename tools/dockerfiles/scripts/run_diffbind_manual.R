@@ -329,7 +329,7 @@ export_corr_heatmap <- function(data, rootname, plot_title, score=NULL, padj=1, 
 }
 
 
-export_profile_heatmap <- function(data, rootname, sites, samples=NULL, scores="rank", abs_scores=FALSE, decreasing=TRUE, max_sites=1000, colors=c("black", "yellow"), pdf=FALSE, width=800, height=800, resolution=100){
+export_profile_heatmap <- function(data, rootname, sites, samples=NULL, scores="rank", abs_scores=FALSE, decreasing=TRUE, split_by=NULL, max_sites=1000, colors=c("black", "yellow"), pdf=FALSE, width=800, height=800, resolution=100){
     tryCatch(
         expr = {
 
@@ -344,6 +344,13 @@ export_profile_heatmap <- function(data, rootname, sites, samples=NULL, scores="
                 decreasing=decreasing,
                 merge=NULL
             )
+
+            if(!is.null(split_by)){                   # used only to fix a bug with not proper Binding Sites groups order and names
+                rowData(profiles_data)$"Binding Sites" <- factor(
+                    as.vector(as.character(rowData(profiles_data)[[split_by]])),
+                    levels=names(sites)               # to make sure the order of clusters is correct, because sites now is GRangesList split by cluster
+                )
+            }
 
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             dba.plotProfile(
@@ -1289,15 +1296,11 @@ if ("HCL" %in% colnames(row_metadata)){
 }
 
 if(!is.null(split_by)){
-    print("Not splitting selected sites because of unknown issue with wrong groups order in DiffBind")
-    selected_sites <- GRangesList(sites=selected_sites)                                  # we add it to GRangesList to have the proper legend dispayed
-
-    # need to figure out why DiffBind changes the names of clusters
-    # print(paste("Splitting selected sites for profile heatmap by", split_by))
-    # selected_sites <- split(
-    #     selected_sites,
-    #     fct_inorder(as.vector(as.character(mcols(selected_sites)[[split_by]])))        # reorder levels by first appearance in a vector
-    # )
+    print(paste("Splitting selected sites for profile heatmap by", split_by))
+    selected_sites <- split(
+        selected_sites,
+        fct_inorder(as.vector(as.character(mcols(selected_sites)[[split_by]])))            # reorder levels by first appearance in a vector - gives the proper cluster order
+    )
 } else {
     print("Splitting selected sites for profile heatmap by log2FoldChange")
     selected_sites <- GRangesList(
@@ -1308,7 +1311,7 @@ if(!is.null(split_by)){
 
 print(head(selected_sites))
 
-selected_samples <- list()                                            # correct order of sample based on col_metadata
+selected_samples <- list()                                                                 # correct order of sample based on col_metadata
 for (i in 1:length(rownames(col_metadata))) {
     current_sample <- rownames(col_metadata)[i]
     selected_samples[[current_sample]] <- which(
@@ -1320,9 +1323,10 @@ print(head(selected_samples))
 export_profile_heatmap(
     data=dba_data,
     sites=selected_sites,
-    decreasing=FALSE,                                                 # rank is a row number so we want to sort in increasing order
+    decreasing=FALSE,                                                                      # rank is a row number so we want to sort in increasing order
     samples=selected_samples,
-    max_sites=Inf,                                                    # to show all binding sites
+    max_sites=Inf,                                                                         # to show all binding sites
+    split_by=split_by,                                                                     # we need it only to reorder Binging sites if selected_sites split by cluster
     rootname=paste(args$output, "pk_prfl", sep="_"),
     width=ifelse(length(args$aliases) > 5, length(args$aliases) * 150, 800),
     pdf=args$pdf
