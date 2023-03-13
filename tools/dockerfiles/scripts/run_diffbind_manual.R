@@ -10,6 +10,7 @@ suppressMessages(library(Glimma))
 suppressMessages(library(hopach))
 suppressMessages(library(ggpubr))
 suppressMessages(library(ggplot2))
+suppressMessages(library(forcats))
 suppressMessages(library(argparse))
 suppressMessages(library(DiffBind))
 suppressMessages(library(tidyverse))
@@ -328,7 +329,7 @@ export_corr_heatmap <- function(data, rootname, plot_title, score=NULL, padj=1, 
 }
 
 
-export_profile_heatmap <- function(data, rootname, sites, samples=NULL, scores="score", abs_scores=FALSE, max_sites=1000, colors=c("black", "yellow"), pdf=FALSE, width=800, height=800, resolution=100){
+export_profile_heatmap <- function(data, rootname, sites, samples=NULL, scores="rank", abs_scores=FALSE, decreasing=TRUE, max_sites=1000, colors=c("black", "yellow"), pdf=FALSE, width=800, height=800, resolution=100){
     tryCatch(
         expr = {
 
@@ -339,6 +340,8 @@ export_profile_heatmap <- function(data, rootname, sites, samples=NULL, scores="
                 scores=scores,
                 absScores=abs_scores,
                 maxSites=max_sites,
+                matrices_color=colors,
+                decreasing=decreasing,
                 merge=NULL
             )
 
@@ -349,6 +352,7 @@ export_profile_heatmap <- function(data, rootname, sites, samples=NULL, scores="
                 absScores=abs_scores,
                 maxSites=max_sites,
                 matrices_color=colors,
+                decreasing=decreasing,
                 merge=NULL
             )
             dev.off()
@@ -361,6 +365,7 @@ export_profile_heatmap <- function(data, rootname, sites, samples=NULL, scores="
                     absScores=abs_scores,
                     maxSites=max_sites,
                     matrices_color=colors,
+                    decreasing=decreasing,
                     merge=NULL
                 )
                 dev.off()
@@ -559,74 +564,6 @@ export_pca_plot <- function(data, pcs, rootname, plot_title, legend_title, color
         }
     )
 }
-
-
-# export_upset_plot <- function(data, metadata, rootname, plot_title, pdf=FALSE, width=800, height=600, resolution=100){
-#     tryCatch(
-#         expr = {
-#             intersect_bp = make_comb_mat(data, mode="intersect")
-
-#             str(intersect_bp)
-#             intersect_rel = comb_size(intersect_bp)/sum(comb_size(intersect_bp))
-#             print(intersect_rel)
-
-
-#             top_annotation <- HeatmapAnnotation(
-#                 degree=as.character(comb_degree(intersect_bp)),
-#                 intersect_bp=anno_barplot(
-#                     comb_size(intersect_bp), 
-#                     gp=gpar(fill="blue"),
-#                     height=unit(2, "cm"),
-#                     # labels_format=function(x) scales::comma(x),
-#                     numbers_rot=90,
-#                     add_numbers=TRUE
-#                 ),
-#                 intersect_rel=anno_barplot(
-#                     intersect_rel, 
-#                     gp=gpar(fill="blue"),
-#                     height=unit(2, "cm"),
-#                     # labels_format=function(x) scales::comma(x),
-#                     numbers_rot=90,
-#                     add_numbers=TRUE
-#                 ), 
-#                 gap=unit(2, "mm"),
-#                 annotation_name_side="right",
-#                 annotation_name_rot=0
-#             )
-
-#             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
-#             suppressMessages(
-#                 print(
-#                     UpSet(
-#                         intersect_bp,
-#                         right_annotation=rowAnnotation(df=metadata),
-#                         top_annotation=top_annotation,
-#                         bg_col=c("#F0F0FF", "#FFF0F0"),
-#                         bg_pt_col="#CCCCFF"
-#                     )
-#                 )
-#             )
-#             dev.off()
-
-#             if (!is.null(pdf) && pdf) {
-#                 pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
-#                 suppressMessages(print(UpSet(distinct_mat_bp)))
-#                 dev.off()
-#             }
-
-#             print(paste("Exporting upset plot to ", rootname, ".(png/pdf)", sep=""))
-#         },
-#         error = function(e){
-#             tryCatch(expr={dev.off()}, error=function(e){})
-#             print(
-#                 paste0(
-#                     "Failed to export upset plot to ", rootname,
-#                     ".(png/pdf) with error - ", e
-#                 )
-#             )
-#         }
-#     )
-# }
 
 
 export_plots <- function(data, metadata, args){
@@ -1014,18 +951,6 @@ if(is.null(args$groupby_codes) && nrow(dba_data$binding) == 0){           # we c
     quit(save = "no", status = 1, runLast = FALSE)
 }
 
-# peak_list <- list()
-# for (i in 1:length(dba_data$samples$SampleID)){
-#     peak_list[[dba_data$samples$SampleID[i]]] <- dba.peakset(dba_data, peaks=i, bRetrieve=TRUE)
-# }
-# export_upset_plot(
-#     data=peak_list,
-#     metadata=metadata$raw,
-#     plot_title="UpSet",
-#     rootname=paste(args$output, "pk_upst", sep="_"),
-#     pdf=args$pdf
-# )
-
 sample_groups <- c(paste(metadata$dba$SampleID, collapse="@"))
 if(!is.null(args$groupby_names)){
     sample_groups <- append(
@@ -1345,18 +1270,42 @@ if (!is.null(args$cluster)){
 }
 
 selected_sites <- makeGRangesFromDataFrame(
-    data.frame(ranges=rownames(row_metadata), log2FoldChange=row_metadata$log2FoldChange) %>%
+    row_metadata %>%
+        mutate(rank=row_number()) %>%                                 # we use rank to maintain the  proper order of peaks
+        mutate(ranges=rownames(.)) %>%                                # need to save rownames, if we remove them profileplyr and dba.plotProfile messes up peaks order
         separate(
             col="ranges",
             into=c("chr", "start", "end"),
             sep=paste0(":", "|", "-")
-        ) %>% mutate(score=-row_number()),                            # need negative, because the sortring is in decreasing order by default
-    keep.extra.columns=TRUE                                           # to keep the score and log2FoldChange columns
+    ),
+    keep.extra.columns=TRUE                                           # to keep all metadata columns
 )
-selected_sites <- GRangesList(
-    gain=selected_sites[selected_sites$log2FoldChange >= 0, ],
-    loss=selected_sites[selected_sites$log2FoldChange < 0, ]
-)
+
+split_by <- NULL
+if ("HCL" %in% colnames(row_metadata)){
+    split_by <- "HCL"
+} else if ("HCL.1" %in% colnames(row_metadata)){
+    split_by <- "HCL.1"
+}
+
+if(!is.null(split_by)){
+    print("Not splitting selected sites because of unknown issue with wrong groups order in DiffBind")
+    selected_sites <- GRangesList(sites=selected_sites)                                  # we add it to GRangesList to have the proper legend dispayed
+
+    # need to figure out why DiffBind changes the names of clusters
+    # print(paste("Splitting selected sites for profile heatmap by", split_by))
+    # selected_sites <- split(
+    #     selected_sites,
+    #     fct_inorder(as.vector(as.character(mcols(selected_sites)[[split_by]])))        # reorder levels by first appearance in a vector
+    # )
+} else {
+    print("Splitting selected sites for profile heatmap by log2FoldChange")
+    selected_sites <- GRangesList(
+        gain=selected_sites[selected_sites$log2FoldChange >= 0, ],
+        loss=selected_sites[selected_sites$log2FoldChange < 0, ]
+    )
+}
+
 print(head(selected_sites))
 
 selected_samples <- list()                                            # correct order of sample based on col_metadata
@@ -1371,8 +1320,9 @@ print(head(selected_samples))
 export_profile_heatmap(
     data=dba_data,
     sites=selected_sites,
+    decreasing=FALSE,                                                 # rank is a row number so we want to sort in increasing order
     samples=selected_samples,
-    max_sites=length(selected_sites$gain) + length(selected_sites$loss),      # to show all sites
+    max_sites=Inf,                                                    # to show all binding sites
     rootname=paste(args$output, "pk_prfl", sep="_"),
     width=ifelse(length(args$aliases) > 5, length(args$aliases) * 150, 800),
     pdf=args$pdf
