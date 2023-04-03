@@ -14,6 +14,7 @@ suppressMessages(debug <- modules::use(file.path(HERE, "modules/debug.R")))
 suppressMessages(filter <- modules::use(file.path(HERE, "modules/filter.R")))
 suppressMessages(graphics <- modules::use(file.path(HERE, "modules/graphics.R")))
 suppressMessages(io <- modules::use(file.path(HERE, "modules/io.R")))
+suppressMessages(qc <- modules::use(file.path(HERE, "modules/qc.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
@@ -25,7 +26,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
 
     graphics$corr_plot(
         data=seurat_data,
-        reduction="atac_lsi",
+        reduction="qclsi",
         highlight_dims=args$dimensions,
         qc_columns=selected_features,
         qc_labels=selected_labels,
@@ -97,7 +98,98 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             rootname=paste(args$output, "umap_spl_cnd", sep="_"),
             pdf=args$pdf
         )
-    } 
+    }
+
+    graphics$dim_plot(
+        data=seurat_data,
+        reduction="atacumap",
+        plot_title="Split by the UMI per cell counts cells UMAP",
+        legend_title="Dataset",
+        group_by="new.ident",
+        split_by="quartile_nCount_ATAC",
+        label=FALSE,
+        alpha=0.5,
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        rootname=paste(args$output, "umap_spl_umi", sep="_"),
+        pdf=args$pdf
+    )
+
+    graphics$dim_plot(
+        data=seurat_data,
+        reduction="atacumap",
+        plot_title="Split by the peaks per cell counts cells UMAP",
+        legend_title="Dataset",
+        group_by="new.ident",
+        split_by="quartile_nFeature_ATAC",
+        label=FALSE,
+        alpha=0.5,
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        rootname=paste(args$output, "umap_spl_peak", sep="_"),
+        pdf=args$pdf
+    )
+
+    graphics$dim_plot(
+        data=seurat_data,
+        reduction="atacumap",
+        plot_title="Split by the TSS enrichment score cells UMAP",
+        legend_title="Dataset",
+        group_by="new.ident",
+        split_by="quartile_TSS.enrichment",
+        label=FALSE,
+        alpha=0.5,
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        rootname=paste(args$output, "umap_spl_tss", sep="_"),
+        pdf=args$pdf
+    )
+
+    graphics$dim_plot(
+        data=seurat_data,
+        reduction="atacumap",
+        plot_title="Split by the nucleosome signal cells UMAP",
+        legend_title="Dataset",
+        group_by="new.ident",
+        split_by="quartile_nucleosome_signal",
+        label=FALSE,
+        alpha=0.5,
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        rootname=paste(args$output, "umap_spl_ncls", sep="_"),
+        pdf=args$pdf
+    )
+
+    graphics$dim_plot(
+        data=seurat_data,
+        reduction="atacumap",
+        plot_title="Split by the FRiP cells UMAP",
+        legend_title="Dataset",
+        group_by="new.ident",
+        split_by="quartile_frip",
+        label=FALSE,
+        alpha=0.5,
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        rootname=paste(args$output, "umap_spl_frip", sep="_"),
+        pdf=args$pdf
+    )
+
+    graphics$dim_plot(
+        data=seurat_data,
+        reduction="atacumap",
+        plot_title="Split by the genomic blacklist regions fraction cells UMAP",
+        legend_title="Dataset",
+        group_by="new.ident",
+        split_by="quartile_blacklist_fraction",
+        label=FALSE,
+        alpha=0.5,
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        rootname=paste(args$output, "umap_spl_blck", sep="_"),
+        pdf=args$pdf
+    )
+
 }
 
 
@@ -189,8 +281,8 @@ get_args <- function(){
             "Dimensionality to use for datasets integration and UMAP projection (from 2 to 50).",
             "If single value N is provided, use from 2 to N LSI components. If multiple values are",
             "provided, subset to only selected LSI components. In combination with --ntgr set to",
-            "harmony, selected principle components will be used in Harmony integration.",
-            "Default: from 2 to 10"
+            "harmony, multiple values will result in using all dimensions starting from 1(!) to",
+            "the max of the provided values. Default: from 2 to 10"
         ),
         type="integer", default=10, nargs="*"
     )
@@ -354,10 +446,27 @@ seurat_data <- analyses$atac_analyze(seurat_data, args)                   # adds
 seurat_data <- filter$collapse_fragments_list(seurat_data)                # collapse repetitive fragments if ATAC assay was splitted when running integration
 debug$print_info(seurat_data, args)
 
+print("Quantifying QC metrics")
+seurat_data <- qc$quartile_qc_metrics(
+    seurat_data=seurat_data,
+    features=c(
+        "nCount_ATAC", "nFeature_ATAC", "TSS.enrichment",
+        "nucleosome_signal", "frip", "blacklist_fraction"
+    ),
+    prefix="quartile"                                                       # we will use this prefix in ucsc$export_cellbrowser function
+)
+debug$print_info(seurat_data, args)
+
 export_all_dimensionality_plots(
     seurat_data=seurat_data,
     args=args
 )
+
+if ("qclsi" %in% names(seurat_data@reductions)){                            # we only needed it for qc correlation plots
+    print("Removing qclsi reduction")
+    seurat_data[["qclsi"]] <- NULL
+    debug$print_info(seurat_data, args)
+}
 
 if(args$cbbuild){
     print("Exporting ATAC assay to UCSC Cellbrowser")
@@ -371,6 +480,7 @@ if(args$cbbuild){
         assay="ATAC",
         slot="counts",
         short_label="ATAC",
+        palette_colors=graphics$D40_COLORS,                                                 # to have colors correspond to the plots
         rootname=paste(args$output, "_cellbrowser", sep=""),
     )
 }
