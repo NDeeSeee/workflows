@@ -191,14 +191,14 @@ outputs:
     doc: |
       File with peak-motif associations in BED format
 
-  filtered_peak_bc_matrix_folder:
+  filtered_feature_bc_matrix_folder:
     type: Directory
     outputBinding:
       glob: "sample/outs/filtered_peak_bc_matrix"
     doc: |
       Folder with filtered peak-barcode matrices containing only cellular barcodes in MEX format.
 
-  filtered_peak_bc_matrix_h5:
+  filtered_feature_bc_matrix_h5:
     type: File
     outputBinding:
       glob: "sample/outs/filtered_peak_bc_matrix.h5"
@@ -219,14 +219,14 @@ outputs:
     doc: |
       Filtered tf-barcode matrices containing only cellular barcodes in HDF5 format.
 
-  raw_peak_bc_matrices_folder:
+  raw_feature_bc_matrices_folder:
     type: Directory
     outputBinding:
       glob: "sample/outs/raw_peak_bc_matrix"
     doc: |
       Folder with unfiltered peak-barcode matrices containing all barcodes in MEX format
 
-  raw_peak_bc_matrices_h5:
+  raw_feature_bc_matrices_h5:
     type: File
     outputBinding:
       glob: "sample/outs/raw_peak_bc_matrix.h5"
