@@ -2,17 +2,20 @@
 # Dockerfile
 #
 # Software:         Custom python3 scripts
-# Software Version: v0.0.1
+# Software Version: v0.0.2
 # Description:      A set of scripts to collect statistics from Cell Ranger (ARC) Count
 # Website:          
 # Provides:         cell_ranger_count_stats.py
 #                   cell_ranger_arc_count_stats.py
 # Base Image:       rackspacedot/python37
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/scstats:v0.0.1 -f scstats-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/scstats:v0.0.1
-# Run Cmd:          docker run --rm -ti biowardrobe2/scstats:v0.0.1 /bin/bash
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/scstats:v0.0.2 -f scstats-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/scstats:v0.0.2
+# Run Cmd:          docker run --rm -ti biowardrobe2/scstats:v0.0.2 /bin/bash
 #################################################################
-
+#
+# v0.0.2
+# - add script cell_ranger_atac_count_stats.py
+#
 
 ### Base Image
 FROM rackspacedot/python37
@@ -26,10 +29,12 @@ WORKDIR /tmp
 
 COPY ./scripts/cell_ranger_count_stats.py /usr/local/bin/cell_ranger_count_stats.py
 COPY ./scripts/cell_ranger_arc_count_stats.py /usr/local/bin/cell_ranger_arc_count_stats.py
+COPY ./scripts/cell_ranger_atac_count_stats.py /usr/local/bin/cell_ranger_atac_count_stats.py
 
-### Installing cell_ranger_count_stats.py and cell_ranger_arc_count_stats.py scripts
+### Installing scripts
 RUN chmod +x /usr/local/bin/cell_ranger_count_stats.py && \
     chmod +x /usr/local/bin/cell_ranger_arc_count_stats.py && \
+    chmod +x /usr/local/bin/cell_ranger_atac_count_stats.py && \
 ### Cleaning
     apt-get clean && \
     apt-get purge && \
