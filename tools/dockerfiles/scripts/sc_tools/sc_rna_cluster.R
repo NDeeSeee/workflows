@@ -476,6 +476,14 @@ get_args <- function(){
         action="store_true"
     )
     parser$add_argument(
+        "--scope",
+        help=paste(
+            "Save Seurat data to SCope compatible loom file.",
+            "Default: false"
+        ),
+        action="store_true"
+    )
+    parser$add_argument(
         "--output",
         help="Output prefix. Default: ./sc",
         type="character", default="./sc"
@@ -624,4 +632,12 @@ if(args$h5seurat){
 if(args$h5ad){
     print("Exporting results to h5ad file")
     io$export_h5ad(seurat_data, paste(args$output, "_data.h5ad", sep=""))
+}
+
+if(args$scope){
+    print("Exporting results to SCope compatible loom file")
+    io$export_scope_loom(                                                                  # we save only counts slot from the RNA assay 
+        seurat_data,
+        paste(args$output, "_data.loom", sep="")
+    )
 }

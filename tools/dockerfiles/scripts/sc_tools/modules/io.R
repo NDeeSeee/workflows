@@ -6,6 +6,7 @@ import("Signac", attach=FALSE)
 import("tibble", attach=FALSE)
 import("sceasy", attach=FALSE)
 import("SeuratDisk", attach=FALSE)
+import("SCopeLoomR", attach=FALSE)
 import("rtracklayer", attach=FALSE)
 import("GenomicRanges", attach=FALSE)
 import("magrittr", `%>%`, attach=TRUE)
@@ -27,6 +28,7 @@ export(
     "load_10x_rna_data",
     "export_h5seurat",
     "export_h5ad",
+    "export_scope_loom",
     "load_cell_cycle_data",
     "replace_fragments"
 )
@@ -134,6 +136,78 @@ export_h5ad <- function(data, location){
         },
         error = function(e){
             base::print(base::paste("Failed to export data as h5ad to", location, sep=" "))
+        }
+    )
+}
+
+export_scope_loom <- function(data, location, assay="RNA", slot="counts"){
+    base::tryCatch(
+        expr = {
+            SeuratObject::DefaultAssay(data) <- assay
+            SCopeLoomR::build_loom(
+                file.name=location,
+                dgem=SeuratObject::GetAssayData(object=data, slot=slot)
+            )
+            loom_handler <- SCopeLoomR::open_loom(location, mode="r+")              # open Loom file for adding data
+
+            for (i in 1:length(data@reductions)){                                   # at least one reduction will be present, because
+                reduction_name <- names(data@reductions)[i]                         # because we are not supposed to call this function
+                SCopeLoomR::add_embedding(                                          # when there is nothing to show
+                    loom=loom_handler,
+                    embedding=data@reductions[[reduction_name]]@cell.embeddings,
+                    name=reduction_name,
+                    is.default=(i == 1)                                             # first found reduction will be default
+                )
+            }
+
+            meta_fields <- base::append(
+                c("new.ident", "condition"),                                        # these two fields should be always present in out Seurat object
+                base::grep(                                                         # will be [] if no custom fields are present
+                    "^custom_",
+                    base::colnames(data@meta.data),
+                    value=TRUE,
+                    ignore.case=TRUE
+                )
+            )
+            for (i in 1:length(meta_fields)){
+                SCopeLoomR::add_col_attr(
+                    loom=loom_handler,
+                    key=meta_fields[i],
+                    value=base::as.vector(
+                        as.character(data@meta.data[ , meta_fields[i] ])
+                    ),
+                    as.annotation=TRUE                                              # adding as categorical value
+                )
+            }
+
+            cluster_fields <- base::grep(
+                "^rna_res\\.|^atac_res\\.|^wsnn_res\\.",                            # we need only columns with numeric cluster values
+                base::colnames(data@meta.data),
+                value=TRUE,
+                ignore.case=TRUE
+            )
+            for (i in 1:length(cluster_fields)){
+                cluster_data <- base::as.vector(as.character(data@meta.data[ , cluster_fields[i] ]))
+                names(cluster_data) <- rownames(data@meta.data)
+                SCopeLoomR::add_annotated_clustering(
+                    loom=loom_handler,
+                    group="Clustering",
+                    name=cluster_fields[i],
+                    clusters=cluster_data,
+                    annotation=cluster_data
+                )
+            }
+
+            SCopeLoomR::close_loom(loom_handler)
+
+            base::print(base::paste("Exporting SCope compatible loom file to", location, sep=" "))
+        },
+        error = function(e){
+            base::print(
+                base::paste(
+                    "Failed to export SCope compatible loom file to", location, "due to", e
+                )
+            )
         }
     )
 }
