@@ -267,8 +267,8 @@ $namespaces:
 $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
-label: "Cell Ranger Count Chromatin Accessibility"
-s:name: "Cell Ranger Count Chromatin Accessibility"
+label: "Cell Ranger ATAC Count"
+s:name: "Cell Ranger ATAC Count"
 s:alternateName: "Counts reads from a single scATAC-Seq library"
 
 s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows/master/tools/cellranger-atac-count.cwl
@@ -307,7 +307,7 @@ s:creator:
 
 
 doc: |
-  Cell Ranger Count Chromatin Accessibility
+  Cell Ranger ATAC Count
 
   Counts reads from a single scATAC-Seq library.
 
