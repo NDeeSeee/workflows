@@ -154,7 +154,9 @@ export_scope_loom <- function(data, location, assay="RNA", slot="counts"){
                 reduction_name <- names(data@reductions)[i]                         # because we are not supposed to call this function
                 SCopeLoomR::add_embedding(                                          # when there is nothing to show
                     loom=loom_handler,
-                    embedding=data@reductions[[reduction_name]]@cell.embeddings,
+                    embedding=base::as.data.frame(                                  # need as.data.frame, otherwise all.equal fails (in SCopeLoomR)
+                        SeuratObject::Embeddings(data, reduction=reduction_name)
+                    ),
                     name=reduction_name,
                     is.default=(i == 1)                                             # first found reduction will be default
                 )
