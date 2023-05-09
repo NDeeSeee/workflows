@@ -26,13 +26,13 @@ for SRA in ${SRA_IDS[@]}; do
     esummary -db sra -id $SRA -mode json|python3 -m json.tool > ${SRA}_meta.json
     esummary -db sra -id $SRA -mode xml > ${SRA}_meta.xml
     echo "#### ${SRA}" >> srr_metadata.md
-    echo "**Title:** `esummary -db sra -id $SRA -mode xml | xtract -pattern Summary -element Title`" >> srr_metadata.md
-    echo "**Bioproject:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Bioproject`" >> srr_metadata.md
-    echo "**Biosample:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Biosample`" >> srr_metadata.md
-    echo "**Study:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Study@name`" >> srr_metadata.md
-    echo "**Spots:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Statistics@total_spots`" >> srr_metadata.md
-    echo "**Bases:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Statistics@total_bases`" >> srr_metadata.md
-    echo "**Size:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Statistics@total_size`" >> srr_metadata.md
+    echo "- **title:** `esummary -db sra -id $SRA -mode xml | xtract -pattern Summary -element Title`" >> srr_metadata.md
+    echo "- **bioproject:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Bioproject`" >> srr_metadata.md
+    echo "- **biosample:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Biosample`" >> srr_metadata.md
+    echo "- **study:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Study@name`" >> srr_metadata.md
+    echo "- **spots:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Statistics@total_spots`" >> srr_metadata.md
+    echo "- **bases:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Statistics@total_bases`" >> srr_metadata.md
+    echo "- **size:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Statistics@total_size`" >> srr_metadata.md
 
     echo "Attempting to prefetch $SRA as TenX type"
     prefetch --type TenX $SRA > /dev/null 2>&1
