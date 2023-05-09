@@ -1,0 +1,38 @@
+####################################################################################################################################
+# Software:         sratoolkit, Cell Ranger, E-utilities
+# Software Version: 0.0.1
+# Description:      Set of utilities to download SRA data
+# Base Image:       cumulusprod/cellranger:7.0.0
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/fastqdwnld:v0.0.1 -f fastqdwnld-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/fastqdwnld:v0.0.1
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/fastqdwnld:v0.0.1 /bin/bash
+####################################################################################################################################
+
+### Base Image
+FROM --platform=linux/amd64 cumulusprod/cellranger:7.0.0
+LABEL maintainer="misha.kotliar@gmail.com"
+ENV DEBIAN_FRONTEND noninteractive
+
+################## BEGIN INSTALLATION ######################
+
+WORKDIR /tmp
+
+### Installing sratoolkit
+
+ENV SRA_VERSION 3.0.5
+ENV SRA_URL "https://ftp-trace.ncbi.nlm.nih.gov/sra/sdk/${SRA_VERSION}/sratoolkit.${SRA_VERSION}-ubuntu64.tar.gz"
+
+COPY ./scripts/sra_download.sh /usr/local/bin/sra_download.sh
+
+RUN curl $SRA_URL|tar -zxv && \
+    cp -r sratoolkit.${SRA_VERSION}-ubuntu64/bin/* /usr/local/bin && \
+    cp -r sratoolkit.${SRA_VERSION}-ubuntu64/schema /usr/local && \
+    rm -rf sratoolkit.${SRA_VERSION}-ubuntu64 && \
+    sh -c "$(curl -fsSL https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)" && \
+    cp -r /root/edirect/* /usr/local/bin && \
+    rm -rf /root/edirect && \
+    chmod +x /usr/local/bin/sra_download.sh && \
+    apt-get clean && \
+    apt-get purge && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /usr/share/doc/* && \
+    strip /usr/local/bin/*; true
