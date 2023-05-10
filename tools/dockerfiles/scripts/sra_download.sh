@@ -23,7 +23,6 @@ DATA_TYPE="TenX"                  # setting it to TenX by default
 
 for SRA in ${SRA_IDS[@]}; do
 
-    esummary -db sra -id $SRA -mode json|python3 -m json.tool > ${SRA}_meta.json
     esummary -db sra -id $SRA -mode xml > ${SRA}_meta.xml
     echo "#### ${SRA}" >> srr_metadata.md
     echo "- **title:** `esummary -db sra -id $SRA -mode xml | xtract -pattern Summary -element Title`" >> srr_metadata.md
@@ -33,6 +32,12 @@ for SRA in ${SRA_IDS[@]}; do
     echo "- **spots:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Statistics@total_spots`" >> srr_metadata.md
     echo "- **bases:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Statistics@total_bases`" >> srr_metadata.md
     echo "- **size:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Statistics@total_size`" >> srr_metadata.md
+
+    esummary -db sra -id $SRA -mode xml | xtract -pattern Runs -element Run@acc | tr "\t" "\n" >> run_ids.tsv
+    esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Biosample >> biosample_ids.tsv
+    esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Bioproject >> bioproject_ids.tsv
+    esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Experiment@acc >> experiment_ids.tsv
+    esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Study@acc >> study_ids.tsv
 
     echo "Attempting to prefetch $SRA as TenX type"
     prefetch --type TenX $SRA > /dev/null 2>&1
@@ -65,7 +70,7 @@ for SRA in ${SRA_IDS[@]}; do
         done;
         rm -rf $SRA
     else
-        if [[ DATA_TYPE = "sra" ]]
+        if [[ $DATA_TYPE = "sra" ]]
         then
             echo "- Previous SRR was downloaded as sra data type. Current $SRA has TenX type. Exiting" >> debug.md
             break
@@ -89,3 +94,11 @@ done;
 
 cat srr_metadata.md single_fastq_stats.md merged_fastq_stats.md debug.md > report.md
 rm -f srr_metadata.md single_fastq_stats.md merged_fastq_stats.md debug.md
+
+echo "run_acc: `cat run_ids.tsv | sort -u | tr '\n' ' '`" >> collected_metadata.tsv
+echo "biosample: `cat biosample_ids.tsv | sort -u | tr '\n' ' '`" >> collected_metadata.tsv
+echo "bioproject: `cat bioproject_ids.tsv | sort -u | tr '\n' ' '`" >> collected_metadata.tsv
+echo "experiment_acc: `cat experiment_ids.tsv | sort -u | tr '\n' ' '`" >> collected_metadata.tsv
+echo "study_acc: `cat study_ids.tsv | sort -u | tr '\n' ' '`" >> collected_metadata.tsv
+
+rm -f run_ids.tsv biosample_ids.tsv bioproject_ids.tsv experiment_ids.tsv study_ids.tsv
