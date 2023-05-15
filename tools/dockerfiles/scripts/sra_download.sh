@@ -50,7 +50,8 @@ for SRA in ${SRA_IDS[@]}; do
         EXIT_CODE=$?
         if [[ $EXIT_CODE -ne 0 ]]
         then
-            echo "- Failed to prefetch $SRA as sra type with exit code $EXIT_CODE. Exiting" >> debug.md
+            echo "- Failed to prefetch $SRA as sra type with exit code $EXIT_CODE. Cleaning downloaded files." >> debug.md
+            rm -f read_*.fastq.gz
             break
         fi
         DATA_TYPE="sra"           # changing data type to "sra" as from now we assume that all SRR should have sra type
@@ -72,7 +73,8 @@ for SRA in ${SRA_IDS[@]}; do
     else
         if [[ $DATA_TYPE = "sra" ]]
         then
-            echo "- Previous SRR was downloaded as sra data type. Current $SRA has TenX type. Exiting" >> debug.md
+            echo "- Previous SRR was downloaded as sra data type. Current $SRA has TenX type. Cleaning downloaded files." >> debug.md
+            rm -f read_*.fastq.gz
             break
         fi
         cellranger bamtofastq $SRA/*.bam extracted_fastq
@@ -81,7 +83,8 @@ for SRA in ${SRA_IDS[@]}; do
         rm -rf $SRA extracted_fastq
         if [[ ${#SRA_IDS[@]} -ne 1 ]]
         then
-            echo "- Merging multiple SRR identifiers extacted to BAM is not correct. Skipping remaining SRR" >> debug.md
+            echo "- Merging multiple SRR identifiers extacted to BAM is not correct. Cleaning downloaded files." >> debug.md
+            rm -f read_*.fastq.gz
             break
         fi
     fi
