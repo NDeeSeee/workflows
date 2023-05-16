@@ -119,7 +119,11 @@ for MERGED in read*.gz; do
     echo "**`zcat $MERGED | wc -l`** lines, **`stat -c%s $MERGED`** bytes" >> merged_fastq_stats.md
 done;
 
-cat srr_metadata.md single_fastq_stats.md merged_fastq_stats.md debug.md > report.md
+if [[ $(wc -l < debug.md) -ge 2 ]]
+then
+    cat debug.md >> report.md
+fi
+cat srr_metadata.md single_fastq_stats.md merged_fastq_stats.md >> report.md
 rm -f srr_metadata.md single_fastq_stats.md merged_fastq_stats.md debug.md
 
 echo "run_acc: `cat run_ids.tsv | sort -u | tr '\n' ' '`"  | tr -s ' ' >> collected_metadata.tsv
