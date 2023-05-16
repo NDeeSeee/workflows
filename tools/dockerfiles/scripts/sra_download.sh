@@ -24,20 +24,37 @@ DATA_TYPE="TenX"                  # setting it to TenX by default
 for SRA in ${SRA_IDS[@]}; do
 
     esummary -db sra -id $SRA -mode xml > ${SRA}_meta.xml
-    echo "#### ${SRA}" >> srr_metadata.md
-    echo "- **title:** `esummary -db sra -id $SRA -mode xml | xtract -pattern Summary -element Title`" >> srr_metadata.md
-    echo "- **bioproject:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Bioproject`" >> srr_metadata.md
-    echo "- **biosample:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Biosample`" >> srr_metadata.md
-    echo "- **study:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Study@name`" >> srr_metadata.md
-    echo "- **spots:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Statistics@total_spots`" >> srr_metadata.md
-    echo "- **bases:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Statistics@total_bases`" >> srr_metadata.md
-    echo "- **size:** `esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Statistics@total_size`" >> srr_metadata.md
+    echo "#### [${SRA}](https://www.ncbi.nlm.nih.gov/Traces/study/?acc=${SRA}&o=acc_s%3Aa)" >> srr_metadata.md
+    echo "***`cat ${SRA}_meta.xml | xtract -pattern Summary -element Title`***" >> srr_metadata.md
+    
+    BIOPROJECT=`cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element Bioproject`
+    BIOSAMPLE=`cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element Biosample`
+    EXPERIMENT=`cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element Experiment@acc`
+    STUDY=`cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element Study@acc`
+    OTHER_RUNS=`cat ${SRA}_meta.xml | xtract -pattern Runs -element Run@acc`
 
-    esummary -db sra -id $SRA -mode xml | xtract -pattern Runs -element Run@acc | tr "\t" "\n" >> run_ids.tsv
-    esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Biosample >> biosample_ids.tsv
-    esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Bioproject >> bioproject_ids.tsv
-    esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Experiment@acc >> experiment_ids.tsv
-    esummary -db sra -id $SRA -mode xml | xtract -pattern DocumentSummary -element Study@acc >> study_ids.tsv
+    echo "- **bioproject:** [${BIOPROJECT}](https://www.ncbi.nlm.nih.gov/bioproject/${BIOPROJECT})" >> srr_metadata.md
+    echo "- **biosample:** [${BIOSAMPLE}](https://www.ncbi.nlm.nih.gov/biosample/${BIOSAMPLE})" >> srr_metadata.md
+    echo "- **experiment:** [${EXPERIMENT}](https://www.ncbi.nlm.nih.gov/sra/${EXPERIMENT})" >> srr_metadata.md
+    echo "- **study:** [${STUDY}](https://trace.ncbi.nlm.nih.gov/Traces/index.html?view=study&acc=${STUDY})" >> srr_metadata.md
+    
+    echo "- **library:**" >> srr_metadata.md
+    echo "  - strategy: `cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element LIBRARY_STRATEGY`" >> srr_metadata.md
+    echo "  - source: `cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element LIBRARY_SOURCE`" >> srr_metadata.md
+    echo "  - selection: `cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element LIBRARY_SELECTION`" >> srr_metadata.md
+    
+    echo "- **statistics:**" >> srr_metadata.md
+    echo "  - spots: `cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element Statistics@total_spots`" >> srr_metadata.md
+    echo "  - bases: `cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element Statistics@total_bases`" >> srr_metadata.md
+    echo "  - size: `cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element Statistics@total_size`" >> srr_metadata.md
+
+    echo "- **other runs:** `for i in $OTHER_RUNS; do echo \"[${i}](https://www.ncbi.nlm.nih.gov/Traces/study/?acc=${i}&o=acc_s%3Aa)\"; done`"  >> srr_metadata.md
+
+    echo $OTHER_RUNS | tr "\t" "\n" >> run_ids.tsv
+    echo $BIOSAMPLE >> biosample_ids.tsv
+    echo $BIOPROJECT >> bioproject_ids.tsv
+    echo $EXPERIMENT >> experiment_ids.tsv
+    echo $STUDY >> study_ids.tsv
 
     echo "Attempting to prefetch $SRA as TenX type"
     prefetch --type TenX $SRA > /dev/null 2>&1
@@ -98,10 +115,10 @@ done;
 cat srr_metadata.md single_fastq_stats.md merged_fastq_stats.md debug.md > report.md
 rm -f srr_metadata.md single_fastq_stats.md merged_fastq_stats.md debug.md
 
-echo "run_acc: `cat run_ids.tsv | sort -u | tr '\n' ' '`" >> collected_metadata.tsv
-echo "biosample: `cat biosample_ids.tsv | sort -u | tr '\n' ' '`" >> collected_metadata.tsv
-echo "bioproject: `cat bioproject_ids.tsv | sort -u | tr '\n' ' '`" >> collected_metadata.tsv
-echo "experiment_acc: `cat experiment_ids.tsv | sort -u | tr '\n' ' '`" >> collected_metadata.tsv
-echo "study_acc: `cat study_ids.tsv | sort -u | tr '\n' ' '`" >> collected_metadata.tsv
+echo "run_acc: `cat run_ids.tsv | sort -u | tr '\n' ' '`"  | tr -s ' ' >> collected_metadata.tsv
+echo "biosample: `cat biosample_ids.tsv | sort -u | tr '\n' ' '`" | tr -s ' ' >> collected_metadata.tsv
+echo "bioproject: `cat bioproject_ids.tsv | sort -u | tr '\n' ' '`" | tr -s ' ' >> collected_metadata.tsv
+echo "experiment_acc: `cat experiment_ids.tsv | sort -u | tr '\n' ' '`" | tr -s ' ' >> collected_metadata.tsv
+echo "study_acc: `cat study_ids.tsv | sort -u | tr '\n' ' '`" | tr -s ' ' >> collected_metadata.tsv
 
 rm -f run_ids.tsv biosample_ids.tsv bioproject_ids.tsv experiment_ids.tsv study_ids.tsv
