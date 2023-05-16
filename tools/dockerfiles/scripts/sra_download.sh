@@ -48,7 +48,7 @@ for SRA in ${SRA_IDS[@]}; do
     echo "  - bases: `cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element Statistics@total_bases`" >> srr_metadata.md
     echo "  - size: `cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element Statistics@total_size`" >> srr_metadata.md
 
-    echo "- **other runs:** `for i in $OTHER_RUNS; do echo \"[${i}](https://www.ncbi.nlm.nih.gov/Traces/study/?acc=${i}&o=acc_s%3Aa)\"; done`"  >> srr_metadata.md
+    echo "- **all runs:** `for i in $OTHER_RUNS; do echo \"[${i}](https://www.ncbi.nlm.nih.gov/Traces/study/?acc=${i}&o=acc_s%3Aa)\"; done`"  >> srr_metadata.md
 
     echo $OTHER_RUNS | tr "\t" "\n" >> run_ids.tsv
     echo $BIOSAMPLE >> biosample_ids.tsv
