@@ -25,30 +25,37 @@ for SRA in ${SRA_IDS[@]}; do
 
     esummary -db sra -id $SRA -mode xml > ${SRA}_meta.xml
     echo "#### [${SRA}](https://www.ncbi.nlm.nih.gov/Traces/study/?acc=${SRA}&o=acc_s%3Aa)" >> srr_metadata.md
-    echo "***`cat ${SRA}_meta.xml | xtract -pattern Summary -element Title`***" >> srr_metadata.md
     
-    BIOPROJECT=`cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element Bioproject`
-    BIOSAMPLE=`cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element Biosample`
-    EXPERIMENT=`cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element Experiment@acc`
-    STUDY=`cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element Study@acc`
+    EXP_NAME=`cat ${SRA}_meta.xml | xtract -pattern ExpXml -element Experiment@name`
+    BIOPROJECT=`cat ${SRA}_meta.xml | xtract -pattern ExpXml -element Bioproject`
+    BIOSAMPLE=`cat ${SRA}_meta.xml | xtract -pattern ExpXml -element Biosample`
+    EXPERIMENT=`cat ${SRA}_meta.xml | xtract -pattern ExpXml -element Experiment@acc`
+    STUDY=`cat ${SRA}_meta.xml | xtract -pattern ExpXml -element Study@acc`
     OTHER_RUNS=`cat ${SRA}_meta.xml | xtract -pattern Runs -element Run@acc`
 
+    echo "***${EXP_NAME}***" >> srr_metadata.md
     echo "- **bioproject:** [${BIOPROJECT}](https://www.ncbi.nlm.nih.gov/bioproject/${BIOPROJECT})" >> srr_metadata.md
     echo "- **biosample:** [${BIOSAMPLE}](https://www.ncbi.nlm.nih.gov/biosample/${BIOSAMPLE})" >> srr_metadata.md
     echo "- **experiment:** [${EXPERIMENT}](https://www.ncbi.nlm.nih.gov/sra/${EXPERIMENT})" >> srr_metadata.md
     echo "- **study:** [${STUDY}](https://trace.ncbi.nlm.nih.gov/Traces/index.html?view=study&acc=${STUDY})" >> srr_metadata.md
     
     echo "- **library:**" >> srr_metadata.md
-    echo "  - strategy: `cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element LIBRARY_STRATEGY`" >> srr_metadata.md
-    echo "  - source: `cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element LIBRARY_SOURCE`" >> srr_metadata.md
-    echo "  - selection: `cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element LIBRARY_SELECTION`" >> srr_metadata.md
+    echo "  - strategy: `cat ${SRA}_meta.xml | xtract -pattern Library_descriptor -element LIBRARY_STRATEGY`" >> srr_metadata.md
+    echo "  - source: `cat ${SRA}_meta.xml | xtract -pattern Library_descriptor -element LIBRARY_SOURCE`" >> srr_metadata.md
+    echo "  - selection: `cat ${SRA}_meta.xml | xtract -pattern Library_descriptor -element LIBRARY_SELECTION`" >> srr_metadata.md
     
-    echo "- **statistics:**" >> srr_metadata.md
-    echo "  - spots: `cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element Statistics@total_spots`" >> srr_metadata.md
-    echo "  - bases: `cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element Statistics@total_bases`" >> srr_metadata.md
-    echo "  - size: `cat ${SRA}_meta.xml | xtract -pattern DocumentSummary -element Statistics@total_size`" >> srr_metadata.md
+    echo "- **total statistics:**" >> srr_metadata.md
+    echo "  - runs: `cat ${SRA}_meta.xml | xtract -pattern Summary -element Statistics@total_runs`" >> srr_metadata.md
+    echo "  - spots: `cat ${SRA}_meta.xml | xtract -pattern Summary -element Statistics@total_spots`" >> srr_metadata.md
+    echo "  - bases: `cat ${SRA}_meta.xml | xtract -pattern Summary -element Statistics@total_bases`" >> srr_metadata.md
+    echo "  - size: `cat ${SRA}_meta.xml | xtract -pattern Summary -element Statistics@total_size`" >> srr_metadata.md
 
-    echo "- **all runs:** `for i in $OTHER_RUNS; do echo \"[${i}](https://www.ncbi.nlm.nih.gov/Traces/study/?acc=${i}&o=acc_s%3Aa)\"; done`"  >> srr_metadata.md
+    echo "- **per run statistics:**" >> srr_metadata.md
+    for i in $OTHER_RUNS; do
+        echo "  - [${i}](https://www.ncbi.nlm.nih.gov/Traces/study/?acc=${i}&o=acc_s%3Aa)" >> srr_metadata.md
+        echo "    - spots: `cat ${SRA}_meta.xml | xtract -pattern Run -if Run@acc -equals ${SRA} -element Run@total_spots`" >> srr_metadata.md
+        echo "    - bases: `cat ${SRA}_meta.xml | xtract -pattern Run -if Run@acc -equals ${SRA} -element Run@total_bases`" >> srr_metadata.md
+    done
 
     echo $OTHER_RUNS | tr "\t" "\n" >> run_ids.tsv
     echo $BIOSAMPLE >> biosample_ids.tsv
