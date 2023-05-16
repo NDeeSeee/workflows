@@ -53,8 +53,8 @@ for SRA in ${SRA_IDS[@]}; do
     echo "- **per run statistics:**" >> srr_metadata.md
     for i in $OTHER_RUNS; do
         echo "  - [${i}](https://www.ncbi.nlm.nih.gov/Traces/study/?acc=${i}&o=acc_s%3Aa)" >> srr_metadata.md
-        echo "    - spots: `cat ${SRA}_meta.xml | xtract -pattern Run -if Run@acc -equals ${SRA} -element Run@total_spots`" >> srr_metadata.md
-        echo "    - bases: `cat ${SRA}_meta.xml | xtract -pattern Run -if Run@acc -equals ${SRA} -element Run@total_bases`" >> srr_metadata.md
+        echo "    - spots: `cat ${SRA}_meta.xml | xtract -pattern Run -if Run@acc -equals ${i} -element Run@total_spots`" >> srr_metadata.md
+        echo "    - bases: `cat ${SRA}_meta.xml | xtract -pattern Run -if Run@acc -equals ${i} -element Run@total_bases`" >> srr_metadata.md
     done
 
     echo $OTHER_RUNS | tr "\t" "\n" >> run_ids.tsv
