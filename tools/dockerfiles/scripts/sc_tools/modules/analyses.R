@@ -13,6 +13,7 @@ import("glmGamPoi", attach=FALSE)  # safety measure. we don't use it directly, b
 import("S4Vectors", attach=FALSE)
 import("reticulate", attach=FALSE)
 import("tidyselect", attach=FALSE)
+import("rtracklayer", attach=FALSE)
 import("BiocParallel", attach=FALSE)
 import("magrittr", `%>%`, attach=TRUE)
 import("SummarizedExperiment", attach=FALSE)
@@ -1327,6 +1328,28 @@ atac_dbinding_analyze <- function(seurat_data, args){
         )
         results$db_sites <- db_sites                                                    # not filtered differentialy bound sites
     }
+
+    base::print("Adding closest genes for differentially bound sites")
+    results$db_sites <- results$db_sites %>%
+                        tidyr::unite(
+                            query_region,                                               # we will left join by this column
+                            chr:start:end,
+                            remove=FALSE,
+                            sep="-"
+                        ) %>%
+                        dplyr::left_join(
+                            Signac::ClosestFeature(                                     # will add query_region and gene_name columns
+                                seurat_data,
+                                regions=GenomicRanges::makeGRangesFromDataFrame(
+                                    results$db_sites,
+                                    seqinfo=seurat_data[["ATAC"]]@seqinfo               # need to have seqinfo in Seurat object
+                                )
+                            ) %>% dplyr::select(c("query_region", "gene_name")),
+                            by="query_region"
+                        ) %>%
+                        dplyr::select(-c("query_region")) %>%
+                        dplyr::relocate(gene_name, .after=last_col())                   # move gene_name to the end
+
     return (results)
 }
 

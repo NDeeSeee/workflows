@@ -200,7 +200,8 @@ export_browser_tracks <- function(db_results, seqinfo_data, args){
                 dplyr::mutate(
                     "name"=paste0(
                         "padj=", format(padj, digits=3, trim=TRUE),
-                        ";log2FC=", format(log2FoldChange, digits=3, trim=TRUE)
+                        ";log2FC=", format(log2FoldChange, digits=3, trim=TRUE),
+                        ";gene=", gene_name
                     )
                 ) %>%
                 dplyr::mutate("score"=0) %>%                                     # need it because export.bb fails without score
