@@ -1,12 +1,17 @@
 ####################################################################################################################################
 # Software:         sratoolkit, Cell Ranger, E-utilities
-# Software Version: 0.0.1
+# Software Version: 0.0.2
 # Description:      Set of utilities to download SRA data
 # Base Image:       cumulusprod/cellranger:7.0.0
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/fastqdwnld:v0.0.1 -f fastqdwnld-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/fastqdwnld:v0.0.1
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/fastqdwnld:v0.0.1 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/fastqdwnld:v0.0.2 -f fastqdwnld-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/fastqdwnld:v0.0.2
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/fastqdwnld:v0.0.2 /bin/bash
 ####################################################################################################################################
+#
+# 0.0.2
+# - Shows warning if provided SRR identifiers mismatch with the available
+#   in the Experiment runs
+#
 
 ### Base Image
 FROM --platform=linux/amd64 cumulusprod/cellranger:7.0.0

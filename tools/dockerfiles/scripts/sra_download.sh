@@ -74,7 +74,7 @@ for SRA in ${SRA_IDS[@]}; do
         EXIT_CODE=$?
         if [[ $EXIT_CODE -ne 0 ]]
         then
-            echo "- Failed to prefetch $SRA as sra type with exit code $EXIT_CODE. Cleaning downloaded files." >> debug.md
+            echo "- Error. Failed to prefetch $SRA as sra type with exit code $EXIT_CODE. Cleaning downloaded files." >> debug.md
             rm -f read_*.fastq.gz
             break
         fi
@@ -97,7 +97,7 @@ for SRA in ${SRA_IDS[@]}; do
     else
         if [[ $DATA_TYPE = "sra" ]]
         then
-            echo "- Previous SRR was downloaded as sra data type. Current $SRA has TenX type. Cleaning downloaded files." >> debug.md
+            echo "- Error. Previous SRR was downloaded as sra data type. Current $SRA has TenX type. Cleaning downloaded files." >> debug.md
             rm -f read_*.fastq.gz
             break
         fi
@@ -107,7 +107,7 @@ for SRA in ${SRA_IDS[@]}; do
         rm -rf $SRA extracted_fastq
         if [[ ${#SRA_IDS[@]} -ne 1 ]]
         then
-            echo "- Merging multiple SRR identifiers extacted to BAM is not correct. Cleaning downloaded files." >> debug.md
+            echo "- Error. Merging multiple SRR identifiers extacted to BAM is not correct. Cleaning downloaded files." >> debug.md
             rm -f read_*.fastq.gz
             break
         fi
@@ -118,6 +118,13 @@ for MERGED in read*.gz; do
     echo "#### `basename $MERGED`" >> merged_fastq_stats.md
     echo "**`zcat $MERGED | wc -l`** lines, **`stat -c%s $MERGED`** bytes" >> merged_fastq_stats.md
 done;
+
+ALL_RUNS=($(cat run_ids.tsv |sort -u |tr "\n" " " |tr -s " "))
+DIFF_RUNS=`echo ${SRA_IDS[@]} ${ALL_RUNS[@]} | tr " " "\n" | sort | uniq -u`
+if [[ ${#DIFF_RUNS[@]} -ge 1 ]] && [[ ${DIFF_RUNS[0]} != "" ]]
+then
+    echo "- Warning. Found missing or redundant SRR identifiers: ${DIFF_RUNS}" >> debug.md
+fi
 
 if [[ $(wc -l < debug.md) -ge 2 ]]
 then
