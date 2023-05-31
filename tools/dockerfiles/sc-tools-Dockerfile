@@ -2,21 +2,25 @@
 # Dockerfile
 #
 # Software:         set of R scripts for single-cell data analysis
-# Software Version: v0.0.21
+# Software Version: v0.0.22
 # Description:      Dockerized version of the set of R scripts for
 #                   single-cell data analysis
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         set of R scripts for single-cell data analysis
 # Base Image:       satijalab/seurat:4.1.0
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.21 -f sc-tools-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.21
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.21 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.22 -f sc-tools-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.22
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.22 /bin/bash
 ##########################################################################################################
 #
 # Notes:
 # - if you have problems compiling Harmony
 #   https://github.com/immunogenomics/harmony/pull/165
 # - fix bug in cell cycle genes removal
+#
+# v0.0.22
+# - include ENCODE blacklist regions and cell cycle
+#   genes files into the image
 #
 # v0.0.21
 # - Add Differential Binding Analysis for scATAC data
@@ -178,6 +182,7 @@ COPY ./scripts/sc_tools/sc_rna_de_pseudobulk.R /usr/local/bin/sc_rna_de_pseudobu
 COPY ./scripts/sc_tools/sc_rna_da_cells.R /usr/local/bin/sc_rna_da_cells.R
 COPY ./scripts/sc_tools/sc_triangulate.R /usr/local/bin/sc_triangulate.R
 COPY ./scripts/sc_tools/modules/*.R /usr/local/bin/modules/
+COPY ./scripts/sc_tools/data/*.csv /opt/sc_tools/
 
 ### Installing dependencies
 RUN apt-get update && \
@@ -239,6 +244,13 @@ RUN apt-get update && \
     chmod +x /usr/local/bin/sc_rna_de_pseudobulk.R && \
     chmod +x /usr/local/bin/sc_rna_da_cells.R && \
     chmod +x /usr/local/bin/sc_triangulate.R && \
+### Downloading blacklist regions files
+    wget https://raw.githubusercontent.com/Boyle-Lab/Blacklist/61a04d2c5e49341d76735d485c61f0d1177d08a8/lists/hg38-blacklist.v2.bed.gz && \
+    wget https://raw.githubusercontent.com/Boyle-Lab/Blacklist/61a04d2c5e49341d76735d485c61f0d1177d08a8/lists/hg19-blacklist.v2.bed.gz && \
+    wget https://raw.githubusercontent.com/Boyle-Lab/Blacklist/61a04d2c5e49341d76735d485c61f0d1177d08a8/lists/mm10-blacklist.v2.bed.gz && \
+    gzip -d hg38-blacklist.v2.bed.gz && mv hg38-blacklist.v2.bed /opt/sc_tools/ && \
+    gzip -d hg19-blacklist.v2.bed.gz && mv hg19-blacklist.v2.bed /opt/sc_tools/ && \
+    gzip -d mm10-blacklist.v2.bed.gz && mv mm10-blacklist.v2.bed /opt/sc_tools/ && \
 ### Cleaning
     apt-get clean && \
     apt-get purge && \
