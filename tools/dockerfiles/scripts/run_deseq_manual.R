@@ -299,6 +299,7 @@ load_expression_data <- function(args, counts_colname=COUNTS_COL, rpkm_colname=R
     if (args$type == "gene"){
         collected_expression_data <- collected_expression_data %>% column_to_rownames("GeneId")
     } else {
+        collected_expression_data$RefseqId <- make.unique(names=collapsed_annotation_df$RefseqId, sep="_")     # in case we have duplicate RefseqId
         collected_expression_data <- collected_expression_data %>% column_to_rownames("RefseqId")
     }
     all_features <- as.vector(as.character(rownames(collected_expression_data)))
