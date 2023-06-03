@@ -4,19 +4,16 @@
 # Description:      DESeq2
 # Website:          https://bioconductor.org/packages/release/bioc/html/DESeq2.html
 # Provides:         DESeq2
-# Base Image:       r-base:4.2.1
+# Base Image:       r-base:4.3.0
 # Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/deseq:v0.0.4 -f deseq-Dockerfile .
 # Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/deseq:v0.0.4
 # Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/deseq:v0.0.4 /bin/bash
 ###################################################################################################
 #
-# Note
-# - in the next version do not include morpheus.R as it's now in the separate Dockerfile
-#
 # v0.0.4
-# - Fix possible issue with non-unique RefseqId when grouping by transcript
-# - Updated Bioconductor version to 3.16
-# - removed run_morpheus.R script
+# - Fix issue with non-unique RefseqId when grouping by transcript
+# - Updated Bioconductor version to 3.17, r-base to 4.3.0
+# - Removed run_morpheus.R script
 #
 # v0.0.3
 # - Added clustering labels to the metadata of GCT file
@@ -28,7 +25,7 @@
 ###################################################################################################
 
 ### Base Image
-FROM --platform=linux/amd64 r-base:4.2.1
+FROM --platform=linux/amd64 r-base:4.3.0
 LABEL maintainer="misha.kotliar@gmail.com"
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -48,7 +45,7 @@ RUN apt-get update && \
     pip3 install --break-system-packages argparse && \
 ### Installing R packages
     R -e "install.packages('BiocManager')" && \
-    R -e "BiocManager::install(version = '3.16', update = FALSE, ask = FALSE)" && \
+    R -e "BiocManager::install(version = '3.17', update = FALSE, ask = FALSE)" && \
     R -e "BiocManager::install(c('BiocParallel', 'DESeq2', 'limma', 'EnhancedVolcano', 'hopach', 'cmapR', 'Glimma'))" && \
     R -e 'install.packages("tidyverse", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("patchwork", repo = "https://cloud.r-project.org/")' && \
