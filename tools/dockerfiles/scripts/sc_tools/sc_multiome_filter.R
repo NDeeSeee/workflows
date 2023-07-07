@@ -898,7 +898,13 @@ print(
 prod$parallel(args)
 
 print(paste("Loading datasets identities from", args$identity))
-cell_identity_data <- io$load_cell_identity_data(args$identity)              # identities are always prepended with letters to keep the order
+cell_identity_data <- io$load_cell_identity_data(args$identity)                          # identities are always prepended with letters to keep the order
+
+print("Exporting an example of datasets metadata file")                                  # can be later used as a template of a file to extend Seurat metadata
+io$export_data(
+    cell_identity_data[, "library_id", drop=FALSE],                                      # we need only the first column with the prepended letters
+    paste(args$output, "_meta.tsv", sep="")
+)
 
 print(paste("Loading datasets grouping from", args$grouping))
 grouping_data <- io$load_grouping_data(args$grouping, cell_identity_data)

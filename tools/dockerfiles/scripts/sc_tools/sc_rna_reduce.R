@@ -22,13 +22,13 @@ suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 export_all_dimensionality_plots <- function(seurat_data, args) {
     Idents(seurat_data) <- "new.ident"                                                                                         # safety measure
     selected_features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "S.Score", "G2M.Score")
-    selected_labels=c("Transcripts", "Genes", "Mitochondrial %", "Novelty score", "S score", "G to M score")
+    selected_labels=c("Transcripts", "Genes", "Mitochondrial %", "Novelty score", "S score", "G2M score")
 
     graphics$elbow_plot(
         data=seurat_data,
         ndims=50,
         reduction="qcpca",                                 # when integrating with Harmony, this will be the PCA that we run before intergration
-        plot_title="Elbow plot (from cells PCA)",
+        plot_title="Elbow plot",
         theme=args$theme,
         rootname=paste(args$output, "elbow", sep="_"),
         pdf=args$pdf
@@ -39,7 +39,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         highlight_dims=args$dimensions,
         qc_columns=selected_features,
         qc_labels=selected_labels,
-        plot_title="Correlation plots between QC metrics and cells PCA components",
+        plot_title="Correlation between QC metrics and principal components",
         combine_guides="collect",
         theme=args$theme,
         rootname=paste(args$output, "qc_dim_corr", sep="_"),
@@ -51,7 +51,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         labels=selected_labels,
         from_meta=TRUE,
         reduction="rnaumap",
-        plot_title="QC metrics on cells UMAP",
+        plot_title="UMAP, QC metrics",
         label=FALSE,
         alpha=0.4,
         max_cutoff="q99",                                                                   # to prevent outlier cells to distort coloring
@@ -63,7 +63,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$dim_plot(
         data=seurat_data,
         reduction="rnaumap",
-        plot_title="Cells UMAP",
+        plot_title="UMAP, colored by dataset",
         legend_title="Dataset",
         group_by="new.ident",
         label=FALSE,
@@ -76,7 +76,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
-            plot_title="Split by cell cycle phase cells UMAP",
+            plot_title="UMAP, colored by dataset, split by cell cycle phase",
             legend_title="Dataset",
             group_by="new.ident",
             split_by="Phase",
@@ -90,7 +90,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="ccpca",
-            plot_title="Cells PCA using only cell cycle genes",
+            plot_title="PCA, colored by cell cycle phase",
             legend_title="Phase",
             group_by="Phase",
             label=FALSE,
@@ -104,7 +104,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$dim_plot(
         data=seurat_data,
         reduction="rnaumap",
-        plot_title="Split by the percentage of transcripts mapped to mitochondrial genes cells UMAP",
+        plot_title="UMAP, colored by dataset, split by mitochondrial percentage",
         legend_title="Dataset",
         group_by="new.ident",
         split_by="quartile_mito_percentage",
@@ -118,7 +118,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$dim_plot(
         data=seurat_data,
         reduction="rnaumap",
-        plot_title="Split by the transcripts per cell counts cells UMAP",
+        plot_title="UMAP, colored by dataset, split by transcripts per cell",
         legend_title="Dataset",
         group_by="new.ident",
         split_by="quartile_nCount_RNA",
@@ -132,7 +132,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$dim_plot(
         data=seurat_data,
         reduction="rnaumap",
-        plot_title="Split by the genes per cell counts cells UMAP",
+        plot_title="UMAP, colored by dataset, split by genes per cell",
         legend_title="Dataset",
         group_by="new.ident",
         split_by="quartile_nFeature_RNA",
@@ -148,7 +148,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
-            plot_title="Split by dataset cells UMAP",
+            plot_title="UMAP, split by dataset",
             legend_title="Dataset",
             group_by="new.ident",
             split_by="new.ident",
@@ -161,7 +161,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="ccpca",
-            plot_title="Split by dataset cells PCA using only cell cycle genes",
+            plot_title="PCA, colored by cell cycle phase, split by dataset",
             legend_title="Phase",
             group_by="Phase",
             split_by="new.ident",
@@ -181,7 +181,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
-            plot_title="Split by grouping condition cells UMAP",
+            plot_title="UMAP, colored by dataset, split by grouping condition",
             legend_title="Dataset",
             group_by="new.ident",
             split_by="condition",
@@ -195,7 +195,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             graphics$dim_plot(
                 data=seurat_data,
                 reduction="rnaumap",
-                plot_title="Grouped by condition split by cell cycle cells UMAP",
+                plot_title="UMAP, colored by grouping condition, split by cell cycle phase",
                 legend_title="Condition",
                 group_by="condition",
                 split_by="Phase",
@@ -209,7 +209,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             graphics$dim_plot(
                 data=seurat_data,
                 reduction="ccpca",
-                plot_title="Split by grouping condition cells PCA using only cell cycle genes",
+                plot_title="PCA, colored by cell cycle phase, split by grouping condition",
                 legend_title="Phase",
                 group_by="Phase",
                 split_by="condition",
@@ -224,7 +224,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
-            plot_title="Grouped by condition split by the percentage of transcripts mapped to mitochondrial genes cells UMAP",
+            plot_title="UMAP, colored by grouping condition, split by mitochondrial percentage",
             legend_title="Condition",
             group_by="condition",
             split_by="quartile_mito_percentage",
@@ -238,7 +238,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
-            plot_title="Grouped by condition split by the transcripts per cell counts cells UMAP",
+            plot_title="UMAP, colored by grouping condition, split by transcripts per cell",
             legend_title="Condition",
             group_by="condition",
             split_by="quartile_nCount_RNA",
@@ -252,7 +252,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="rnaumap",
-            plot_title="Grouped by condition split by the genes per cell counts cells UMAP",
+            plot_title="UMAP, colored by grouping condition, split by genes per cell",
             legend_title="Condition",
             group_by="condition",
             split_by="quartile_nFeature_RNA",
