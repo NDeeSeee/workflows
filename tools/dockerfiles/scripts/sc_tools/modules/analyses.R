@@ -540,13 +540,25 @@ rna_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
                 "cell cycle genes"
             )
         )
-        seurat_data <- Seurat::RunPCA(            # PCA will be run on the default assay, which can be one of "rna_integrated", "RNA", or "SCT"
-            seurat_data,
-            reduction.name="ccpca",               # add "ccpca" reduction that can be used for cell cycle evaluation
-            npcs=50,
-            features=cell_cycle_data$gene_id,     # these features will be overlaped with the features from the scale.data slot
-            verbose=FALSE,                        # which means they can be either highly variable genes or integration features if we use rna_integrated assay
-            approx=FALSE                          # to avoid warning message
+        base::tryCatch(
+            expr = {
+                seurat_data <- Seurat::RunPCA(            # PCA will be run on the default assay, which can be one of "rna_integrated", "RNA", or "SCT"
+                    seurat_data,
+                    reduction.name="ccpca",               # add "ccpca" reduction that can be used for cell cycle evaluation
+                    npcs=50,
+                    features=cell_cycle_data$gene_id,     # these features will be overlaped with the features from the scale.data slot
+                    verbose=FALSE,                        # which means they can be either highly variable genes or integration features if we use rna_integrated assay
+                    approx=FALSE                          # to avoid warning message
+                )
+            },
+            error = function(e){
+                base::print(
+                    base::paste(
+                        "Failed to run PCA reduction for",
+                        "cell cycle genes with error -", e
+                    )
+                )
+            }
         )
     }
     base::print(
