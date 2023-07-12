@@ -563,7 +563,7 @@ DefaultAssay(seurat_data) <- "RNA"
 debug$print_info(seurat_data, args)
 
 print(paste("Loading cell cycle data from", args$cellcycle))
-cell_cycle_data <- io$load_cell_cycle_data(args$cellcycle)
+cell_cycle_data <- io$load_cell_cycle_data(seurat_data, args$cellcycle)
 
 if (!is.null(args$metadata)){
     print("Extending Seurat object with the extra metadata fields")

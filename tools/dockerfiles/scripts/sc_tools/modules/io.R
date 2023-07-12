@@ -70,24 +70,43 @@ get_file_type <- function (filename){
 #     return (default_barcodes_data)
 # }
 
-load_cell_cycle_data <- function(location){
-    if (!is.null(location)){
-        cell_cycle_data <- utils::read.table(
-            location,
-            sep=get_file_type(location),
-            header=TRUE,
-            check.names=FALSE,
-            stringsAsFactors=FALSE
-        )
-        base::print(
-            base::paste(
-                "Cell cycle data is successfully loaded from ", location
+load_cell_cycle_data <- function(seurat_data, location){
+    base::tryCatch(
+        expr = {
+            cell_cycle_data <- utils::read.table(
+                location,
+                sep=get_file_type(location),
+                header=TRUE,
+                check.names=FALSE,
+                stringsAsFactors=FALSE
             )
-        )
-        return (cell_cycle_data)
-    }
-    base::print("Cell cycle data is not provided.")
-    return (NULL)
+            if (
+                length(
+                    base::intersect(
+                        base::as.vector(as.character(base::rownames(seurat_data))),         # all genes
+                        cell_cycle_data$gene_id                                             # cc genes
+                    )
+                ) == 0
+            ){
+                base::print("Loaded cell cycle data has 0 genes present in the dataset")
+                return (NULL)
+            }
+            base::print(
+                base::paste(
+                    "Cell cycle data is successfully loaded from", location
+                )
+            )
+            return (cell_cycle_data)
+        },
+        error = function(e){
+            base::print(
+                base::paste(
+                    "Failed to load cell cycle data from", location, "due to", e
+                )
+            )
+            return (NULL)
+        }
+    )
 }
 
 export_fragments_coverage <- function(fragments_data, location){
