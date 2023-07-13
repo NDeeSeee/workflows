@@ -31,8 +31,10 @@ export_all_clustering_plots <- function(seurat_data, args){
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
-                    "Grouped by cell cycle phase split by dataset cells composition plot.",
-                    "Downsampled to", downsampled_to, "cells per dataset"),
+                    "Composition plot,",
+                    "colored by cell cycle phase,",
+                    "split by dataset, downsampled"
+                ),
                 legend_title="Phase",
                 group_by="Phase",
                 split_by="new.ident",
@@ -50,7 +52,10 @@ export_all_clustering_plots <- function(seurat_data, args){
         graphics$dim_plot(
             data=seurat_data,
             reduction="wnnumap",
-            plot_title=paste("Clustered cells UMAP. Resolution", current_resolution),
+            plot_title=paste(
+                "UMAP, colored by cluster,",
+                "resolution", current_resolution
+            ),
             legend_title="Cluster",
             group_by=paste("wsnn_res", current_resolution, sep="."),
             label=TRUE,
@@ -64,7 +69,11 @@ export_all_clustering_plots <- function(seurat_data, args){
             graphics$dim_plot(
                 data=seurat_data,
                 reduction="wnnumap",
-                plot_title=paste("Split by dataset clustered cells UMAP. Resolution", current_resolution),
+                plot_title=paste(
+                    "UMAP, colored by cluster,",
+                    "split by dataset,",
+                    "resolution", current_resolution
+                ),
                 legend_title="Cluster",
                 group_by=paste("wsnn_res", current_resolution, sep="."),
                 split_by="new.ident",
@@ -78,9 +87,10 @@ export_all_clustering_plots <- function(seurat_data, args){
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
-                    "Grouped by cluster split by dataset cells composition plot.",
-                    "Downsampled to", downsampled_to, "cells per dataset.",
-                    "Resolution", current_resolution),
+                    "Composition plot, colored by cluster,",
+                    "split by dataset, downsampled,",
+                    "resolution", current_resolution
+                ),
                 legend_title="Cluster",
                 group_by=paste("wsnn_res", current_resolution, sep="."),
                 split_by="new.ident",
@@ -94,9 +104,10 @@ export_all_clustering_plots <- function(seurat_data, args){
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
-                    "Grouped by dataset split by cluster cells composition plot.",
-                    "Downsampled to", downsampled_to, "cells per dataset.",
-                    "Resolution", current_resolution),
+                    "Composition plot, colored by dataset,",
+                    "split by cluster, downsampled,",
+                    "resolution", current_resolution
+                ),
                 legend_title="Dataset",
                 group_by="new.ident",
                 split_by=paste("wsnn_res", current_resolution, sep="."),
@@ -115,7 +126,11 @@ export_all_clustering_plots <- function(seurat_data, args){
             graphics$dim_plot(
                 data=seurat_data,
                 reduction="wnnumap",
-                plot_title=paste("Split by grouping condition clustered cells UMAP. Resolution", current_resolution),
+                plot_title=paste(
+                    "UMAP, colored by cluster,",
+                    "split by grouping condition,",
+                    "resolution", current_resolution
+                ),
                 legend_title="Cluster",
                 group_by=paste("wsnn_res", current_resolution, sep="."),
                 split_by="condition",
@@ -129,9 +144,9 @@ export_all_clustering_plots <- function(seurat_data, args){
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
-                    "Grouped by cluster split by condition cells composition plot.",
-                    "Downsampled to", downsampled_to, "cells per dataset.",
-                    "Resolution", current_resolution
+                    "Composition plot, colored by cluster,",
+                    "split by grouping condition, downsampled,",
+                    "resolution", current_resolution
                 ),
                 legend_title="Cluster",
                 group_by=paste("wsnn_res", current_resolution, sep="."),
@@ -146,9 +161,10 @@ export_all_clustering_plots <- function(seurat_data, args){
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
-                    "Grouped by condition split by cluster cells composition plot.",
-                    "Downsampled to", downsampled_to, "cells per dataset.",
-                    "Resolution", current_resolution
+                    "Composition plot,",
+                    "colored by grouping condition,",
+                    "split by cluster, downsampled,",
+                    "resolution", current_resolution
                 ),
                 legend_title="Condition",
                 group_by="condition",
@@ -165,7 +181,11 @@ export_all_clustering_plots <- function(seurat_data, args){
             graphics$dim_plot(
                 data=seurat_data,
                 reduction="wnnumap",
-                plot_title=paste("Split by cell cycle phase clustered cells UMAP. Resolution", current_resolution),
+                plot_title=paste(
+                    "UMAP, colored by cluster,",
+                    "split by cell cycle phase,",
+                    "resolution", current_resolution
+                ),
                 legend_title="Cluster",
                 group_by=paste("wsnn_res", current_resolution, sep="."),
                 split_by="Phase",
@@ -180,9 +200,11 @@ export_all_clustering_plots <- function(seurat_data, args){
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
-                    "Grouped by cell cycle phase split by cluster cells composition plot.",
-                    "Downsampled to", downsampled_to, "cells per dataset.",
-                    "Resolution", current_resolution),
+                    "Composition plot,",
+                    "colored by cell cycle phase,",
+                    "split by cluster, downsampled,",
+                    "resolution", current_resolution
+                ),
                 legend_title="Phase",
                 group_by="Phase",
                 split_by=paste("wsnn_res", current_resolution, sep="."),
@@ -211,7 +233,7 @@ export_all_expression_plots <- function(seurat_data, args) {
                 features=current_gene,
                 labels=current_gene,
                 reduction="wnnumap",
-                plot_title="Log normalized gene expression on cells UMAP",
+                plot_title="UMAP, gene expression",
                 label=FALSE,
                 order=TRUE,
                 max_cutoff="q99",  # to prevent cells with overexpressed gene from distoring the color bar
@@ -226,7 +248,7 @@ export_all_expression_plots <- function(seurat_data, args) {
                 data=seurat_data,
                 features=current_gene,
                 reduction="wnnumap",
-                plot_title="Log normalized gene expression density on cells UMAP",
+                plot_title="UMAP, gene expression density",
                 joint=FALSE,
                 width=800,
                 height=800,
@@ -242,7 +264,10 @@ export_all_expression_plots <- function(seurat_data, args) {
         graphics$dot_plot(
             data=seurat_data,
             features=args$genes,
-            plot_title=paste("Log normalized scaled average gene expression per cluster. Resolution", current_resolution),
+            plot_title=paste(
+                "Gene expression dot plot,",
+                "resolution", current_resolution
+            ),
             x_label="Genes",
             y_label="Clusters",
             cluster_idents=FALSE,
@@ -257,7 +282,10 @@ export_all_expression_plots <- function(seurat_data, args) {
                     data=seurat_data,
                     features=current_gene,
                     labels=current_gene,
-                    plot_title=paste("Log normalized gene expression density per cluster. Resolution", current_resolution),
+                    plot_title=paste(
+                        "Gene expression violin plot,",
+                        "resolution", current_resolution
+                    ),
                     legend_title="Cluster",
                     log=TRUE,
                     pt_size=0,
@@ -302,8 +330,9 @@ export_all_coverage_plots <- function(seurat_data, args) {
                     region=current_gene,
                     group_by=paste("wsnn_res", current_resolution, sep="."),
                     plot_title=paste(
-                        "Tn5 insertion frequency plot around", current_gene, "gene.",
-                        "Resolution", current_resolution
+                        "Fragments coverage,",
+                        current_gene, "gene,",
+                        "resolution", current_resolution
                     ),
                     idents=NULL,                                                   # to include all values from the default "new.ident" column
                     cells=colnames(seurat_data),                                   # limit to only those cells that are in out seurat_data
@@ -369,7 +398,7 @@ export_heatmaps <- function(seurat_data, markers, args){
                 palette_colors=graphics$D40_COLORS,
                 heatmap_colors=c("black", "yellow"),
                 plot_title=paste(
-                    "Normalized gene expression heatmap. Resolution", current_resolution
+                    "Gene expression heatmap, resolution", current_resolution
                 ),
                 height=12*length(grouped_markers$feature),
                 rootname=paste(args$output, "xpr_htmp_res", current_resolution, sep="_"),
