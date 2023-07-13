@@ -30,7 +30,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         highlight_dims=args$dimensions,
         qc_columns=selected_features,
         qc_labels=selected_labels,
-        plot_title="Correlation plots between QC metrics and cells LSI dimensions",
+        plot_title="Correlation between QC metrics and LSI components",
         combine_guides="collect",
         theme=args$theme,
         rootname=paste(args$output, "qc_dim_corr", sep="_"),
@@ -42,7 +42,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         labels=selected_labels,
         from_meta=TRUE,
         reduction="atacumap",
-        plot_title="QC metrics on cells UMAP",
+        plot_title="UMAP, QC metrics",
         label=FALSE,
         alpha=0.4,
         max_cutoff="q99",                                                                   # to prevent outlier cells to distort coloring
@@ -55,7 +55,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$dim_plot(
         data=seurat_data,
         reduction="atacumap",
-        plot_title="Cells UMAP",
+        plot_title="UMAP, colored by dataset",
         legend_title="Dataset",
         group_by="new.ident",
         label=FALSE,
@@ -65,11 +65,101 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         pdf=args$pdf
     )
 
+    graphics$dim_plot(
+        data=seurat_data,
+        reduction="atacumap",
+        plot_title="UMAP, colored by dataset, split by fragments in peaks per cell",
+        legend_title="Dataset",
+        group_by="new.ident",
+        split_by="quartile_nCount_ATAC",
+        label=FALSE,
+        alpha=0.5,
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        rootname=paste(args$output, "umap_spl_frgm", sep="_"),
+        pdf=args$pdf
+    )
+
+    graphics$dim_plot(
+        data=seurat_data,
+        reduction="atacumap",
+        plot_title="UMAP, colored by dataset, split by peaks per cell",
+        legend_title="Dataset",
+        group_by="new.ident",
+        split_by="quartile_nFeature_ATAC",
+        label=FALSE,
+        alpha=0.5,
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        rootname=paste(args$output, "umap_spl_peak", sep="_"),
+        pdf=args$pdf
+    )
+
+    graphics$dim_plot(
+        data=seurat_data,
+        reduction="atacumap",
+        plot_title="UMAP, colored by dataset, split by TSS enrichment score",
+        legend_title="Dataset",
+        group_by="new.ident",
+        split_by="quartile_TSS.enrichment",
+        label=FALSE,
+        alpha=0.5,
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        rootname=paste(args$output, "umap_spl_tss", sep="_"),
+        pdf=args$pdf
+    )
+
+    graphics$dim_plot(
+        data=seurat_data,
+        reduction="atacumap",
+        plot_title="UMAP, colored by dataset, split by nucleosome signal",
+        legend_title="Dataset",
+        group_by="new.ident",
+        split_by="quartile_nucleosome_signal",
+        label=FALSE,
+        alpha=0.5,
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        rootname=paste(args$output, "umap_spl_ncls", sep="_"),
+        pdf=args$pdf
+    )
+
+    graphics$dim_plot(
+        data=seurat_data,
+        reduction="atacumap",
+        plot_title="UMAP, colored by dataset, split by FRiP",
+        legend_title="Dataset",
+        group_by="new.ident",
+        split_by="quartile_frip",
+        label=FALSE,
+        alpha=0.5,
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        rootname=paste(args$output, "umap_spl_frip", sep="_"),
+        pdf=args$pdf
+    )
+
+    graphics$dim_plot(
+        data=seurat_data,
+        reduction="atacumap",
+        plot_title="UMAP, colored by dataset, split by blacklist fraction",
+        legend_title="Dataset",
+        group_by="new.ident",
+        split_by="quartile_blacklist_fraction",
+        label=FALSE,
+        alpha=0.5,
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        rootname=paste(args$output, "umap_spl_blck", sep="_"),
+        pdf=args$pdf
+    )
+
     if (length(unique(as.vector(as.character(Idents(seurat_data))))) > 1){
         graphics$dim_plot(
             data=seurat_data,
             reduction="atacumap",
-            plot_title="Split by dataset cells UMAP",
+            plot_title="UMAP, split by dataset",
             legend_title="Dataset",
             group_by="new.ident",
             split_by="new.ident",
@@ -88,7 +178,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
         graphics$dim_plot(
             data=seurat_data,
             reduction="atacumap",
-            plot_title="Split by grouping condition cells UMAP",
+            plot_title="UMAP, colored by dataset, split by grouping condition",
             legend_title="Dataset",
             group_by="new.ident",
             split_by="condition",
@@ -98,97 +188,97 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
             rootname=paste(args$output, "umap_spl_cnd", sep="_"),
             pdf=args$pdf
         )
+
+        graphics$dim_plot(
+            data=seurat_data,
+            reduction="atacumap",
+            plot_title="UMAP, colored by grouping condition, split by fragments in peaks per cell",
+            legend_title="Condition",
+            group_by="condition",
+            split_by="quartile_nCount_ATAC",
+            label=FALSE,
+            alpha=0.5,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "umap_gr_cnd_spl_frgm", sep="_"),
+            pdf=args$pdf
+        )
+
+        graphics$dim_plot(
+            data=seurat_data,
+            reduction="atacumap",
+            plot_title="UMAP, colored by grouping condition, split by peaks per cell",
+            legend_title="Condition",
+            group_by="condition",
+            split_by="quartile_nFeature_ATAC",
+            label=FALSE,
+            alpha=0.5,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "umap_gr_cnd_spl_peak", sep="_"),
+            pdf=args$pdf
+        )
+
+        graphics$dim_plot(
+            data=seurat_data,
+            reduction="atacumap",
+            plot_title="UMAP, colored by grouping condition, split by TSS enrichment score",
+            legend_title="Condition",
+            group_by="condition",
+            split_by="quartile_TSS.enrichment",
+            label=FALSE,
+            alpha=0.5,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "umap_gr_cnd_spl_tss", sep="_"),
+            pdf=args$pdf
+        )
+
+        graphics$dim_plot(
+            data=seurat_data,
+            reduction="atacumap",
+            plot_title="UMAP, colored by grouping condition, split by nucleosome signal",
+            legend_title="Condition",
+            group_by="condition",
+            split_by="quartile_nucleosome_signal",
+            label=FALSE,
+            alpha=0.5,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "umap_gr_cnd_spl_ncls", sep="_"),
+            pdf=args$pdf
+        )
+
+        graphics$dim_plot(
+            data=seurat_data,
+            reduction="atacumap",
+            plot_title="UMAP, colored by grouping condition, split by FRiP",
+            legend_title="Condition",
+            group_by="condition",
+            split_by="quartile_frip",
+            label=FALSE,
+            alpha=0.5,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "umap_gr_cnd_spl_frip", sep="_"),
+            pdf=args$pdf
+        )
+
+        graphics$dim_plot(
+            data=seurat_data,
+            reduction="atacumap",
+            plot_title="UMAP, colored by grouping condition, split by blacklist fraction",
+            legend_title="Condition",
+            group_by="condition",
+            split_by="quartile_blacklist_fraction",
+            label=FALSE,
+            alpha=0.5,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "umap_gr_cnd_spl_blck", sep="_"),
+            pdf=args$pdf
+        )
     }
-
-    graphics$dim_plot(
-        data=seurat_data,
-        reduction="atacumap",
-        plot_title="Split by the fragments in peaks per cell counts cells UMAP",
-        legend_title="Dataset",
-        group_by="new.ident",
-        split_by="quartile_nCount_ATAC",
-        label=FALSE,
-        alpha=0.5,
-        palette_colors=graphics$D40_COLORS,
-        theme=args$theme,
-        rootname=paste(args$output, "umap_spl_frgm", sep="_"),
-        pdf=args$pdf
-    )
-
-    graphics$dim_plot(
-        data=seurat_data,
-        reduction="atacumap",
-        plot_title="Split by the peaks per cell counts cells UMAP",
-        legend_title="Dataset",
-        group_by="new.ident",
-        split_by="quartile_nFeature_ATAC",
-        label=FALSE,
-        alpha=0.5,
-        palette_colors=graphics$D40_COLORS,
-        theme=args$theme,
-        rootname=paste(args$output, "umap_spl_peak", sep="_"),
-        pdf=args$pdf
-    )
-
-    graphics$dim_plot(
-        data=seurat_data,
-        reduction="atacumap",
-        plot_title="Split by the TSS enrichment score cells UMAP",
-        legend_title="Dataset",
-        group_by="new.ident",
-        split_by="quartile_TSS.enrichment",
-        label=FALSE,
-        alpha=0.5,
-        palette_colors=graphics$D40_COLORS,
-        theme=args$theme,
-        rootname=paste(args$output, "umap_spl_tss", sep="_"),
-        pdf=args$pdf
-    )
-
-    graphics$dim_plot(
-        data=seurat_data,
-        reduction="atacumap",
-        plot_title="Split by the nucleosome signal cells UMAP",
-        legend_title="Dataset",
-        group_by="new.ident",
-        split_by="quartile_nucleosome_signal",
-        label=FALSE,
-        alpha=0.5,
-        palette_colors=graphics$D40_COLORS,
-        theme=args$theme,
-        rootname=paste(args$output, "umap_spl_ncls", sep="_"),
-        pdf=args$pdf
-    )
-
-    graphics$dim_plot(
-        data=seurat_data,
-        reduction="atacumap",
-        plot_title="Split by the FRiP cells UMAP",
-        legend_title="Dataset",
-        group_by="new.ident",
-        split_by="quartile_frip",
-        label=FALSE,
-        alpha=0.5,
-        palette_colors=graphics$D40_COLORS,
-        theme=args$theme,
-        rootname=paste(args$output, "umap_spl_frip", sep="_"),
-        pdf=args$pdf
-    )
-
-    graphics$dim_plot(
-        data=seurat_data,
-        reduction="atacumap",
-        plot_title="Split by the genomic blacklist regions fraction cells UMAP",
-        legend_title="Dataset",
-        group_by="new.ident",
-        split_by="quartile_blacklist_fraction",
-        label=FALSE,
-        alpha=0.5,
-        palette_colors=graphics$D40_COLORS,
-        theme=args$theme,
-        rootname=paste(args$output, "umap_spl_blck", sep="_"),
-        pdf=args$pdf
-    )
 
 }
 
