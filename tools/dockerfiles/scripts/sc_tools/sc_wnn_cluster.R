@@ -394,13 +394,13 @@ export_heatmaps <- function(seurat_data, markers, args){
                 split_rows=forcats::fct_inorder(as.character(grouped_markers$cluster)),            # fct_inorder fails with numeric
                 show_rownames=TRUE,
                 scale_to_max=TRUE,
-                group_by=column_annotations,
+                group_by=unique(column_annotations),                                               # to not show duplicates
                 palette_colors=graphics$D40_COLORS,
                 heatmap_colors=c("black", "yellow"),
                 plot_title=paste(
                     "Gene expression heatmap, resolution", current_resolution
                 ),
-                height=12*length(grouped_markers$feature),
+                height=13*length(grouped_markers$feature),
                 rootname=paste(args$output, "xpr_htmp_res", current_resolution, sep="_"),
                 pdf=args$pdf
             )

@@ -31,13 +31,13 @@ export_all_clustering_plots <- function(seurat_data, args){
         graphics$dim_plot(
             data=seurat_data,
             reduction=reduction,
-            plot_title=paste0(
-                "Cells UMAP with assigned cell types (",
-                reduction, " dim. reduction)"
+            plot_title=paste(
+                "UMAP, colored by cell type,",
+                "reduction", reduction
             ),
             legend_title="Cell type",
             group_by=args$target,
-            label=FALSE,
+            label=FALSE,                                                                             # names can be too long to show on plot
             label_color="black",
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
@@ -48,9 +48,10 @@ export_all_clustering_plots <- function(seurat_data, args){
             graphics$dim_plot(
                 data=seurat_data,
                 reduction=reduction,
-                plot_title=paste0(
-                    "Split by dataset cells UMAP with assigned cell types (",
-                    reduction, " dim. reduction)"
+                plot_title=paste(
+                    "UMAP, colored by cell type,",
+                    "split by dataset,",
+                    "reduction", reduction
                 ),
                 legend_title="Cell type",
                 group_by=args$target,
@@ -70,9 +71,10 @@ export_all_clustering_plots <- function(seurat_data, args){
             graphics$dim_plot(
                 data=seurat_data,
                 reduction=reduction,
-                plot_title=paste0(
-                    "Split by grouping condition cells UMAP with assigned cell types (",
-                    reduction, " dim. reduction)"
+                plot_title=paste(
+                    "UMAP, colored by cell type,",
+                    "split by grouping condition,",
+                    "reduction", reduction
                 ),
                 legend_title="Cell type",
                 group_by=args$target,
@@ -89,9 +91,10 @@ export_all_clustering_plots <- function(seurat_data, args){
             graphics$dim_plot(
                 data=seurat_data,
                 reduction=reduction,
-                plot_title=paste0(
-                    "Split by cell cycle phase cells UMAP with assigned cell types (",
-                    reduction, " dim. reduction)"
+                plot_title=paste(
+                    "UMAP, colored by cell type,",
+                    "split by cell cycle phase,",
+                    "reduction", reduction
                 ),
                 legend_title="Cell type",
                 group_by=args$target,
@@ -111,16 +114,17 @@ export_all_clustering_plots <- function(seurat_data, args){
         graphics$composition_plot(
             data=downsampled_data,
             plot_title=paste(
-                "Grouped by cell type split by dataset cells composition plot.",
-                "Downsampled to", downsampled_to, "cells per dataset."
+                "Composition plot,",
+                "colored by cell type,",
+                "split by dataset,",
+                "downsampled"
             ),
             legend_title="Cell type",
             group_by=args$target,
             split_by="new.ident",
             x_label="Dataset",
-            y_label="Cells counts",
+            y_label="Cells percentage",
             palette_colors=graphics$D40_COLORS,
-            bar_position="dodge",
             theme=args$theme,
             rootname=paste(args$output, "cmp_gr_ctyp_spl_idnt", sep="_"),
             pdf=args$pdf
@@ -128,16 +132,17 @@ export_all_clustering_plots <- function(seurat_data, args){
         graphics$composition_plot(
             data=downsampled_data,
             plot_title=paste(
-                "Grouped by dataset split by cell type cells composition plot.",
-                "Downsampled to", downsampled_to, "cells per dataset."
+                "Composition plot,",
+                "colored by dataset,",
+                "split by cell type,",
+                "downsampled"
             ),
             legend_title="Dataset",
             group_by="new.ident",
             split_by=args$target,
             x_label="Cell type",
-            y_label="Cells counts",
+            y_label="Cells percentage",
             palette_colors=graphics$D40_COLORS,
-            bar_position="dodge",
             theme=args$theme,
             rootname=paste(args$output, "cmp_gr_idnt_spl_ctyp", sep="_"),
             pdf=args$pdf
@@ -146,16 +151,16 @@ export_all_clustering_plots <- function(seurat_data, args){
             graphics$composition_plot(
                 data=downsampled_data,
                 plot_title=paste(
-                    "Grouped by cell cycle phase split by dataset cells composition plot.",
-                    "Downsampled to", downsampled_to, "cells per dataset."
+                    "Composition plot,",
+                    "colored by cell cycle phase,",
+                    "split by dataset, downsampled"
                 ),
                 legend_title="Phase",
                 group_by="Phase",
                 split_by="new.ident",
                 x_label="Dataset",
-                y_label="Cells counts",
+                y_label="Cells percentage",
                 palette_colors=graphics$D40_COLORS,
-                bar_position="dodge",
                 theme=args$theme,
                 rootname=paste(args$output, "cmp_gr_ph_spl_idnt", sep="_"),
                 pdf=args$pdf
@@ -169,16 +174,17 @@ export_all_clustering_plots <- function(seurat_data, args){
         graphics$composition_plot(
             data=downsampled_data,
             plot_title=paste(
-                "Grouped by cell type split by condition cells composition plot.",
-                "Downsampled to", downsampled_to, "cells per dataset."
+                "Composition plot,",
+                "colored by cell type,",
+                "split by grouping condition,",
+                "downsampled"
             ),
             legend_title="Cell type",
             group_by=args$target,
             split_by="condition",
             x_label="Condition",
-            y_label="Cells counts",
+            y_label="Cells percentage",
             palette_colors=graphics$D40_COLORS,
-            bar_position="dodge",
             theme=args$theme,
             rootname=paste(args$output, "cmp_gr_ctyp_spl_cnd", sep="_"),
             pdf=args$pdf
@@ -186,16 +192,17 @@ export_all_clustering_plots <- function(seurat_data, args){
         graphics$composition_plot(
             data=downsampled_data,
             plot_title=paste(
-                "Grouped by condition split by cell type cells composition plot.",
-                "Downsampled to", downsampled_to, "cells per dataset."
+                "Composition plot,",
+                "colored by grouping condition,",
+                "split by cell type,",
+                "downsampled"
             ),
             legend_title="Condition",
             group_by="condition",
             split_by=args$target,
             x_label="Cell type",
-            y_label="Cells counts",
+            y_label="Cells percentage",
             palette_colors=graphics$D40_COLORS,
-            bar_position="dodge",
             theme=args$theme,
             rootname=paste(args$output, "cmp_gr_cnd_spl_ctyp", sep="_"),
             pdf=args$pdf
@@ -206,16 +213,17 @@ export_all_clustering_plots <- function(seurat_data, args){
         graphics$composition_plot(
             data=downsampled_data,
             plot_title=paste(
-                "Grouped by cell cycle phase split by cell type cells composition plot.",
-                "Downsampled to", downsampled_to, "cells per dataset."
+                "Composition plot,",
+                "colored by cell cycle phase,",
+                "split by cell type,",
+                "downsampled"
             ),
             legend_title="Phase",
             group_by="Phase",
             split_by=args$target,
             x_label="Cell type",
-            y_label="Cells counts",
+            y_label="Cells percentage",
             palette_colors=graphics$D40_COLORS,
-            bar_position="dodge",
             theme=args$theme,
             rootname=paste(args$output, "cmp_gr_ph_spl_ctyp", sep="_"),
             pdf=args$pdf
@@ -251,7 +259,8 @@ export_all_coverage_plots <- function(seurat_data, args) {
                 region=current_gene,
                 group_by=args$target,
                 plot_title=paste(
-                    "Tn5 insertion frequency plot around", current_gene, "gene."
+                    "Fragments coverage,",
+                    current_gene, "gene"
                 ),
                 idents=NULL,                                                               # to include all values from the default "new.ident" column
                 cells=colnames(seurat_data),                                               # limit to only those cells that are in out seurat_data
@@ -280,7 +289,7 @@ export_all_expression_plots <- function(seurat_data, args) {
     graphics$dot_plot(
         data=seurat_data,
         features=args$genes,
-        plot_title=paste("Log normalized scaled average gene expression per cell type."),
+        plot_title="Gene expression dot plot",
         x_label="Genes",
         y_label="Cell type",
         cluster_idents=FALSE,
@@ -295,7 +304,7 @@ export_all_expression_plots <- function(seurat_data, args) {
                 data=seurat_data,
                 features=current_gene,
                 labels=current_gene,
-                plot_title=paste("Log normalized gene expression density per cell type"),
+                plot_title="Gene expression violin plot",
                 legend_title="Cell type",
                 log=TRUE,
                 pt_size=0,
@@ -314,7 +323,10 @@ export_all_expression_plots <- function(seurat_data, args) {
                     features=current_gene,
                     labels=current_gene,
                     reduction=reduction,
-                    plot_title=paste0("Log normalized gene expression on cells UMAP with assigned cell types (", reduction, " dim. reduction)"),
+                    plot_title=paste(
+                        "UMAP, gene expression",
+                        "reduction", reduction
+                    ),
                     label=FALSE,
                     order=TRUE,
                     max_cutoff="q99",  # to prevent cells with overexpressed gene from distoring the color bar
@@ -329,7 +341,10 @@ export_all_expression_plots <- function(seurat_data, args) {
                     data=seurat_data,
                     features=current_gene,
                     reduction=reduction,
-                    plot_title=paste0("Log normalized gene expression density on cells UMAP with assigned cell types (", reduction, " dim. reduction)"),
+                    plot_title=paste(
+                        "UMAP, gene expression density",
+                        "reduction", reduction
+                    ),
                     joint=FALSE,
                     width=800,
                     height=800,
@@ -378,11 +393,11 @@ export_heatmaps <- function(seurat_data, markers, args){
         split_rows=forcats::fct_inorder(as.character(grouped_markers$cluster)),            # fct_inorder fails with numeric
         show_rownames=TRUE,
         scale_to_max=TRUE,
-        group_by=column_annotations,
+        group_by=unique(column_annotations),                                               # to not show duplicates
         palette_colors=graphics$D40_COLORS,
         heatmap_colors=c("black", "yellow"),
-        plot_title="Normalized gene expression heatmap",
-        height=12*length(grouped_markers$feature),
+        plot_title="Gene expression heatmap",
+        height=13*length(grouped_markers$feature),
         rootname=paste(args$output, "xpr_htmp", sep="_"),
         pdf=args$pdf
     )
@@ -562,6 +577,16 @@ get_args <- function(){
     parser$add_argument(
         "--cbbuild",
         help="Export results to UCSC Cell Browser. Default: false",
+        action="store_true"
+    )
+    parser$add_argument(
+        "--scope",
+        help=paste(
+            "Save Seurat data to SCope compatible loom file. Only",
+            "not normalized raw counts from the RNA assay will be",
+            "saved. If loaded Seurat object doesn't have RNA assay",
+            "this parameter will be ignored. Default: false"
+        ),
         action="store_true"
     )
     parser$add_argument(
@@ -830,4 +855,12 @@ if(args$h5seurat){
 if(args$h5ad){
     print("Exporting results to h5ad file")
     io$export_h5ad(seurat_data, paste(args$output, "_data.h5ad", sep=""))
+}
+
+if(args$scope && ("RNA" %in% names(seurat_data@assays))){
+    print("Exporting results to SCope compatible loom file")
+    io$export_scope_loom(                                                                  # we save only counts slot from the RNA assay 
+        seurat_data,
+        paste(args$output, "_data.loom", sep="")
+    )
 }
