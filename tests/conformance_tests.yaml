@@ -726,6 +726,25 @@
         location: chr4.fa
         size: 1378901
 
+- job: ./files-to-folder-3.json
+  tool: ../tools/files-to-folder.cwl
+  output:
+    folder:
+      class: Directory
+      listing:
+      - class: File
+        location: chr4_100_mapped_reads.Aligned.out.bam
+        size: 11034
+      - class: File
+        location: chr4_100_mapped_reads.Aligned.out.bam.bai
+        size: 1368
+      - class: File
+        location: dm3_chr4.tsv
+        size: 76090
+      - class: File
+        location: chr4.fa
+        size: 1378901
+
 # ========================================================
 # geep
 # ========================================================
