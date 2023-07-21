@@ -24,56 +24,100 @@ suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
 call_peaks <- function(seurat_data, seqinfo_data, args) {
     backup_assay <- DefaultAssay(seurat_data)
-    tryCatch(
-        expr = {
-            print(paste("Calling MACS2 peaks for cells grouped by", args$callby))
-            DefaultAssay(seurat_data) <- "ATAC"
-            macs2_peaks <- CallPeaks(
-                seurat_data,
-                group.by=args$callby,
-                verbose=args$verbose
-            )
-            Idents(seurat_data) <- "new.ident"                                      # safety measure - set identities to something standard
-            macs2_counts <- FeatureMatrix(
-                fragments=Fragments(seurat_data),
-                sep=c("-", "-"),
-                features=macs2_peaks,
-                cells=colnames(seurat_data),
-                verbose=FALSE
-            )
-            rm(macs2_peaks)                                                         # remove unused data
-            genome_annotation <- rtracklayer::import(args$annotations, format="GFF")
-            if( !("gene_biotype" %in% colnames(GenomicRanges::mcols(genome_annotation))) ){
-                print("Loaded genome annotation doesn't have 'gene_biotype' column. Adding NA")
-                genome_annotation$gene_biotype <- NA
-            }
-            if( !("tx_id" %in% colnames(GenomicRanges::mcols(genome_annotation))) ){
-                print("Genome annotation doesn't have 'tx_id' column. Adding from 'transcript_id'")
-                genome_annotation$tx_id <- genome_annotation$transcript_id
-            }
-            atac_assay <- CreateChromatinAssay(
-                counts=macs2_counts,
-                sep=c("-", "-"),
-                fragments=Fragments(seurat_data),
-                min.cells=0,                                                        # setting something other than 0 will update nCount_ATAC, which bring some discrepancy to the QC plots
-                min.features=-1,                                                    # as they check ncount.cell > min.features and by default it's 0, we will remove cells without peaks and won't be able to add new assay to our seurat_data
-                annotation=genome_annotation,
-                genome=seqinfo_data                                                 # we will need it later when exporing genome coverage to bigWig files
-            )
-            rm(macs2_counts, genome_annotation)                                     # remove unused data
-            seurat_data[["ATAC"]] <- atac_assay
-            rm(atac_assay)                                                          # remove unused data
-            gc(verbose=FALSE)
-        },
-        error = function(e){
-            print(paste("Failed to call MACS2 peaks due to", e))
-        },
-        finally = {
-            DefaultAssay(seurat_data) <- backup_assay
-            Idents(seurat_data) <- "new.ident"                                      # safety measure
-            return (seurat_data)
-        }
+    DefaultAssay(seurat_data) <- "ATAC"                                     # safety measure
+
+    print("Adjusting fragments data to 1bp length Tn5 cut sites")
+    tn5ct_location <- paste0(args$tmpdir, "/", "tn5ct.tsv.gz")
+    exit_code <- sys::exec_wait(
+        cmd="sc_tn5_cut_sites.sh",                                          # if it's not found in PATH, R will fail with error
+        args=c(args$fragments, tn5ct_location)
     )
+    if (exit_code != 0){                                                    # we were able to run sc_tn5_cut_sites.sh, but something went wrong
+        base::print(
+            base::paste0(
+                "Failed to adjust fragments data to 1bp length ",
+                "Tn5 cut sites with exit code ", exit_code, ". Exiting."
+            )
+        )
+        base::quit(save="no", status=1, runLast=FALSE)                      # force R to exit with error
+    }
+
+    print(
+        paste(
+            "Replacing fragments data with 1bp length",
+            "Tn5 cut sites from", tn5ct_location
+        )
+    )
+    seurat_data <- io$replace_fragments(tn5ct_location, seurat_data)        # will change the default assay to ATAC
+    debug$print_info(seurat_data, args)
+
+    print(
+        paste(
+            "Calling MACS2 peaks from 1bp length Tn5",
+            "cut sites for cells grouped by", args$callby,
+            "with --shift -25 --extsize 50 --keep-dup all",
+            "--qvalue", args$qvalue, "parameters"
+        )
+    )
+    macs2_peaks <- CallPeaks(
+        seurat_data,
+        group.by=args$callby,
+        extsize=50,                                                                    # will be always called with --nomodel, so --shift
+        shift=-25,                                                                     # and --extsize make difference
+        additional.args=paste(
+            "-q", args$qvalue,
+            "--keep-dup all",                                                          # our fragments are already deduplicated
+            "--seed 42",                                                               # just in case
+            "--tempdir", args$tmpdir
+        ),
+        verbose=args$verbose
+    )
+
+    print(
+        paste(
+            "Returning to the original fragments",
+            "data from", args$fragments
+        )
+    )
+    seurat_data <- io$replace_fragments(args$fragments, seurat_data)
+    file.remove(tn5ct_location)                                                        # we don't need Tn5 cut sites file anymore
+
+    Idents(seurat_data) <- "new.ident"                                                 # safety measure - set identities to something standard
+    macs2_counts <- FeatureMatrix(
+        fragments=Fragments(seurat_data),                                              # at this moment it points to the original fragments data
+        sep=c("-", "-"),
+        features=macs2_peaks,
+        cells=colnames(seurat_data),
+        verbose=args$verbose
+    )
+    rm(macs2_peaks)                                                                    # remove unused data
+
+    genome_annotation <- rtracklayer::import(args$annotations, format="GFF")
+    if( !("gene_biotype" %in% colnames(GenomicRanges::mcols(genome_annotation))) ){
+        print("Loaded genome annotation doesn't have 'gene_biotype' column. Adding NA")
+        genome_annotation$gene_biotype <- NA
+    }
+    if( !("tx_id" %in% colnames(GenomicRanges::mcols(genome_annotation))) ){
+        print("Genome annotation doesn't have 'tx_id' column. Adding from 'transcript_id'")
+        genome_annotation$tx_id <- genome_annotation$transcript_id
+    }
+    atac_assay <- CreateChromatinAssay(
+        counts=macs2_counts,
+        sep=c("-", "-"),
+        fragments=Fragments(seurat_data),                                   # at this moment it points to the original fragments data
+        min.cells=0,                                                        # setting something other than 0 will update nCount_ATAC, which bring some discrepancy to the QC plots
+        min.features=-1,                                                    # as they check ncount.cell > min.features and by default it's 0, we will remove cells without peaks and won't be able to add new assay to our seurat_data
+        annotation=genome_annotation,
+        genome=seqinfo_data                                                 # we will need it later when exporing genome coverage to bigWig files
+    )
+    rm(macs2_counts, genome_annotation)                                     # remove unused data
+    seurat_data[["ATAC"]] <- atac_assay
+    rm(atac_assay)                                                          # remove unused data
+    gc(verbose=FALSE)
+
+    DefaultAssay(seurat_data) <- backup_assay
+    Idents(seurat_data) <- "new.ident"                                      # safety measure
+    return (seurat_data)
 }
 
 
@@ -85,6 +129,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         "Transcripts", "Genes", "Mitochondrial %", "Novelty score",
         paste(c("Fragments in peaks", "TSS enrichment score", "Nucl. signal", "Peaks", "FRiP", "Bl. regions"), peak_type)
     )
+    datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
 
     qc_metrics_pca <- qc$qc_metrics_pca(
         seurat_data=seurat_data,
@@ -137,6 +182,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         plot_title=paste("Number of cells per dataset (", suffix, ")", sep=""),
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
+        width=ifelse(datasets_count > 1, 1200, 600),
         rootname=paste(args$output, suffix, "cells_count", sep="_"),
         pdf=args$pdf
     )
@@ -152,9 +198,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         legend_title="Dataset",
         plot_title=paste("Transcripts per cell density (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
-        zoom_on_intercept=TRUE,
+        zoom_on_intercept=FALSE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
+        height=ifelse(datasets_count > 1, 800, 400),
         rootname=paste(args$output, suffix, "umi_dnst", sep="_"),
         pdf=args$pdf
     )
@@ -170,7 +217,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         legend_title="Dataset",
         plot_title=paste("Genes per cell density (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
-        zoom_on_intercept=TRUE,
+        zoom_on_intercept=FALSE,
         show_ranked=TRUE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
@@ -199,6 +246,8 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         show_lm=TRUE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
+        width=ifelse(datasets_count > 1, 1200, 600),
+        height=ifelse(datasets_count > 1, 800, 400),
         rootname=paste(args$output, suffix, "gene_umi", sep="_"),
         pdf=args$pdf
     )
@@ -212,9 +261,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         y_label="Density",
         legend_title="Dataset",
         plot_title=paste("Percentage of transcripts mapped to mitochondrial genes per cell density (", suffix, ")", sep=""),
-        zoom_on_intercept=TRUE,
+        zoom_on_intercept=FALSE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
+        height=ifelse(datasets_count > 1, 800, 400),
         rootname=paste(args$output, suffix, "mito_dnst", sep="_"),
         pdf=args$pdf
     )
@@ -228,9 +278,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         y_label="Density",
         legend_title="Dataset",
         plot_title=paste("Novelty score per cell density for RNA assay (", suffix, ")", sep=""),
-        zoom_on_intercept=TRUE,
+        zoom_on_intercept=FALSE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
+        height=ifelse(datasets_count > 1, 800, 400),
         rootname=paste(args$output, suffix, "nvlt_dnst", sep="_"),
         pdf=args$pdf
     )
@@ -245,9 +296,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         legend_title="Dataset",
         plot_title=paste("Fragments in peaks per cell density (", suffix, ") ", peak_type, sep=""),
         scale_x_log10=TRUE,
-        zoom_on_intercept=TRUE,
+        zoom_on_intercept=FALSE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
+        height=ifelse(datasets_count > 1, 800, 400),
         rootname=paste(args$output, suffix, "frgm_dnst", sep="_"),
         pdf=args$pdf
     )
@@ -262,7 +314,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         legend_title="Dataset",
         plot_title=paste("Peaks per cell density (", suffix, ") ", peak_type, sep=""),
         scale_x_log10=FALSE,
-        zoom_on_intercept=TRUE,
+        zoom_on_intercept=FALSE,
         show_ranked=TRUE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
@@ -280,7 +332,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         legend_title="Dataset",
         plot_title=paste("Fraction of ATAC fragments within genomic blacklist regions per cell density (", suffix, ") ", peak_type, sep=""),
         scale_x_log10=FALSE,
-        zoom_on_intercept=TRUE,
+        zoom_on_intercept=FALSE,
         show_ranked=TRUE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
@@ -309,6 +361,8 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         show_density=TRUE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
+        width=ifelse(datasets_count > 1, 1200, 600),
+        height=ifelse(datasets_count > 1, 800, 400),
         rootname=paste(args$output, suffix, "rna_atac_cnts", sep="_"),
         pdf=args$pdf
     )
@@ -334,6 +388,8 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         show_density=TRUE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
+        width=ifelse(datasets_count > 1, 1200, 600),
+        height=ifelse(datasets_count > 1, 800, 400),
         rootname=paste(args$output, suffix, "tss_frgm", sep="_"),
         pdf=args$pdf
     )
@@ -365,6 +421,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             y_label="Cells percentage",
             palette_colors=c("#00AEAE", "#0BFFFF"),
             theme=args$theme,
+            width=ifelse(datasets_count > 1, 1200, 600),
             rootname=paste(args$output, suffix, "rnadbl", sep="_"),
             pdf=args$pdf
         )
@@ -381,6 +438,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             y_label="Cells percentage",
             palette_colors=c("#00DCDC", "#0BFFFF"),
             theme=args$theme,
+            width=ifelse(datasets_count > 1, 1200, 600),
             rootname=paste(args$output, suffix, "atacdbl", sep="_"),
             pdf=args$pdf
         )
@@ -415,6 +473,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             y_label="Cells percentage",
             palette_colors=c("#00AEAE", "#008080", "#00DCDC", "#0BFFFF"),
             theme=args$theme,
+            width=ifelse(datasets_count > 1, 1200, 600),
             rootname=paste(args$output, suffix, "vrlpdbl", sep="_"),
             pdf=args$pdf
         )
@@ -429,6 +488,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         combine_guides="collect",
         plot_title=paste("TSS enrichment score (", suffix, ") ", peak_type, sep=""),
         theme=args$theme,
+        height=ifelse(datasets_count > 1, 800, 400),
         rootname=paste(args$output, suffix, "tss_nrch", sep="_"),
         pdf=args$pdf
     )
@@ -439,6 +499,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         combine_guides="collect",
         plot_title=paste("Fragments length histogram (", suffix, ") ", peak_type, sep=""),
         theme=args$theme,
+        height=ifelse(datasets_count > 1, 800, 400),
         rootname=paste(args$output, suffix, "frgm_hist", sep="_"),
         pdf=args$pdf
     )
@@ -459,7 +520,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             legend_title="Dataset",
             plot_title=paste("Split by grouping condition transcripts per cell density (", suffix, ")", sep=""),
             scale_x_log10=TRUE,
-            zoom_on_intercept=TRUE,
+            zoom_on_intercept=FALSE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
             rootname=paste(args$output, suffix, "umi_dnst_spl_cnd", sep="_"),
@@ -477,7 +538,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             legend_title="Dataset",
             plot_title=paste("Split by grouping condition genes per cell density (", suffix, ")", sep=""),
             scale_x_log10=TRUE,
-            zoom_on_intercept=TRUE,
+            zoom_on_intercept=FALSE,
             show_ranked=TRUE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
@@ -494,7 +555,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             y_label="Density",
             legend_title="Dataset",
             plot_title=paste("Split by grouping condition the percentage of transcripts mapped to mitochondrial genes per cell density (", suffix, ")", sep=""),
-            zoom_on_intercept=TRUE,
+            zoom_on_intercept=FALSE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
             rootname=paste(args$output, suffix, "mito_dnst_spl_cnd", sep="_"),
@@ -510,7 +571,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             y_label="Density",
             legend_title="Dataset",
             plot_title=paste("Split by grouping condition the novelty score per cell density for RNA assay (", suffix, ")", sep=""),
-            zoom_on_intercept=TRUE,
+            zoom_on_intercept=FALSE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
             rootname=paste(args$output, suffix, "nvlt_dnst_spl_cnd", sep="_"),
@@ -527,7 +588,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             legend_title="Dataset",
             plot_title=paste("Split by grouping condition fragments in peaks per cell density (", suffix, ") ", peak_type, sep=""),
             scale_x_log10=TRUE,
-            zoom_on_intercept=TRUE,
+            zoom_on_intercept=FALSE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
             rootname=paste(args$output, suffix, "frgm_dnst_spl_cnd", sep="_"),
@@ -544,7 +605,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             legend_title="Dataset",
             plot_title=paste("Split by grouping condition peaks per cell density (", suffix, ") ", peak_type, sep=""),
             scale_x_log10=FALSE,
-            zoom_on_intercept=TRUE,
+            zoom_on_intercept=FALSE,
             show_ranked=TRUE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
@@ -562,7 +623,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             legend_title="Dataset",
             plot_title=paste("Split by grouping condition the fraction of ATAC fragments within genomic blacklist regions per cell density (", suffix, ") ", peak_type, sep=""),
             scale_x_log10=FALSE,
-            zoom_on_intercept=TRUE,
+            zoom_on_intercept=FALSE,
             show_ranked=TRUE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
@@ -780,6 +841,14 @@ get_args <- function(){
         type="character"
     )
     parser$add_argument(
+        "--qvalue",
+        help=paste(
+            "Minimum FDR (q-value) cutoff for MACS2 peak detection.",
+            "Ignored if --callby is not provided. Default: 0.05"
+        ),
+        type="double", default=0.05
+    )
+    parser$add_argument(
         "--removedoublets",
         help=paste(
             "Remove cells that were identified as doublets. For RNA assay cells",
@@ -850,6 +919,14 @@ get_args <- function(){
         "--cbbuild",
         help="Export results to UCSC Cell Browser. Default: false",
         action="store_true"
+    )
+    parser$add_argument(
+        "--tmpdir",
+        help=paste(
+            "Directory to keep temporary files. Default: either /tmp",
+            "or defined by environment variables TMPDIR, TMP, TEMP."
+        ),
+        type="character", default=tempdir()
     )
     parser$add_argument(
         "--output",

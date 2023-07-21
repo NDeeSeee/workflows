@@ -22,6 +22,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
     Idents(seurat_data) <- "new.ident"                                                                # safety measure
     selected_features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi")
     selected_labels=c("Transcripts", "Genes", "Mitochondrial %", "Novelty score")
+    datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
 
     qc_metrics_pca <- qc$qc_metrics_pca(
         seurat_data=seurat_data,
@@ -74,6 +75,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         plot_title=paste("Number of cells per dataset (", suffix, ")", sep=""),
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
+        width=ifelse(datasets_count > 1, 1200, 600),
         rootname=paste(args$output, suffix, "cells_count", sep="_"),
         pdf=args$pdf
     )
@@ -89,9 +91,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         legend_title="Dataset",
         plot_title=paste("Transcripts per cell density (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
-        zoom_on_intercept=TRUE,
+        zoom_on_intercept=FALSE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
+        height=ifelse(datasets_count > 1, 800, 400),
         rootname=paste(args$output, suffix, "umi_dnst", sep="_"),
         pdf=args$pdf
     )
@@ -107,7 +110,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         legend_title="Dataset",
         plot_title=paste("Genes per cell density (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
-        zoom_on_intercept=TRUE,
+        zoom_on_intercept=FALSE,
         show_ranked=TRUE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
@@ -136,6 +139,8 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         show_lm=TRUE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
+        width=ifelse(datasets_count > 1, 1200, 600),
+        height=ifelse(datasets_count > 1, 800, 400),
         rootname=paste(args$output, suffix, "gene_umi", sep="_"),
         pdf=args$pdf
     )
@@ -149,9 +154,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         y_label="Density",
         legend_title="Dataset",
         plot_title=paste("Percentage of transcripts mapped to mitochondrial genes per cell density (", suffix, ")", sep=""),
-        zoom_on_intercept=TRUE,
+        zoom_on_intercept=FALSE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
+        height=ifelse(datasets_count > 1, 800, 400),
         rootname=paste(args$output, suffix, "mito_dnst", sep="_"),
         pdf=args$pdf
     )
@@ -165,9 +171,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         y_label="Density",
         legend_title="Dataset",
         plot_title=paste("Novelty score per cell density (", suffix, ")", sep=""),
-        zoom_on_intercept=TRUE,
+        zoom_on_intercept=FALSE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
+        height=ifelse(datasets_count > 1, 800, 400),
         rootname=paste(args$output, suffix, "nvlt_dnst", sep="_"),
         pdf=args$pdf
     )
@@ -199,6 +206,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
             y_label="Cells percentage",
             palette_colors=c("#00AEAE", "#0BFFFF"),
             theme=args$theme,
+            width=ifelse(datasets_count > 1, 1200, 600),
             rootname=paste(args$output, suffix, "rnadbl", sep="_"),
             pdf=args$pdf
         )
@@ -219,7 +227,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
             legend_title="Dataset",
             plot_title=paste("Split by grouping condition transcripts per cell density (", suffix, ")", sep=""),
             scale_x_log10=TRUE,
-            zoom_on_intercept=TRUE,
+            zoom_on_intercept=FALSE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
             rootname=paste(args$output, suffix, "umi_dnst_spl_cnd", sep="_"),
@@ -237,7 +245,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
             legend_title="Dataset",
             plot_title=paste("Split by grouping condition genes per cell density (", suffix, ")", sep=""),
             scale_x_log10=TRUE,
-            zoom_on_intercept=TRUE,
+            zoom_on_intercept=FALSE,
             show_ranked=TRUE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
@@ -254,7 +262,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
             y_label="Density",
             legend_title="Dataset",
             plot_title=paste("Split by grouping condition the percentage of transcripts mapped to mitochondrial genes per cell density (", suffix, ")", sep=""),
-            zoom_on_intercept=TRUE,
+            zoom_on_intercept=FALSE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
             rootname=paste(args$output, suffix, "mito_dnst_spl_cnd", sep="_"),
@@ -270,7 +278,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
             y_label="Density",
             legend_title="Dataset",
             plot_title=paste("Split by grouping condition the novelty score per cell density (", suffix, ")", sep=""),
-            zoom_on_intercept=TRUE,
+            zoom_on_intercept=FALSE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
             rootname=paste(args$output, suffix, "nvlt_dnst_spl_cnd", sep="_"),

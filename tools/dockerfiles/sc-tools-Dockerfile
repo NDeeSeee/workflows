@@ -2,21 +2,28 @@
 # Dockerfile
 #
 # Software:         set of R scripts for single-cell data analysis
-# Software Version: v0.0.25
+# Software Version: v0.0.26
 # Description:      Dockerized version of the set of R scripts for
 #                   single-cell data analysis
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         set of R scripts for single-cell data analysis
 # Base Image:       satijalab/seurat:4.1.0
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.25 -f sc-tools-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.25
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.25 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.26 -f sc-tools-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.26
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.26 /bin/bash
 ##########################################################################################################
 #
 # Notes:
 # - if you have problems compiling Harmony
 #   https://github.com/immunogenomics/harmony/pull/165
 # - fix bug in cell cycle genes removal
+#
+# v0.0.26
+# - Optionally replace Cellranger peaks with peaks
+#   called by MACS2 from the Tn5 cut sites
+# - adjusted plots sizes from the filtering workflows
+# - need to install cython==0.29 because of this bug
+#   https://github.com/macs3-project/MACS/discussions/568
 #
 # v0.0.25
 # - Refactoring
@@ -173,10 +180,12 @@ WORKDIR /tmp
 ENV R_MAX_VSIZE=200000000000
 ENV CB_VERSION "1.1.1"
 ENV MACS2_URL "https://github.com/macs3-project/MACS.git"
-ENV MACS2_VERSION "2.2.7.1"
+ENV MACS2_VERSION "2.2.8"
 ENV SCTRIANGULATE_VERSION "0.12.0"
 ENV SCIPY_VERSION "1.7.3"
 ENV NUMPY_VERSION "1.22.0"
+ENV HTSLIB_VERSION "1.17"
+ENV HTSLIB_URL "https://github.com/samtools/htslib/releases/download/${HTSLIB_VERSION}/htslib-${HTSLIB_VERSION}.tar.bz2"
 
 COPY ./scripts/sc_tools/sc_rna_filter.R /usr/local/bin/sc_rna_filter.R
 COPY ./scripts/sc_tools/sc_multiome_filter.R /usr/local/bin/sc_multiome_filter.R
@@ -191,6 +200,7 @@ COPY ./scripts/sc_tools/sc_ctype_assign.R /usr/local/bin/sc_ctype_assign.R
 COPY ./scripts/sc_tools/sc_rna_de_pseudobulk.R /usr/local/bin/sc_rna_de_pseudobulk.R
 COPY ./scripts/sc_tools/sc_rna_da_cells.R /usr/local/bin/sc_rna_da_cells.R
 COPY ./scripts/sc_tools/sc_triangulate.R /usr/local/bin/sc_triangulate.R
+COPY ./scripts/sc_tools/sc_tn5_cut_sites.sh /usr/local/bin/sc_tn5_cut_sites.sh
 COPY ./scripts/sc_tools/modules/*.R /usr/local/bin/modules/
 COPY ./scripts/sc_tools/data/*.csv /opt/sc_tools/
 
@@ -200,6 +210,12 @@ RUN apt-get update && \
                     libssl-dev pandoc libudunits2-dev libgdal-dev libcairo2-dev libharfbuzz-dev \
                     libfribidi-dev libbz2-dev tk libfontconfig1-dev libfreetype6-dev libpng-dev \
                     libtiff5-dev libjpeg-dev libmagick++-dev vim -y && \
+    wget -q -O - $HTSLIB_URL | tar -jxv && \
+    cd htslib-${HTSLIB_VERSION} && \
+    ./configure --prefix=/usr/local/ && \
+    make -j 4 && \
+    make install && \
+    cd .. && \
     sed -i -e 's/name="disk" value="1GiB"/name="disk" value="15GiB"/g' /etc/ImageMagick-6/policy.xml && \
     sed -i -e 's/name="width" value="16KP"/name="width" value="25MP"/g' /etc/ImageMagick-6/policy.xml && \
     sed -i -e 's/name="height" value="16KP"/name="height" value="25MP"/g' /etc/ImageMagick-6/policy.xml && \
@@ -211,7 +227,7 @@ RUN apt-get update && \
     pip3 install MAnorm2-utils && \
     git clone --depth 1 --branch v${MACS2_VERSION} ${MACS2_URL} && \
     cd MACS && \
-    sed -i -e 's/numpy>=/numpy /g' setup.py && \
+    pip3 install cython==0.29 && \
     pip3 install . && \
     cd .. && \
     pip3 install sctriangulate==${SCTRIANGULATE_VERSION} && \
@@ -254,6 +270,7 @@ RUN apt-get update && \
     chmod +x /usr/local/bin/sc_rna_de_pseudobulk.R && \
     chmod +x /usr/local/bin/sc_rna_da_cells.R && \
     chmod +x /usr/local/bin/sc_triangulate.R && \
+    chmod +x /usr/local/bin/sc_tn5_cut_sites.sh && \
 ### Downloading blacklist regions files
     wget https://raw.githubusercontent.com/Boyle-Lab/Blacklist/61a04d2c5e49341d76735d485c61f0d1177d08a8/lists/hg38-blacklist.v2.bed.gz && \
     wget https://raw.githubusercontent.com/Boyle-Lab/Blacklist/61a04d2c5e49341d76735d485c61f0d1177d08a8/lists/hg19-blacklist.v2.bed.gz && \
