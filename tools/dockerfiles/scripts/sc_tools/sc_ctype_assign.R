@@ -324,7 +324,7 @@ export_all_expression_plots <- function(seurat_data, args) {
                     labels=current_gene,
                     reduction=reduction,
                     plot_title=paste(
-                        "UMAP, gene expression",
+                        "UMAP, gene expression,",
                         "reduction", reduction
                     ),
                     label=FALSE,
@@ -342,7 +342,7 @@ export_all_expression_plots <- function(seurat_data, args) {
                     features=current_gene,
                     reduction=reduction,
                     plot_title=paste(
-                        "UMAP, gene expression density",
+                        "UMAP, gene expression density,",
                         "reduction", reduction
                     ),
                     joint=FALSE,

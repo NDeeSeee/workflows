@@ -30,13 +30,13 @@ export_raw_plots <- function(seurat_data, args){
             data=seurat_data,
             reduction=reduction,
             plot_title=paste0(
-                "Cells UMAP split by ", args$splitby, " ",
+                "UMAP, split by ", args$splitby, ", ",
                 ifelse(
                     (!is.null(args$groupby) && !is.null(args$subset)),
-                    paste("subsetted to", paste(args$subset, collapse=", "), "values from the", args$groupby, "column "),
+                    paste("subsetted to", paste(args$subset, collapse=", "), "values from the", args$groupby, "column, "),
                     ""
                 ),
-                "(", reduction, " dim. reduction)"
+                "reduction", reduction
             ),
             legend_title=ifelse(
                 (!is.null(args$groupby) && !is.null(args$subset)),
@@ -79,7 +79,7 @@ export_processed_plots <- function(seurat_data, de_results, args){
         graphics$pca_plot(
             pca_data=pca_data,
             pcs=c(1, 2),
-            plot_title="Normalized read counts PCA (1, 2). All genes",
+            plot_title="Gene expression PCA (1,2)",
             legend_title="Dataset",
             color_by="group",
             palette_colors=graphics$D40_COLORS,
@@ -91,7 +91,7 @@ export_processed_plots <- function(seurat_data, de_results, args){
         graphics$pca_plot(
             pca_data=pca_data,
             pcs=c(2, 3),
-            plot_title="Normalized read counts PCA (2, 3). All genes",
+            plot_title="Gene expression PCA (2,3)",
             legend_title="Dataset",
             color_by="group",
             palette_colors=graphics$D40_COLORS,
@@ -132,7 +132,7 @@ export_processed_plots <- function(seurat_data, de_results, args){
                 paste0("Model batch effect by ", args$batchby, ". "),
                 ""
             ),
-            "Displayed Padj threshold equals to ", args$padj
+            "Adjusted P-value threshold ", args$padj
         ),
         caption=paste(nrow(de_results$de_genes), "genes"),
         features=genes_to_highlight,
@@ -146,14 +146,7 @@ export_processed_plots <- function(seurat_data, de_results, args){
             data=seurat_data,
             features=genes_to_highlight,
             labels=genes_to_highlight,
-            plot_title=paste0(
-                "Gene expression density for ", args$second, " vs ", args$first, " cells",
-                ifelse(
-                    (!is.null(args$groupby) && !is.null(args$subset)),
-                    paste(" subsetted to", paste(args$subset, collapse=", "), "values from", args$groupby, "column"),
-                    ""
-                )
-            ),
+            plot_title=paste("Gene expression violin plots, split by", args$splitby),
             legend_title=args$splitby,
             log=TRUE,
             pt_size=0,
@@ -174,13 +167,13 @@ export_processed_plots <- function(seurat_data, de_results, args){
                     labels=current_gene,
                     reduction=reduction,
                     plot_title=paste0(
-                        "Gene expression on cells UMAP split by ", args$splitby, " ",
+                        "UMAP, gene expression, split by ", args$splitby, ", ",
                         ifelse(
                             (!is.null(args$groupby) && !is.null(args$subset)),
-                            paste("subsetted to", paste(args$subset, collapse=", "), "values from the", args$groupby, "column "),
+                            paste("subsetted to", paste(args$subset, collapse=", "), "values from the", args$groupby, "column, "),
                             ""
                         ),
-                        "(", reduction, " dim. reduction)"
+                        "reduction", reduction
                     ),
                     label=FALSE,
                     order=TRUE,
@@ -222,24 +215,25 @@ export_processed_plots <- function(seurat_data, de_results, args){
         assay="RNA",                                               # for now we will always use RNA even if SCT may be present
         slot="data",
         features=rownames(de_results$cell$row_metadata),           # to make sure we use the same number and order of genes as in GCT file
-        show_rownames=nrow(de_results$cell$row_metadata) <= 60,    # hide gene names if there are too many of them
+        split_rows=split_rows,
+        show_rownames=TRUE,
         scale_to_max=TRUE,
+        group_by=colnames(de_results$cell$column_metadata),
+        palette_colors=graphics$D40_COLORS,
+        heatmap_colors=c("black", "yellow"),
         plot_title=paste0(
-            "Normalized gene expression for cells",
+            "Gene expression heatmap",
             ifelse(
                 (!is.null(args$groupby) && !is.null(args$subset)),
                 paste(
-                    " subsetted to", paste(args$subset, collapse=", "),
-                    "values from", args$groupby, "column. "
+                    ", subsetted to", paste(args$subset, collapse=", "),
+                    "values from the", args$groupby, "column, "
                 ),
-                ". "
+                ", "
             ),
-            "padj <= ", args$padj
+            "adjusted P-value threshold ", args$padj
         ),
-        group_by=colnames(de_results$cell$column_metadata),
-        split_rows=split_rows,
-        palette_colors=graphics$D40_COLORS,
-        heatmap_colors=c("black", "yellow"),
+        height=13*length(rownames(de_results$cell$row_metadata)),
         rootname=paste(args$output, "xpr_htmp", sep="_"),
         pdf=args$pdf
     )

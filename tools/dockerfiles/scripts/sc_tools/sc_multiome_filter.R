@@ -141,13 +141,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
     graphics$pca_plot(
         pca_data=qc_metrics_pca,
         pcs=c(1, 2),
-        plot_title=paste(
-            paste(
-                paste0("PC", c(1, 2)),
-                collapse=" and "
-            ),
-            " from the QC metrics PCA (", suffix, ")", sep=""
-        ),
+        plot_title=paste0("QC metrics PCA (1,2) (", suffix, ")"),
         legend_title="QC metrics",
         color_by="labels",
         palette_colors=graphics$D40_COLORS,
@@ -158,13 +152,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
     graphics$pca_plot(
         pca_data=qc_metrics_pca,
         pcs=c(2, 3),
-        plot_title=paste(
-            paste(
-                paste0("PC", c(2, 3)),
-                collapse=" and "
-            ),
-            " from the QC metrics PCA (", suffix, ")", sep=""
-        ),
+        plot_title=paste0("QC metrics PCA (2,3) (", suffix, ")"),
         legend_title="QC metrics",
         color_by="labels",
         palette_colors=graphics$D40_COLORS,
