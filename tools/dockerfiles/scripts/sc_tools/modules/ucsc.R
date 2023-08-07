@@ -327,6 +327,11 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, label_field=N
                 }
             }
 
+            pseudotime_fields <- base::grep("^ptime_", base::colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
+            pseudotime_fields_names <- base::gsub("ptime_", "Pseudotime from ", pseudotime_fields)
+            meta_fields <- base::append(meta_fields, pseudotime_fields)
+            meta_fields_names <- base::append(meta_fields_names, pseudotime_fields_names)
+
             show_labels <- TRUE                                                      # by default we try to show labels, but we hide them if cluster_field wasn't provided
             if (is.null(label_field) || !(label_field %in% (meta_fields_names))){    # either not provided or not correct label_field
                 show_labels <- FALSE                                                 # hide labels

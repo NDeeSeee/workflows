@@ -11,11 +11,13 @@ import("harmony", attach=FALSE)
 import("tibble", attach=FALSE)
 import("glmGamPoi", attach=FALSE)  # safety measure. we don't use it directly, but SCTransform with method="glmGamPoi" needs it
 import("S4Vectors", attach=FALSE)
+import("slingshot", attach=FALSE)
 import("reticulate", attach=FALSE)
 import("tidyselect", attach=FALSE)
 import("rtracklayer", attach=FALSE)
 import("BiocParallel", attach=FALSE)
 import("magrittr", `%>%`, attach=TRUE)
+import("TrajectoryUtils", attach=FALSE)
 import("SummarizedExperiment", attach=FALSE)
 
 export(
@@ -27,6 +29,7 @@ export(
     "rna_sct_single",
     "rna_log_integrated",
     "rna_sct_integrated",
+    "add_trajectory",
     "get_vars_to_regress",
     "get_cell_cycle_scores",
     "get_min_ident_size",
@@ -652,6 +655,135 @@ add_clusters <- function(seurat_data, assay, graph_name, reduction, args){
     )
     return (seurat_data)
 }
+
+add_trajectory <- function(seurat_data, args){
+    base::print(
+        base::paste(
+            "Calculating trajectory from", args$reduction,
+            "reduction, using cluster labels from", args$source,
+            "metadata column. Dimensions used:",
+            base::paste(args$dimensions, collapse=", ")
+        )
+    )
+    embeddings_mat <- SeuratObject::Embeddings(                              # returns cell.embeddings which is already matrix
+        seurat_data,
+        args$reduction
+    )
+    if(!is.null(args$dimensions)){
+        embeddings_mat <- embeddings_mat[, args$dimensions]
+    }
+    base::print("Selected embeddings")
+    base::print(utils::head(embeddings_mat))
+
+    clusters_per_cell <- base::as.vector(
+        as.character(seurat_data@meta.data[[args$source]])
+    )
+
+    slingshot_data <- slingshot::slingshot(                                  # returns PseudotimeOrdering object
+        data=embeddings_mat,
+        clusterLabels=clusters_per_cell,
+        start.clus=args$start                                                # can be NULL
+    )
+    lineages_data <- slingshot::slingLineages(slingshot_data)
+    lineage_params <- slingshot::slingParams(slingshot_data)
+    base::print("Slingshot results")
+    base::print(utils::head(slingshot_data))
+
+    clusters_unique <- base::unique(clusters_per_cell)
+    clusters_weights <- base::vapply(
+        clusters_unique,
+        function(s){as.numeric(clusters_per_cell == s)},
+        rep(0, base::nrow(embeddings_mat))
+    )
+    base::colnames(clusters_weights) <- clusters_unique
+    base::rownames(clusters_weights) <- base::rownames(embeddings_mat)
+    base::print("Cluster weights")
+    base::print(utils::head(clusters_weights))
+
+    lineage_params$dist <- TrajectoryUtils:::.dist_clusters_scaled(                    # https://github.com/kstreet13/slingshot/issues/172
+        x=embeddings_mat,
+        clusters=clusters_weights,
+        centers=TrajectoryUtils::rowmean(embeddings_mat, clusters_weights),
+        full=TRUE
+    )
+    base::print("Cluster distance matrix")
+    base::print(lineage_params$dist)
+
+    cluster_network <- lineages_data %>%
+        purrr::map_df(
+            ~ tibble::tibble(
+                from=.[-length(.)],
+                to=.[-1]
+            )
+        ) %>%
+        base::unique() %>%
+        dplyr::mutate(
+            length=lineage_params$dist[base::cbind(from, to)],
+            directed=TRUE
+        )
+    base::print("Trajectory network")
+    base::print(cluster_network)
+
+    progressions <- purrr::map_df(
+        seq_along(lineages_data),
+        function(l) {
+            ind <- base::apply(slingshot::slingCurveWeights(slingshot_data), 1, which.max) == l
+            lin <- lineages_data[[l]]
+            pst.full <- slingshot::slingPseudotime(slingshot_data, na=FALSE)[,l]
+            pst <- pst.full[ind]
+            means <- base::sapply(
+                lin,
+                function(s){
+                    stats::weighted.mean(
+                        pst.full,
+                        slingshot::slingClusterLabels(slingshot_data)[, s]
+                    )
+                }
+            )
+            non_ends <- means[-c(1, length(means))]
+            edgeID.l <- as.numeric(base::cut(pst, breaks=c(-Inf, non_ends, Inf)))
+            from.l <- lineages_data[[l]][edgeID.l]
+            to.l <- lineages_data[[l]][edgeID.l + 1]
+            m.from <- means[from.l]
+            m.to <- means[to.l]
+            pct <- (pst - m.from) / (m.to - m.from)
+            pct[pct < 0] <- 0
+            pct[pct > 1] <- 1
+            tibble::tibble(
+                cell_id=names(base::which(ind)),
+                from=from.l,
+                to=to.l,
+                percentage=pct
+            )
+        }
+    )
+    base::print("Trajectory progression")
+    base::print(utils::head(progressions))
+
+    seurat_data@misc$trajectories[[args$reduction]] <- dynwrap::wrap_data(
+                                                           cell_ids=base::rownames(embeddings_mat)
+                                                       ) %>%
+                                                       dynwrap::add_trajectory(
+                                                           milestone_network=cluster_network,
+                                                           progressions=progressions,
+                                                           lineages_data=lineages_data             # just in case, maybe we don't need it at all
+                                                       ) %>%
+                                                       dynwrap::add_dimred(
+                                                           dimred=embeddings_mat
+                                                       ) %>%
+                                                       dynwrap::add_root(
+                                                           root_milestone_id=args$start            # if NULL the root will be defined automatically
+                                                       ) %>%
+                                                       dynwrap::add_pseudotime()                   # need to be run after root is added
+
+    seurat_data@meta.data[[paste0("ptime_", args$reduction)]] <- seurat_data@misc$trajectories[[args$reduction]]$pseudotime
+
+    base::rm(embeddings_mat, slingshot_data, progressions)
+    base::gc(verbose=FALSE)
+
+    return (seurat_data)
+}
+
 
 integrate_labels <- function(seurat_data, source_columns, args){
     base::print(

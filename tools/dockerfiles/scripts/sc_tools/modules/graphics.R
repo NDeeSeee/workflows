@@ -8,6 +8,8 @@ import("Signac", attach=FALSE)
 import("tibble", attach=FALSE)
 import("Glimma", attach=FALSE)
 import("ggplot2", attach=FALSE)
+import("dynwrap", attach=FALSE)
+import("dynplot", attach=FALSE)
 import("ggrepel", attach=FALSE)
 import("cluster", attach=FALSE)
 import("reshape2", attach=FALSE)
@@ -46,6 +48,11 @@ export(
     "volcano_plot",
     "feature_heatmap",
     "daseq_permutations",
+    "trajectory_plot",
+    "trajectory_graph",
+    "dendro_plot",
+    "topology_plot",
+    "trajectory_heatmap",
     "D40_COLORS"
 )
 
@@ -536,6 +543,272 @@ dim_plot <- function(data, rootname, reduction, plot_title, legend_title, cells=
     )
 }
 
+trajectory_plot <- function(                                # all feature related parameters are skipped
+    data, rootname, reduction, plot_title,
+    legend_title=NULL,
+    color_cells="auto",                                     # one of auto, none, grouping, milestone, pseudotime
+    color_density="none",                                   # one of none, grouping    
+    alpha=1,
+    palette_colors=NULL,
+    theme="classic",
+    pdf=FALSE,
+    width=1200,
+    height=800,
+    resolution=100
+){
+    base::tryCatch(
+        expr = {
+
+            plot <- dynplot::plot_dimred(
+                        trajectory=data@misc$trajectories[[reduction]],
+                        color_cells=color_cells,
+                        color_density=color_density,
+                        grouping=if (color_density == "grouping"){
+                                    dynwrap::group_onto_nearest_milestones(
+                                        data@misc$trajectories[[reduction]]
+                                    )
+                                } else { NULL },
+                        alpha_cells=alpha
+                    ) +
+                    ggplot2::ggtitle(plot_title) +
+                    get_theme(theme)
+
+            if (!is.null(legend_title)){
+                plot <- plot +
+                        ggplot2::guides(color=ggplot2::guide_legend(legend_title)) +
+                        ggplot2::guides(fill=ggplot2::guide_legend(legend_title))
+            }
+
+            if (!is.null(palette_colors) && color_density == "grouping" && color_cells == "grouping"){
+                plot <- plot +
+                        ggplot2::scale_color_manual(values=palette_colors) +
+                        ggplot2::scale_fill_manual(values=palette_colors)
+            }
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            base::suppressMessages(base::print(plot))
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                base::suppressMessages(base::print(plot))
+                grDevices::dev.off()
+            }
+
+            base::print(base::paste("Exporting trajectory plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export trajectory plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
+trajectory_graph <- function(                               # all feature related parameters are skipped
+    data, rootname, reduction, plot_title,
+    legend_title=NULL,
+    color_cells="auto",                                     # one of auto, none, grouping, milestone, pseudotime
+    palette_colors=NULL,
+    theme="classic",
+    pdf=FALSE,
+    width=1200,
+    height=800,
+    resolution=100
+){
+    base::tryCatch(
+        expr = {
+
+            plot <- dynplot::plot_graph(
+                        trajectory=data@misc$trajectories[[reduction]],
+                        color_cells=color_cells,
+                        grouping=if (color_cells == "grouping"){
+                                     dynwrap::group_onto_nearest_milestones(
+                                         data@misc$trajectories[[reduction]]
+                                     )
+                                 } else { NULL }
+                    ) +
+                    ggplot2::ggtitle(plot_title) +
+                    get_theme(theme)
+
+            if (!is.null(legend_title)){
+                plot <- plot +
+                        ggplot2::guides(color=ggplot2::guide_legend(legend_title)) +
+                        ggplot2::guides(fill=ggplot2::guide_legend(legend_title))
+            }
+
+            if (!is.null(palette_colors) && color_cells == "grouping"){
+                plot <- plot +
+                        ggplot2::scale_color_manual(values=palette_colors) +
+                        ggplot2::scale_fill_manual(values=palette_colors)
+            }
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            base::suppressMessages(base::print(plot))
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                base::suppressMessages(base::print(plot))
+                grDevices::dev.off()
+            }
+
+            base::print(base::paste("Exporting trajectory graph to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export trajectory graph to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
+dendro_plot <- function(                                    # all feature related parameters are skipped
+    data, rootname, reduction, plot_title,
+    legend_title=NULL,
+    color_cells="auto",                                     # one of auto, none, grouping, milestone, pseudotime
+    alpha=1,
+    palette_colors=NULL,
+    theme="classic",
+    pdf=FALSE,
+    width=1200,
+    height=800,
+    resolution=100
+){
+    base::tryCatch(
+        expr = {
+
+            plot <- dynplot::plot_dendro(
+                        trajectory=data@misc$trajectories[[reduction]],
+                        color_cells=color_cells,
+                        grouping=if (color_cells == "grouping"){
+                                    dynwrap::group_onto_nearest_milestones(
+                                        data@misc$trajectories[[reduction]]
+                                    )
+                                } else { NULL },
+                        alpha_cells=alpha
+                    ) +
+                    ggplot2::ggtitle(plot_title) +
+                    get_theme(theme)
+
+            if (!is.null(legend_title)){
+                plot <- plot +
+                        ggplot2::guides(color=ggplot2::guide_legend(legend_title)) +
+                        ggplot2::guides(fill=ggplot2::guide_legend(legend_title))
+            }
+
+            if (!is.null(palette_colors) && color_cells == "grouping"){
+                plot <- plot +
+                        ggplot2::scale_color_manual(values=palette_colors) +
+                        ggplot2::scale_fill_manual(values=palette_colors)
+            }
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            base::suppressMessages(base::print(plot))
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                base::suppressMessages(base::print(plot))
+                grDevices::dev.off()
+            }
+
+            base::print(base::paste("Exporting dendrogram to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export dendrogram to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
+topology_plot <- function(                                    # all feature related parameters are skipped
+    data, rootname, reduction, plot_title,
+    theme="classic",
+    pdf=FALSE,
+    width=1200,
+    height=800,
+    resolution=100
+){
+    base::tryCatch(
+        expr = {
+
+            plot <- dynplot::plot_topology(
+                        trajectory=data@misc$trajectories[[reduction]]
+                    ) +
+                    ggplot2::ggtitle(plot_title) +
+                    get_theme(theme)
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            base::suppressMessages(base::print(plot))
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                base::suppressMessages(base::print(plot))
+                grDevices::dev.off()
+            }
+
+            base::print(base::paste("Exporting topology plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export topology plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
+trajectory_heatmap <- function(                                    # changing the theme makes it look bad
+    data, rootname, reduction, plot_title,
+    assay="RNA",
+    slot="data",
+    features=50,                                                   # can be either a number of genes or a list of gene names
+    palette_colors=D40_COLORS,                                     # for cluster colors
+    pdf=FALSE,
+    width=1200,
+    height=800,
+    resolution=100
+){
+    base::tryCatch(
+        expr = {
+            sorted_milestone_ids <- base::sort(data@misc$trajectories[[reduction]]$milestone_ids)
+            plot <- dynplot::plot_heatmap(
+                        trajectory=data@misc$trajectories[[reduction]],
+                        expression_source=base::t(
+                            base::as.matrix(
+                                SeuratObject::GetAssayData(data, assay=assay, slot=slot)
+                            )
+                        ),
+                        features_oi=features,
+                        grouping=dynwrap::group_onto_nearest_milestones(
+                            data@misc$trajectories[[reduction]]
+                        ),
+                        groups=data.frame(
+                            group_id=sorted_milestone_ids,
+                            color=palette_colors[0:length(sorted_milestone_ids)],
+                            check.names=FALSE
+                        )
+                    ) +
+                    patchwork::plot_annotation(title=plot_title)
+
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            base::suppressMessages(base::print(plot))
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                base::suppressMessages(base::print(plot))
+                grDevices::dev.off()
+            }
+
+            base::print(base::paste("Exporting trajectory heatmap to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export trajectory heatmap to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
 elbow_plot <- function(data, rootname, plot_title, reduction="pca", ndims=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
@@ -981,7 +1254,7 @@ expression_density_plot <- function(data, features, rootname, reduction, plot_ti
 }
 
 
-feature_plot <- function(data, features, labels, rootname, reduction, plot_title, from_meta=FALSE, split_by=NULL, label=FALSE, order=FALSE, color_limits=NULL, color_scales=NULL, gradient_colors=c("lightgrey", "blue"), min_cutoff=NA, max_cutoff=NA, pt_size=NULL, combine_guides=NULL, alpha=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+feature_plot <- function(data, features, labels, rootname, reduction, plot_title, from_meta=FALSE, split_by=NULL, label=FALSE, label_color="black", label_size=4, order=FALSE, color_limits=NULL, color_scales=NULL, gradient_colors=c("lightgrey", "blue"), min_cutoff=NA, max_cutoff=NA, pt_size=NULL, combine_guides=NULL, alpha=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
 
@@ -1040,6 +1313,8 @@ feature_plot <- function(data, features, labels, rootname, reduction, plot_title
                         reduction=reduction,
                         split.by=split_by,
                         label=label,
+                        label.color=label_color,
+                        label.size=label_size,
                         combine=FALSE       # to return a list of gglots
                     )
             plots <- base::lapply(seq_along(plots), function(i){

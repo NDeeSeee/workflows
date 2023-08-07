@@ -16,6 +16,8 @@ print_info <- function(seurat_data, args) {
         base::print(SeuratObject::Graphs(seurat_data))
         base::print("Neighbors")
         base::print(SeuratObject::Neighbors(seurat_data))
+        base::print("Miscellaneous")
+        base::print(names(SeuratObject::Misc(seurat_data)))
         base::print("Default assay")
         base::print(SeuratObject::DefaultAssay(seurat_data))
         base::print("Metadata")
