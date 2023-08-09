@@ -437,7 +437,7 @@ vln_plot <- function(data, features, labels, rootname, plot_title, legend_title,
     )
 }
 
-dim_plot <- function(data, rootname, reduction, plot_title, legend_title, cells=NULL, split_by=NULL, group_by=NULL, highlight_group=NULL, perc_split_by=NULL, perc_group_by=NULL, ncol=NULL, label=FALSE, label_box=FALSE, label_repel=FALSE, label_color="black", label_size=4, alpha=NULL, palette_colors=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+dim_plot <- function(data, rootname, reduction, plot_title, legend_title, cells=NULL, split_by=NULL, group_by=NULL, highlight_group=NULL, perc_split_by=NULL, perc_group_by=NULL, ncol=NULL, label=FALSE, label_box=FALSE, label_repel=FALSE, label_color="black", label_size=4, fixed=TRUE, alpha=NULL, palette_colors=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             highlight_cells <- NULL
@@ -476,6 +476,10 @@ dim_plot <- function(data, rootname, reduction, plot_title, legend_title, cells=
                     get_theme(theme) +
                     ggplot2::ggtitle(plot_title) +
                     ggplot2::guides(color=ggplot2::guide_legend(legend_title, override.aes=list(size=3)))
+
+            if (!is.null(fixed) && fixed){
+                plot <- plot + ggplot2::coord_fixed(ratio=1)
+            }
 
             if (!is.null(palette_colors)){
                 plot <- plot +
