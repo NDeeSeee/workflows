@@ -11,6 +11,7 @@ import("ggplot2", attach=FALSE)
 import("dynwrap", attach=FALSE)
 import("dynplot", attach=FALSE)
 import("ggrepel", attach=FALSE)
+import("circlize", attach=FALSE)
 import("cluster", attach=FALSE)
 import("reshape2", attach=FALSE)
 import("dittoSeq", attach=FALSE)
@@ -18,6 +19,7 @@ import("Nebulosa", attach=FALSE)
 import("patchwork", attach=FALSE)
 import("tidyselect", attach=FALSE)
 import("htmlwidgets", attach=FALSE)
+import("scRepertoire", attach=FALSE)
 import("RColorBrewer", attach=FALSE)
 import("magrittr", `%>%`, attach=TRUE)
 import("EnhancedVolcano", attach=FALSE)
@@ -25,6 +27,13 @@ import("SummarizedExperiment", attach=FALSE)
 
 
 export(
+    "clonotype_bar_plot",
+    "clonotype_feature_plot",
+    "clonotype_homeostasis_plot",
+    "clonotype_overlap_plot",
+    "clonotype_network_plot",
+    "clonotype_chord_plot",
+    "clonotype_diversity_plot",
     "geom_bar_plot",
     "geom_density_plot",
     "geom_point_plot",
@@ -74,6 +83,338 @@ get_theme <- function(theme){
             "classic"  = ggplot2::theme_classic(),
             "void"     = ggplot2::theme_void()
         )
+    )
+}
+
+clonotype_bar_plot <- function(data, rootname, clone_by, chains, split_by, x_label, y_label, legend_title, plot_title, scale=TRUE, palette_colors=D40_COLORS, combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+    base::tryCatch(
+        expr = {
+            plots <- list()
+            for (i in 1:length(chains)){          # should work fine even if chains is not a vector
+                current_chain <- chains[i]
+                plots[[current_chain]] <- scRepertoire::quantContig(
+                    data,
+                    cloneCall=clone_by,
+                    chain=current_chain,
+                    scale=scale,
+                    split.by=split_by
+                ) +
+                ggplot2::xlab(x_label) +
+                ggplot2::ylab(y_label) +
+                ggplot2::guides(fill=ggplot2::guide_legend(legend_title), x=ggplot2::guide_axis(angle=45)) +
+                ggplot2::ggtitle(current_chain) +
+                ggplot2::scale_fill_manual(values=palette_colors) +
+                get_theme(theme)
+            }
+            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
+                              patchwork::plot_annotation(title=plot_title)
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            base::suppressMessages(base::print(combined_plots))
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                base::suppressMessages(base::print(combined_plots))
+                grDevices::dev.off()
+            }
+
+            base::print(base::paste("Exporting clonotype bar plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export clonotype bar plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
+clonotype_homeostasis_plot <- function(data, rootname, clone_by, chains, split_by, x_label, y_label, legend_title, plot_title, palette_colors=D40_COLORS, combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+    base::tryCatch(
+        expr = {
+            plots <- list()
+            for (i in 1:length(chains)){          # should work fine even if chains is not a vector
+                current_chain <- chains[i]
+                plots[[current_chain]] <- scRepertoire::clonalHomeostasis(
+                    data,
+                    cloneCall=clone_by,
+                    chain=current_chain,
+                    split.by=split_by
+                ) +
+                ggplot2::xlab(x_label) +
+                ggplot2::ylab(y_label) +
+                ggplot2::guides(fill=ggplot2::guide_legend(legend_title), x=ggplot2::guide_axis(angle=45)) +
+                ggplot2::ggtitle(current_chain) +
+                ggplot2::scale_fill_manual(values=palette_colors) +
+                get_theme(theme)
+            }
+            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
+                              patchwork::plot_annotation(title=plot_title)
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            base::suppressMessages(base::print(combined_plots))
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                base::suppressMessages(base::print(combined_plots))
+                grDevices::dev.off()
+            }
+
+            base::print(base::paste("Exporting clonotype homeostasis plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export clonotype homeostasis plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
+clonotype_overlap_plot <- function(data, rootname, clone_by, chains, split_by, x_label, y_label, plot_title, method="morisita", color_limits=c(0, 1), gradient_colors=c("lightgrey", "blue"), na_color="white", combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+    base::tryCatch(
+        expr = {
+            plots <- list()
+            for (i in 1:length(chains)){                                  # should work fine even if chains is not a vector
+                current_chain <- chains[i]
+                plots[[current_chain]] <- scRepertoire::clonalOverlap(
+                    data,
+                    cloneCall=clone_by,
+                    method=method,
+                    chain=current_chain,
+                    split.by=split_by
+                ) +
+                ggplot2::xlab(x_label) +
+                ggplot2::ylab(y_label) +
+                ggplot2::guides(
+                    x=ggplot2::guide_axis(angle=45),
+                    y=ggplot2::guide_axis(angle=90)
+                ) +
+                ggplot2::ggtitle(current_chain) +
+                ggplot2::scale_fill_gradientn(                            # we need to rescale all plots to the same limits otherwise legend is not combined
+                    colors=gradient_colors,
+                    limits=color_limits,
+                    na.value=na_color
+                ) +
+                get_theme(theme)
+            }
+            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
+                              patchwork::plot_annotation(title=plot_title)
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            base::suppressMessages(base::print(combined_plots))
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                base::suppressMessages(base::print(combined_plots))
+                grDevices::dev.off()
+            }
+
+            base::print(base::paste("Exporting clonotype overlap plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export clonotype overlap plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
+clonotype_network_plot <- function(data, reduction, rootname, clone_by, chains, group_by, legend_title, plot_title, fixed=TRUE, pt_size=1, alpha=1, palette_colors=D40_COLORS, combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+    base::tryCatch(
+        expr = {
+            library("ggraph")                                             # need to include it as library, otherwise clonalNetwork fails
+            plots <- list()
+            for (i in 1:length(chains)){                                  # should work fine even if chains is not a vector
+                current_chain <- chains[i]
+                plots[[current_chain]] <- scRepertoire::clonalNetwork(
+                    data,
+                    reduction=reduction,
+                    identity=group_by,
+                    cloneCall=clone_by,
+                    chain=current_chain
+                ) +
+                ggplot2::ggtitle(current_chain) +
+                ggplot2::scale_color_manual(
+                    values=palette_colors
+                ) +
+                ggplot2::guides(                                          # need to add new guides because they were completely removed in clonalNetwork
+                    colour=ggplot2::guide_legend(
+                        title=legend_title,
+                        title.position="top",
+                        direction="horizontal"
+                    )
+                ) +
+                get_theme(theme)
+
+                plots[[current_chain]]$layers[[1]]$aes_params$size <- pt_size      # we need to add at least some size, because alpha doesn't work without it
+                plots[[current_chain]]$layers[[1]]$aes_params$alpha <- alpha
+
+                if (!is.null(fixed) && fixed){
+                    plots[[current_chain]] <- plots[[current_chain]] + ggplot2::coord_fixed(ratio=1)
+                }
+
+            }
+            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
+                              patchwork::plot_annotation(title=plot_title)
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            base::suppressMessages(base::print(combined_plots))
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                base::suppressMessages(base::print(combined_plots))
+                grDevices::dev.off()
+            }
+
+            base::print(base::paste("Exporting clonotype network plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export clonotype network plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
+clonotype_diversity_plot <- function(data, rootname, clone_by, chains, split_by, group_by, x_label, y_label, legend_title, plot_title, pt_size=1, alpha=1, palette_colors=D40_COLORS, combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+    base::tryCatch(
+        expr = {
+            plots <- list()
+            for (i in 1:length(chains)){                                    # should work fine even if chains is not a vector
+                current_chain <- chains[i]
+                plots[[current_chain]] <- scRepertoire::clonalDiversity(
+                    data,
+                    cloneCall=clone_by,
+                    chain=current_chain,
+                    group.by=group_by,
+                    x.axis=split_by,
+                    split.by="new.ident"                                    # doesn't influence anything, but may fail if not set to new.ident
+                ) +
+                ggplot2::xlab(x_label) +
+                ggplot2::ylab(y_label) +
+                ggplot2::guides(color=ggplot2::guide_legend(legend_title), x=ggplot2::guide_axis(angle=45)) +
+                ggplot2::scale_color_manual(values=palette_colors) +
+                ggplot2::ggtitle(current_chain) +
+                get_theme(theme)
+
+                plots[[current_chain]]$layers[[2]]$aes_params$size <- pt_size      # we need to add at least some size, because alpha doesn't work without it
+                plots[[current_chain]]$layers[[2]]$aes_params$alpha <- alpha
+
+            }
+            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
+                              patchwork::plot_annotation(title=plot_title)
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            base::suppressMessages(base::print(combined_plots))
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                base::suppressMessages(base::print(combined_plots))
+                grDevices::dev.off()
+            }
+
+            base::print(base::paste("Exporting clonotype diversity plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export clonotype diversity plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
+clonotype_feature_plot <- function(data, rootname, feature, chains, split_by, x_label, y_label, plot_title, order_by="variance", scale=TRUE, combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+    base::tryCatch(
+        expr = {
+            plots <- list()
+            for (i in 1:length(chains)){                                    # should work fine even if chains is not a vector
+                current_chain <- chains[i]
+                plots[[current_chain]] <- scRepertoire::vizGenes(
+                    data,
+                    gene=feature,
+                    chain=current_chain,
+                    y.axis=split_by,
+                    split.by="new.ident",                            # doesn't influence anything, but may fail if not set to new.ident
+                    group.by=NULL,                                   # doesn't influence anything
+                    order=order_by,                                  # can be either "variance" or "gene"
+                    plot="bar",
+                    scale=scale
+                ) +
+                ggplot2::xlab(x_label) +
+                ggplot2::ylab(y_label) +
+                ggplot2::guides(x=ggplot2::guide_axis(angle=45)) +
+                ggplot2::ggtitle(current_chain) +
+                get_theme(theme)
+            }
+            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
+                              patchwork::plot_annotation(title=plot_title)
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            base::suppressMessages(base::print(combined_plots))
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                base::suppressMessages(base::print(combined_plots))
+                grDevices::dev.off()
+            }
+
+            base::print(base::paste("Exporting clonotype feature plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export clonotype feature plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
+clonotype_chord_plot <- function(data, rootname, clone_by, group_by, plot_title, proportion=TRUE, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=800, height=800, resolution=100){
+    base::tryCatch(
+        expr = {
+
+            chord_data <- scRepertoire::getCirclize(
+                sc=data,
+                cloneCall=clone_by,
+                group.by=group_by,
+                proportion=proportion
+            )
+            selected_colors <- palette_colors[1:length(base::unique(base::as.vector(as.character(chord_data$from))))]
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            circlize::chordDiagram(
+                chord_data,
+                self.link=TRUE,
+                directional=TRUE,
+                direction.type="arrows",
+                link.arr.type="big.arrow",
+                annotationTrack=c("name", "grid"),
+                grid.col=selected_colors
+            )
+            graphics::title(main=plot_title, adj=0, line=-0.5)
+            circlize::circos.clear()
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                circlize::chordDiagram(
+                    chord_data,
+                    self.link=TRUE,
+                    directional=TRUE,
+                    direction.type="arrows",
+                    link.arr.type="big.arrow",
+                    annotationTrack=c("name", "grid"),
+                    grid.col=selected_colors
+                )
+                graphics::title(main=plot_title, adj=0, line=-0.5)
+                circlize::circos.clear()
+                grDevices::dev.off()
+            }
+
+            base::print(base::paste("Exporting chord diagram to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export chord diagram to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
     )
 }
 

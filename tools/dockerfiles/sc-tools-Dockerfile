@@ -2,21 +2,28 @@
 # Dockerfile
 #
 # Software:         set of R scripts for single-cell data analysis
-# Software Version: v0.0.27
+# Software Version: v0.0.28
 # Description:      Dockerized version of the set of R scripts for
 #                   single-cell data analysis
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         set of R scripts for single-cell data analysis
 # Base Image:       satijalab/seurat:4.1.0
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.27 -f sc-tools-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.27
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.27 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.28 -f sc-tools-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.28
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.28 /bin/bash
 ##########################################################################################################
 #
 # Notes:
 # - if you have problems compiling Harmony
 #   https://github.com/immunogenomics/harmony/pull/165
 # - fix bug in cell cycle genes removal
+#
+# v0.0.28
+# - Added V(D)J analysis script sc_vdj_profile.R
+# - Install scRepertoire from GitHub because,
+#   unless we update base image to the newer R,
+#   the bioconductor version of scRepertoire
+#   doesn't include createHTOContigList function
 #
 # v0.0.27
 # - Added trajectory analysis script sc_rna_trajectory.R
@@ -205,6 +212,7 @@ COPY ./scripts/sc_tools/sc_rna_da_cells.R /usr/local/bin/sc_rna_da_cells.R
 COPY ./scripts/sc_tools/sc_triangulate.R /usr/local/bin/sc_triangulate.R
 COPY ./scripts/sc_tools/sc_rna_trajectory.R /usr/local/bin/sc_rna_trajectory.R
 COPY ./scripts/sc_tools/sc_tn5_cut_sites.sh /usr/local/bin/sc_tn5_cut_sites.sh
+COPY ./scripts/sc_tools/sc_vdj_profile.R /usr/local/bin/sc_vdj_profile.R
 COPY ./scripts/sc_tools/modules/*.R /usr/local/bin/modules/
 COPY ./scripts/sc_tools/data/*.csv /opt/sc_tools/
 
@@ -253,6 +261,7 @@ RUN apt-get update && \
     R -e 'devtools::install_github("aertslab/SCopeLoomR", upgrade = "never")' && \
     R -e 'devtools::install_github("dynverse/dynfeature", upgrade = "never")' && \
     R -e 'devtools::install_github("dynverse/dynplot", upgrade = "never")' && \
+    R -e 'devtools::install_github("ncborcherding/scRepertoire", upgrade = "never")' && \
     R -e 'install.packages("LambertW")' && \
     R -e 'install.packages("nortest")' && \
     R -e 'install.packages("doParallel")' && \
@@ -263,6 +272,7 @@ RUN apt-get update && \
     R -e 'install.packages("harmony")' && \
     R -e 'install.packages("magick")' && \
     R -e 'install.packages("MAnorm2")' && \
+    R -e 'install.packages("circlize")' && \
 ### Installing R scripts
     chmod +x /usr/local/bin/sc_rna_filter.R && \
     chmod +x /usr/local/bin/sc_multiome_filter.R && \
@@ -278,6 +288,7 @@ RUN apt-get update && \
     chmod +x /usr/local/bin/sc_rna_da_cells.R && \
     chmod +x /usr/local/bin/sc_triangulate.R && \
     chmod +x /usr/local/bin/sc_rna_trajectory.R && \
+    chmod +x /usr/local/bin/sc_vdj_profile.R && \
     chmod +x /usr/local/bin/sc_tn5_cut_sites.sh && \
 ### Downloading blacklist regions files
     wget https://raw.githubusercontent.com/Boyle-Lab/Blacklist/61a04d2c5e49341d76735d485c61f0d1177d08a8/lists/hg38-blacklist.v2.bed.gz && \

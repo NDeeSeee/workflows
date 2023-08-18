@@ -241,17 +241,69 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, label_field=N
             SeuratObject::DefaultAssay(seurat_data) <- assay                 # safety measure
             SeuratObject::Idents(seurat_data) <- "new.ident"                 # safety measure
 
-            color_data <- base::data.frame(                                 # here we will collect all colors if palette_colors was provided
+            color_data <- base::data.frame(                                  # here we will collect all colors
                 category=character(),
                 color=character(),
                 check.names=FALSE,
                 stringsAsFactors=FALSE
-            )
+            ) %>% tibble::add_row(category="NA", color="#E1F6FF")            # color for NA
 
             if (is.null(meta_fields) || is.null(meta_fields_names)){
-                meta_fields <-       c("nCount_RNA",   "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "S.Score", "G2M.Score",    "Phase", "rna_doublets", "atac_doublets", "nCount_ATAC",        "nFeature_ATAC", "TSS.enrichment",       "nucleosome_signal", "frip", "blacklist_fraction")
-                meta_fields_names <- c("Transcripts",  "Genes",        "Mitochondrial %", "Novelty score",            "S score", "G2M score", "Phase", "RNA doublets", "ATAC doublets", "Fragments in peaks", "Peaks",         "TSS enrichment score", "Nucleosome signal", "FRiP", "Bl. regions")
+                meta_fields <- c(
+                    "nCount_RNA",
+                    "nFeature_RNA",
+                    "mito_percentage",
+                    "log10_gene_per_log10_umi",
+                    "S.Score",
+                    "G2M.Score",
+                    "Phase",
+                    "rna_doublets",
+                    "atac_doublets",
+                    "nCount_ATAC",
+                    "nFeature_ATAC",
+                    "TSS.enrichment",
+                    "nucleosome_signal",
+                    "frip",
+                    "blacklist_fraction",
+                    "CTgene",
+                    "CTnt",
+                    "CTaa",
+                    "CTstrict",
+                    "Frequency",
+                    "cloneType"
+                )
+                meta_fields_names <- c(
+                    "Transcripts",
+                    "Genes",
+                    "Mitochondrial %",
+                    "Novelty score",
+                    "S score",
+                    "G2M score",
+                    "Phase",
+                    "RNA doublets",
+                    "ATAC doublets",
+                    "Fragments in peaks",
+                    "Peaks",
+                    "TSS enrichment score",
+                    "Nucleosome signal",
+                    "FRiP",
+                    "Bl. regions",
+                    "Cl. VDJC gene seq.",
+                    "Cl. nucl. seq.",
+                    "Cl. amino acid seq.",
+                    "Cl. nucl. & gene seq.",
+                    "Cl. frequency",
+                    "Cl. group"
+                )
             }
+
+            # clonotype_fileds <- c("CTgene", "CTnt", "CTaa", "CTstrict", "Frequency", "cloneType")
+            # if (all(clonotype_fileds %in% base::colnames(seurat_data@meta.data))){
+            #     seurat_data@meta.data <- seurat_data@meta.data %>%
+            #                              dplyr::mutate_at(
+            #                                  clonotype_fileds, ~tidyr::replace_na(., "")
+            #                              )
+            # }
 
             if (length(base::unique(base::as.vector(as.character(seurat_data@meta.data$new.ident)))) > 1){
                 meta_fields <- base::append(meta_fields, "new.ident", 0)
@@ -377,7 +429,7 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, label_field=N
                 is_nested=is_nested,
                 dot_radius=dot_radius,
                 dot_alpha=dot_alpha,
-                color_data=if(base::nrow(color_data) > 0) color_data else NULL
+                color_data=if(base::nrow(color_data) > 1) color_data else NULL       # we always have color for NA, so we check > 1
             )
             base::print(base::paste("Exporting UCSC Cellbrowser data to", rootname, sep=" "))
         },

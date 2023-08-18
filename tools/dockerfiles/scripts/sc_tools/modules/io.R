@@ -8,6 +8,7 @@ import("sceasy", attach=FALSE)
 import("SeuratDisk", attach=FALSE)
 import("SCopeLoomR", attach=FALSE)
 import("rtracklayer", attach=FALSE)
+import("scRepertoire", attach=FALSE)
 import("GenomeInfoDb", attach=FALSE)
 import("GenomicRanges", attach=FALSE)
 import("magrittr", `%>%`, attach=TRUE)
@@ -28,6 +29,7 @@ export(
     "assign_identities",
     "load_10x_multiome_data",
     "load_10x_rna_data",
+    "load_10x_vdj_data",
     "load_seqinfo_data",
     "export_h5seurat",
     "export_h5ad",
@@ -605,6 +607,67 @@ load_10x_rna_data <- function(args, cell_identity_data, grouping_data) {
         base::gc(verbose=FALSE)
         return (merged_seurat_data)
     }
+}
+
+load_10x_vdj_data <- function(seurat_data, args) {
+    base::print(
+        base::paste(
+            "Loading congtigs annotations from", args$contigs
+        )
+    )
+    congtigs_data <- scRepertoire::createHTOContigList(            # should work even if seurat_data includes only one dataset
+        contig=utils::read.table(
+            args$contigs,
+            sep=get_file_type(args$contigs),
+            header=TRUE,
+            check.names=FALSE,
+            stringsAsFactors=FALSE
+        ),
+        sc=seurat_data,                                                # the order of barcode suffixes should be the same as in contigs
+        group.by="new.ident"
+    )
+
+    remove_multi=!is.null(args$strictness) && args$strictness == "removemulti"
+    filter_multi=!is.null(args$strictness) && args$strictness == "filtermulti"
+    if (remove_multi || filter_multi){
+        base::print(
+            base::paste(
+                "Applied filtering options:",
+                "remove_multi", remove_multi,
+                "filter_multi", filter_multi
+            )
+        )
+    }
+
+    if (args$mode == "tcr"){
+        base::print("Combining T Cell receptor contigs")
+        congtigs_data <- scRepertoire::combineTCR(
+            df=congtigs_data,
+            removeNA=TRUE,                                             # remove any chain without values
+            removeMulti=remove_multi,
+            filterMulti=filter_multi
+        )
+    } else {
+        base::print("Combining B Cell receptor contigs")
+        congtigs_data <- scRepertoire::combineBCR(
+            df=congtigs_data,
+            removeNA=TRUE,                                             # remove any chain without values
+            removeMulti=remove_multi,
+            filterMulti=filter_multi
+        )
+    }
+
+    seurat_data <- scRepertoire::combineExpression(
+        df=congtigs_data,
+        sc=seurat_data,
+        cloneCall=args$cloneby,
+        group.by=args$groupby                                          # "new.ident" should be equal to "none"
+    )
+    # seurat_data@misc$vdj[[args$mode]] <- congtigs_data               # we can keep it here just in case
+    base::rm(congtigs_data)
+    base::gc(verbose=FALSE)
+
+    return (seurat_data)
 }
 
 replace_fragments <- function(location, seurat_data){
