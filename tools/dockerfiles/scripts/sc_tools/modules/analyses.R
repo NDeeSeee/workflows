@@ -33,6 +33,7 @@ export(
     "get_vars_to_regress",
     "get_cell_cycle_scores",
     "get_min_ident_size",
+    "get_fraction",
     "get_markers_by_res",
     "get_markers",
     "atac_preprocess",
@@ -254,6 +255,14 @@ get_min_ident_size <- function(splitted_seurat_data){
         )
     )
     return (min_ident_size)
+}
+
+get_fraction <- function(data, fraction, min_size=50){
+    slice_size <- max(
+                      round(fraction * base::nrow(data)),
+                      min(min_size, base::nrow(data))
+                  )
+    return (slice_size)
 }
 
 rna_log_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL){

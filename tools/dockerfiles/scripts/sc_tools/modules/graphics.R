@@ -1898,9 +1898,24 @@ volcano_plot <- function(data, rootname, x_axis, y_axis, x_cutoff, y_cutoff, x_l
     )
 }
 
-feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", slot="data", cells=NULL, scale_to_max=TRUE, scale="none", split_rows=NULL, legend_title="Expression", heatmap_colors=c("blue", "black", "yellow"), group_by="new.ident", show_rownames=FALSE, palette_colors=D40_COLORS, pdf=FALSE, width=1200, height=900, resolution=100){
+feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", slot="data", cells=NULL, scale_to_max=TRUE, scale="none", color_breaks=NA, highlight_features=NULL, cluster_rows=FALSE, split_rows=NULL, legend_title="Expression", heatmap_colors=c("blue", "black", "yellow"), group_by="new.ident", show_rownames=FALSE, palette_colors=D40_COLORS, pdf=FALSE, width=1200, height=900, resolution=100){
     base::tryCatch(
         expr = {
+
+            # borrowed from the ComplexHeatmap package
+            if (scale=="row" && !scale_to_max && is.na(color_breaks)){      # building z-scores but no color breaks provided
+                mat <- t(scale(t(base::as.matrix(                           # z-score per row
+                           SeuratObject::GetAssayData(
+                               object=data,
+                               assay=assay,
+                               slot=slot                                    # not restricted, but better use counts slot
+                           )
+                       ))))
+                limit <- stats::quantile(abs(mat), 0.99, na.rm=TRUE)        # to exclude outliers
+                color_breaks <- base::pretty(c(-limit, limit), n=5)
+                base::rm(mat)                                               # remove unused data
+                base::gc(verbose=FALSE)
+            }
 
             plot <- dittoSeq::dittoHeatmap(
                 data,
@@ -1908,16 +1923,19 @@ feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", s
                 slot=slot,
                 cells.use=cells,
                 genes=features,
+                highlight.features=highlight_features,
                 scaled.to.max=scale_to_max,
-                cluster_rows=FALSE,
+                cluster_rows=cluster_rows,          # will cluster row within each group defined by row_split
                 cluster_cols=FALSE,
                 show_colnames=FALSE,
                 show_rownames=show_rownames,
                 main=plot_title,
                 heatmap.colors=grDevices::colorRampPalette(heatmap_colors)(50),
                 heatmap.colors.max.scaled=grDevices::colorRampPalette(heatmap_colors[1:2])(25),  # only two colors needed
+                breaks=color_breaks,
                 scale=scale,                        # can be "row"/"column"/"none" but will be forced to "none" if scaled.to.max is TRUE
-                annot.by=group_by,                  # the first item will be used to order the cells
+                annot.by=group_by,
+                order.by=group_by,                  # the order of items in group_by will define the levels of ordering
                 annot.colors=palette_colors,        # defines colors for the first item set in annot.by
                 drop_levels=TRUE,                   # to drop factor levels that are not present in factor values
                 use_raster=TRUE,
@@ -1925,7 +1943,7 @@ feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", s
                 complex=TRUE,                       # to use ComplexHeatmap instead of pheatmap
                 row_split=split_rows,               # defines rows order and grouping
                 cluster_row_slices=FALSE,           # to prevent an additional clustering applied to the mean of row slices
-                row_gap = grid::unit(0.5, "mm"),    # instead of the default 1 mm
+                row_gap = grid::unit(0.1, "mm"),    # instead of the default 1 mm
                 name=legend_title                   # to give the heatmap color scale a custom title
             )
 

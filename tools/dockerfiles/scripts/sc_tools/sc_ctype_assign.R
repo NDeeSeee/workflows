@@ -362,46 +362,66 @@ export_all_expression_plots <- function(seurat_data, args) {
 export_heatmaps <- function(seurat_data, markers, args){
     DefaultAssay(seurat_data) <- "RNA"                            # safety measure
     Idents(seurat_data) <- "new.ident"                            # safety measure
-    grouped_markers <- markers %>%
-                       dplyr::filter(.$p_val_adj <= 0.05) %>%                                  # to have only significant gene markers 
-                       dplyr::filter(.$pct.1 >= 0.1) %>%                                       # to have at least 10% of cells expressing this gene
-                       dplyr::group_by(cluster) %>%
-                       dplyr::top_frac(n=-0.25, wt=p_val_adj) %>%                              # get 25% of the most significant gene markers
-                       dplyr::top_n(
-                           n=10,                                                               # 10 genes per cluster
-                           wt=avg_log2FC
-                       )
-    column_annotations <- c(args$target)
-    if (length(unique(as.vector(as.character(seurat_data@meta.data$new.ident)))) > 1){
-        column_annotations <- c(column_annotations, "new.ident")                           # several datasets found
+
+    clusters_order <- levels(seurat_data@meta.data[[args$target]])
+    if (is.null(clusters_order)){
+        clusters_order <- unique(seurat_data@meta.data[[args$target]])
     }
-    if (
-        all(as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition))) &&
-        length(unique(as.vector(as.character(seurat_data@meta.data$condition)))) > 1
-    ){
-        column_annotations <- c(column_annotations, "condition")                           # several conditions found
+
+    filtered_markers <- markers %>%
+                        dplyr::mutate(
+                            cluster=base::factor(
+                                cluster,
+                                levels=clusters_order
+                            )
+                        ) %>%
+                        dplyr::arrange(cluster) %>%                                         # to have upregulated genes on the diagonal
+                        dplyr::filter(.$p_val_adj <= 0.05) %>%                              # to have only significant gene markers
+                        dplyr::filter(.$pct.1 >= 0.1) %>%                                   # to have at least 10% of cells expressing this gene
+                        dplyr::group_by(feature) %>%
+                        dplyr::arrange(desc(pct.1), .by_group=TRUE) %>%                     # sort all duplicated features by desc(pct.1)
+                        dplyr::slice_head(n=1) %>%                                          # choose the feature with the highest pct.1
+                        dplyr::ungroup() %>%
+                        dplyr::group_by(cluster) %>%
+                        dplyr::arrange(p_val_adj, desc(avg_log2FC), .by_group=TRUE) %>%
+                        dplyr::group_modify(~ .x %>%
+                            slice_head(n=analyses$get_fraction(.x, 0.25))                   # take 25% of the features
+                        ) %>%
+                        dplyr::arrange(desc(avg_log2FC), .by_group=TRUE) %>%
+                        dplyr::ungroup()
+
+    if (nrow(filtered_markers) > 0){
+        column_annotations <- c(args$target)
+        if (
+            all(as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition))) &&
+            length(unique(as.vector(as.character(seurat_data@meta.data$condition)))) > 1
+        ){
+            column_annotations <- c(column_annotations, "condition")                           # several conditions found
+        }
+        if (length(unique(as.vector(as.character(seurat_data@meta.data$new.ident)))) > 1){
+            column_annotations <- c(column_annotations, "new.ident")                           # several datasets found
+        }
+        graphics$feature_heatmap(                                                              # install.packages("magick") for better rasterization
+            data=seurat_data,
+            assay="RNA",
+            slot="data",
+            features=filtered_markers$feature,
+            highlight_features=if(!is.null(args$genes) && length(args$genes) > 0) args$genes else NULL,
+            show_rownames=FALSE,
+            scale_to_max=FALSE,
+            scale="row",                                                                       # will calculate z-score
+            heatmap_colors=c("darkblue", "black", "yellow"),
+            group_by=unique(column_annotations),                                               # safety measure for possible duplicates
+            palette_colors=graphics$D40_COLORS,
+            plot_title="Gene expression heatmap",
+            rootname=paste(args$output, "xpr_htmp", sep="_"),
+            pdf=args$pdf
+        )
+        io$export_data(
+            filtered_markers,
+            paste(args$output, "xpr_htmp.tsv", sep="_")
+        )
     }
-    custom_fields <- grep("^custom_", colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
-    if (length(custom_fields) > 0){
-        column_annotations <- c(column_annotations, custom_fields)                         # adding all custom fields
-    }
-    graphics$feature_heatmap(                                                              # install.packages("magick") for better rasterization
-        data=seurat_data,
-        assay="RNA",
-        slot="data",
-        features=grouped_markers$feature,
-        split_rows=forcats::fct_inorder(as.character(grouped_markers$cluster)),            # fct_inorder fails with numeric
-        show_rownames=TRUE,
-        scale_to_max=TRUE,
-        group_by=unique(column_annotations),                                               # to not show duplicates
-        palette_colors=graphics$D40_COLORS,
-        heatmap_colors=c("black", "yellow"),
-        plot_title="Gene expression heatmap",
-        height=13*length(grouped_markers$feature),
-        rootname=paste(args$output, "xpr_htmp", sep="_"),
-        pdf=args$pdf
-    )
-    Idents(seurat_data) <- "new.ident"                            # safety measure
 }
 
 

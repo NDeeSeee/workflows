@@ -216,11 +216,12 @@ export_processed_plots <- function(seurat_data, de_results, args){
         slot="data",
         features=rownames(de_results$cell$row_metadata),           # to make sure we use the same number and order of genes as in GCT file
         split_rows=split_rows,
-        show_rownames=TRUE,
-        scale_to_max=TRUE,
+        show_rownames=FALSE,
+        scale_to_max=FALSE,
+        scale="row",                                                                       # will calculate z-score
+        heatmap_colors=c("darkblue", "black", "yellow"),
         group_by=colnames(de_results$cell$column_metadata),
         palette_colors=graphics$D40_COLORS,
-        heatmap_colors=c("black", "yellow"),
         plot_title=paste0(
             "Gene expression heatmap",
             ifelse(
@@ -233,7 +234,6 @@ export_processed_plots <- function(seurat_data, de_results, args){
             ),
             "adjusted P-value threshold ", args$padj
         ),
-        height=13*length(rownames(de_results$cell$row_metadata)),
         rootname=paste(args$output, "xpr_htmp", sep="_"),
         pdf=args$pdf
     )
