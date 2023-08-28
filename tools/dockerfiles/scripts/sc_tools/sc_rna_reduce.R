@@ -368,10 +368,10 @@ get_args <- function(){
     parser$add_argument(
         "--regressgenes",
         help=paste(
-            "Genes which expression should be regressed as a confounding source of variation.",
-            "Default: None"
+            "Regex pattern to identify genes which expression should be",
+            "regressed as a confounding source of variation. Default: none"
         ),
-        type="character", nargs="*"
+        type="character"
     )
     cell_cycle_group <- parser$add_mutually_exclusive_group()
     cell_cycle_group$add_argument(
@@ -583,15 +583,23 @@ if (!is.null(args$barcodes)){
 debug$print_info(seurat_data, args)
 
 if (!is.null(args$regressgenes)){
-    print("Adjusting genes to be regressed to include only those that are present in the loaded Seurat object")
-    args$regressgenes <- unique(args$regressgenes)
-    args$regressgenes <- args$regressgenes[args$regressgenes %in% as.vector(as.character(rownames(seurat_data)))]     # with RNA assay set as default the rownames should be genes
-    print(args$regressgenes)
-    if (!is.null(args$regressgenes) && length(args$regressgenes) > 0){
-        print("Calculating the percentage of transcripts mapped to the genes that should be regressed out")
+    excluded_genes <- grep(
+        args$regressgenes,
+        as.vector(as.character(rownames(seurat_data))),    # with RNA assay set as default the rownames should be genes
+        value=TRUE,
+        ignore.case=TRUE
+    )
+    if (length(excluded_genes) > 0){
+        print(
+            paste(
+                "Based on the pattern", args$regressgenes, "the expression",
+                "of the following genes will be regressed as a confounding",
+                "source of variation", paste(excluded_genes, collapse=", ")
+            )
+        )
         seurat_data <- qc$add_gene_expr_percentage(
             seurat_data=seurat_data,
-            target_genes=args$regressgenes
+            target_genes=excluded_genes
         )
         debug$print_info(seurat_data, args)
     }
