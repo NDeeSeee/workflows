@@ -583,13 +583,13 @@ if (!is.null(args$barcodes)){
 debug$print_info(seurat_data, args)
 
 if (!is.null(args$regressgenes)){
-    excluded_genes <- grep(
+    excluded_genes <- grep(                                # might return empty list if nothing found
         args$regressgenes,
         as.vector(as.character(rownames(seurat_data))),    # with RNA assay set as default the rownames should be genes
         value=TRUE,
         ignore.case=TRUE
     )
-    if (length(excluded_genes) > 0){
+    if (length(excluded_genes) > 0){                       # found some genes based on pattern
         print(
             paste(
                 "Based on the pattern", args$regressgenes, "the expression",
@@ -597,11 +597,14 @@ if (!is.null(args$regressgenes)){
                 "source of variation", paste(excluded_genes, collapse=", ")
             )
         )
+        args$regressgenes <- excluded_genes                # for easy access in the get_vars_to_regress function
         seurat_data <- qc$add_gene_expr_percentage(
             seurat_data=seurat_data,
-            target_genes=excluded_genes
+            target_genes=args$regressgenes
         )
         debug$print_info(seurat_data, args)
+    } else {
+        args$regressgenes <- NULL                          # no genes found, reset it to NULL
     }
 }
 
