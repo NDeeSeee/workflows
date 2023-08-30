@@ -97,7 +97,9 @@ get_vars_to_regress <- function(seurat_data, args, exclude_columns=NULL) {
     }
     if (!is.null(args$regressgenes) && length(args$regressgenes) > 0){                      # easier to process regressgenes separately
         for (i in 1:length(args$regressgenes)){
-            current_column <- base::paste("perc", args$regressgenes[i], sep="_")
+            current_column <- base::make.names(                                             # when columns are added to meta.data they
+                base::paste("perc", args$regressgenes[i], sep="_")                          # are run through make.names function
+            )
             if (is.null(vars_to_regress)) {
                 vars_to_regress <- current_column
             } else {
