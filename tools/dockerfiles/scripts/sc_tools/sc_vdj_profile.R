@@ -25,16 +25,10 @@ export_all_plots <- function(seurat_data, args){
     datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
     conditions_count <- length(unique(as.vector(as.character(seurat_data@meta.data$condition))))
 
-    if (args$mode == "tcr"){
-        chains <- c("TRA", "TRB", "TRD", "TRG")
-    } else {
-        chains <- c("IGH", "IGL")
-    }
-
     graphics$clonotype_bar_plot(
         data=seurat_data,
         clone_by=args$cloneby,
-        chains=chains,
+        chains="both",
         x_label="Dataset",
         y_label="Clonotypes %",
         legend_title="Dataset",
@@ -54,7 +48,7 @@ export_all_plots <- function(seurat_data, args){
     graphics$clonotype_bar_plot(
         data=seurat_data,
         clone_by=args$cloneby,
-        chains=chains,
+        chains="both",
         x_label="Cluster",
         y_label="Clonotypes %",
         legend_title="Cluster",
@@ -74,7 +68,7 @@ export_all_plots <- function(seurat_data, args){
     graphics$clonotype_homeostasis_plot(
         data=seurat_data,
         clone_by=args$cloneby,
-        chains=chains,
+        chains="both",
         x_label="Dataset",
         y_label="Relative Abundance",
         legend_title="Clonotype group",
@@ -93,7 +87,7 @@ export_all_plots <- function(seurat_data, args){
     graphics$clonotype_homeostasis_plot(
         data=seurat_data,
         clone_by=args$cloneby,
-        chains=chains,
+        chains="both",
         x_label="Cluster",
         y_label="Relative Abundance",
         legend_title="Clonotype group",
@@ -112,7 +106,7 @@ export_all_plots <- function(seurat_data, args){
     graphics$clonotype_overlap_plot(
         data=seurat_data,
         clone_by=args$cloneby,
-        chains=chains,
+        chains="both",
         plot_title=paste(
             "Clonotypes similarity,",
             "split by cluster"
@@ -130,7 +124,7 @@ export_all_plots <- function(seurat_data, args){
     graphics$clonotype_overlap_plot(
         data=seurat_data,
         clone_by=args$cloneby,
-        chains=chains,
+        chains="both",
         plot_title=paste(
             "Clonotypes similarity,",
             "split by dataset"
@@ -149,7 +143,7 @@ export_all_plots <- function(seurat_data, args){
         data=seurat_data,
         reduction="rnaumap",
         clone_by=args$cloneby,
-        chains=chains,
+        chains="both",
         plot_title=paste(
             "Clonotypes network,",
             "colored by cluster"
@@ -167,7 +161,7 @@ export_all_plots <- function(seurat_data, args){
         data=seurat_data,
         reduction="rnaumap",
         clone_by=args$cloneby,
-        chains=chains,
+        chains="both",
         plot_title=paste(
             "Clonotypes network,",
             "colored by dataset"
@@ -184,7 +178,7 @@ export_all_plots <- function(seurat_data, args){
     graphics$clonotype_diversity_plot(
         data=seurat_data,
         clone_by=args$cloneby,
-        chains=chains,
+        chains="both",
         plot_title=paste(
             "Clonotypes diversity,",
             "colored by cluster,",
@@ -206,7 +200,7 @@ export_all_plots <- function(seurat_data, args){
     graphics$clonotype_diversity_plot(
         data=seurat_data,
         clone_by=args$cloneby,
-        chains=chains,
+        chains="both",
         plot_title=paste(
             "Clonotypes diversity,",
             "colored by dataset,",
@@ -234,7 +228,7 @@ export_all_plots <- function(seurat_data, args){
         graphics$clonotype_feature_plot(
             data=seurat_data,
             feature=current_feature,
-            chains=chains,
+            chains="both",
             plot_title=paste(
                 "Relative usage of", current_feature,
                 "genes, split by cluster"
@@ -254,7 +248,7 @@ export_all_plots <- function(seurat_data, args){
         graphics$clonotype_feature_plot(
             data=seurat_data,
             feature=current_feature,
-            chains=chains,
+            chains="both",
             plot_title=paste(
                 "Relative usage of", current_feature,
                 "genes, split by dataset"
@@ -319,7 +313,7 @@ export_all_plots <- function(seurat_data, args){
         graphics$clonotype_bar_plot(
             data=seurat_data,
             clone_by=args$cloneby,
-            chains=chains,
+            chains="both",
             x_label="Condition",
             y_label="Clonotypes %",
             legend_title="Condition",
@@ -339,7 +333,7 @@ export_all_plots <- function(seurat_data, args){
         graphics$clonotype_homeostasis_plot(
             data=seurat_data,
             clone_by=args$cloneby,
-            chains=chains,
+            chains="both",
             x_label="Condition",
             y_label="Relative Abundance",
             legend_title="Clonotype group",
@@ -358,7 +352,7 @@ export_all_plots <- function(seurat_data, args){
         graphics$clonotype_overlap_plot(
             data=seurat_data,
             clone_by=args$cloneby,
-            chains=chains,
+            chains="both",
             plot_title=paste(
                 "Clonotypes similarity,",
                 "split by grouping condition"
@@ -377,7 +371,7 @@ export_all_plots <- function(seurat_data, args){
             data=seurat_data,
             reduction="rnaumap",
             clone_by=args$cloneby,
-            chains=chains,
+            chains="both",
             plot_title=paste(
                 "Clonotypes network,",
                 "colored by grouping condition"
@@ -394,7 +388,7 @@ export_all_plots <- function(seurat_data, args){
         graphics$clonotype_diversity_plot(
             data=seurat_data,
             clone_by=args$cloneby,
-            chains=chains,
+            chains="both",
             plot_title=paste(
                 "Clonotypes diversity,",
                 "colored by cluster,",
@@ -416,7 +410,7 @@ export_all_plots <- function(seurat_data, args){
         graphics$clonotype_diversity_plot(
             data=seurat_data,
             clone_by=args$cloneby,
-            chains=chains,
+            chains="both",
             plot_title=paste(
                 "Clonotypes diversity,",
                 "colored by grouping condition,",
@@ -497,16 +491,6 @@ get_args <- function(){
             "object to select clusters from."
         ),
         type="character", required="True"
-    )
-    parser$add_argument(
-        "--mode",
-        help=paste(
-            "Analysis mode. tcr: T-cell receptor with alpha, beta,",
-            "delta, and gamma chains. bcr: B-cell receptor with",
-            "heavy and light immunoglobulin chains. Default: tcr"
-        ),
-        type="character", default="tcr",
-        choices=c("tcr", "bcr")
     )
     parser$add_argument(
         "--cloneby",

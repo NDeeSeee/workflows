@@ -639,22 +639,26 @@ load_10x_vdj_data <- function(seurat_data, args) {
         )
     }
 
-    if (args$mode == "tcr"){
+    detected_chains <- base::sort(base::unique(congtigs_data[[1]]$chain))      # assuming that taking the first item from the list is ok
+    if (base::identical(c("TRA", "TRB"), detected_chains)) {
         base::print("Combining T Cell receptor contigs")
         congtigs_data <- scRepertoire::combineTCR(
             df=congtigs_data,
-            removeNA=TRUE,                                             # remove any chain without values
+            removeNA=TRUE,                                                     # remove any chain without values
+            removeMulti=remove_multi,
+            filterMulti=filter_multi
+        )
+    } else if (base::identical(c("IGH", "IGL"), detected_chains)){
+        base::print("Combining B Cell receptor contigs")
+        congtigs_data <- scRepertoire::combineBCR(
+            df=congtigs_data,
+            removeNA=TRUE,                                                     # remove any chain without values
             removeMulti=remove_multi,
             filterMulti=filter_multi
         )
     } else {
-        base::print("Combining B Cell receptor contigs")
-        congtigs_data <- scRepertoire::combineBCR(
-            df=congtigs_data,
-            removeNA=TRUE,                                             # remove any chain without values
-            removeMulti=remove_multi,
-            filterMulti=filter_multi
-        )
+        base::print("Not implemented chains detected. Exiting")
+        quit(save="no", status=1, runLast=FALSE)
     }
 
     seurat_data <- scRepertoire::combineExpression(
@@ -663,7 +667,6 @@ load_10x_vdj_data <- function(seurat_data, args) {
         cloneCall=args$cloneby,
         group.by=args$groupby                                          # "new.ident" should be equal to "none"
     )
-    # seurat_data@misc$vdj[[args$mode]] <- congtigs_data               # we can keep it here just in case
     base::rm(congtigs_data)
     base::gc(verbose=FALSE)
 

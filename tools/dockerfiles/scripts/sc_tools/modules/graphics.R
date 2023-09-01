@@ -102,9 +102,12 @@ clonotype_bar_plot <- function(data, rootname, clone_by, chains, split_by, x_lab
                 ggplot2::xlab(x_label) +
                 ggplot2::ylab(y_label) +
                 ggplot2::guides(fill=ggplot2::guide_legend(legend_title), x=ggplot2::guide_axis(angle=45)) +
-                ggplot2::ggtitle(current_chain) +
                 ggplot2::scale_fill_manual(values=palette_colors) +
                 get_theme(theme)
+                if (current_chain != "both"){
+                    plots[[current_chain]] <- plots[[current_chain]] +
+                                              ggplot2::ggtitle(current_chain)
+                }
             }
             combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
                               patchwork::plot_annotation(title=plot_title)
@@ -143,9 +146,12 @@ clonotype_homeostasis_plot <- function(data, rootname, clone_by, chains, split_b
                 ggplot2::xlab(x_label) +
                 ggplot2::ylab(y_label) +
                 ggplot2::guides(fill=ggplot2::guide_legend(legend_title), x=ggplot2::guide_axis(angle=45)) +
-                ggplot2::ggtitle(current_chain) +
                 ggplot2::scale_fill_manual(values=palette_colors) +
                 get_theme(theme)
+                if (current_chain != "both"){
+                    plots[[current_chain]] <- plots[[current_chain]] +
+                                              ggplot2::ggtitle(current_chain)
+                }
             }
             combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
                               patchwork::plot_annotation(title=plot_title)
@@ -188,13 +194,16 @@ clonotype_overlap_plot <- function(data, rootname, clone_by, chains, split_by, x
                     x=ggplot2::guide_axis(angle=45),
                     y=ggplot2::guide_axis(angle=90)
                 ) +
-                ggplot2::ggtitle(current_chain) +
                 ggplot2::scale_fill_gradientn(                            # we need to rescale all plots to the same limits otherwise legend is not combined
                     colors=gradient_colors,
                     limits=color_limits,
                     na.value=na_color
                 ) +
                 get_theme(theme)
+                if (current_chain != "both"){
+                    plots[[current_chain]] <- plots[[current_chain]] +
+                                              ggplot2::ggtitle(current_chain)
+                }
             }
             combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
                               patchwork::plot_annotation(title=plot_title)
@@ -232,7 +241,6 @@ clonotype_network_plot <- function(data, reduction, rootname, clone_by, chains, 
                     cloneCall=clone_by,
                     chain=current_chain
                 ) +
-                ggplot2::ggtitle(current_chain) +
                 ggplot2::scale_color_manual(
                     values=palette_colors
                 ) +
@@ -244,7 +252,10 @@ clonotype_network_plot <- function(data, reduction, rootname, clone_by, chains, 
                     )
                 ) +
                 get_theme(theme)
-
+                if (current_chain != "both"){
+                    plots[[current_chain]] <- plots[[current_chain]] +
+                                              ggplot2::ggtitle(current_chain)
+                }
                 plots[[current_chain]]$layers[[1]]$aes_params$size <- pt_size      # we need to add at least some size, because alpha doesn't work without it
                 plots[[current_chain]]$layers[[1]]$aes_params$alpha <- alpha
 
@@ -293,12 +304,13 @@ clonotype_diversity_plot <- function(data, rootname, clone_by, chains, split_by,
                 ggplot2::ylab(y_label) +
                 ggplot2::guides(color=ggplot2::guide_legend(legend_title), x=ggplot2::guide_axis(angle=45)) +
                 ggplot2::scale_color_manual(values=palette_colors) +
-                ggplot2::ggtitle(current_chain) +
                 get_theme(theme)
-
+                if (current_chain != "both"){
+                    plots[[current_chain]] <- plots[[current_chain]] +
+                                              ggplot2::ggtitle(current_chain)
+                }
                 plots[[current_chain]]$layers[[2]]$aes_params$size <- pt_size      # we need to add at least some size, because alpha doesn't work without it
                 plots[[current_chain]]$layers[[2]]$aes_params$alpha <- alpha
-
             }
             combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
                               patchwork::plot_annotation(title=plot_title)
@@ -342,8 +354,11 @@ clonotype_feature_plot <- function(data, rootname, feature, chains, split_by, x_
                 ggplot2::xlab(x_label) +
                 ggplot2::ylab(y_label) +
                 ggplot2::guides(x=ggplot2::guide_axis(angle=45)) +
-                ggplot2::ggtitle(current_chain) +
                 get_theme(theme)
+                if (current_chain != "both"){
+                    plots[[current_chain]] <- plots[[current_chain]] +
+                                              ggplot2::ggtitle(current_chain)
+                }
             }
             combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
                               patchwork::plot_annotation(title=plot_title)
@@ -1599,7 +1614,7 @@ expression_density_plot <- function(data, features, rootname, reduction, plot_ti
 }
 
 
-feature_plot <- function(data, features, labels, rootname, reduction, plot_title, from_meta=FALSE, split_by=NULL, label=FALSE, label_color="black", label_size=4, order=FALSE, color_limits=NULL, color_scales=NULL, gradient_colors=c("lightgrey", "blue"), min_cutoff=NA, max_cutoff=NA, pt_size=NULL, combine_guides=NULL, alpha=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+feature_plot <- function(data, features, labels, rootname, reduction, plot_title, from_meta=FALSE, split_by=NULL, label=FALSE, label_color="black", label_size=4, order=FALSE, color_limits=NULL, color_scales=NULL, gradient_colors=c("lightgrey", "blue"), min_cutoff=NA, max_cutoff=NA, pt_size=NULL, combine_guides=NULL, fixed=TRUE, alpha=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
 
@@ -1664,6 +1679,9 @@ feature_plot <- function(data, features, labels, rootname, reduction, plot_title
                     )
             plots <- base::lapply(seq_along(plots), function(i){
                 plots[[i]] <- plots[[i]] + ggplot2::ggtitle(labels_corrected[i]) + get_theme(theme)
+                if (!is.null(fixed) && fixed){
+                    plots[[i]] <- plots[[i]] + ggplot2::coord_fixed(ratio=1)
+                }
                 if (!is.null(alpha)) { plots[[i]]$layers[[1]]$aes_params$alpha <- alpha }
                 if (!is.null(split_by) && (length(features_corrected) == 1)){                # applying bug fix - redefining gradient limits
                     plots[[i]] <- plots[[i]] +
