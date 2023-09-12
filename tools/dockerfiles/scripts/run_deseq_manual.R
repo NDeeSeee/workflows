@@ -8,7 +8,8 @@ suppressMessages(library(dplyr))
 suppressMessages(library(limma))
 suppressMessages(library(DESeq2))
 suppressMessages(library(hopach))
-suppressMessages(library(Glimma))
+suppressMessages(library(sva))
+suppressMessages(library(Glimma))             # we replaced it with ComBat_seq
 suppressMessages(library(argparse))
 suppressMessages(library(tidyverse))
 suppressMessages(library(patchwork))
@@ -389,6 +390,45 @@ get_diff_expr_data <- function(expression_data, metadata, args){
         quit(save = "no", status = 1, runLast = FALSE)
     }
 
+    if(!is.null(args$remove)){
+        print(paste("Removing the effect of", args$remove, "using ComBat-Seq"))
+        counts_data <- ComBat_seq(
+            as.matrix(counts_data),
+            batch=metadata[[args$remove]],       # columns from counts data are alread ordered by rownames from metadata
+            group=NULL
+        )
+        print(
+            paste(
+                "Removing", args$remove, "item from design and",
+                "reduced formulas if it was used there"
+            )
+        )
+        args$design <- paste(
+            grep(
+                args$remove,
+                unlist(strsplit(args$design, "\\+")),
+                value=TRUE,
+                ignore.case=TRUE,
+                invert=TRUE
+            ),
+            collapse="+"
+        )
+        print(paste("Updated design formula", args$design))
+        if (!is.null(args$reduced)){
+            args$reduced <- paste(
+                grep(
+                    args$remove,
+                    unlist(strsplit(args$reduced, "\\+")),
+                    value=TRUE,
+                    ignore.case=TRUE,
+                    invert=TRUE
+                ),
+                collapse="+"
+            )
+            print(paste("Updated reduced formula", args$reduced))
+        }
+    }
+
     print("Loadind data to DESeq2")
     deseq_data <- DESeqDataSetFromMatrix(
         countData=counts_data,
@@ -473,27 +513,29 @@ get_norm_counts_data <- function(deseq_data, metadata, args){
         print("Applying rlog transformation (not blind to the experimental design)")
         norm_counts_data <- DESeq2::rlog(deseq_data, blind=FALSE)
     }
-    if(!is.null(args$remove)){
-        print(
-            paste("Removing the effect of", args$remove, "from the normalized counts")
-        )
-        keep_formula <- paste(
-            grep(
-                args$remove,
-                unlist(strsplit(args$design, "\\+")),
-                value=TRUE,
-                ignore.case=TRUE,
-                invert=TRUE
-            ),
-            collapse="+"
-        )
-        print(paste("Formula to include conditions to be preserved", keep_formula))
-        assay(norm_counts_data) <- limma::removeBatchEffect(
-            assay(norm_counts_data),
-            batch=norm_counts_data[[args$remove]],
-            design=stats::model.matrix(stats::as.formula(keep_formula), metadata)
-        )
-    }
+
+    # if(!is.null(args$remove)){
+    #     print(
+    #         paste("Removing the effect of", args$remove, "from the normalized counts")
+    #     )
+    #     keep_formula <- paste(
+    #         grep(
+    #             args$remove,
+    #             unlist(strsplit(args$design, "\\+")),
+    #             value=TRUE,
+    #             ignore.case=TRUE,
+    #             invert=TRUE
+    #         ),
+    #         collapse="+"
+    #     )
+    #     print(paste("Formula to include conditions to be preserved", keep_formula))
+    #     assay(norm_counts_data) <- limma::removeBatchEffect(
+    #         assay(norm_counts_data),
+    #         batch=norm_counts_data[[args$remove]],
+    #         design=stats::model.matrix(stats::as.formula(keep_formula), metadata)
+    #     )
+    # }
+
     print("Normalized read counts")
     print(head(assay(norm_counts_data)))
     print(dim(assay(norm_counts_data)))
@@ -680,11 +722,11 @@ get_args <- function(){
     parser$add_argument(
         "--remove",
         help=paste(
-            "Column from the metadata file to remove batch effect when",
-            "exporting feature counts. All components that include this",
-            "term will be removed from the design formula when correcting",
-            "for batch effect. Default: do not remove batch effect from",
-            "the exported counts"
+            "Column from the metadata file to remove batch effect",
+            "before running differential expression analysis. If",
+            "present, all components that include this term will be",
+            "removed from the design and reduced formulas.",
+            "Default: do not remove batch effect"
         ),
         type="character"
     )
@@ -786,13 +828,6 @@ norm_counts_data <- get_norm_counts_data(diff_expr_data$raw, metadata, args)    
 
 export_plots(diff_expr_data, norm_counts_data, metadata, args)
 
-print("Exporting differentially expressed features")
-export_data(
-    diff_expr_data$res,                                                          # this is not filtered differentially expressed features
-    location=paste(args$output, "diff_expr_features.tsv", sep="_"),
-    digits=5
-)
-
 print(
     paste(
         "Filtering normalized read counts matrix to include",
@@ -841,8 +876,30 @@ if (!is.null(args$cluster)){
         row_metadata <- row_metadata[clustered_data$order, ]          # reordering features order based on the HOPACH clustering results
         print("Reordered features")
         print(head(row_metadata))
+        cluster_columns <- grep(
+            "HCL",
+            colnames(row_metadata),
+            value=TRUE,
+            ignore.case=TRUE
+        )
+        if (length(cluster_columns) > 0){                             # check length just in case
+            diff_expr_data$res <- merge(
+                diff_expr_data$res,
+                row_metadata[, cluster_columns] %>% rownames_to_column(var="feature"),
+                by="feature",
+                all.x=TRUE,
+                sort=FALSE
+            )
+        }
     }
 }
+
+print("Exporting differentially expressed features")
+export_data(                                                          # may include HCL columns from clustering by row
+    diff_expr_data$res,                                                          # this is not filtered differentially expressed features
+    location=paste(args$output, "diff_expr_features.tsv", sep="_"),
+    digits=5
+)
 
 # we do not reorder norm_counts_mat based on the clustering order
 # because when exportin to GCT we use row_metadata and col_metadata

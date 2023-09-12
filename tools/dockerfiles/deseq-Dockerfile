@@ -1,14 +1,23 @@
 ###################################################################################################
 # Software:         DESeq2
-# Software Version: v0.0.4
+# Software Version: v0.0.5
 # Description:      DESeq2
 # Website:          https://bioconductor.org/packages/release/bioc/html/DESeq2.html
 # Provides:         DESeq2
-# Base Image:       r-base:4.3.0
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/deseq:v0.0.4 -f deseq-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/deseq:v0.0.4
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/deseq:v0.0.4 /bin/bash
+# Base Image:       r-base:4.3.1
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/deseq:v0.0.5 -f deseq-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/deseq:v0.0.5
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/deseq:v0.0.5 /bin/bash
 ###################################################################################################
+#
+# v0.0.5
+# - Update base image to 4.3.1
+# - Replace limma with ComBat-seq so now batch
+#   effect can be corrected before running DESEq2
+# - Export HCL columns to the main TSV output file.
+#   Output NA for genes that are not assigned to
+#   any of the clusters.
+# - libfreetype6-dev renamed to libfreetype-dev
 #
 # v0.0.4
 # - Fix issue with non-unique RefseqId when grouping by transcript
@@ -41,12 +50,12 @@ COPY ./scripts/run_deseq_manual.R /usr/local/bin/run_deseq_manual.R
 RUN apt-get update && \
     apt-get install -y vim pandoc gcc-10-base libgcc-10-dev python3-dev python3-pip libxml2-dev libssl-dev \
                        libcurl4-openssl-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev \
-                       libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev && \
+                       libfreetype-dev libpng-dev libtiff5-dev libjpeg-dev && \
     pip3 install --break-system-packages argparse && \
 ### Installing R packages
     R -e "install.packages('BiocManager')" && \
     R -e "BiocManager::install(version = '3.17', update = FALSE, ask = FALSE)" && \
-    R -e "BiocManager::install(c('BiocParallel', 'DESeq2', 'limma', 'EnhancedVolcano', 'hopach', 'cmapR', 'Glimma'))" && \
+    R -e "BiocManager::install(c('BiocParallel', 'DESeq2', 'limma', 'EnhancedVolcano', 'hopach', 'cmapR', 'Glimma', 'sva'))" && \
     R -e 'install.packages("tidyverse", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("patchwork", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("argparse", repo = "https://cloud.r-project.org/")' && \
