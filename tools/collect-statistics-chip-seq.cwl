@@ -438,7 +438,7 @@ inputs:
                             "reads/pairs after filtering in treatment",
                             "redundant rate in treatment",
                             "fraction of reads in peaks",
-                            
+
                             "average tag density",
                             "maximum"]
 
