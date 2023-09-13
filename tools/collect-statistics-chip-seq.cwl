@@ -437,7 +437,10 @@ inputs:
                             "total reads/pairs in treatment",
                             "reads/pairs after filtering in treatment",
                             "redundant rate in treatment",
-                            "fraction of reads in peaks"]
+                            "fraction of reads in peaks",
+                            
+                            "average tag density",
+                            "maximum"]
 
                 if collected_data.get("adapter trimming statistics", None):
                     header.extend(["adapter trimming statistics",
@@ -495,7 +498,10 @@ inputs:
                         collected_data["peak calling statistics"]["total reads/pairs in treatment"],
                         collected_data["peak calling statistics"]["reads/pairs after filtering in treatment"],
                         collected_data["peak calling statistics"]["redundant rate in treatment"],
-                        collected_data["peak calling statistics"]["fraction of reads in peaks"]]
+                        collected_data["peak calling statistics"]["fraction of reads in peaks"],
+
+                        "",
+                        collected_data["average tag density"]["maximum"]]
 
                 if collected_data.get("adapter trimming statistics", None):
                     data.extend(["",
