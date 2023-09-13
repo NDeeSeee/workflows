@@ -35,28 +35,35 @@ inputs:
       fi
 
       echo "Sorting BAM file by name"
-      echo "samtools sort -n -@ $2 -o namesorted.bam temp.bam"
-      samtools sort -n -@ $2 -o namesorted.bam temp.bam
+      echo "samtools sort -n -@ $3 -o namesorted.bam temp.bam"
+      samtools sort -n -@ $3 -o namesorted.bam temp.bam
       
       echo "Filling in mate coordinates and inserting size fields"
-      echo "samtools fixmate -m -@ $2 namesorted.bam fixed.bam"
-      samtools fixmate -m -@ $2 namesorted.bam fixed.bam
+      echo "samtools fixmate -m -@ $3 namesorted.bam fixed.bam"
+      samtools fixmate -m -@ $3 namesorted.bam fixed.bam
 
       echo "Sorting BAM file by coordinates"
-      echo "samtools sort -@ $2 -o positionsorted.bam fixed.bam"
-      samtools sort -@ $2 -o positionsorted.bam fixed.bam
+      echo "samtools sort -@ $3 -o positionsorted.bam fixed.bam"
+      samtools sort -@ $3 -o positionsorted.bam fixed.bam
 
-      echo "Removing duplicates"
-      echo "samtools markdup -r -s -@ $2 positionsorted.bam markduped.bam"
-      samtools markdup -r -s -@ $2 positionsorted.bam markduped.bam 2> markdup_report.tsv
+      if [ "$1" = "true" ]
+      then
+        echo "Only marking PCR duplicates"
+        echo "samtools markdup -s -@ $3 positionsorted.bam markduped.bam"
+        samtools markdup -s -@ $3 positionsorted.bam markduped.bam 2> markdup_report.tsv
+      else
+        echo "Removing PCR duplicates"
+        echo "samtools markdup -r -s -@ $3 positionsorted.bam markduped.bam"
+        samtools markdup -r -s -@ $3 positionsorted.bam markduped.bam 2> markdup_report.tsv
+      fi
 
       echo "Sorting BAM file"
-      echo "samtools sort -@ $2 markduped.bam -o $1"
-      samtools sort -@ $2 markduped.bam -o $1
+      echo "samtools sort -@ $3 markduped.bam -o $2"
+      samtools sort -@ $3 markduped.bam -o $2
       
       echo "Indexing BAM file"
-      echo "samtools index $1"
-      samtools index $1
+      echo "samtools index $2"
+      samtools index $2
 
       echo "Removing temporary files"
       rm -f namesorted.bam fixed.bam positionsorted.bam markduped.bam temp.bam*
@@ -71,10 +78,20 @@ inputs:
       position: 6
     doc: BAM (optionally BAI) files
 
+  keep_duplicates:
+    type: boolean?
+    default: false                        # somehow when omitted, valueFrom is not evaluated
+    inputBinding:
+      position: 7
+      valueFrom: $(self?"true":"false")
+    doc: |
+      If true duplicates will be only
+      marked, oterwise - removed
+
   output_filename:
     type: string?
     inputBinding:
-      position: 7
+      position: 8
       valueFrom: |
         ${
           return (self == "")?inputs.bam_bai_pair.basename:self;
@@ -85,7 +102,7 @@ inputs:
   threads:
     type: int?
     inputBinding:
-      position: 8
+      position: 9
     default: 1
     doc: "Number of threads to use"
 
@@ -155,10 +172,10 @@ s:creator:
         - id: http://orcid.org/0000-0002-6486-3898
 
 doc: |
-  Removes PCR duplicates from coordinate sorted and indexed BAM files.
+  Removes or only marks PCR duplicates from coordinate sorted and indexed BAM files.
   Returns coordinate sorted and indexed BAM files.
   Stages input bam_bai_pair to workdir. Otherwise samtools sort fails.
 
 s:about: |
-  Removes PCR duplicates from coordinate sorted and indexed BAM files.
+  Removes or only marks PCR duplicates from coordinate sorted and indexed BAM files.
   Returns coordinate sorted and indexed BAM files.
