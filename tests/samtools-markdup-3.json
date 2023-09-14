@@ -1,0 +1,9 @@
+{
+    "bam_bai_pair": {
+        "class": "File",
+        "location": "./data/dm3_chr4/generated_inputs/bam_bai/chr4_100_mapped_reads.Aligned.out.bam"
+    },
+    "output_filename": "deduplicated.bam",
+    "keep_duplicates": true,
+    "threads": 2
+}

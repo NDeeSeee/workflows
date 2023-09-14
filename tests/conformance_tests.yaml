@@ -5332,6 +5332,19 @@
       class: File
       location: markdup_report.tsv
 
+- job: ./samtools-markdup-3.json
+  tool: ../tools/samtools-markdup.cwl
+  output:
+    deduplicated_bam_bai_pair:
+      class: File
+      location: deduplicated.bam
+      secondaryFiles:
+      - class: File
+        location: deduplicated.bam.bai
+    markdup_report:
+      class: File
+      location: markdup_report.tsv
+
 # ========================================================
 # gat-run
 # ========================================================
