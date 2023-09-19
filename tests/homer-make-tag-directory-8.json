@@ -1,9 +1,7 @@
 {
-  "bam_file": [{
+  "bam_file": {
     "class": "File",
     "location": "./data/dm3_chr4/generated_inputs/bam_bai/chr4_100_mapped_reads.Aligned.out.bam"
-  }],
-  "output_folder": ["result"],
-  "fragment_size": [150],
-  "total_reads": [94]
+  },
+  "output_folder": "results"
 }

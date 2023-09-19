@@ -8,6 +8,7 @@
       "class": "File",
       "location": "./data/dm3_chr4/generated_inputs/bam_bai/copy_chr4_100_mapped_reads.Aligned.out.bam"
     }],
+  "output_folder": ["result_1", "result_2"],
   "fragment_size": [150, 150],
   "total_reads": [94, 94]
 }

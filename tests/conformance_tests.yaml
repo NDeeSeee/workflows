@@ -2585,6 +2585,29 @@
         location: tagCountDistribution.txt
         size: 97
 
+- job: ./homer-make-tag-directory-8.json
+  tool: ../tools/homer-make-tag-directory.cwl
+  output:
+    output_tag_folder:
+      class: Directory
+      basename: "results"
+      listing:
+      - class: File
+        location: chr4.tags.tsv
+        size: 636
+      - class: File
+        location: tagLengthDistribution.txt
+        size: 3748
+      - class: File
+        location: tagAutocorrelation.txt
+        size: 51918
+      - class: File
+        location: tagInfo.txt
+        size: 400
+      - class: File
+        location: tagCountDistribution.txt
+        size: 97
+
 # ========================================================
 # deseq-advanced
 # ========================================================
@@ -2937,7 +2960,7 @@
   output:
     tag_folder:
     - class: Directory
-      basename: "chr4_100_mapped_reads"
+      basename: "result"
       listing:
       - class: File
         location: chr4.tags.tsv
@@ -2960,7 +2983,7 @@
   output:
     tag_folder:
     - class: Directory
-      basename: "chr4_100_mapped_reads"
+      basename: "result_1"
       listing:
       - class: File
         location: chr4.tags.tsv
@@ -2978,7 +3001,7 @@
         location: tagCountDistribution.txt
         size: 108
     - class: Directory
-      basename: "copy_chr4_100_mapped_reads"
+      basename: "result_2"
       listing:
       - class: File
         location: chr4.tags.tsv
@@ -3001,7 +3024,7 @@
   output:
     tag_folder:
     - class: Directory
-      basename: "copy_chr4_100_mapped_reads"
+      basename: "result_1"
       listing:
       - class: File
         location: chr4.tags.tsv
@@ -3019,7 +3042,7 @@
         location: tagCountDistribution.txt
         size: 108
     - class: Directory
-      basename: "chr4_100_mapped_reads"
+      basename: "result_2"
       listing:
       - class: File
         location: chr4.tags.tsv
