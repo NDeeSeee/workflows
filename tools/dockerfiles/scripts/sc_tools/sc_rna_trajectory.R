@@ -26,6 +26,7 @@ set.seed(42)
 export_all_plots <- function(seurat_data, args){
     SeuratObject::DefaultAssay(seurat_data) <- "RNA"                            # safety measure
     SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
+    lineages_count <- length(seurat_data@misc$trajectories[[args$reduction]]$slingshot@metadata$lineages)
 
     graphics$trajectory_plot(
         data=seurat_data,
@@ -98,6 +99,7 @@ export_all_plots <- function(seurat_data, args){
         color_cells="grouping",
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
+        height=ifelse(lineages_count > 1, 800, 400),
         rootname=paste(args$output, "dndr_gr_clst", sep="_"),
         pdf=args$pdf
     )
@@ -111,6 +113,7 @@ export_all_plots <- function(seurat_data, args){
         ),
         color_cells="pseudotime",
         theme=args$theme,
+        height=ifelse(lineages_count > 1, 800, 400),
         rootname=paste(args$output, "dndr_pstm", sep="_"),
         pdf=args$pdf
     )
@@ -136,12 +139,106 @@ export_all_plots <- function(seurat_data, args){
         pdf=args$pdf
     )
 
+    if (!is.null(args$genes) && length(args$genes) > 0){
+        graphics$trajectory_expression(
+            data=seurat_data,
+            reduction=args$reduction,
+            features=args$genes,
+            plot_title="Gene expression along pseudotime",
+            combine_guides="collect",
+            theme=args$theme,
+            rootname=paste(args$output, "xpr_pstm", sep="_"),
+            pdf=args$pdf
+        )
+    }
+
     Idents(seurat_data) <- args$source
     ptime_column <- paste0("ptime_", args$reduction)
     ptime_ranges <- c(min(seurat_data@meta.data[[ptime_column]]), max(seurat_data@meta.data[[ptime_column]]))
     ptime_colors <- c("#140b34", "#38588c", "#25848e", "#2ab07f", "#83d44b", "#c0df25")
     datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
     conditions_count <- length(unique(as.vector(as.character(seurat_data@meta.data$condition))))
+
+    graphics$geom_density_plot(
+        data=seurat_data@meta.data,
+        x_axis=ptime_column,
+        group_by="new.ident",
+        split_by="new.ident",
+        x_label="Pseudotime",
+        y_label="Density",
+        legend_title="Dataset",
+        plot_title=paste(
+            "Pseudotime density,",
+            "split by dataset"
+        ),
+        show_zoomed=TRUE,
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        rootname=paste(args$output, "pstm_dnst_spl_idnt", sep="_"),
+        pdf=args$pdf
+    )
+
+    graphics$trajectory_hist(
+        data=seurat_data@meta.data,
+        x_axis=ptime_column,
+        group_by=args$source,
+        split_by="new.ident",
+        x_label="Pseudotime",
+        y_label="Density",
+        legend_title="Cluster",
+            plot_title=paste(
+                "Pseudotime histogram,",
+                "colored by cluster,",
+                "split by dataset"
+            ),
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        rootname=paste(args$output, "pstm_hist_gr_clst_spl_idnt", sep="_"),
+        pdf=args$pdf
+    )
+
+    if (
+        all(as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition))) &&
+        conditions_count > 1
+    ){
+        graphics$geom_density_plot(
+            data=seurat_data@meta.data,
+            x_axis=ptime_column,
+            group_by="condition",
+            split_by="condition",
+            x_label="Pseudotime",
+            y_label="Density",
+            legend_title="Condition",
+            plot_title=paste(
+                "Pseudotime density,",
+                "split by grouping condition"
+            ),
+            show_zoomed=TRUE,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "pstm_dnst_spl_cnd", sep="_"),
+            pdf=args$pdf
+        )
+        graphics$trajectory_hist(
+            data=seurat_data@meta.data,
+            x_axis=ptime_column,
+            group_by=args$source,
+            split_by="condition",
+            x_label="Pseudotime",
+            y_label="Density",
+            legend_title="Cluster",
+                plot_title=paste(
+                    "Pseudotime histogram,",
+                    "colored by cluster,",
+                    "split by grouping condition"
+                ),
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "pstm_hist_gr_clst_spl_cnd", sep="_"),
+            pdf=args$pdf
+        )
+    }
+
     for (reduction in c("rnaumap", "atacumap", "wnnumap")){
         if (reduction == args$reduction || !(reduction %in% names(seurat_data@reductions))) {next}
         graphics$feature_plot(
@@ -303,6 +400,14 @@ get_args <- function(){
         type="integer", default=50
     )
     parser$add_argument(
+        "--genes",
+        help=paste(
+            "Genes of interest to build genes expression plots.",
+            "Default: None"
+        ),
+        type="character", nargs="*"
+    )
+    parser$add_argument(
         "--pdf",
         help="Export plots in PDF. Default: false",
         action="store_true"
@@ -410,6 +515,21 @@ if (!is.null(args$barcodes)){
 
 print("Setting default assay to RNA")
 DefaultAssay(seurat_data) <- "RNA"
+
+print("Normalizing RNA counts")
+seurat_data <- NormalizeData(seurat_data, verbose=FALSE)                                        # just in case rerun normalize, because we will show gene expression
+
+if (!is.null(args$genes)){
+    print(
+        paste(
+            "Adjusting genes of interest to include only those",
+            "that are present in the loaded Seurat object"
+        )
+    )
+    args$genes <- unique(args$genes)
+    args$genes <- args$genes[args$genes %in% as.vector(as.character(rownames(seurat_data)))]    # with RNA assay set as default the rownames should be genes
+    print(args$genes)
+}
 
 print("Running RNA trajectory analysis")
 seurat_data <- analyses$add_trajectory(seurat_data, args)      # adds ptime_"reduction" column to metadata and misc object into trajectories list

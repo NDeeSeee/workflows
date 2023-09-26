@@ -6,6 +6,7 @@ import("scales", attach=FALSE)
 import("Seurat", attach=FALSE)
 import("Signac", attach=FALSE)
 import("tibble", attach=FALSE)
+import("traviz", attach=FALSE)
 import("Glimma", attach=FALSE)
 import("ggplot2", attach=FALSE)
 import("dynwrap", attach=FALSE)
@@ -59,6 +60,8 @@ export(
     "daseq_permutations",
     "trajectory_plot",
     "trajectory_graph",
+    "trajectory_expression",
+    "trajectory_hist",
     "dendro_plot",
     "topology_plot",
     "trajectory_heatmap",
@@ -465,30 +468,35 @@ geom_bar_plot <- function(data, rootname, x_axis, color_by, x_label, y_label, le
     )
 }
 
-geom_density_plot <- function(data, rootname, x_axis, color_by, facet_by, x_left_intercept, x_label, y_label, legend_title, plot_title, x_right_intercept=NULL,  scale_x_log10=FALSE, scale_y_log10=FALSE, zoom_on_intercept=FALSE, alpha=0.7, show_ranked=FALSE, ranked_x_label="Ranked cells", palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+geom_density_plot <- function(data, rootname, x_axis, group_by, split_by, x_label, y_label, legend_title, plot_title, x_left_intercept=NULL, x_right_intercept=NULL,  scale_x_log10=FALSE, scale_y_log10=FALSE, alpha=0.7, show_zoomed=FALSE, show_ranked=FALSE, ranked_x_label="Ranked cells", palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             intercept_data <- data %>%
-                              dplyr::select(tidyselect::all_of(color_by), tidyselect::all_of(facet_by)) %>%
+                              dplyr::select(tidyselect::all_of(group_by), tidyselect::all_of(split_by)) %>%
                               dplyr::distinct() %>%
-                              dplyr::arrange(dplyr::across(tidyselect::all_of(color_by))) %>%
-                              tibble::add_column(color=palette_colors[1:base::nrow(.)],x_left=x_left_intercept)
+                              dplyr::arrange(dplyr::across(tidyselect::all_of(group_by))) %>%
+                              tibble::add_column(color=palette_colors[1:base::nrow(.)])
 
-            plot <- ggplot2::ggplot(data, ggplot2::aes_string(x=x_axis, fill=color_by)) +
+            plot <- ggplot2::ggplot(data, ggplot2::aes_string(x=x_axis, fill=group_by)) +
                     ggplot2::geom_density(alpha=alpha) +
                     ggplot2::xlab(x_label) +
                     ggplot2::ylab(y_label) +
                     ggplot2::guides(fill=ggplot2::guide_legend(legend_title)) +
                     ggplot2::ggtitle(plot_title) +
-                    ggplot2::facet_wrap(stats::as.formula(base::paste("~", facet_by))) +
+                    ggplot2::facet_wrap(stats::as.formula(base::paste("~", split_by))) +
                     ggplot2::scale_fill_manual(values=palette_colors) +
-                    ggplot2::geom_vline(intercept_data, mapping=ggplot2::aes(xintercept=x_left), color=intercept_data$color, alpha=0.7) +
-                    ggrepel::geom_label_repel(
-                        intercept_data, mapping=ggplot2::aes(x=x_left, y=Inf, label=x_left),
-                        color="black", fill=intercept_data$color, alpha=0.7, segment.colour=NA, direction="y", size=3,
-                        show.legend=FALSE
-                    ) +
                     get_theme(theme)
+
+            if (!is.null(x_left_intercept)){
+                intercept_data <- intercept_data %>% tibble::add_column(x_left=x_left_intercept)
+                plot <- plot +
+                        ggplot2::geom_vline(intercept_data, mapping=ggplot2::aes(xintercept=x_left), color=intercept_data$color, alpha=0.7) +
+                        ggrepel::geom_label_repel(
+                            intercept_data, mapping=ggplot2::aes(x=x_left, y=Inf, label=x_left),
+                            color="black", fill=intercept_data$color, alpha=0.7, segment.colour=NA, direction="y", size=3,
+                            show.legend=FALSE
+                        )
+            }
 
             if (!is.null(x_right_intercept)){
                 intercept_data <- intercept_data %>% tibble::add_column(x_right=x_right_intercept)
@@ -504,31 +512,40 @@ geom_density_plot <- function(data, rootname, x_axis, color_by, facet_by, x_left
             if (scale_x_log10){ plot <- plot + ggplot2::scale_x_log10() + ggplot2::annotation_logticks(sides="b", alpha=0.3) }
             if (scale_y_log10){ plot <- plot + ggplot2::scale_y_log10() + ggplot2::annotation_logticks(sides="l", alpha=0.3) }
 
-            if (zoom_on_intercept) {
-                zoomed_plot <- ggplot2::ggplot(data, ggplot2::aes_string(x=x_axis, color=color_by)) +
+            if (show_zoomed){
+                zoomed_plot <- ggplot2::ggplot(data, ggplot2::aes_string(x=x_axis, color=group_by)) +
                                ggplot2::geom_density(show.legend=FALSE, size=2) +
                                ggplot2::xlab(x_label) +
                                ggplot2::ylab(y_label) +
                                ggplot2::scale_color_manual(values=palette_colors) +
-                               ggplot2::geom_vline(intercept_data, mapping=ggplot2::aes(xintercept=x_left), color=intercept_data$color, alpha=0.7) +
-                               ggrepel::geom_label_repel(
-                                   intercept_data, mapping=ggplot2::aes(x=x_left, y=Inf, label=x_left),
-                                   color="black", fill=intercept_data$color, alpha=0.7, segment.colour=NA, direction="y", size=3,
-                                   show.legend=FALSE
-                               ) +
                                get_theme(theme)
+
+                if (!is.null(x_left_intercept)){
+                    zoomed_plot <- zoomed_plot +
+                                   ggplot2::geom_vline(intercept_data, mapping=ggplot2::aes(xintercept=x_left), color=intercept_data$color, alpha=0.7) +
+                                   ggrepel::geom_label_repel(
+                                       intercept_data, mapping=ggplot2::aes(x=x_left, y=Inf, label=x_left),
+                                       color="black", fill=intercept_data$color, alpha=0.7, segment.colour=NA, direction="y", size=3,
+                                       show.legend=FALSE
+                                   )
+                }
                 if (!is.null(x_right_intercept)){
                     zoomed_plot <- zoomed_plot +
-                                   ggplot2::coord_cartesian(xlim=c(min(intercept_data$x_left), max(intercept_data$x_right))) +
                                    ggplot2::geom_vline(intercept_data, mapping=ggplot2::aes(xintercept=x_right), color=intercept_data$color, alpha=0.7) +
                                    ggrepel::geom_label_repel(
                                        intercept_data, mapping=ggplot2::aes(x=x_right, y=Inf, label=x_right),
                                        color="black", fill=intercept_data$color, alpha=0.7, segment.colour=NA, direction="y", size=3,
                                        show.legend=FALSE
                                    )
-                } else {
-                    zoomed_plot <- zoomed_plot + ggplot2::coord_cartesian(xlim=c(NA, max(intercept_data$x_left)))
                 }
+                zoomed_plot <- zoomed_plot +
+                               ggplot2::coord_cartesian(
+                                   xlim=c(
+                                       base::ifelse(!is.null(x_left_intercept), min(intercept_data$x_left), NA),
+                                       base::ifelse(!is.null(x_right_intercept), max(intercept_data$x_right), NA)
+                                   )
+                               )
+
                 if (scale_x_log10){ zoomed_plot <- zoomed_plot + ggplot2::scale_x_log10() + ggplot2::annotation_logticks(sides="b", alpha=0.3) }
                 if (scale_y_log10){ zoomed_plot <- zoomed_plot + ggplot2::scale_y_log10() + ggplot2::annotation_logticks(sides="l", alpha=0.3) }
                 plot <- plot / zoomed_plot
@@ -536,20 +553,25 @@ geom_density_plot <- function(data, rootname, x_axis, color_by, facet_by, x_left
 
             if (show_ranked) {
                 ranked_plot <- data %>%
-                               dplyr::arrange(dplyr::across(tidyselect::all_of(color_by)), dplyr::across(tidyselect::all_of(x_axis))) %>%
-                               ggplot2::ggplot(ggplot2::aes_string(x=seq_along(data[[x_axis]]), y=x_axis, color=color_by)) +
+                               dplyr::arrange(dplyr::across(tidyselect::all_of(group_by)), dplyr::across(tidyselect::all_of(x_axis))) %>%
+                               ggplot2::ggplot(ggplot2::aes_string(x=seq_along(data[[x_axis]]), y=x_axis, color=group_by)) +
                                ggplot2::geom_point(show.legend=FALSE, size=0.5) +
                                ggplot2::xlab(ranked_x_label) +
                                ggplot2::ylab(x_label) +
                                ggplot2::scale_y_log10() + ggplot2::annotation_logticks(sides="l", alpha=0.3) +
                                ggplot2::scale_color_manual(values=palette_colors) +
-                               ggplot2::geom_hline(intercept_data, mapping=ggplot2::aes(yintercept=x_left), color=intercept_data$color, alpha=0.7) +
-                               ggrepel::geom_label_repel(
-                                   intercept_data, mapping=ggplot2::aes(x=Inf, y=x_left, label=x_left),
-                                   color="black", fill=intercept_data$color, alpha=0.7, segment.colour=NA, direction="x", size=3,
-                                   show.legend=FALSE
-                               ) +
                                get_theme(theme)
+
+                if (!is.null(x_left_intercept)){
+                    ranked_plot <- ranked_plot +
+                                   ggplot2::geom_hline(intercept_data, mapping=ggplot2::aes(yintercept=x_left), color=intercept_data$color, alpha=0.7) +
+                                       ggrepel::geom_label_repel(
+                                       intercept_data, mapping=ggplot2::aes(x=Inf, y=x_left, label=x_left),
+                                       color="black", fill=intercept_data$color, alpha=0.7, segment.colour=NA, direction="x", size=3,
+                                       show.legend=FALSE
+                                   )
+                }
+
                 if (!is.null(x_right_intercept)){
                     ranked_plot <- ranked_plot +
                                    ggplot2::geom_hline(intercept_data, mapping=ggplot2::aes(yintercept=x_right), color=intercept_data$color, alpha=0.7) +
@@ -581,13 +603,13 @@ geom_density_plot <- function(data, rootname, x_axis, color_by, facet_by, x_left
     )
 }
 
-geom_point_plot <- function(data, rootname, x_axis, y_axis, facet_by, x_left_intercept, y_low_intercept, color_by, gradient_colors, color_limits, color_break, x_label, y_label, legend_title, plot_title, highlight_rows=NULL, highlight_color="black", highlight_shape=4, y_high_intercept=NULL, scale_x_log10=FALSE, scale_y_log10=FALSE, show_lm=FALSE, show_density=FALSE, alpha=0.2, alpha_intercept=0.5, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+geom_point_plot <- function(data, rootname, x_axis, y_axis, split_by, x_left_intercept, y_low_intercept, color_by, gradient_colors, color_limits, color_break, x_label, y_label, legend_title, plot_title, highlight_rows=NULL, highlight_color="black", highlight_shape=4, y_high_intercept=NULL, scale_x_log10=FALSE, scale_y_log10=FALSE, show_lm=FALSE, show_density=FALSE, alpha=0.2, alpha_intercept=0.5, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             intercept_data <- data %>%
-                              dplyr::select(tidyselect::all_of(facet_by)) %>%
+                              dplyr::select(tidyselect::all_of(split_by)) %>%
                               dplyr::distinct() %>%
-                              dplyr::arrange(dplyr::across(tidyselect::all_of(facet_by))) %>%
+                              dplyr::arrange(dplyr::across(tidyselect::all_of(split_by))) %>%
                               tibble::add_column(color=palette_colors[1:base::nrow(.)], x_left=x_left_intercept, y_low=y_low_intercept)
 
             if (!is.null(y_high_intercept)){
@@ -606,7 +628,7 @@ geom_point_plot <- function(data, rootname, x_axis, y_axis, facet_by, x_left_int
                     ggplot2::ylab(y_label) +
                     ggplot2::guides(color=ggplot2::guide_colourbar(legend_title)) +
                     ggplot2::ggtitle(plot_title) +
-                    ggplot2::facet_wrap(stats::as.formula(base::paste("~", facet_by))) +
+                    ggplot2::facet_wrap(stats::as.formula(base::paste("~", split_by))) +
                     ggplot2::geom_vline(intercept_data, mapping=ggplot2::aes(xintercept=x_left), color=intercept_data$color, alpha=alpha_intercept) +
                     ggplot2::geom_hline(intercept_data, mapping=ggplot2::aes(yintercept=y_low), color=intercept_data$color, alpha=alpha_intercept) +
                     ggrepel::geom_label_repel(
@@ -920,12 +942,12 @@ trajectory_plot <- function(                                # all feature relate
         expr = {
 
             plot <- dynplot::plot_dimred(
-                        trajectory=data@misc$trajectories[[reduction]],
+                        trajectory=data@misc$trajectories[[reduction]]$dyno,
                         color_cells=color_cells,
                         color_density=color_density,
                         grouping=if (color_density == "grouping"){
                                     dynwrap::group_onto_nearest_milestones(
-                                        data@misc$trajectories[[reduction]]
+                                        data@misc$trajectories[[reduction]]$dyno
                                     )
                                 } else { NULL },
                         alpha_cells=alpha
@@ -964,6 +986,107 @@ trajectory_plot <- function(                                # all feature relate
     )
 }
 
+trajectory_expression <- function(
+    data, rootname, reduction, features, plot_title,
+    assay="RNA",
+    slot="data",
+    alpha=0.5,
+    combine_guides=NULL,
+    theme="classic",
+    pdf=FALSE,
+    width=1200,
+    height=800,
+    resolution=100
+){
+    base::tryCatch(
+        expr = {
+            plots <- list()
+            counts_data <- base::as.matrix(
+                SeuratObject::GetAssayData(
+                    data,
+                    assay=assay,
+                    slot=slot
+                )
+            )
+            for (i in 1:length(features)){
+                current_feature <- features[i]
+                plots[[current_feature]] <- traviz::plotExpression(
+                    counts=counts_data,
+                    sds=data@misc$trajectories[[reduction]]$slingshot,
+                    gene=current_feature,
+                    alpha=alpha,
+                ) + ggplot2::ggtitle(current_feature)
+            }
+            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides) + patchwork::plot_annotation(title=plot_title)
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            base::suppressMessages(base::print(combined_plots))
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                base::suppressMessages(base::print(combined_plots))
+                grDevices::dev.off()
+            }
+
+            base::print(base::paste("Exporting expression along pseudotime plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export expression along pseudotime plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
+trajectory_hist <- function(
+    data, rootname, x_axis, group_by, split_by, x_label, y_label, legend_title, plot_title,
+    stack_direction="center", stack_ratio=0.25, method="histodot",
+    pt_size=0.5, alpha=0.85, palette_colors=D40_COLORS, theme="classic", pdf=FALSE,
+    width=1200, height=800, resolution=100
+){
+    base::tryCatch(
+        expr = {
+            plot <- ggplot2::ggplot(data, ggplot2::aes_string(x=x_axis, fill=group_by, color=group_by)) +
+                    ggplot2::geom_dotplot(
+                        alpha=alpha,
+                        method=method,
+                        stackdir=stack_direction,
+                        stackratio=stack_ratio,
+                        dotsize=pt_size,
+                        binpositions="all",
+                        position=ggplot2::position_jitter(height=0, seed=NULL)
+                    ) +
+                    ggplot2::xlab(x_label) +
+                    ggplot2::ylab(y_label) +
+                    ggplot2::guides(
+                        fill=ggplot2::guide_legend(legend_title),
+                        color=ggplot2::guide_legend(legend_title)
+                    ) +
+                    ggplot2::ggtitle(plot_title) +
+                    ggplot2::facet_wrap(stats::as.formula(base::paste("~", split_by))) +
+                    ggplot2::scale_fill_manual(values=palette_colors) +
+                    ggplot2::scale_color_manual(values=palette_colors) +
+                    get_theme(theme)
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            base::suppressMessages(base::print(plot))
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                base::suppressMessages(base::print(plot))
+                grDevices::dev.off()
+            }
+
+            base::print(base::paste("Exporting trajectory histogram to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export trajectory histogram to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
 trajectory_graph <- function(                               # all feature related parameters are skipped
     data, rootname, reduction, plot_title,
     legend_title=NULL,
@@ -979,11 +1102,11 @@ trajectory_graph <- function(                               # all feature relate
         expr = {
 
             plot <- dynplot::plot_graph(
-                        trajectory=data@misc$trajectories[[reduction]],
+                        trajectory=data@misc$trajectories[[reduction]]$dyno,
                         color_cells=color_cells,
                         grouping=if (color_cells == "grouping"){
                                      dynwrap::group_onto_nearest_milestones(
-                                         data@misc$trajectories[[reduction]]
+                                         data@misc$trajectories[[reduction]]$dyno
                                      )
                                  } else { NULL }
                     ) +
@@ -1037,11 +1160,11 @@ dendro_plot <- function(                                    # all feature relate
         expr = {
 
             plot <- dynplot::plot_dendro(
-                        trajectory=data@misc$trajectories[[reduction]],
+                        trajectory=data@misc$trajectories[[reduction]]$dyno,
                         color_cells=color_cells,
                         grouping=if (color_cells == "grouping"){
                                     dynwrap::group_onto_nearest_milestones(
-                                        data@misc$trajectories[[reduction]]
+                                        data@misc$trajectories[[reduction]]$dyno
                                     )
                                 } else { NULL },
                         alpha_cells=alpha
@@ -1092,7 +1215,7 @@ topology_plot <- function(                                    # all feature rela
         expr = {
 
             plot <- dynplot::plot_topology(
-                        trajectory=data@misc$trajectories[[reduction]]
+                        trajectory=data@misc$trajectories[[reduction]]$dyno
                     ) +
                     ggplot2::ggtitle(plot_title) +
                     get_theme(theme)
@@ -1129,9 +1252,9 @@ trajectory_heatmap <- function(                                    # changing th
 ){
     base::tryCatch(
         expr = {
-            sorted_milestone_ids <- base::sort(data@misc$trajectories[[reduction]]$milestone_ids)
+            sorted_milestone_ids <- base::sort(data@misc$trajectories[[reduction]]$dyno$milestone_ids)
             plot <- dynplot::plot_heatmap(
-                        trajectory=data@misc$trajectories[[reduction]],
+                        trajectory=data@misc$trajectories[[reduction]]$dyno,
                         expression_source=base::t(
                             base::as.matrix(
                                 SeuratObject::GetAssayData(data, assay=assay, slot=slot)
@@ -1139,7 +1262,7 @@ trajectory_heatmap <- function(                                    # changing th
                         ),
                         features_oi=features,
                         grouping=dynwrap::group_onto_nearest_milestones(
-                            data@misc$trajectories[[reduction]]
+                            data@misc$trajectories[[reduction]]$dyno
                         ),
                         groups=data.frame(
                             group_id=sorted_milestone_ids,

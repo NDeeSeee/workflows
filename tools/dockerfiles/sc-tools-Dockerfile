@@ -2,21 +2,32 @@
 # Dockerfile
 #
 # Software:         set of R scripts for single-cell data analysis
-# Software Version: v0.0.29
+# Software Version: v0.0.30
 # Description:      Dockerized version of the set of R scripts for
 #                   single-cell data analysis
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         set of R scripts for single-cell data analysis
-# Base Image:       satijalab/seurat:4.1.0
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.29 -f sc-tools-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.29
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.29 /bin/bash
+# Base Image:       satijalab/seurat:latest
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.30 -f sc-tools-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.30
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.30 /bin/bash
 ##########################################################################################################
 #
 # Notes:
 # - if you have problems compiling Harmony
 #   https://github.com/immunogenomics/harmony/pull/165
 # - fix bug in cell cycle genes removal
+#
+# v0.0.30
+# - Updated base image to the latest (has the same
+#   Seurat 4.3.0 as satijalab/seurat:4.3.0).
+#   Otherwise can't install cmapR (its Cytolib dependency)
+#   as in the satijalab/seurat:4.3.0 R version is too old.
+# - Updated RNA trajectory script
+#   * show gene expression along the pseudotime
+#   * show pseudotime histogram colored by cluster
+# - Need to install Matrix.utils from GitHub
+#   because it was removed from the R repository
 #
 # v0.0.29
 # - Updated gene markers heatmap
@@ -183,7 +194,7 @@
 
 
 ### Base Image
-FROM --platform=linux/amd64 satijalab/seurat:4.1.0
+FROM --platform=linux/amd64 satijalab/seurat:latest
 LABEL maintainer="misha.kotliar@gmail.com"
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -252,12 +263,13 @@ RUN apt-get update && \
     R -e 'install.packages("argparse", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("tidyverse", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("modules", repo = "https://cloud.r-project.org/")' && \
+    R -e 'devtools::install_github("cvarrichio/Matrix.utils", upgrade = "never")' && \
     R -e "BiocManager::install(c('BiocGenerics', 'DelayedArray', 'DelayedMatrixStats','limma', \
                                  'S4Vectors', 'SingleCellExperiment', 'SummarizedExperiment', \
-                                 'batchelor', 'Matrix.utils', 'DESeq2', 'Rsamtools', 'rtracklayer', \
+                                 'batchelor', 'DESeq2', 'Rsamtools', 'rtracklayer', \
                                  'glmGamPoi', 'Nebulosa', 'limma', 'EnhancedVolcano', 'LoomExperiment', \
                                  'hopach', 'Glimma', 'dittoSeq', 'cmapR', 'ComplexHeatmap', 'scDblFinder', \
-                                 'slingshot'))" && \
+                                 'slingshot', 'traviz'))" && \
     R -e 'install.packages("fastmatch")' && \
     R -e 'install.packages("RcppRoll")' && \
     R -e 'install.packages("Signac", repo = "https://cloud.r-project.org/", dependencies = FALSE)' && \

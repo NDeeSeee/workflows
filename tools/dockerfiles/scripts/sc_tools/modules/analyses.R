@@ -771,23 +771,26 @@ add_trajectory <- function(seurat_data, args){
     base::print("Trajectory progression")
     base::print(utils::head(progressions))
 
-    seurat_data@misc$trajectories[[args$reduction]] <- dynwrap::wrap_data(
-                                                           cell_ids=base::rownames(embeddings_mat)
-                                                       ) %>%
-                                                       dynwrap::add_trajectory(
-                                                           milestone_network=cluster_network,
-                                                           progressions=progressions,
-                                                           lineages_data=lineages_data             # just in case, maybe we don't need it at all
-                                                       ) %>%
-                                                       dynwrap::add_dimred(
-                                                           dimred=embeddings_mat
-                                                       ) %>%
-                                                       dynwrap::add_root(
-                                                           root_milestone_id=args$start            # if NULL the root will be defined automatically
-                                                       ) %>%
-                                                       dynwrap::add_pseudotime()                   # need to be run after root is added
+    seurat_data@misc$trajectories[[args$reduction]] <- list(
+        slingshot=slingshot_data,                                    # we will need it for gene expression over time plots
+        dyno=dynwrap::wrap_data(
+                 cell_ids=base::rownames(embeddings_mat)
+             ) %>%
+             dynwrap::add_trajectory(
+                 milestone_network=cluster_network,
+                 progressions=progressions,
+                 lineages_data=lineages_data                         # just in case, maybe we don't need it at all
+             ) %>%
+             dynwrap::add_dimred(
+                 dimred=embeddings_mat
+             ) %>%
+             dynwrap::add_root(
+                 root_milestone_id=args$start                        # if NULL the root will be defined automatically
+             ) %>%
+             dynwrap::add_pseudotime()                               # need to be run after root is added
+    )
 
-    seurat_data@meta.data[[paste0("ptime_", args$reduction)]] <- seurat_data@misc$trajectories[[args$reduction]]$pseudotime
+    seurat_data@meta.data[[paste0("ptime_", args$reduction)]] <- seurat_data@misc$trajectories[[args$reduction]]$dyno$pseudotime
 
     base::rm(embeddings_mat, slingshot_data, progressions)
     base::gc(verbose=FALSE)
