@@ -263,6 +263,7 @@ RUN apt-get update && \
     R -e 'install.packages("argparse", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("tidyverse", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("modules", repo = "https://cloud.r-project.org/")' && \
+    R -e 'install.packages("hexbin", repo = "https://cloud.r-project.org/")' && \
     R -e 'devtools::install_github("cvarrichio/Matrix.utils", upgrade = "never")' && \
     R -e "BiocManager::install(c('BiocGenerics', 'DelayedArray', 'DelayedMatrixStats','limma', \
                                  'S4Vectors', 'SingleCellExperiment', 'SummarizedExperiment', \
