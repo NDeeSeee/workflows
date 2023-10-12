@@ -362,11 +362,11 @@ export_consensus_peak_venn_diagram <- function(dba_data, rootname, width=800, he
         expr = {
 
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=res)
-            dba.plotVenn(dba_data, dba_data$masks$Consensus)
+            dba.plotVenn(dba_data, mask=dba_data$masks$Consensus)
             dev.off()
 
             pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/res), height=round(height/res))
-            dba.plotVenn(dba_data, dba_data$masks$Consensus)
+            dba.plotVenn(dba_data, mask=dba_data$masks$Consensus)
             dev.off()
 
             cat(paste("\nExport consensus peak venn diagram to ", rootname, ".(png/pdf)", sep=""))
@@ -414,13 +414,19 @@ get_args <- function(){
 
     parser$add_argument("-c1", "--condition1",   help='Condition 1 name, single word with letters and numbers only. Default: condition_1', type="character", default="condition_1")
     parser$add_argument("-c2", "--condition2",   help='Condition 2 name, single word with letters and numbers only. Default: condition_2', type="character", default="condition_2")
-    parser$add_argument("-fs", "--fragmentsize", help='Extend each read from its endpoint along the appropriate strand. Default: 125bp', type="integer", default=125)
-    parser$add_argument("-rd", "--removedup",    help='Remove reads that map to exactly the same genomic position. Default: false', action='store_true')
     parser$add_argument("-me", "--method",       help='Method by which to analyze differential binding affinity. Default: all', type="character", choices=c("edger","deseq2","all"), default="all")
     parser$add_argument("-mo", "--minoverlap",   help='Min peakset overlap. Only include peaks in at least this many peaksets when generating consensus peakset. Default: 2', type="integer", default=2)
     parser$add_argument("-uc", "--usecommon",    help='Derive consensus peaks only from the common peaks within each condition. Min peakset overlap and min read counts are ignored. Default: false', action='store_true')
-    parser$add_argument("-mc", "--mincounts",    help='Min read counts. Exclude all merged intervals where the MAX raw read counts among all of the samples is smaller than the specified value. Default: 0', type="integer", default=0)
-
+    parser$add_argument(
+        "--summits",
+        help=paste(
+            "Width in bp to extend peaks around their summits in both directions",
+            "and replace the original ones. Set it to 100 bp for ATAC-Seq and 200",
+            "bp for ChIP-Seq datasets. To skip peaks extension and replacement, set",
+            "it to negative value. Default: 200 bp (results in 401 bp wide peaks)"
+        ),
+        type="integer", default=200
+    )
     parser$add_argument("-cu", "--cutoff",       help='Cutoff for reported results. Applied to the parameter set with -cp. Default: 0.05', type="double",    default=0.05)
     parser$add_argument("-cp", "--cparam",       help='Parameter to which cutoff should be applied (fdr or pvalue). Default: fdr',         type="character", choices=c("pvalue","fdr"), default="fdr")
 
@@ -452,8 +458,8 @@ cat("\nLoaded data\n - chrM removed\n - intersected peaks merged\n\n")
 print(diff_dba)
 
 
-mask_cond_1 <- dba.mask(diff_dba, DBA_CONDITION, args$condition1)
-mask_cond_2 <- dba.mask(diff_dba, DBA_CONDITION, args$condition2)
+mask_cond_1 <- dba.mask(diff_dba, attribute=DBA_CONDITION, value=args$condition1)
+mask_cond_2 <- dba.mask(diff_dba, attribute=DBA_CONDITION, value=args$condition2)
 mask_cond_both <- as.logical(mask_cond_1 + mask_cond_2)
 
 if (args$usecommon){
@@ -472,11 +478,11 @@ if (args$usecommon){
 # Get peak overlap rates, export plots
 cat("\n")
 cat(paste("\nPeak overlap rate for", args$condition1, "\n", sep=" "))
-peak_overlap_rate_cond_1 = dba.overlap(diff_dba, mask_cond_1, mode=DBA_OLAP_RATE)
+peak_overlap_rate_cond_1 = dba.overlap(diff_dba, mask=mask_cond_1, mode=DBA_OLAP_RATE)
 print(peak_overlap_rate_cond_1)
 
 cat(paste("\nPeak overlap rate for", args$condition2, "\n", sep=" "))
-peak_overlap_rate_cond_2 = dba.overlap(diff_dba, mask_cond_2, mode=DBA_OLAP_RATE)
+peak_overlap_rate_cond_2 = dba.overlap(diff_dba, mask=mask_cond_2, mode=DBA_OLAP_RATE)
 print(peak_overlap_rate_cond_2)
 
 export_peak_overlap_rate_plot(peak_overlap_rate_cond_1, paste(args$output, "_condition_1_peak_overlap_rate", sep=""))
@@ -498,13 +504,18 @@ export_peak_overlap_correlation_heatmap(diff_dba, paste(args$output, "_peak_over
 cat(paste("\n\nCount reads using", diff_dba$config$cores, "threads. Min peakset overlap is set to", args$minoverlap, "\n", sep=" "))
 
 if (args$usecommon){
-    diff_dba <- dba.count(diff_dba, peaks=consensus_peaks, fragmentSize=args$fragmentsize, bRemoveDuplicates=args$removedup, minOverlap=args$minoverlap)
+    diff_dba <- dba.count(
+        diff_dba,
+        peaks=consensus_peaks,
+        summits=ifelse(args$summits >= 0, args$summits, FALSE),
+        minOverlap=args$minoverlap
+    )
 } else {
-    if (args$mincounts > 0){
-        cat(paste("\n\nExclude all merged intervals where the MAX of raw read counts is smaller than", args$mincounts, "\n", sep=" "))
-        args$mincounts <- args$mincounts + 1  # looks like I need to do it because of a bug in diffbind
-    }
-    diff_dba <- dba.count(diff_dba, fragmentSize=args$fragmentsize, bRemoveDuplicates=args$removedup, minOverlap=args$minoverlap, filter=args$mincounts, score=DBA_SCORE_READS)
+    diff_dba <- dba.count(
+        diff_dba,
+        summits=ifelse(args$summits >= 0, args$summits, FALSE),
+        minOverlap=args$minoverlap
+    )
 }
 
 cat("\nCounted data\n\n")
@@ -527,12 +538,12 @@ diff_dba$contrasts <- NULL
 cat(paste("\n\nEstablish contrast [", paste(metadata[metadata["Condition"]==args$condition1, "ID"], collapse=", "), "] vs [", paste(metadata[metadata["Condition"]==args$condition2, "ID"], collapse=", "), "]", "\n\n", sep=""))
 if (is.vector(args$block)){
     cat(paste("Blocked attributes [", paste(metadata[args$block, "ID"], collapse=", "), "]", "\n\n", sep=""))
-    diff_dba <- dba.contrast(diff_dba, mask_cond_1, mask_cond_2, args$condition1, args$condition2, block=args$block)
+    diff_dba <- dba.contrast(diff_dba, group1=mask_cond_1, group2=mask_cond_2, name1=args$condition1, name2=args$condition2, block=args$block)
 } else {
     cat("Blocked attributes\n")
     print(args$block)
     cat("\n")
-    diff_dba <- dba.contrast(diff_dba, mask_cond_1, mask_cond_2, args$condition1, args$condition2, block=DBA_TISSUE)
+    diff_dba <- dba.contrast(diff_dba, group1=mask_cond_1, group2=mask_cond_2, name1=args$condition1, name2=args$condition2, block=DBA_TISSUE)
 }
 
 

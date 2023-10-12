@@ -23,8 +23,8 @@ suppressMessages(library(EnhancedVolcano))
 theme_set(theme_classic())                       # set classic theme for all ggplot generated graphics
 
 
-D40_COLORS <- c("#FB1C0D", "#0DE400", "#0D00FF", "#E8B4BD", "#FD00EA", "#0DD1FE", "#FF9B0D", "#0D601C", "#C50D69", "#CACA16", "#722A91", "#00DEBF", "#863B00", "#5D7C91", "#FD84D8", "#C100FB", "#8499FC", "#FD6658", "#83D87A", "#968549", "#DEB6FB", "#832E60", "#A8CAB0", "#FE8F95", "#FE1CBB", "#DF7CF8", "#FF0078", "#F9B781", "#4D493B", "#1C5198", "#7C32CE", "#EFBC16", "#7CD2DE", "#B30DA7", "#9FC0F6", "#7A940D", "#9B0000", "#946D9B", "#C8C2D9", "#94605A")
-ALL_CRITERIA <- c("Tissue", "Factor", "Condition", "Treatment", "Caller", "Replicate")
+D40_COLORS <- c("#FF6E6A", "#71E869", "#6574FF", "#F3A6B5", "#FF5AD6", "#6DDCFE", "#FFBB70", "#43A14E", "#D71C7C", "#E1E333", "#8139A8", "#00D8B6", "#B55C00", "#7FA4B6", "#FFA4E3", "#B300FF", "#9BC4FD", "#FF7E6A", "#9DE98D", "#BFA178", "#E7C2FD", "#8B437D", "#ADCDC0", "#FE9FA4", "#FF53D1", "#D993F9", "#FF47A1", "#FFC171", "#625C51", "#4288C9", "#9767D4", "#F2D61D", "#8EE6FD", "#B940B1", "#B2D5F8", "#9AB317", "#C70000", "#AC8BAC", "#D7D1E4", "#9D8D87")
+ALL_CRITERIA <- c("Tissue", "Factor", "Condition", "Treatment", "Replicate")
 
 
 get_file_type <- function (filename){
@@ -229,9 +229,9 @@ export_data <- function(data, location, row_names=FALSE, col_names=TRUE, quote=F
 export_overlap_plot <- function(data, rootname, plot_title, plot_subtitle, highlight=NULL, pdf=FALSE, width=600, height=600, resolution=100){
     tryCatch(
         expr = {
-            colors <- rep("steelblue3", length(data))
+            colors <- rep("darkseagreen", length(data))
             if(!is.null(highlight) && highlight > 0 && highlight <= length(data)){
-                colors[highlight] <- "steelblue4"
+                colors[highlight] <- "darkseagreen4"
             }
             peaksets <- factor(
                 as.character(1:length(data)),                   # need to have it as character, otherwise some labels will be skipped,
@@ -292,24 +292,25 @@ export_overlap_plot <- function(data, rootname, plot_title, plot_subtitle, highl
 }
 
 
-export_corr_heatmap <- function(data, rootname, plot_title, score=NULL, padj=1, colors="Blues", pdf=FALSE, width=800, height=800, resolution=100){
+export_corr_heatmap <- function(data, rootname, plot_title, score=NULL, padj=1, colors="Greens", pdf=FALSE, margin=20, width=800, height=800, resolution=100){
     tryCatch(
         expr = {
 
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             if (!is.null(score)){
-                dba.plotHeatmap(dba_data, correlations=TRUE, th=padj, score=score, main=plot_title, colScheme=colors)
+                dba.plotHeatmap(dba_data, correlations=TRUE, th=padj, score=score, main=plot_title, colScheme=colors, margin=margin, density.info="none")
             } else {
-                dba.plotHeatmap(dba_data, correlations=TRUE, th=padj, main=plot_title, colScheme=colors)
+                print("Correlation values")
+                print(dba.plotHeatmap(dba_data, correlations=TRUE, breaks=seq(0, 1, length.out=257), th=padj, main=plot_title, colScheme=colors, margin=margin, density.info="none"))
             }
             dev.off()
 
             if (!is.null(pdf) && pdf) {
                 pdf(file=paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
                 if (!is.null(score)){
-                    dba.plotHeatmap(dba_data, correlations=TRUE, th=padj, score=score, main=plot_title, colScheme=colors)
+                    dba.plotHeatmap(dba_data, correlations=TRUE, th=padj, score=score, main=plot_title, colScheme=colors, margin=margin, density.info="none")
                 } else {
-                    dba.plotHeatmap(dba_data, correlations=TRUE, th=padj, main=plot_title, colScheme=colors)
+                    dba.plotHeatmap(dba_data, correlations=TRUE, breaks=seq(0, 1, length.out=257), th=padj, main=plot_title, colScheme=colors, margin=margin, density.info="none")
                 }
                 dev.off()
             }
@@ -665,6 +666,7 @@ assert_args <- function(args){
         "lib"  = DBA_NORM_LIB
     )
 
+    print("Converting the --score parameter to -log10 form")
     args$score <- -log10(args$score)             # need to convert it to -log10, as both pvalue and qvalue are -log10
 
     all_design_vars <- unique(all.vars(as.formula(args$design)))
@@ -689,7 +691,6 @@ assert_args <- function(args){
                     "Factor"     = DBA_FACTOR,
                     "Condition"  = DBA_CONDITION,
                     "Treatment"  = DBA_TREATMENT,
-                    "Caller"     = DBA_CALLER,
                     "Replicate"  = DBA_REPLICATE
                 )
             )
@@ -734,20 +735,19 @@ get_args <- function(){
             "TSV/CSV metadata file to describe datasets provided in --alignments",
             "and --peaks parameters. First column should have the name 'sample',",
             "all other columns names should be selected from the following list:",
-            "Tissue, Factor, Condition, Treatment, Caller, Replicate. The values",
-            "from the 'sample' column should correspond to the values provided in",
-            "--aliases parameter. For a proper --contrast intepretation, values",
-            "defined in each metadata column should not be used in any of the other",
-            "columns. All metadata columns are treated as factors (no covariates",
-            "are supported)."
+            "Tissue, Factor, Condition, Treatment, Replicate. The values from the",
+            "'sample' column should correspond to the values provided in --aliases",
+            "parameter. For a proper --contrast intepretation, values defined in",
+            "each metadata column should not be used in any of the other columns.",
+            "All metadata columns are treated as factors (no covariates are supported)."
         ),
         type="character", required="True"
     )
     parser$add_argument(
         "--scoreby",
         help=paste(
-            "Score metrics to build peak overlap correlation heatmap and exclude low",
-            "quality peaks based on the threshold provided in --score parameter.",
+            "Score metrics to exclude low quality peaks based on the",
+            "threshold provided in the --score parameter.",
             "Default: pvalue"                                                              # https://support.bioconductor.org/p/66628/
         ),
         type="character",
@@ -770,6 +770,16 @@ get_args <- function(){
             "all datasets is bigger than or equal to the provided value. Default: 1"       # but we don't have any controls so it's the same as DBA_SCORE_RPKM 
         ),
         type="double", default=1
+    )
+    parser$add_argument(
+        "--summits",
+        help=paste(
+            "Width in bp to extend peaks around their summits in both directions",
+            "and replace the original ones. Set it to 100 bp for ATAC-Seq and 200",
+            "bp for ChIP-Seq datasets. To skip peaks extension and replacement, set",
+            "it to negative value. Default: 200 bp (results in 401 bp wide peaks)"
+        ),
+        type="integer", default=200
     )
     parser$add_argument(
         "--minoverlap",
@@ -917,11 +927,11 @@ print(args)
 print(paste("Loading metadata from", args$metadata))
 metadata <- get_metadata(args)
 
-print("Constructing DBA object")
-# peaks will be filtered by --scoreby column to include only >= args$score values.
-# Then Score column will be somehow normalized
+# peaks will be filtered by --scoreby column to include only >= args$score values
+# We already transformed args$score to -log10, that's why we use >=
+# Scores column will be normalized from 0 to 1
 dba_default_params <- list(
-    minOverlap=args$minoverlap,
+    minOverlap=1,                               # we should set it to 1, otherwise minOverlap is getting applied even when we load data
     peakCaller="macs",                          # we don't set peakFormat and scoreCol as they will be derived from the peakCaller value
     peakFormat="macs",
     scoreCol=args$scoreby,                      # either 7 (-log10 pvalue) or 9 (-log10 qvalue)
@@ -944,19 +954,17 @@ dba_default_params <- list(
     )
 )
 
+print("Constructing DBA object. Forcing --minoverlap to 1")
 dba_data <- do.call(dba, append(dba_default_params, list(sampleSheet=metadata$dba)))
+print(
+    paste0(
+        "This DBA object includes merged with minOverlap=1 peaks ",
+        "preliminary filtered by ", args$scoreby, " column to ",
+        "contain only values >= ", args$score
+    )
+)
 print(dba_data)
 print(str(dba_data))
-
-if(is.null(args$groupby_codes) && nrow(dba_data$binding) == 0){           # we check it only when --groupby wasn't provided
-    print(                                                                # because we have another checks for --groupby and
-        paste(                                                            # we wan't to keep logic clean
-            "--minoverlap parameter it too high. Try to set it",
-            "to smaller value or use a fraction form."
-        )
-    )
-    quit(save = "no", status = 1, runLast = FALSE)
-}
 
 sample_groups <- c(paste(metadata$dba$SampleID, collapse="@"))
 if(!is.null(args$groupby_names)){
@@ -970,8 +978,16 @@ if(!is.null(args$groupby_names)){
                          pull(sample)
     )
 }
+print("Sample groups for peakset overlap rate plots")
+print(sample_groups)
 for (i in 1:length(sample_groups)){
     current_samples <- unlist(strsplit(sample_groups[i], "@"))
+    print(
+        paste(
+            "Processing", paste(current_samples, collapse=", "),
+            "group of samples"
+        )
+    )
     current_mask = c()
     for (j in 1:length(current_samples)) {
         current_mask <- append(
@@ -992,15 +1008,15 @@ for (i in 1:length(sample_groups)){
 # -log10(qvalue) columns from the loaded peak files. All peaks
 # are added to the same list where the overlapping or adjacent
 # peaks are merged. If several peaks from the specific peakset
-# overlap onme merged peak, the best score is taken. If a certain
-# peakset doesn't inclide a peak that overlaps with the merged
-# peak, negative score is assigned.
+# overlap the same merged peak, the best score is taken. If a
+# certain peakset doesn't include a peak that overlaps with the
+# merged peak, negative score is assigned.
 
 export_corr_heatmap(                              # how it is calculated https://support.bioconductor.org/p/63034/
     data=dba_data,
-    plot_title="Datasets correlation (peak score)",
+    plot_title="Datasets correlation (all peaks)",
     rootname=paste(
-        args$output, "pk_scr_corr", sep="_"
+        args$output, "all_pk_scr_corr", sep="_"
     ),
     pdf=args$pdf
 )
@@ -1008,16 +1024,20 @@ export_corr_heatmap(                              # how it is calculated https:/
 print("Counting reads in peaks")
 dba_count_default_params <- list(
     DBA=dba_data,
-    bRemoveDuplicates=FALSE,                      # set to FALSE because with bUseSummarizeOverlaps duplicates should be removed in advance
-    bUseSummarizeOverlaps=TRUE,                   # this is a default value but we set it here explicitely, fragmentSize will be ignored
-    summits=200,                                  # default value, will make all consensus peaks have the same size 2*summits+s1
-    filter=args$minrpkm,                          # keep only those peaks where max RPKM for all datasets is bigger or equal to this value
+    bRemoveDuplicates=FALSE,                                  # set to FALSE because with bUseSummarizeOverlaps duplicates should be removed in advance
+    bUseSummarizeOverlaps=TRUE,                               # this is a default value but we set it here explicitely, fragmentSize will be ignored
+    summits=ifelse(args$summits >= 0, args$summits, FALSE),   # will make all consensus peaks have the same size 2*summits+1
+    filter=args$minrpkm,                                      # keep only those peaks where max RPKM for all datasets is bigger or equal to this value
     bParallel=TRUE
 )
 
 if(!is.null(args$groupby_codes)){
-    print("Searching for the consensus peaks based on the user provided grouping")
-
+    print(
+        paste(
+            "Searching for the consensus peaks with minimum peakset overlap",
+            args$minoverlap, "applied to each dataset group separately"
+        )
+    )
     dba_peakset_default_params <- list(
         peak.caller="macs",
         peak.format="macs",
@@ -1026,7 +1046,6 @@ if(!is.null(args$groupby_codes)){
         filter=args$score,
         DataType=DBA_DATA_FRAME
     )
-
     dba_data_temp <- do.call(
         dba.peakset,
         append(
@@ -1038,6 +1057,7 @@ if(!is.null(args$groupby_codes)){
             )
         )
     )
+    print("Temporary DBA object to obtain consensus peaks")
     print(dba_data_temp)
     print(str(dba_data_temp))
 
@@ -1063,6 +1083,7 @@ if(!is.null(args$groupby_codes)){
             )
         )
     )
+    print("Temporary DBA object made of only consensus peaks")
     print(dba_data_temp)
     print(str(dba_data_temp))
 
@@ -1094,18 +1115,54 @@ if(!is.null(args$groupby_codes)){
             )
         )
     )
+    export_corr_heatmap(                                                  # how it is calculated https://support.bioconductor.org/p/63034/
+        data=dba_data,
+        plot_title=paste0(
+            "Datasets correlation (",
+            ifelse(args$summits >= 0, paste0(args$summits, "bp rec. "), ""),
+            "cons. peaks)"
+        ),
+        rootname=paste(
+            args$output, "cns_pk_scr_corr", sep="_"
+        ),
+        pdf=args$pdf
+    )
 } else {
-    print("Searching for the consensus peaks based on the minimum peakset overlap")
+    print(
+        paste(
+            "Searching for the consensus peaks with minimum peakset overlap",
+            args$minoverlap, "applied to all datasets jointly"
+        )
+    )
     dba_data <- do.call(
         dba.count,
         append(
             dba_count_default_params,
             list(
-                minOverlap=args$minoverlap        # to use user-provided value
+                minOverlap=args$minoverlap                                # to force using user-provided value
             )
         )
     )
+    export_corr_heatmap(                                                  # how it is calculated https://support.bioconductor.org/p/63034/
+        data=dba_data,
+        plot_title=paste0(
+            "Datasets correlation (",
+            ifelse(args$summits >= 0, paste0(args$summits, "bp rec. "), ""),
+            "cons. peaks)"
+        ),
+        rootname=paste(
+            args$output, "cns_pk_scr_corr", sep="_"
+        ),
+        pdf=args$pdf
+    )
 }
+print(
+    paste0(
+        "This DBA object includes peaks with ",
+        "minOverlap=", args$minoverlap,
+        " applied either to all or grouped datasets"
+    )
+)
 print(dba_data)
 print(str(dba_data))
 
@@ -1134,6 +1191,7 @@ dba_data <- dba.contrast(                                # we need it only to ma
     design=args$design,
     reorderMeta=correct_base_levels
 )
+print("This is DBA object with reordered metadata levels")
 print(dba_data)
 print(str(dba_data))
 
@@ -1169,6 +1227,7 @@ dba_data <- dba.contrast(
     design=args$design,                           # just in case set it here as well
     contrast=selected_contrast
 )
+print("This is DBA object after we added contrast")
 print(dba_data)
 print(str(dba_data))
 
@@ -1178,13 +1237,14 @@ dba_data <- dba.normalize(                        # this doesn't know anything a
     method=args$method,
     normalize=args$norm
 )
+print("This is DBA object after we normalized counts")
 print(dba_data)
 print(str(dba_data))
 
 export_corr_heatmap(
     data=dba_data,
     score=DBA_SCORE_NORMALIZED,
-    plot_title="Datasets correlation (normalized reads)",
+    plot_title="Datasets correlation (norm. reads)",
     rootname=paste(
         args$output, "nr_rds_corr", sep="_"
     ),
@@ -1198,6 +1258,7 @@ dba_data <- dba.analyze(
     bParallel=TRUE,
     bReduceObjects=FALSE                             # we want to have a complete DESeq2 or edgeR object
 )
+print("This is DBA object after we performed differential analysis")
 print(dba_data)
 print(str(dba_data))
 

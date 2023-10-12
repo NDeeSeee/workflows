@@ -1,13 +1,24 @@
 #################################################################
-# Software Version: v0.0.15
+# Software Version: v0.0.16
 # Description:      Differential Binding Analysis
 # Website:          http://www.bioconductor.org/packages/release/bioc/html/DiffBind.html
 # Provides:         diffbind
-# Base Image:       r-base:4.2.2
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/diffbind:v0.0.15 -f diffbind-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/diffbind:v0.0.15
-# Run Cmd:          docker run --rm -ti biowardrobe2/diffbind:v0.0.15 /bin/bash
+# Base Image:       r-base:4.3.1
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/diffbind:v0.0.16 -f diffbind-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/diffbind:v0.0.16
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/diffbind:v0.0.16 /bin/bash
 #################################################################
+#
+# v0.0.16
+# - Fixed bug in run_diffbind_manual.R
+#   caused by applying --minoverlap even when we load
+#   the data
+# - added separate Datasets correlation plots for all
+#   and consensus peaks
+# - Updated base image to from 4.2.2 to 4.3.1
+# - removed unused parameters in run_diffbind.R
+# - made run_diffbind.R work again (wasn't properly
+#   updated to work with the latest DiffBind > 3)
 #
 # v0.0.15
 # - Updated run_diffbind_manual.R to build better plots
@@ -76,7 +87,7 @@
 
 
 ### Base Image
-FROM r-base:4.2.2
+FROM r-base:4.3.1
 LABEL maintainer="misha.kotliar@gmail.com"
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -91,11 +102,11 @@ COPY ./scripts/run_diffbind_manual.R /usr/local/bin/run_diffbind_manual.R
 RUN apt-get update && \
     apt-get install -y vim pandoc gcc-10-base libgcc-10-dev cmake python3-dev python3-pip libxml2-dev \
                        libssl-dev libcurl4-openssl-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev \
-                       libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev file && \
+                       libpng-dev libtiff5-dev libjpeg-dev file && \
     pip3 install --break-system-packages argparse && \
 ### Installing R packages
     R -e "install.packages('BiocManager')" && \
-    R -e "BiocManager::install(version = '3.16', update=TRUE, ask=FALSE)" && \
+    R -e "BiocManager::install(version = '3.17', update=TRUE, ask=FALSE)" && \
     R -e "BiocManager::install('DiffBind')" && \
     R -e "BiocManager::install('hopach')" && \
     R -e "BiocManager::install('cmapR')" && \
