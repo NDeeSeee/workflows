@@ -1,14 +1,18 @@
 ###################################################################################################
 # Software:         DESeq2
-# Software Version: v0.0.5
+# Software Version: v0.0.6
 # Description:      DESeq2
 # Website:          https://bioconductor.org/packages/release/bioc/html/DESeq2.html
 # Provides:         DESeq2
 # Base Image:       r-base:4.3.1
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/deseq:v0.0.5 -f deseq-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/deseq:v0.0.5
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/deseq:v0.0.5 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/deseq:v0.0.6 -f deseq-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/deseq:v0.0.6
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/deseq:v0.0.6 /bin/bash
 ###################################################################################################
+#
+# v0.0.6
+# - Add multiple tests for DESEq MFA in
+#   case contrast wasn't explicitly set
 #
 # v0.0.5
 # - Update base image to 4.3.1
@@ -34,7 +38,7 @@
 ###################################################################################################
 
 ### Base Image
-FROM --platform=linux/amd64 r-base:4.3.0
+FROM --platform=linux/amd64 r-base:4.3.1
 LABEL maintainer="misha.kotliar@gmail.com"
 ENV DEBIAN_FRONTEND noninteractive
 

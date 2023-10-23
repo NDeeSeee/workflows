@@ -9,7 +9,7 @@ suppressMessages(library(limma))
 suppressMessages(library(DESeq2))
 suppressMessages(library(hopach))
 suppressMessages(library(sva))
-suppressMessages(library(Glimma))             # we replaced it with ComBat_seq
+suppressMessages(library(Glimma))
 suppressMessages(library(argparse))
 suppressMessages(library(tidyverse))
 suppressMessages(library(patchwork))
@@ -31,7 +31,7 @@ suppressMessages(library(SummarizedExperiment))
 COUNTS_COL <- "TotalReads"
 RPKM_COL <- "Rpkm"
 INTERSECT_BY <- c("RefseqId", "GeneId", "Chrom", "TxStart", "TxEnd", "Strand")
-
+D40_COLORS <- c("#FF6E6A", "#71E869", "#6574FF", "#F3A6B5", "#FF5AD6", "#6DDCFE", "#FFBB70", "#43A14E", "#D71C7C", "#E1E333", "#8139A8", "#00D8B6", "#B55C00", "#7FA4B6", "#FFA4E3", "#B300FF", "#9BC4FD", "#FF7E6A", "#9DE98D", "#BFA178", "#E7C2FD", "#8B437D", "#ADCDC0", "#FE9FA4", "#FF53D1", "#D993F9", "#FF47A1", "#FFC171", "#625C51", "#4288C9", "#9767D4", "#F2D61D", "#8EE6FD", "#B940B1", "#B2D5F8", "#9AB317", "#C70000", "#AC8BAC", "#D7D1E4", "#9D8D87")
 
 set_cpus <- function (cpus) {
     register(MulticoreParam(cpus))
@@ -63,7 +63,7 @@ export_volcano_plot <- function(data, rootname, x_axis, y_axis, x_cutoff, y_cuto
                         widthConnectors=0.2
                     ) +
                     scale_y_log10() +
-                    theme_gray() +
+                    theme_classic() +
                     theme(legend.position="none", plot.subtitle=element_text(size=8, face="italic", color="gray30"))
 
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
@@ -86,7 +86,7 @@ export_volcano_plot <- function(data, rootname, x_axis, y_axis, x_cutoff, y_cuto
 }
 
 
-export_pca_plot <- function(norm_counts_data, rootname, intgroup, plot_title, plot_subtitle, ntop=500, palette="Paired", alpha=0.5, pdf=FALSE, width=1200, height=800, resolution=100){
+export_pca_plot <- function(norm_counts_data, rootname, intgroup, plot_title, plot_subtitle, ntop=500, palette_colors=D40_COLORS, alpha=0.5, pdf=FALSE, width=1200, height=800, resolution=100){
     tryCatch(
         expr = {
             pca_data <- plotPCA(
@@ -108,8 +108,9 @@ export_pca_plot <- function(norm_counts_data, rootname, intgroup, plot_title, pl
                         check_overlap=TRUE,
                         show.legend=FALSE
                     ) +
-                    theme(plot.subtitle=element_text(size=8, face="italic", color="gray30"))
-                    scale_fill_brewer(palette=palette)
+                    theme_classic() +
+                    theme(plot.subtitle=element_text(size=8, face="italic", color="gray30")) +
+                    ggplot2::scale_color_manual(values=palette_colors)
 
             png(filename=paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             suppressMessages(print(plot))
@@ -151,10 +152,16 @@ export_mds_html_plot <- function(norm_counts_data, location){
 
 
 get_highlight_features <- function(diff_expr_features, args){
-    print(paste("Filtering DESeq results to include only features with padj <= ", args$padj))
-    filt_diff_expr_features <- diff_expr_features %>% filter(.$padj<=args$padj)
+    print(
+        paste(
+            "Filtering DESeq results to include only",
+            "features with padj <= ", args$padj,
+            "and |log2FoldChange| >= ", args$logfc
+        )
+    )
+    filt_diff_expr_features <- diff_expr_features %>%
+                               filter(.$padj<=args$padj, abs(.$log2FoldChange)>=args$logfc)
     filt_diff_expr_features <- filt_diff_expr_features %>% arrange(desc(log2FoldChange))
-
     print(paste("Number of significantly differentially expressed features:", nrow(filt_diff_expr_features)))
 
     topn_diff_expr_features <- filt_diff_expr_features %>% filter(row_number() > max(row_number()) - 10 | row_number() <= 10)
@@ -178,14 +185,19 @@ export_plots <- function(diff_expr_data, norm_counts_data, metadata, args){
         rootname=paste(args$output, "volcano_plot", sep="_"),
         x_axis="log2FoldChange",
         y_axis="padj",
-        x_cutoff=0,
+        x_cutoff=args$logfc,
         y_cutoff=args$padj,
         x_label="log2FoldChange",
         y_label="-log10 Padj",
         plot_title="Differentially expressed features",
         plot_subtitle=paste0(
             "Differentially expressed features with padj", "<=", args$padj,
-            ifelse(args$contrast, paste0(" for contrast ", args$contrast), "")
+            " and |log2FoldChange| >= ", args$logfc,
+            ifelse(
+                is.null(args$contrast),
+                " from multiple contrasts",
+                paste0(" from ", args$contrast, " contrast")
+            )
         ),
         caption=paste(nrow(diff_expr_data$res), "features"),
         features=highlight_features,
@@ -403,27 +415,43 @@ get_diff_expr_data <- function(expression_data, metadata, args){
                 "reduced formulas if it was used there"
             )
         )
-        args$design <- paste(
-            grep(
-                args$remove,
-                unlist(strsplit(args$design, "\\+")),
-                value=TRUE,
-                ignore.case=TRUE,
-                invert=TRUE
-            ),
-            collapse="+"
-        )
-        print(paste("Updated design formula", args$design))
-        if (!is.null(args$reduced)){
-            args$reduced <- paste(
+        args$design <- paste0(
+            "~",
+            paste(
                 grep(
                     args$remove,
-                    unlist(strsplit(args$reduced, "\\+")),
+                    unlist(
+                        strsplit(
+                            gsub("~| ", "", args$design),
+                            "\\+"
+                        )
+                    ),
                     value=TRUE,
                     ignore.case=TRUE,
                     invert=TRUE
                 ),
                 collapse="+"
+            )
+        )
+        print(paste("Updated design formula", args$design))
+        if (!is.null(args$reduced)){
+            args$reduced <- paste0(
+                "~",
+                paste(
+                    grep(
+                        args$remove,
+                        unlist(
+                            strsplit(
+                                gsub("~| ", "", args$reduced),
+                                "\\+"
+                            )
+                        ),
+                        value=TRUE,
+                        ignore.case=TRUE,
+                        invert=TRUE
+                    ),
+                    collapse="+"
+                )
             )
             print(paste("Updated reduced formula", args$reduced))
         }
@@ -458,29 +486,131 @@ get_diff_expr_data <- function(expression_data, metadata, args){
     print("Estimated effects")
     print(resultsNames(deseq_data))
 
-    if (is.null(args$contrast)){                         # can't fake missing contrast parameter so need this if statement
-        print(paste(
-            "Contrast is not provided. The last term",
-            "from the design formula will be used."
-        ))
-        deseq_results <- results(
-            deseq_data,
-            parallel=TRUE,
-            BPPARAM=MulticoreParam(args$cpus)         # add it here as well just in case
+    if (is.null(args$contrast)){                                               # will have to create multiple contrasts
+        print(
+            paste0(
+                "Contrast is not set. Union of contrasts for all ",
+                "pairwise combinations of metadata values ",
+                "from the columns used in the design formula ",
+                paste(
+                    ifelse(
+                        !is.null(args$reduced),
+                        "(but not present in the reduced) ",
+                        ""
+                    )
+                ),
+                "will be used instead."
+            )
         )
+        all_contrasts <- c()                                                   # to keep all collected contrasts
+        all_design_vars <- unique(all.vars(as.formula(args$design)))
+        all_reduced_vars <- c()                                                # default value in case --reduced was not provided
+        if(!is.null(args$reduced)){
+            all_reduced_vars <- unique(all.vars(as.formula(args$reduced)))
+        }
+        for (i in 1:length(all_design_vars)) {
+            current_design_var <- all_design_vars[i]
+            if (current_design_var %in% all_reduced_vars){
+                print(
+                    paste(
+                        "Skipping contrasts made of", current_design_var,
+                        "because it's present in the --reduced formula"
+                    )
+                )
+                next
+            }
+            all_contrasts <- append(
+                                    all_contrasts,
+                                    lapply(
+                                        combn(
+                                            x=unique(
+                                                metadata[[current_design_var]]
+                                            ),
+                                            m=2,                                  # for contrast we always need 2
+                                            simplify=FALSE
+                                        ),
+                                        function(s){
+                                            v <- as.vector(sort(s))               # sorting by levels and convecting to vector
+                                            c(current_design_var, v[2], v[1])
+                                        }
+                                    )
+                                )
+        }
+        print("Collected contrasts")
+        print(all_contrasts)
+        if (length(all_contrasts) == 0){
+            print("Exiting: no contrasts collected")
+            quit(save = "no", status = 1, runLast = FALSE)
+        }
+        deseq_results <- list()
+        for (i in 1:length(all_contrasts)) {
+            current_contrast <- all_contrasts[[i]]
+            print(
+                paste(
+                    "Current contrast:", paste(current_contrast, collapse=" ")
+                )
+            )
+            current_deseq_results <- results(
+                                            deseq_data,
+                                            contrast=current_contrast,
+                                            parallel=TRUE,
+                                            BPPARAM=MulticoreParam(args$cpus)         # add it here as well just in case
+                                        )
+            print("Current results description")
+            print(mcols(current_deseq_results))
+            print(mcols(current_deseq_results)$description)
+            contrast_id <- tolower(
+                gsub(
+                    "'|\"|\\s|\\t|#|%|&|-", "_",
+                    paste(
+                        c(
+                            current_contrast[1],
+                            paste(current_contrast[2:3], collapse="_vs_")
+                        ),
+                        collapse="__"
+                    )
+                )
+            )
+            deseq_results[[contrast_id]] <- as.data.frame(current_deseq_results) %>%
+                                            rownames_to_column(var="feature")
+        }
+        deseq_results <- bind_rows(deseq_results, .id="contrast") %>%
+                            dplyr::mutate(
+                            "padj_th"=ifelse(                   # to be able to sort by logFC within significant padj
+                                            .$padj <= args$padj,
+                                            args$padj,
+                                            .$padj
+                                        )
+                            ) %>%
+                            dplyr::group_by(feature) %>%
+                            dplyr::arrange(
+                            padj_th,                            # sort primarily by |log2FoldChange| within significant padj
+                            desc(abs(log2FoldChange)),          # then, if padj is not signif. anymore, sort by padj and |log2FoldChange|
+                            .by_group=TRUE
+                            ) %>%
+                            dplyr::slice_head(n=1) %>%             # all NA should be at the bottom
+                            dplyr::ungroup() %>%
+                            dplyr::arrange(
+                            contrast, desc(log2FoldChange)
+                            ) %>%
+                            dplyr::select(-c("padj_th")) %>%       # drop temporary column
+                            relocate(contrast, .after=last_col())
+        print(head(deseq_results, n=25))
     } else {
         print("Using user-provided contrast.")
         deseq_results <- results(
-            deseq_data,
-            contrast=get_contrast(as.formula(args$design), deseq_data, metadata, args),
-            parallel=TRUE,
-            BPPARAM=MulticoreParam(args$cpus)         # add it here as well just in case
-        )
+                             deseq_data,
+                             contrast=get_contrast(as.formula(args$design), deseq_data, metadata, args),
+                             parallel=TRUE,
+                             BPPARAM=MulticoreParam(args$cpus)         # add it here as well just in case
+                         )
+        print("Results description")
+        print(mcols(deseq_results))
+        print(mcols(deseq_results)$description)
+        deseq_results <- as.data.frame(deseq_results) %>%
+                         rownames_to_column(var="feature") %>%
+                         dplyr::arrange(desc(log2FoldChange))
     }
-
-    print("Results description")
-    print(mcols(deseq_results))
-    print(head(deseq_results))
 
     print("Adding extra columns to the DESeq output")
     rpkm_columns <- grep(                                                    # for column ordering only
@@ -489,15 +619,26 @@ get_diff_expr_data <- function(expression_data, metadata, args){
         value=TRUE,
         ignore.case=TRUE
     )
-    deseq_results <- expression_data %>%
-                     bind_cols(as.data.frame(deseq_results)) %>%
-                     na.omit() %>%                                           # exclude all rows where NA is found in any column (comes from DESeq)
-                     rownames_to_column(var="feature") %>%                   # will make "feature" the first columns instead of GeneId or RefseqId depending on --type value
-                     relocate(any_of(rpkm_columns), .after=last_col()) %>%   # move all rpkm columns to the end
-                     relocate(any_of(counts_columns), .after=last_col())     # move all read counts columns to the end
-    print(paste("Number of differentially expressed features after excluding NA:", nrow(deseq_results)))
+
+    deseq_results <- expression_data[as.vector(as.character(deseq_results$feature)), ] %>%    # need to reorder rows in expression_data to correspond to the deseq_results
+                     bind_cols(deseq_results) %>%
+                     na.omit() %>%
+                     relocate(any_of(rpkm_columns), .after=last_col()) %>%                    # move all rpkm columns to the end
+                     relocate(any_of(counts_columns), .after=last_col())                      # move all read counts columns to the end
+    print(
+        paste(
+            "Number of differentially expressed features",
+            "after excluding NA:", nrow(deseq_results)
+        )
+    )
     print("DESeq2 results")
     print(head(deseq_results))
+
+    if (!base::identical(rownames(deseq_results), deseq_results$feature)){                    # safety measure
+        print("Exiting: genes order in the DESeq results is not correct")
+        quit(save = "no", status = 1, runLast = FALSE)
+    }
+
     return (list(
         res=deseq_results,
         raw=deseq_data
@@ -577,7 +718,7 @@ get_clustered_data <- function(expression_data, center, dist, transpose) {
             clusters$label,
             10^c((nchar(trunc(clusters$label))[1]-1):0),
             function(a, b) {
-                paste0("c", a %/% b %% 10)
+                paste0("c", a %/% b)
             }
         )
     )
@@ -673,8 +814,11 @@ get_args <- function(){
         help=paste(
             "Contrast to be be applied for the output, formatted as",
             "a mathematical formula of values from the --metadata table.",
-            "If not provided, the last term from the design formula will",
-            "be used."
+            "If not provided, all possible combinations of values from",
+            "the metadata columns present in the --design but not in the",
+            "--reduced formula will be used (results will be merged giving",
+            "the priority to significantly differentially expressed genes",
+            "with higher absolute log2FoldChange values)."
         ),
         type="character"
     )
@@ -784,6 +928,14 @@ get_args <- function(){
         type="double", default=0.05
     )
     parser$add_argument(
+        "--logfc",
+        help=paste(
+            "In the exploratory visualization analysis output only features with",
+            "absolute log2FoldChange bigger or equal to this value. Default: 0"
+        ),
+        type="double", default=0
+    )
+    parser$add_argument(
         "--pdf",
         help="Export plots in PDF. Default: false",
         action="store_true"
@@ -831,16 +983,20 @@ export_plots(diff_expr_data, norm_counts_data, metadata, args)
 print(
     paste(
         "Filtering normalized read counts matrix to include",
-        "only differentially expressed features with padj <= ", args$padj
+        "only differentially expressed features with padj <=", args$padj,
+        "and |log2FoldChange| >=", args$logfc
     )
 )
 
 row_metadata <- diff_expr_data$res %>%
                 remove_rownames() %>%
                 column_to_rownames("feature") %>%
-                dplyr::select(log2FoldChange, pvalue, padj)  %>%                 # we are interested only in these three columns
-                filter(.$padj<=args$padj) %>%
-                arrange(desc(log2FoldChange))
+                dplyr::select(
+                    any_of(
+                        c("log2FoldChange", "pvalue", "padj", "contrast")        # need any_of because "contrast" might not exist
+                    )
+                ) %>%
+                filter(.$padj<=args$padj, abs(.$log2FoldChange)>=args$logfc)
 
 col_metadata <- metadata %>%
                 mutate_at(colnames(.), as.vector)                                # need to convert to vector, because in our metadata everything was a factor
@@ -882,10 +1038,10 @@ if (!is.null(args$cluster)){
             value=TRUE,
             ignore.case=TRUE
         )
-        if (length(cluster_columns) > 0){                             # check length just in case
+        if (length(cluster_columns) > 0){                             # check the length just in case
             diff_expr_data$res <- merge(
                 diff_expr_data$res,
-                row_metadata[, cluster_columns] %>% rownames_to_column(var="feature"),
+                row_metadata[, cluster_columns, drop=FALSE] %>% rownames_to_column(var="feature"),    # need drop=FALSE in case only one HCL column present
                 by="feature",
                 all.x=TRUE,
                 sort=FALSE
