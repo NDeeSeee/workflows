@@ -151,6 +151,7 @@ get_clustered_data <- function(data, center, dist, transpose) {
     }
 
     print("Parsing cluster labels")
+    options(scipen=999)                                           # need to temporary disable scientific notation, because nchar gives wrong answer
     clusters = as.data.frame(hopach_results$clustering$labels)
     colnames(clusters) = "label"
     clusters = cbind(
@@ -159,11 +160,12 @@ get_clustered_data <- function(data, center, dist, transpose) {
             clusters$label,
             10^c((nchar(trunc(clusters$label))[1]-1):0),
             function(a, b) {
-                paste0("c", a %/% b %% 10)
+                paste0("c", a %/% b)
             }
         )
     )
     clusters = clusters[, c(-1), drop=FALSE]
+    options(scipen=0)                                            # setting back to the default value
 
     return (
         list(
