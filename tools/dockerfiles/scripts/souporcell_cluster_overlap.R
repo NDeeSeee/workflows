@@ -66,5 +66,5 @@ grDevices::png(
     height=400,
     res=100
 )
-print(upset(fromList(collected_list), order.by="freq"))
+print(upset(fromList(collected_list), order.by="freq", nsets=99))
 grDevices::dev.off()
