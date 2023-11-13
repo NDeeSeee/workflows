@@ -2,21 +2,31 @@
 # Dockerfile
 #
 # Software:         set of R scripts for single-cell data analysis
-# Software Version: v0.0.30
+# Software Version: v0.0.31
 # Description:      Dockerized version of the set of R scripts for
 #                   single-cell data analysis
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         set of R scripts for single-cell data analysis
 # Base Image:       satijalab/seurat:latest
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.30 -f sc-tools-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.30
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.30 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.31 -f sc-tools-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.31
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.31 /bin/bash
 ##########################################################################################################
 #
 # Notes:
 # - if you have problems compiling Harmony
 #   https://github.com/immunogenomics/harmony/pull/165
 # - fix bug in cell cycle genes removal
+#
+# v0.0.31
+# - Set identities to new.ident after filtering by barcodes
+#   (this will allow script not to fail when we overwritten
+#   new.ident columns with our custom metadata file)
+# - Minor correction of the HOPACH clustering labels
+# - Need to install specific version of Signac (1.11.0),
+#   because the latest one is already updated to work with
+#   Seurat 5, but the latest docker image for Seurat is not
+#   yet version 5.
 #
 # v0.0.30
 # - Updated base image to the latest (has the same
@@ -273,7 +283,7 @@ RUN apt-get update && \
                                  'slingshot', 'traviz'))" && \
     R -e 'install.packages("fastmatch")' && \
     R -e 'install.packages("RcppRoll")' && \
-    R -e 'install.packages("Signac", repo = "https://cloud.r-project.org/", dependencies = FALSE)' && \
+    R -e 'devtools::install_github("stuart-lab/signac@1.11.0", upgrade = "never")' && \
     R -e 'devtools::install_github("cellgeni/sceasy", upgrade = "never")' && \
     R -e 'devtools::install_github("KlugerLab/DAseq", upgrade = "never")' && \
     R -e 'devtools::install_github("aertslab/SCopeLoomR", upgrade = "never")' && \

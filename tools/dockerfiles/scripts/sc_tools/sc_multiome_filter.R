@@ -1008,13 +1008,12 @@ debug$print_info(seurat_data, args)
 idents_before_filtering <- sort(unique(as.vector(as.character(Idents(seurat_data)))))    # A->Z sorted identities
 if (!is.null(args$barcodes)){
     print("Applying cell filters based on the barcodes of interest")
-    seurat_data <- io$extend_metadata_by_barcode(seurat_data, args$barcodes, TRUE)
+    seurat_data <- io$extend_metadata_by_barcode(seurat_data, args$barcodes, TRUE)       # sets identities to new.ident
 }
 debug$print_info(seurat_data, args)
 idents_after_filtering <- sort(unique(as.vector(as.character(Idents(seurat_data)))))     # A->Z sorted identities
 
 print("Adjusting input parameters")
-idents_count <- length(unique(as.vector(as.character(Idents(seurat_data)))))
 for (key in names(args)){
     if (key %in% c("mingenes", "maxgenes", "minumis", "minnovelty", "minfragments", "maxnuclsignal", "mintssenrich", "minfrip", "maxblacklist")){
         if (length(args[[key]]) == 1){

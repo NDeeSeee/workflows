@@ -397,6 +397,7 @@ extend_metadata_by_barcode <- function(seurat_data, location, filter=FALSE){
             refactored_metadata[SeuratObject::Cells(seurat_data), , drop=FALSE]           # to guarantee the proper cells order
         )
     }
+    SeuratObject::Idents(seurat_data) <- "new.ident"                                      # in case we updated new.ident columns with the new values
     return (seurat_data)
 }
 

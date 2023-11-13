@@ -639,7 +639,7 @@ if (!is.null(args$metadata)){
 
 if (!is.null(args$barcodes)){
     print("Applying cell filters based on the barcodes of interest")
-    seurat_data <- io$extend_metadata_by_barcode(seurat_data, args$barcodes, TRUE)
+    seurat_data <- io$extend_metadata_by_barcode(seurat_data, args$barcodes, TRUE)         # sets identities to new.ident
     debug$print_info(seurat_data, args)
 }
 

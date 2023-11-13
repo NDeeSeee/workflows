@@ -1262,6 +1262,7 @@ get_clustered_data <- function(expression_data, center_row, dist, transpose) {
     }
 
     base::print("Parsing cluster labels")
+    options(scipen=999)                                                 # need to temporary disable scientific notation, because nchar gives wrong answer
     clusters = base::as.data.frame(hopach_results$clustering$labels)
     base::colnames(clusters) = "label"
     clusters = base::cbind(
@@ -1270,11 +1271,12 @@ get_clustered_data <- function(expression_data, center_row, dist, transpose) {
             clusters$label,
             10^c((base::nchar(trunc(clusters$label))[1]-1):0),
             function(a, b) {
-                base::paste0("c", a %/% b %% 10)
+                base::paste0("c", a %/% b)
             }
         )
     )
     clusters = clusters[, c(-1), drop=FALSE]
+    options(scipen=0)                                                   # setting back to the default value
     return (
         list(
             order=base::as.vector(hopach_results$clustering$order),

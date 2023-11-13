@@ -534,7 +534,7 @@ debug$print_info(seurat_data, args)
 idents_before_filtering <- sort(unique(as.vector(as.character(Idents(seurat_data)))))    # A->Z sorted identities
 if (!is.null(args$barcodes)){
     print("Applying cell filters based on the barcodes of interest")
-    seurat_data <- io$extend_metadata_by_barcode(seurat_data, args$barcodes, TRUE)
+    seurat_data <- io$extend_metadata_by_barcode(seurat_data, args$barcodes, TRUE)       # sets identities to new.ident
 }
 debug$print_info(seurat_data, args)
 idents_after_filtering <- sort(unique(as.vector(as.character(Idents(seurat_data)))))     # A->Z sorted identities
