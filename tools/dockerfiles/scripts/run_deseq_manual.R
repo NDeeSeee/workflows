@@ -346,23 +346,39 @@ assert_args <- function(args){
 }
 
 
-get_contrast <- function(design_formula, deseq_data, metadata, args){
+get_contrast <- function(design_formula, deseq_data, metadata, contrast_formula, selected_samples=NULL){
     model <- model.matrix(design_formula, metadata)
     print("Model matrix")
     print(model)
-    for (i in 1:length(colnames(metadata))){
-        current_column <- colnames(metadata)[i]
-        unique_keys <- unique(metadata[[current_column]])
+    all_design_vars <- unique(all.vars(as.formula(design_formula)))     # need to use design variable instead of metadata columns
+    for (i in 1:length(all_design_vars)){                               # because with --remove design formula get updates but
+        current_design_var <- all_design_vars[i]                        # metadata remains the same
+        unique_keys <- unique(metadata[[current_design_var]])
         for (j in 1:length(unique_keys)){
             key <- as.character(unique_keys[j])
-            print(paste("Subsetting model matrix for", current_column, "column", "with value", key))
-            subset <- colMeans(model[deseq_data[[current_column]] == key, ])
-            print(subset)
-            assign(key, subset)
+            print(
+                paste0(
+                    "Filtering model matrix by ",
+                    current_design_var, ": ", key
+                )
+            )
+            if (!is.null(selected_samples)) {                           # need to subset by sample and key in one step
+                print(
+                    paste0(
+                        "Filtering model matrix by sample: ",
+                        paste(selected_samples, collapse=", ")
+                    )
+                )
+                subset_model <- model[deseq_data[[current_design_var]] == key & rownames(model) %in% selected_samples, ]
+            } else {
+                subset_model <- model[deseq_data[[current_design_var]] == key, ]
+            }
+            print(subset_model)
+            assign(key, colMeans(subset_model))
         }
     }
-    print(paste("Evaluating contrast", args$contrast))
-    contrast <- eval(parse(text=args$contrast))
+    print(paste("Evaluating the contrast", contrast_formula))
+    contrast <- eval(parse(text=contrast_formula))
     print(contrast)
     return (contrast)
 }
@@ -488,53 +504,90 @@ get_diff_expr_data <- function(expression_data, metadata, args){
 
     if (is.null(args$contrast)){                                               # will have to create multiple contrasts
         print(
-            paste0(
-                "Contrast is not set. Union of contrasts for all ",
-                "pairwise combinations of metadata values ",
-                "from the columns used in the design formula ",
-                paste(
-                    ifelse(
-                        !is.null(args$reduced),
-                        "(but not present in the reduced) ",
-                        ""
-                    )
-                ),
+            paste(
+                "Contrast is not set. Union of contrasts for all",
+                "pairwise combinations of metadata values",
+                "from the columns used in the design formula",
                 "will be used instead."
             )
         )
         all_contrasts <- c()                                                   # to keep all collected contrasts
         all_design_vars <- unique(all.vars(as.formula(args$design)))
-        all_reduced_vars <- c()                                                # default value in case --reduced was not provided
-        if(!is.null(args$reduced)){
-            all_reduced_vars <- unique(all.vars(as.formula(args$reduced)))
-        }
         for (i in 1:length(all_design_vars)) {
             current_design_var <- all_design_vars[i]
-            if (current_design_var %in% all_reduced_vars){
-                print(
-                    paste(
-                        "Skipping contrasts made of", current_design_var,
-                        "because it's present in the --reduced formula"
-                    )
-                )
-                next
-            }
+            remaining_design_vars <- setdiff(                                  # to define filtering groups
+                all_design_vars,                                               # but it might be emply vector as well
+                current_design_var
+            )
             all_contrasts <- append(
-                                    all_contrasts,
-                                    lapply(
-                                        combn(
-                                            x=unique(
-                                                metadata[[current_design_var]]
-                                            ),
-                                            m=2,                                  # for contrast we always need 2
-                                            simplify=FALSE
+                all_contrasts,
+                unlist(
+                    lapply(
+                        combn(                                         # will return all combinations of size 2
+                            x=unique(
+                                metadata[[current_design_var]]         # all metadata columns are already factors
+                            ),
+                            m=2,
+                            simplify=FALSE
+                        ),
+                        function(v){
+                            current_pair <- as.vector(sort(v))                             # sorting by levels and converting to vector
+                            sample_groups <- metadata %>%
+                                filter(!!sym(current_design_var) %in% current_pair) %>%
+                                select(all_of(remaining_design_vars)) %>%                  # may select 0 columns when remaining_design_vars is empty
+                                rownames_to_column(var="sample") %>%
+                                group_by(across(all_of(remaining_design_vars))) %>%        # may create one group when remaining_design_vars is empty
+                                mutate(
+                                    sample=paste(sample, collapse="@")
+                                ) %>%
+                                ungroup() %>%
+                                select(sample) %>%
+                                distinct() %>%
+                                pull(sample)
+                            lapply(
+                                sample_groups,
+                                function(l){
+                                    selected_samples <- unlist(strsplit(l, "@"))
+                                    alias <- metadata %>%
+                                        rownames_to_column(var="sample") %>%
+                                        filter(sample %in% selected_samples) %>%
+                                        select(all_of(remaining_design_vars)) %>%          # these columns should be identical for all selected samples
+                                        mutate(
+                                            alias = if (ncol(.) == 0)
+                                                        ""
+                                                    else
+                                                        paste0("_for_", do.call(paste, c(., sep="_")))
+                                        ) %>%
+                                        select(alias) %>%
+                                        distinct() %>%
+                                        pull(alias)                                        # should be always a vector with length 1
+                                    if (length(alias) > 1){
+                                        print("Exiting: alias can't have length more than 1")
+                                        quit(save = "no", status = 1, runLast = FALSE)
+                                    }
+                                    list(
+                                        contrast=paste0(
+                                            current_pair[2], "-", current_pair[1]      # the order of comparison is always higher level to lower level
                                         ),
-                                        function(s){
-                                            v <- as.vector(sort(s))               # sorting by levels and convecting to vector
-                                            c(current_design_var, v[2], v[1])
-                                        }
+                                        samples=selected_samples,                      # may include all samples filtered only by current_design_var
+                                        alias=gsub(
+                                            "'|\"|\\s|\\t|#|%|&|-",
+                                            "_",
+                                            paste0(
+                                                current_pair[2],
+                                                "_vs_",
+                                                current_pair[1],
+                                                alias                                  # can be empty string
+                                            )
+                                        )
                                     )
-                                )
+                                }
+                            )
+                        }
+                    ),
+                recursive=FALSE
+                )
+            )
         }
         print("Collected contrasts")
         print(all_contrasts)
@@ -546,70 +599,77 @@ get_diff_expr_data <- function(expression_data, metadata, args){
         for (i in 1:length(all_contrasts)) {
             current_contrast <- all_contrasts[[i]]
             print(
-                paste(
-                    "Current contrast:", paste(current_contrast, collapse=" ")
+                paste0(
+                    "Processing contrast ", current_contrast$alias,
+                    " (", paste(current_contrast$samples, collapse=", "), ")"
                 )
             )
             current_deseq_results <- results(
-                                            deseq_data,
-                                            contrast=current_contrast,
-                                            parallel=TRUE,
-                                            BPPARAM=MulticoreParam(args$cpus)         # add it here as well just in case
-                                        )
+                deseq_data,
+                contrast=get_contrast(
+                    design_formula=as.formula(args$design),
+                    deseq_data=deseq_data,
+                    metadata=metadata,
+                    contrast_formula=current_contrast$contrast,
+                    selected_samples=current_contrast$samples
+                ),
+                parallel=TRUE,
+                BPPARAM=MulticoreParam(args$cpus)         # add it here as well just in case
+            )
             print("Current results description")
             print(mcols(current_deseq_results))
             print(mcols(current_deseq_results)$description)
-            contrast_id <- tolower(
-                gsub(
-                    "'|\"|\\s|\\t|#|%|&|-", "_",
-                    paste(
-                        c(
-                            current_contrast[1],
-                            paste(current_contrast[2:3], collapse="_vs_")
-                        ),
-                        collapse="__"
-                    )
-                )
-            )
-            deseq_results[[contrast_id]] <- as.data.frame(current_deseq_results) %>%
-                                            rownames_to_column(var="feature")
+            deseq_results[[current_contrast$alias]] <- as.data.frame(current_deseq_results) %>%
+                rownames_to_column(var="feature")
+            print(head(deseq_results[[current_contrast$alias]]))
         }
+        print("Merging results from multiple contrasts")
         deseq_results <- bind_rows(deseq_results, .id="contrast") %>%
-                            dplyr::mutate(
-                            "padj_th"=ifelse(                   # to be able to sort by logFC within significant padj
-                                            .$padj <= args$padj,
-                                            args$padj,
-                                            .$padj
-                                        )
-                            ) %>%
-                            dplyr::group_by(feature) %>%
-                            dplyr::arrange(
-                            padj_th,                            # sort primarily by |log2FoldChange| within significant padj
-                            desc(abs(log2FoldChange)),          # then, if padj is not signif. anymore, sort by padj and |log2FoldChange|
-                            .by_group=TRUE
-                            ) %>%
-                            dplyr::slice_head(n=1) %>%             # all NA should be at the bottom
-                            dplyr::ungroup() %>%
-                            dplyr::arrange(
-                            contrast, desc(log2FoldChange)
-                            ) %>%
-                            dplyr::select(-c("padj_th")) %>%       # drop temporary column
-                            relocate(contrast, .after=last_col())
-        print(head(deseq_results, n=25))
+            dplyr::mutate(
+                "padj_th"=ifelse(                      # to be able to sort by logFC within significant padj
+                    .$padj <= args$padj,
+                    args$padj,
+                    .$padj
+                )
+            ) %>%
+            dplyr::group_by(feature) %>%
+            dplyr::arrange(
+                padj_th,                               # sort primarily by |log2FoldChange| within significant padj
+                desc(abs(log2FoldChange)),             # then, if padj is not signif. anymore, sort by padj and |log2FoldChange|
+                .by_group=TRUE
+            ) %>%
+            dplyr::slice_head(n=1) %>%                 # all NA should be at the bottom
+            dplyr::ungroup() %>%
+            dplyr::arrange(
+                contrast, desc(log2FoldChange)
+            ) %>%
+            dplyr::select(-c("padj_th")) %>%           # drop temporary column
+            relocate(contrast, .after=last_col())
+        print(deseq_results)
     } else {
-        print("Using user-provided contrast.")
+        print(
+            paste(
+                "Using user-provided contrast:",
+                args$contrast
+            )
+        )
         deseq_results <- results(
-                             deseq_data,
-                             contrast=get_contrast(as.formula(args$design), deseq_data, metadata, args),
-                             parallel=TRUE,
-                             BPPARAM=MulticoreParam(args$cpus)         # add it here as well just in case
-                         )
+            deseq_data,
+            contrast=get_contrast(
+                design_formula=as.formula(args$design),
+                deseq_data=deseq_data,
+                metadata=metadata,
+                contrast_formula=args$contrast
+            ),
+            parallel=TRUE,
+            BPPARAM=MulticoreParam(args$cpus)         # add it here as well just in case
+        )
         print("Results description")
         print(mcols(deseq_results))
         print(mcols(deseq_results)$description)
         deseq_results <- as.data.frame(deseq_results) %>%
-                         rownames_to_column(var="feature") %>%
-                         dplyr::arrange(desc(log2FoldChange))
+            rownames_to_column(var="feature") %>%
+            dplyr::arrange(desc(log2FoldChange))
     }
 
     print("Adding extra columns to the DESeq output")
@@ -621,10 +681,10 @@ get_diff_expr_data <- function(expression_data, metadata, args){
     )
 
     deseq_results <- expression_data[as.vector(as.character(deseq_results$feature)), ] %>%    # need to reorder rows in expression_data to correspond to the deseq_results
-                     bind_cols(deseq_results) %>%
-                     na.omit() %>%
-                     relocate(any_of(rpkm_columns), .after=last_col()) %>%                    # move all rpkm columns to the end
-                     relocate(any_of(counts_columns), .after=last_col())                      # move all read counts columns to the end
+        bind_cols(deseq_results) %>%
+        na.omit() %>%
+        relocate(any_of(rpkm_columns), .after=last_col()) %>%                    # move all rpkm columns to the end
+        relocate(any_of(counts_columns), .after=last_col())                      # move all read counts columns to the end
     print(
         paste(
             "Number of differentially expressed features",
@@ -817,10 +877,10 @@ get_args <- function(){
             "Contrast to be be applied for the output, formatted as",
             "a mathematical formula of values from the --metadata table.",
             "If not provided, all possible combinations of values from",
-            "the metadata columns present in the --design but not in the",
-            "--reduced formula will be used (results will be merged giving",
-            "the priority to significantly differentially expressed genes",
-            "with higher absolute log2FoldChange values)."
+            "the metadata columns present in the --design will be used",
+            "(results will be merged giving the priority to significantly",
+            "differentially expressed genes with higher absolute",
+            "log2FoldChange values)."
         ),
         type="character"
     )
