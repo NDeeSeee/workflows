@@ -335,8 +335,7 @@ get_args <- function(){
     parser$add_argument(
         "--ntgr",
         help=paste(
-            "Integration method used for joint analysis of multiple datasets. Automatically",
-            "set to 'none' if loaded Suerat object includes only one dataset.",
+            "Integration method used for joint analysis of multiple datasets.",
             "Default: signac"
         ),
         type="character",
@@ -368,13 +367,12 @@ get_args <- function(){
     parser$add_argument(
         "--dimensions",
         help=paste(
-            "Dimensionality to use for datasets integration and UMAP projection (from 2 to 50).",
-            "If single value N is provided, use from 2 to N LSI components. If multiple values are",
-            "provided, subset to only selected LSI components. In combination with --ntgr set to",
-            "harmony, multiple values will result in using all dimensions starting from 1(!) to",
-            "the max of the provided values. Default: from 2 to 10"
+            "Dimensionality to use for datasets integration (if provided RDS file includes",
+            "multiple datasets and --ntgr is not set to 'none') and UMAP projection.",
+            "(from 2 to 50). First LSI component is always excluded.",
+            "Default: 10"
         ),
-        type="integer", default=10, nargs="*"
+        type="integer", default=10
     )
     parser$add_argument(
         "--uspread",
@@ -493,11 +491,9 @@ args <- get_args()
 
 print("Input parameters")
 print(args)
-if (length(args$dimensions) == 1) {
-    print("Adjusting --dimensions parameter as only a single value was provided")
-    args$dimensions <- c(2:args$dimensions[1])                                              # skipping the first LSI component
-    print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
-}
+print("Adjusting --dimensions parameter")
+args$dimensions <- c(2:args$dimensions)                                                   # first LSI component is always excluded
+print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
 args$minvarpeaks <- paste0("q", args$minvarpeaks)                                         # need to have it in a form of "qN", for example "q0"
 
 print(

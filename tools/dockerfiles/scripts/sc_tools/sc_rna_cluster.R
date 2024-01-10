@@ -407,12 +407,11 @@ get_args <- function(){
     parser$add_argument(
         "--dimensions",
         help=paste(
-            "Dimensionality to use when constructing nearest-neighbor graph before clustering",
-            "(from 1 to 50). If single value N is provided, use from 1 to N dimensions. If",
-            "multiple values are provided, subset to only selected dimensions.",
-            "Default: from 1 to 10"
+            "Dimensionality to use when constructing nearest-neighbor",
+            "graph before clustering (from 1 to 50).",
+            "Default: 10"
         ),
-        type="integer", default=10, nargs="*"
+        type="integer", default=10
     )
     parser$add_argument(
         "--ametric",
@@ -573,11 +572,9 @@ args <- get_args()
 
 print("Input parameters")
 print(args)
-if (length(args$dimensions) == 1) {
-    print("Adjusting --dimensions parameter as only a single value was provided")
-    args$dimensions <- c(1:args$dimensions[1])
-    print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
-}
+print("Adjusting --dimensions parameter")
+args$dimensions <- c(1:args$dimensions)
+print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
 
 print(
     paste(

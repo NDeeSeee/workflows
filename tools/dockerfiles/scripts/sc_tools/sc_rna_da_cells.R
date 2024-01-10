@@ -128,11 +128,9 @@ get_args <- function(){
         "--dimensions",
         help=paste(
             "Dimensionality to use when running DA analysis (from 1 to 50).",
-            "If single value N is provided, use from 1 to N PCs. If multiple",
-            "values are provided, subset to only selected PCs.",
-            "Default: from 1 to 10"
+            "Default: 10"
         ),
-        type="integer", default=10, nargs="*"
+        type="integer", default=10
     )
     parser$add_argument(
         "--knn",
@@ -258,11 +256,10 @@ get_args <- function(){
 args <- get_args()
 print("Input parameters")
 print(args)
-if (length(args$dimensions) == 1) {
-    print("Adjusting --dimensions parameter as only a single value was provided")
-    args$dimensions <- c(1:args$dimensions[1])
-    print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
-}
+print("Adjusting --dimensions parameter")
+args$dimensions <- c(1:args$dimensions)
+print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
+
 if(!is.null(args$ranges)){
     args$ranges <- sort(args$ranges, decreasing=TRUE)   # for consistency with other parts of the program
 }

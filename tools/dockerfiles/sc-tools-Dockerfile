@@ -2,21 +2,27 @@
 # Dockerfile
 #
 # Software:         set of R scripts for single-cell data analysis
-# Software Version: v0.0.31
+# Software Version: v0.0.32
 # Description:      Dockerized version of the set of R scripts for
 #                   single-cell data analysis
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         set of R scripts for single-cell data analysis
 # Base Image:       satijalab/seurat:latest
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.31 -f sc-tools-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.31
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.31 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.32 -f sc-tools-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.32
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.32 /bin/bash
 ##########################################################################################################
 #
 # Notes:
 # - if you have problems compiling Harmony
 #   https://github.com/immunogenomics/harmony/pull/165
 # - fix bug in cell cycle genes removal
+#
+# v0.0.32
+# - Fix bug with ATAC Dim Reduction pipeline
+# - Updated all --dimension parameters to be integers
+# - Set scRepertoire version to v1, because latest from
+#   the GitHub is already v2
 #
 # v0.0.31
 # - Set identities to new.ident after filtering by barcodes
@@ -289,7 +295,7 @@ RUN apt-get update && \
     R -e 'devtools::install_github("aertslab/SCopeLoomR", upgrade = "never")' && \
     R -e 'devtools::install_github("dynverse/dynfeature", upgrade = "never")' && \
     R -e 'devtools::install_github("dynverse/dynplot", upgrade = "never")' && \
-    R -e 'devtools::install_github("ncborcherding/scRepertoire", upgrade = "never")' && \
+    R -e 'devtools::install_github("ncborcherding/scRepertoire@v1", upgrade = "never")' && \
     R -e 'install.packages("LambertW")' && \
     R -e 'install.packages("nortest")' && \
     R -e 'install.packages("doParallel")' && \

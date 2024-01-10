@@ -355,13 +355,10 @@ get_args <- function(){
     parser$add_argument(
         "--dimensions",
         help=paste(
-            "Dimensionality to use (from 1 to 50). If single value N is provided,",
-            "use from 1 to N dimensions. If multiple values are provided, subset",
-            "to only selected dimensions. May fail if user specified more dimensions",
-            "than it was available in the selected --reduction.",
+            "Dimensionality to use (from 1 to 50).",
             "Default: use all available dimensions"
         ),
-        type="integer", nargs="*"
+        type="integer"
     )
     parser$add_argument(
         "--source",
@@ -469,9 +466,9 @@ args <- get_args()
 print("Input parameters")
 print(args)
 
-if (!is.null(args$dimensions) && length(args$dimensions) == 1) {
-    print("Adjusting --dimensions parameter as only a single value was provided")
-    args$dimensions <- c(1:args$dimensions[1])
+if (!is.null(args$dimensions)){
+    print("Adjusting --dimensions parameter")
+    args$dimensions <- c(1:args$dimensions)
     print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
 }
 

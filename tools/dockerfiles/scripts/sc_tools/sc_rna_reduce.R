@@ -398,13 +398,12 @@ get_args <- function(){
     parser$add_argument(
         "--dimensions",
         help=paste(
-            "Dimensionality to use in UMAP projection (from 1 to 50). If single value N",
-            "is provided, use from 1 to N PCs. If multiple values are provided, subset to",
-            "only specified PCs. In combination with --ntgr set to harmony, multiple values",
-            "will result in using all principal components starting from 1 to the max of",
-            "the provided values. Default: from 1 to 10"
+            "Dimensionality to use for datasets integration (if provided RDS",
+            "file includes multiple datasets and --ntgr is not set to 'harmony')",
+            "and UMAP projection (from 1 to 50).",
+            "Default: 10"
         ),
-        type="integer", default=10, nargs="*"
+        type="integer", default=10
     )
     parser$add_argument(
         "--uspread",
@@ -542,11 +541,9 @@ args <- get_args()
 
 print("Input parameters")
 print(args)
-if (length(args$dimensions) == 1) {
-    print("Adjusting --dimensions parameter as only a single value was provided")
-    args$dimensions <- c(1:args$dimensions[1])
-    print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
-}
+print("Adjusting --dimensions parameter")
+args$dimensions <- c(1:args$dimensions)
+print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
 
 print(
     paste(

@@ -616,7 +616,7 @@ rna_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
                 group.by.vars=args$ntgrby,
                 reduction="pca",
                 reduction.save="pca",                                  # overwriting old pca reduction
-                dims.use=args$dimensions,                              # keep it, but it looks like it doesn't influence anything https://github.com/immunogenomics/harmony/issues/82
+                dims.use=args$dimensions,                              # only selected components will be used
                 assay.use=SeuratObject::DefaultAssay(seurat_data),     # can be both RNA or SCT depending on --norm parameter
                 verbose=FALSE
             )
@@ -1038,7 +1038,7 @@ atac_preprocess <- function(seurat_data, args) {
                     group.by.vars=args$ntgrby,
                     reduction="atac_lsi",
                     reduction.save="atac_lsi",                                    # overwriting old atac_lsi reduction
-                    dims.use=args$dimensions,                                     # keed it, but it doesn't actually used anywhere inside RunHarmony function
+                    dims.use=args$dimensions,                                     # now it will subset to the selected dimensions, so atac_lsi will be 1 component shorter
                     assay.use=SeuratObject::DefaultAssay(processed_seurat_data),
                     project.dim=FALSE,                                            # for ATAC we don't need to project
                     verbose=FALSE
@@ -1094,7 +1094,7 @@ atac_preprocess <- function(seurat_data, args) {
             reductions=processed_seurat_data[["lsi"]],
             new.reduction.name="atac_lsi",                                                      # adding "atac_lsi" for consistency
             k.weight=min(get_min_ident_size(splitted_seurat_data), 100),                        # k.weight 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
-            dims.to.integrate=args$dimensions                                                   # even if we include 1 dimension it won't influence on the results because we didn't use it in FindIntegrationAnchors
+            dims.to.integrate=args$dimensions,                                                  # will always overwrite with 1:ncol(x = reductions), so no difference what to use here
         )
         qclsi_reduction <- processed_seurat_data[["qclsi"]]                                     # need it for QC correlation plots
         processed_seurat_data <- integrated_seurat_data
@@ -1132,10 +1132,13 @@ atac_analyze <- function(seurat_data, args){
             seurat_data[[reduction_name]] <- backup_reductions[[reduction_name]]
         }
     }
+    datasets_count <- length(base::unique(base::as.vector(as.character(seurat_data@meta.data$new.ident))))
+    first_lsi_removed <- args$ntgr == "harmony" && datasets_count > 1
     seurat_data <- Seurat::RunUMAP(
         seurat_data,
         reduction="atac_lsi",
-        dims=args$dimensions,
+        dims=if(first_lsi_removed) c(1:(max(args$dimensions)-1))   # after integration we already exlcuded the first LSI component
+             else args$dimensions,                                 # still need to exclude the first LSI component
         reduction.name="atacumap",
         reduction.key="ATACUMAP_",
         spread=base::ifelse(is.null(args$uspread), 1, args$uspread),
@@ -1144,6 +1147,9 @@ atac_analyze <- function(seurat_data, args){
         metric=base::ifelse(is.null(args$umetric), "cosine", args$umetric),
         umap.method=base::ifelse(is.null(args$umethod), "uwot", args$umethod),
         verbose=FALSE
+    )
+    seurat_data@misc$atac_reduce <- list(
+        first_lsi_removed=first_lsi_removed                   # we will need it later to know how many LSI components to use
     )
     return (seurat_data)
 }

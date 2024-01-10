@@ -242,11 +242,11 @@ get_args <- function(){
         "--dimensions",
         help=paste(
             "Dimensionality to use when constructing nearest-neighbor graph before clustering",
-            "(from 1 to 50). If single value N is provided, use from 2 to N dimensions. If",
-            "multiple values are provided, subset to only selected dimensions.",
-            "Default: from 2 to 10"
+            "(from 2 to 50). First LSI component is always excluded unless the provided RDS",
+            "file consists of multiple datasets integrated with Harmony.",
+            "Default: 10"
         ),
-        type="integer", default=10, nargs="*"
+        type="integer", default=10
     )
     parser$add_argument(
         "--ametric",
@@ -400,11 +400,6 @@ args <- get_args()
 
 print("Input parameters")
 print(args)
-if (length(args$dimensions) == 1) {
-    print("Adjusting --dimensions parameter as only a single value was provided")
-    args$dimensions <- c(2:args$dimensions[1])                                              # skipping the first LSI component
-    print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
-}
 
 print(
     paste(
@@ -424,6 +419,14 @@ if (!all(c("atac_lsi", "atacumap") %in% names(seurat_data@reductions))){
     print("Loaded Seurat object doesn't have 'atac_lsi' and/or 'atacumap' reduction(s). Exiting.")
     quit(save="no", status=1, runLast=FALSE)
 }
+
+print("Adjusting --dimensions parameter")
+if (!is.null(seurat_data@misc$atac_reduce$first_lsi_removed) && seurat_data@misc$atac_reduce$first_lsi_removed){
+    args$dimensions <- c(1:(max(args$dimensions)-1))  # first LSI component has been already removed
+} else {
+    args$dimensions <- c(2:args$dimensions)
+}
+print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
 
 if (!is.null(args$fragments)){
     print(paste("Loading fragments data from", args$fragments))

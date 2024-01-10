@@ -445,23 +445,21 @@ get_args <- function(){
         "--rnadimensions",
         help=paste(
             "Dimensionality from the 'pca' reduction to use when constructing weighted",
-            "nearest-neighbor graph before clustering (from 1 to 50). If single value N",
-            "is provided, use from 1 to N dimensions. If multiple values are provided,",
-            "subset to only selected dimensions.",
-            "Default: from 1 to 10"
+            "nearest-neighbor graph before clustering (from 1 to 50).",
+            "Default: 10"
         ),
-        type="integer", default=10, nargs="*"
+        type="integer", default=10
     )
     parser$add_argument(
         "--atacdimensions",
         help=paste(
             "Dimensionality from the 'atac_lsi' reduction to use when constructing weighted",
-            "nearest-neighbor graph before clustering (from 1 to 50). If single value N",
-            "is provided, use from 2 to N dimensions. If multiple values are provided,",
-            "subset to only selected dimensions.",
-            "Default: from 2 to 10"
+            "nearest-neighbor graph before clustering (from 2 to 50). First LSI component is",
+            "always excluded unless the provided RDS file consists of multiple datasets",
+            "where ATAC assay were integrated with Harmony.",
+            "Default: 10"
         ),
-        type="integer", default=10, nargs="*"
+        type="integer", default=10
     )
     parser$add_argument(
         "--algorithm",
@@ -718,16 +716,6 @@ args <- get_args()
 
 print("Input parameters")
 print(args)
-if (length(args$rnadimensions) == 1) {
-    print("Adjusting --rnadimensions parameter as only a single value was provided")
-    args$rnadimensions <- c(1:args$rnadimensions[1])
-    print(paste("--rnadimensions was adjusted to", paste(args$rnadimensions, collapse=", ")))
-}
-if (length(args$atacdimensions) == 1) {
-    print("Adjusting --atacdimensions parameter as only a single value was provided")
-    args$atacdimensions <- c(2:args$atacdimensions[1])                                              # skipping the first LSI component
-    print(paste("--atacdimensions was adjusted to", paste(args$atacdimensions, collapse=", ")))
-}
 
 print(
     paste(
@@ -747,6 +735,18 @@ if (!all(c("pca", "atac_lsi") %in% names(seurat_data@reductions))){
     print("Loaded Seurat object doesn't have 'pca' and/or 'atac_lsi' reduction(s). Exiting.")
     quit(save="no", status=1, runLast=FALSE)
 }
+
+print("Adjusting --rnadimensions parameter")
+args$rnadimensions <- c(1:args$rnadimensions)
+print(paste("--rnadimensions was adjusted to", paste(args$rnadimensions, collapse=", ")))
+
+print("Adjusting --atacdimensions parameter")
+if (!is.null(seurat_data@misc$atac_reduce$first_lsi_removed) && seurat_data@misc$atac_reduce$first_lsi_removed){
+    args$atacdimensions <- c(1:(max(args$atacdimensions)-1))  # first LSI component has been already removed
+} else {
+    args$atacdimensions <- c(2:args$atacdimensions)
+}
+print(paste("--atacdimensions was adjusted to", paste(args$atacdimensions, collapse=", ")))
 
 if (!is.null(args$fragments)){
     print(paste("Loading fragments data from", args$fragments))
