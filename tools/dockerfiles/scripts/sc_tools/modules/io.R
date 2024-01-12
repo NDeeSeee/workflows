@@ -289,7 +289,7 @@ load_cell_identity_data <- function(location) {
     return (cell_identity_data)
 }
 
-extend_metadata <- function(seurat_data, location, seurat_ref_column, meta_ref_column, seurat_target_columns=NULL){
+extend_metadata <- function(seurat_data, location, seurat_ref_column, meta_ref_column, split_by=NULL, seurat_target_columns=NULL){
     metadata <- utils::read.table(
         location,
         sep=get_file_type(location),
@@ -301,9 +301,36 @@ extend_metadata <- function(seurat_data, location, seurat_ref_column, meta_ref_c
     base::print(metadata)
     seurat_ref_values <- base::as.vector(as.character(seurat_data@meta.data[, seurat_ref_column]))
     meta_ref_values <- base::as.vector(as.character(metadata[, meta_ref_column]))
-    if (!all(base::sort(meta_ref_values) == base::sort(base::unique(seurat_ref_values)))){
-        base::print("Extra metadata file is malformed. Exiting.")
-        base::quit(save="no", status=1, runLast=FALSE)
+    if (!all(base::sort(meta_ref_values) == base::sort(base::unique(seurat_ref_values)))){       # need to check if metadata is valid before splitting in into the smaller
+        base::print("Extra metadata file is malformed. Exiting.")                                # groups, because we use expand_grid that will add all possible values
+        base::quit(save="no", status=1, runLast=FALSE)                                           # to meta_ref_values that might not be present in the updated seurat_ref_values
+    }
+    if(!is.null(split_by)){
+        meta_ext_values <- base::unique(base::as.vector(as.character(seurat_data@meta.data[, split_by])))
+        base::print(
+            base::paste(
+                "Splitting metadata by", split_by, "adding",
+                paste(meta_ext_values, collapse=","), "suffixes"
+            )
+        )
+        metadata <- metadata %>%
+                    tidyr::expand_grid(sc_temp=meta_ext_values) %>%
+                    dplyr::mutate(
+                        dplyr::across(
+                            -tidyselect::one_of("sc_temp"),
+                            ~ base::paste(., base::get("sc_temp"), sep="_")
+                        )
+                    ) %>%
+                    dplyr::select(-c("sc_temp")) %>%
+                    base::as.data.frame()                                                               # otherwise won't work
+        base::print("Updated metadata")
+        base::print(metadata)
+        seurat_ref_values <- base::paste(                                                               # need to overwrite the previous ones
+            base::as.vector(as.character(seurat_data@meta.data[, seurat_ref_column])),
+            base::as.vector(as.character(seurat_data@meta.data[, split_by])),
+            sep="_"
+        )
+        meta_ref_values <- base::as.vector(as.character(metadata[, meta_ref_column]))                   # need to overwrite the previous ones
     }
     meta_source_columns <- base::colnames(metadata)[base::colnames(metadata) != meta_ref_column]        # all except ref column from metadata
     if (is.null(seurat_target_columns)){

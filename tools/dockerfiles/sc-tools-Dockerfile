@@ -23,6 +23,9 @@
 # - Updated all --dimension parameters to be integers
 # - Set scRepertoire version to v1, because latest from
 #   the GitHub is already v2
+# - Added --splitby parameter to sc_ctype_assign.R
+# - Added --upstream, --downstream parameters for genome
+#   coverage plots
 #
 # v0.0.31
 # - Set identities to new.ident after filtering by barcodes

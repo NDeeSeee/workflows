@@ -1651,7 +1651,7 @@ mds_html_plot <- function(norm_counts_data, rootname){
     )
 }
 
-dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, cluster_idents=FALSE, min_pct=0.01, col_min=-2.5, col_max=2.5, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, cluster_idents=FALSE, min_pct=0.01, col_min=-2.5, col_max=2.5, theme="classic", pdf=FALSE, width=1200, height=NULL, resolution=100){
     base::tryCatch(
         expr = {
             plot <- Seurat::DotPlot(
@@ -1669,6 +1669,11 @@ dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, clu
                     get_theme(theme) +
                     ggplot2::ggtitle(plot_title) +
                     Seurat::RotatedAxis()
+
+            if (is.null(height)){
+                height <- round((length(base::unique(base::as.vector(as.character(SeuratObject::Idents(data))))) + 2) * 0.4 * resolution)
+                height <- base::ifelse(height < 400, 400, height)
+            }
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(plot))
@@ -1960,7 +1965,7 @@ coverage_plot <- function(data, assay, region, group_by, plot_title, rootname, i
 
             if (is.null(height)){
                 groups = length(base::unique(base::as.vector(as.character(data@meta.data[[group_by]]))))
-                height <- round(groups * 0.8 * resolution)           # 0.8 inch per group
+                height <- round(groups * 0.9 * resolution)           # 0.9 inch per group
                 if (show_tile){
                     height <- round(2 * height)                      # to give twice more space for tiles
                     height <- height + round(0.1 * resolution)       # 0.1 inch for space between the plots

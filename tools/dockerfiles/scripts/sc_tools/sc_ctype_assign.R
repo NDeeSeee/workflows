@@ -267,8 +267,8 @@ export_all_coverage_plots <- function(seurat_data, args) {
                 features=if("RNA" %in% names(seurat_data@assays)) current_gene else NULL,  # will fail if features are provided without "RNA" assay
                 expression_assay="RNA",
                 expression_slot="data",                                                    # use scaled counts
-                extend_upstream=2500,
-                extend_downstream=2500,
+                extend_upstream=args$upstream,
+                extend_downstream=args$downstream,
                 show_annotation=TRUE,
                 show_peaks=TRUE,
                 show_tile=TRUE,
@@ -285,7 +285,7 @@ export_all_coverage_plots <- function(seurat_data, args) {
 export_all_expression_plots <- function(seurat_data, args) {
     SeuratObject::DefaultAssay(seurat_data) <- "RNA"                            # safety measure
     SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
-    Idents(seurat_data) <- args$target
+    SeuratObject::Idents(seurat_data) <- args$target
     graphics$dot_plot(
         data=seurat_data,
         features=args$genes,
@@ -298,6 +298,10 @@ export_all_expression_plots <- function(seurat_data, args) {
         pdf=args$pdf
     )
     if (!is.null(args$genes) && length(args$genes) > 0){
+        groups_count <- 1                                    # used only to adjust the height of the plot
+        if (!is.null(args$splitby)){
+            groups_count <- length(unique(as.vector(as.character(seurat_data@meta.data[[args$splitby]]))))
+        }
         for (i in 1:length(args$genes)){
             current_gene <- args$genes[i]
             graphics$vln_plot(
@@ -323,16 +327,22 @@ export_all_expression_plots <- function(seurat_data, args) {
                     features=current_gene,
                     labels=current_gene,
                     reduction=reduction,
-                    plot_title=paste(
-                        "UMAP, gene expression,",
-                        "reduction", reduction
+                    plot_title=paste0(
+                        "UMAP, gene expression, ",
+                        ifelse(
+                            !is.null(args$splitby),
+                            paste0("split by ", args$splitby, ", "),
+                            ""
+                        ),
+                        "reduction ", reduction
                     ),
                     label=FALSE,
                     order=TRUE,
+                    split_by=args$splitby,
                     max_cutoff="q99",  # to prevent cells with overexpressed gene from distoring the color bar
-                    combine_guides="keep",
+                    combine_guides="collect",
                     width=800,
-                    height=800,
+                    height=ifelse(groups_count == 2, 400, 800),
                     theme=args$theme,
                     rootname=paste(args$output, "xpr_per_cell_rd", reduction, current_gene, sep="_"),
                     pdf=args$pdf
@@ -462,6 +472,15 @@ get_args <- function(){
         type="character", required="True"
     )
     parser$add_argument(
+        "--splitby",
+        help=paste(
+            "Column from the Seurat object metadata to additionally split",
+            "every cluster selected with --source into smaller groups.",
+            "Default: do not split"
+        ),
+        type="character"
+    )
+    parser$add_argument(
         "--diffgenes",
         help=paste(
             "Identify differentially expressed genes (putative gene markers) for",
@@ -575,6 +594,24 @@ get_args <- function(){
         type="character", nargs="*"
     )
     parser$add_argument(
+        "--upstream",
+        help=paste(
+            "Number of bases to extend the genome coverage region for",
+            "a specific gene upstream. Ignored if --genes or --fragments",
+            "parameters are not provided. Default: 2500"
+        ),
+        type="integer", default=2500
+    )
+    parser$add_argument(
+        "--downstream",
+        help=paste(
+            "Number of bases to extend the genome coverage region for",
+            "a specific gene downstream. Ignored if --genes or --fragments",
+            "parameters are not provided. Default: 2500"
+        ),
+        type="integer", default=2500
+    )
+    parser$add_argument(
         "--pdf",
         help="Export plots in PDF. Default: false",
         action="store_true"
@@ -685,6 +722,7 @@ seurat_data <- io$extend_metadata(
     location=args$celltypes,
     seurat_ref_column=args$source,
     meta_ref_column="cluster",
+    split_by=args$splitby,                 # can be NULL if --splitby not provided
     seurat_target_columns=args$target
 )
 debug$print_info(seurat_data, args)

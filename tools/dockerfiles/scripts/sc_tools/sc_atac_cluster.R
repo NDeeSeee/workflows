@@ -211,8 +211,8 @@ export_all_coverage_plots <- function(seurat_data, args) {
                     features=if("RNA" %in% names(seurat_data@assays)) current_gene else NULL,  # will fail if features are provided without "RNA" assay
                     expression_assay="RNA",
                     expression_slot="data",                                                    # use scaled counts
-                    extend_upstream=2500,
-                    extend_downstream=2500,
+                    extend_upstream=args$upstream,
+                    extend_downstream=args$downstream,
                     show_annotation=TRUE,
                     show_peaks=TRUE,
                     show_tile=TRUE,
@@ -299,6 +299,24 @@ get_args <- function(){
             "Default: None"
         ),
         type="character", nargs="*"
+    )
+    parser$add_argument(
+        "--upstream",
+        help=paste(
+            "Number of bases to extend the genome coverage region for",
+            "a specific gene upstream. Ignored if --genes or --fragments",
+            "parameters are not provided. Default: 2500"
+        ),
+        type="integer", default=2500
+    )
+    parser$add_argument(
+        "--downstream",
+        help=paste(
+            "Number of bases to extend the genome coverage region for",
+            "a specific gene downstream. Ignored if --genes or --fragments",
+            "parameters are not provided. Default: 2500"
+        ),
+        type="integer", default=2500
     )
     parser$add_argument(
         "--diffpeaks",
