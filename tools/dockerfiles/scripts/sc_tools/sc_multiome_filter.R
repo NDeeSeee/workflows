@@ -26,7 +26,7 @@ call_peaks <- function(seurat_data, seqinfo_data, args) {
     backup_assay <- DefaultAssay(seurat_data)
     DefaultAssay(seurat_data) <- "ATAC"                                     # safety measure
 
-    print("Adjusting fragments data to 1bp length Tn5 cut sites")
+    print("Adjusting ATAC fragments data to 1bp length Tn5 cut sites")
     tn5ct_location <- paste0(args$tmpdir, "/", "tn5ct.tsv.gz")
     exit_code <- sys::exec_wait(
         cmd="sc_tn5_cut_sites.sh",                                          # if it's not found in PATH, R will fail with error
@@ -35,7 +35,7 @@ call_peaks <- function(seurat_data, seqinfo_data, args) {
     if (exit_code != 0){                                                    # we were able to run sc_tn5_cut_sites.sh, but something went wrong
         base::print(
             base::paste0(
-                "Failed to adjust fragments data to 1bp length ",
+                "Failed to adjust ATAC fragments data to 1bp length ",
                 "Tn5 cut sites with exit code ", exit_code, ". Exiting."
             )
         )
@@ -44,7 +44,7 @@ call_peaks <- function(seurat_data, seqinfo_data, args) {
 
     print(
         paste(
-            "Replacing fragments data with 1bp length",
+            "Replacing ATAC fragments data with 1bp length",
             "Tn5 cut sites from", tn5ct_location
         )
     )
@@ -75,7 +75,7 @@ call_peaks <- function(seurat_data, seqinfo_data, args) {
 
     print(
         paste(
-            "Returning to the original fragments",
+            "Returning to the original ATAC fragments",
             "data from", args$fragments
         )
     )
@@ -126,8 +126,8 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
     peak_type <- ifelse(macs2_peaks, "- MACS2", "- 10x")
     selected_features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "TSS.enrichment", "nucleosome_signal", "nFeature_ATAC", "frip", "blacklist_fraction")
     selected_labels=c(
-        "Transcripts", "Genes", "Mitochondrial %", "Novelty score",
-        paste(c("Fragments in peaks", "TSS enrichment score", "Nucl. signal", "Peaks", "FRiP", "Bl. regions"), peak_type)
+        "RNA reads", "Genes", "Mitochondrial %", "Novelty score",
+        paste(c("ATAC fragments in peaks", "TSS enrichment score", "Nucl. signal", "Peaks", "FRiP", "Bl. regions"), peak_type)
     )
     datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
 
@@ -181,10 +181,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         group_by="new.ident",
         split_by="new.ident",
         x_left_intercept=args$minumis,
-        x_label="Transcripts per cell",
+        x_label="RNA reads per cell",
         y_label="Density",
         legend_title="Dataset",
-        plot_title=paste("Transcripts per cell density (", suffix, ")", sep=""),
+        plot_title=paste("RNA reads per cell density (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
         show_zoomed=FALSE,
         palette_colors=graphics$D40_COLORS,
@@ -225,10 +225,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         gradient_colors=c("lightslateblue", "red", "green"),
         color_limits=c(0, 100),
         color_break=args$maxmt,
-        x_label="Transcripts per cell",
+        x_label="RNA reads per cell",
         y_label="Genes per cell",
         legend_title="Mitochondrial %",
-        plot_title=paste("Genes vs transcripts per cell (", suffix, ")", sep=""),
+        plot_title=paste("Genes vs RNA reads per cell (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
         scale_y_log10=TRUE,
         show_lm=TRUE,
@@ -245,10 +245,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         group_by="new.ident",
         split_by="new.ident",
         x_right_intercept=args$maxmt,
-        x_label="Percentage of transcripts mapped to mitochondrial genes per cell",
+        x_label="Percentage of RNA reads mapped to mitochondrial genes per cell",
         y_label="Density",
         legend_title="Dataset",
-        plot_title=paste("Percentage of transcripts mapped to mitochondrial genes per cell density (", suffix, ")", sep=""),
+        plot_title=paste("Percentage of RNA reads mapped to mitochondrial genes per cell density (", suffix, ")", sep=""),
         show_zoomed=FALSE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
@@ -279,10 +279,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         group_by="new.ident",
         split_by="new.ident",
         x_left_intercept=args$minfragments,
-        x_label="Fragments in peaks per cell",
+        x_label="ATAC fragments in peaks per cell",
         y_label="Density",
         legend_title="Dataset",
-        plot_title=paste("Fragments in peaks per cell density (", suffix, ") ", peak_type, sep=""),
+        plot_title=paste("ATAC fragments in peaks per cell density (", suffix, ") ", peak_type, sep=""),
         scale_x_log10=TRUE,
         show_zoomed=FALSE,
         palette_colors=graphics$D40_COLORS,
@@ -330,9 +330,9 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         data=seurat_data@meta.data,
         split_by="new.ident",
         x_axis="nCount_ATAC",
-        x_label="Fragments in peaks per cell (ATAC)",
+        x_label="ATAC fragments in peaks per cell",
         y_axis="nCount_RNA",
-        y_label="Transcripts per cell (RNA)",
+        y_label="RNA reads per cell",
         x_left_intercept=args$minfragments,
         y_low_intercept=args$minumis,
         alpha_intercept=1,
@@ -342,7 +342,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         color_limits=c(0, 100),
         color_break=args$maxmt,
         legend_title="Mitochondrial %",
-        plot_title=paste("Transcripts vs fragments in peaks per cell (", suffix, ") ", peak_type, sep=""),
+        plot_title=paste("RNA reads vs ATAC fragments in peaks per cell (", suffix, ") ", peak_type, sep=""),
         scale_x_log10=TRUE,
         scale_y_log10=TRUE,
         show_density=TRUE,
@@ -357,7 +357,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         data=seurat_data@meta.data,
         split_by="new.ident",
         x_axis="nCount_ATAC",
-        x_label="Fragments in peaks per cell",
+        x_label="ATAC fragments in peaks per cell",
         y_axis="TSS.enrichment",
         y_label="TSS enrichment score",
         x_left_intercept=args$minfragments,
@@ -369,7 +369,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         color_limits=c(0, 100),
         color_break=args$maxmt,
         legend_title="Mitochondrial %",
-        plot_title=paste("TSS enrichment score vs fragments in peaks per cell (", suffix, ") ", peak_type, sep=""),
+        plot_title=paste("TSS enrichment score vs ATAC fragments in peaks per cell (", suffix, ") ", peak_type, sep=""),
         scale_x_log10=TRUE,
         scale_y_log10=FALSE,
         show_density=TRUE,
@@ -484,7 +484,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         split_by="new.ident",
         group_by_value=args$maxnuclsignal,
         combine_guides="collect",
-        plot_title=paste("Fragments length histogram (", suffix, ") ", peak_type, sep=""),
+        plot_title=paste("ATAC fragments length histogram (", suffix, ") ", peak_type, sep=""),
         theme=args$theme,
         height=ifelse(datasets_count > 1, 800, 400),
         rootname=paste(args$output, suffix, "frgm_hist", sep="_"),
@@ -502,10 +502,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             group_by="new.ident",
             split_by="condition",
             x_left_intercept=args$minumis,
-            x_label="Transcripts per cell",
+            x_label="RNA reads per cell",
             y_label="Density",
             legend_title="Dataset",
-            plot_title=paste("Split by grouping condition transcripts per cell density (", suffix, ")", sep=""),
+            plot_title=paste("Split by grouping condition RNA reads per cell density (", suffix, ")", sep=""),
             scale_x_log10=TRUE,
             show_zoomed=FALSE,
             palette_colors=graphics$D40_COLORS,
@@ -538,10 +538,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             group_by="new.ident",
             split_by="condition",
             x_right_intercept=args$maxmt,
-            x_label="Percentage of transcripts mapped to mitochondrial genes per cell",
+            x_label="Percentage of RNA reads mapped to mitochondrial genes per cell",
             y_label="Density",
             legend_title="Dataset",
-            plot_title=paste("Split by grouping condition the percentage of transcripts mapped to mitochondrial genes per cell density (", suffix, ")", sep=""),
+            plot_title=paste("Split by grouping condition the percentage of RNA reads mapped to mitochondrial genes per cell density (", suffix, ")", sep=""),
             show_zoomed=FALSE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
@@ -570,10 +570,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             group_by="new.ident",
             split_by="condition",
             x_left_intercept=args$minfragments,
-            x_label="Fragments in peaks per cell",
+            x_label="ATAC fragments in peaks per cell",
             y_label="Density",
             legend_title="Dataset",
-            plot_title=paste("Split by grouping condition fragments in peaks per cell density (", suffix, ") ", peak_type, sep=""),
+            plot_title=paste("Split by grouping condition ATAC fragments in peaks per cell density (", suffix, ") ", peak_type, sep=""),
             scale_x_log10=TRUE,
             show_zoomed=FALSE,
             palette_colors=graphics$D40_COLORS,
@@ -715,7 +715,7 @@ get_args <- function(){
     parser$add_argument(
         "--minumis",
         help=paste(
-            "Include cells where at least this many UMI (transcripts) are detected.",
+            "Include cells where at least this many RNA reads are detected.",
             "If multiple values provided, each of them will be applied to the",
             "correspondent dataset from the '--mex' input based on the '--identity' file.",
             "Default: 500 (applied to all datasets)"
@@ -733,7 +733,7 @@ get_args <- function(){
     parser$add_argument(
         "--maxmt",
         help=paste(
-            "Include cells with the percentage of transcripts mapped to mitochondrial",
+            "Include cells with the percentage of RNA reads mapped to mitochondrial",
             "genes not bigger than this value.",
             "Default: 5 (applied to all datasets)"
         ),
@@ -761,7 +761,7 @@ get_args <- function(){
     parser$add_argument(                                                                    # when loading Cell Ranger data we have cut sites
         "--minfragments",                                                                   # per peak so we recalculate it to have fragments
         help=paste(
-            "Include cells where at least this many fragments in peaks are",
+            "Include cells where at least this many ATAC fragments in peaks are",
             "detected. If multiple values provided, each of them will be",
             "applied to the correspondent dataset from the '--mex' input",
             "based on the '--identity' file.",
@@ -774,7 +774,7 @@ get_args <- function(){
         help=paste(
             "Include cells with the nucleosome signal not bigger than this value.",
             "Nucleosome signal quantifies the approximate ratio of mononucleosomal",
-            "to nucleosome-free fragments. If multiple values provided, each of",
+            "to nucleosome-free ATAC fragments. If multiple values provided, each of",
             "them will be applied to the correspondent dataset from the '--mex' input",
             "based on the '--identity' file.",
             "Default: 4 (applied to all datasets)"
@@ -785,8 +785,8 @@ get_args <- function(){
         "--mintssenrich",
         help=paste(
             "Include cells with the TSS enrichment score not lower than this value.",
-            "Score is calculated based on the ratio of fragments centered at the TSS",
-            "to fragments in TSS-flanking regions. If multiple values provided, each",
+            "Score is calculated based on the ratio of ATAC fragments centered at the TSS",
+            "to ATAC fragments in TSS-flanking regions. If multiple values provided, each",
             "of them will be applied to the correspondent dataset from the '--mex' input",
             "based on the '--identity' file.",
             "Default: 2 (applied to all datasets)"
@@ -798,7 +798,7 @@ get_args <- function(){
         help=paste(
             "Include cells with the FRiP not lower than this value. If multiple values",
             "provided, each of them will be applied to the correspondent dataset from the",
-            "'--mex' input based on the '--identity' file. FRiP is calculated for fragments.",
+            "'--mex' input based on the '--identity' file. FRiP is calculated for ATAC fragments.",
             "Default: 0.15 (applied to all datasets)"
         ),
         type="double", default=0.15, nargs="*"
@@ -806,7 +806,7 @@ get_args <- function(){
     parser$add_argument(
         "--maxblacklist",
         help=paste(
-            "Include cells with the fraction of fragments in genomic blacklist regions",
+            "Include cells with the fraction of ATAC fragments in genomic blacklist regions",
             "not bigger than this value. If multiple values provided, each of them",
             "will be applied to the correspondent dataset from the '--mex' input based",
             "on the '--identity' file.",
@@ -979,7 +979,7 @@ print(paste("Loading chromosome length information from", args$seqinfo))
 seqinfo_data <- io$load_seqinfo_data(args$seqinfo)
 
 print(paste("Loading gene/peak-barcode matrices from", args$mex))
-print(paste("Loading fragments from", args$fragments))
+print(paste("Loading ATAC fragments from", args$fragments))
 print(paste("Loading annotations from", args$annotations))
 seurat_data <- io$load_10x_multiome_data(                                                # identities are set to the "new.ident" column
     args=args,
@@ -1121,7 +1121,7 @@ export_all_qc_plots(                                                            
     macs2_peaks=!is.null(args$callby)                                                    # can be both from 10x or MACS2
 )
 
-print("Adding genes vs transcripts per cell as gene_rnaumi dimensionality reduction")
+print("Adding genes vs RNA reads per cell as gene_rnaumi dimensionality reduction")
 seurat_data@reductions[["gene_rnaumi"]] <- CreateDimReducObject(
     embeddings=as.matrix(
         seurat_data@meta.data[, c("nCount_RNA", "nFeature_RNA"), drop=FALSE] %>%
@@ -1132,7 +1132,7 @@ seurat_data@reductions[["gene_rnaumi"]] <- CreateDimReducObject(
     assay="RNA"
 )
 
-print("Adding transcripts vs fragments in peaks per cell as rnaumi_atacfrgm dimensionality reduction")
+print("Adding RNA reads vs ATAC fragments in peaks per cell as rnaumi_atacfrgm dimensionality reduction")
 seurat_data@reductions[["rnaumi_atacfrgm"]] <- CreateDimReducObject(
     embeddings=as.matrix(
         seurat_data@meta.data[, c("nCount_ATAC", "nCount_RNA"), drop=FALSE] %>%
@@ -1143,7 +1143,7 @@ seurat_data@reductions[["rnaumi_atacfrgm"]] <- CreateDimReducObject(
     assay="RNA"
 )
 
-print("Adding TSS enrichment score vs fragments in peaks per cell as tss_atacfrgm dimensionality reduction")
+print("Adding TSS enrichment score vs ATAC fragments in peaks per cell as tss_atacfrgm dimensionality reduction")
 seurat_data@reductions[["tss_atacfrgm"]] <- CreateDimReducObject(
     embeddings=as.matrix(
         seurat_data@meta.data[, c("nCount_ATAC", "TSS.enrichment"), drop=FALSE] %>%

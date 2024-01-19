@@ -273,7 +273,7 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, label_field=N
                     "cloneType"
                 )
                 meta_fields_names <- c(
-                    "Transcripts",
+                    "RNA reads",
                     "Genes",
                     "Mitochondrial %",
                     "Novelty score",
@@ -282,7 +282,7 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, label_field=N
                     "Phase",
                     "RNA doublets",
                     "ATAC doublets",
-                    "Fragments in peaks",
+                    "ATAC fragments in peaks",
                     "Peaks",
                     "TSS enrichment score",
                     "Nucleosome signal",

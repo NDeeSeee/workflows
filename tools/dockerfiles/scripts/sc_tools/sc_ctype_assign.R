@@ -259,7 +259,7 @@ export_all_coverage_plots <- function(seurat_data, args) {
                 region=current_gene,
                 group_by=args$target,
                 plot_title=paste(
-                    "Fragments coverage,",
+                    "ATAC fragments coverage,",
                     current_gene, "gene"
                 ),
                 idents=NULL,                                                               # to include all values from the default "new.ident" column
@@ -728,7 +728,7 @@ seurat_data <- io$extend_metadata(
 debug$print_info(seurat_data, args)
 
 if ( (!is.null(args$fragments)) && ("ATAC" %in% names(seurat_data@assays)) ){
-    print(paste("Loading fragments data from", args$fragments))
+    print(paste("Loading ATAC fragments data from", args$fragments))
     seurat_data <- io$replace_fragments(args$fragments, seurat_data)                                             # will change the default assay to ATAC
     debug$print_info(seurat_data, args)
 }

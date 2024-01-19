@@ -81,19 +81,19 @@ prepare_fragments_and_peaks <- function(seurat_data, seqinfo_data, args){       
         )
     )
     for (i in 1:length(tmp_locations$fragments)) {
-        print(paste("Loading fragments data from", tmp_locations$fragments[[i]]))
+        print(paste("Loading ATAC fragments data from", tmp_locations$fragments[[i]]))
         fragments_data=rtracklayer::import(
             tmp_locations$fragments[[i]],
             format="BED",
             genome=seqinfo_data
         )
-        print("Generating coverage from the loaded fragments data")
+        print("Generating coverage from the loaded ATAC fragments data")
         io$export_fragments_coverage(
             fragments_data=fragments_data,
             location=tmp_locations$fragments_coverage[[i]]
         )
         if (args$test == "manorm2"){
-            print("Extracting 1bp length Tn5 cut sites from the loaded fragments data")
+            print("Extracting 1bp length Tn5 cut sites from the loaded ATAC fragments data")
             cut_sites_data <- unlist(as(list(
                 resize(fragments_data, 1, fix="start", ignore.strand=TRUE),                    # will be 1bp region that corresponds to the beginning of the fragment
                 resize(fragments_data, 1, fix="end", ignore.strand=TRUE)                       # will be 1bp region that corresponds to the end of the fragment
@@ -572,7 +572,7 @@ if (is.null(seqinfo_data)){
     quit(save="no", status=1, runLast=FALSE)
 }
 
-print(paste("Loading fragments data from", args$fragments))
+print(paste("Loading ATAC fragments data from", args$fragments))
 seurat_data <- io$replace_fragments(args$fragments, seurat_data)
 debug$print_info(seurat_data, args)
 

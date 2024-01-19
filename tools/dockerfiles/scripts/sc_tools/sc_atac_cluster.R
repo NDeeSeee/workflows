@@ -202,7 +202,7 @@ export_all_coverage_plots <- function(seurat_data, args) {
                     region=current_gene,
                     group_by=paste("atac_res", current_resolution, sep="."),
                     plot_title=paste(
-                        "Fragments coverage,",
+                        "ATAC fragments coverage,",
                         current_gene, "gene,",
                         "resolution", current_resolution
                     ),
@@ -447,7 +447,7 @@ if (!is.null(seurat_data@misc$atac_reduce$first_lsi_removed) && seurat_data@misc
 print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
 
 if (!is.null(args$fragments)){
-    print(paste("Loading fragments data from", args$fragments))
+    print(paste("Loading ATAC fragments data from", args$fragments))
     seurat_data <- io$replace_fragments(args$fragments, seurat_data)
     debug$print_info(seurat_data, args)
 }

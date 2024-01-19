@@ -167,7 +167,7 @@ if (!all(args$splitby %in% colnames(seurat_data@meta.data))){
     quit(save="no", status=1, runLast=FALSE)
 }
 
-print(paste("Loading fragments data from", args$fragments))
+print(paste("Loading ATAC fragments data from", args$fragments))
 seurat_data <- io$replace_fragments(args$fragments, seurat_data)
 debug$print_info(seurat_data, args)
 

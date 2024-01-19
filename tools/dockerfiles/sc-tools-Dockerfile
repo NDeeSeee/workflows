@@ -2,21 +2,27 @@
 # Dockerfile
 #
 # Software:         set of R scripts for single-cell data analysis
-# Software Version: v0.0.32
+# Software Version: v0.0.33
 # Description:      Dockerized version of the set of R scripts for
 #                   single-cell data analysis
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         set of R scripts for single-cell data analysis
 # Base Image:       satijalab/seurat:latest
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.32 -f sc-tools-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.32
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.32 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.33 -f sc-tools-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.33
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.33 /bin/bash
 ##########################################################################################################
 #
 # Notes:
 # - if you have problems compiling Harmony
 #   https://github.com/immunogenomics/harmony/pull/165
 # - fix bug in cell cycle genes removal
+#
+# v0.0.33 -- based on biowardrobe2/sc-tools:v0.0.32
+# - Replace all "Transcipts" with "RNA reads" and
+#   all "Fragments" with "ATAC fragments".
+# - Use biowardrobe2/sc-tools:v0.0.32 as a base
+#   image only updating R scripts
 #
 # v0.0.32
 # - Fix bug with ATAC Dim Reduction pipeline

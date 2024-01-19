@@ -330,7 +330,7 @@ export_all_coverage_plots <- function(seurat_data, args) {
                     region=current_gene,
                     group_by=paste("wsnn_res", current_resolution, sep="."),
                     plot_title=paste(
-                        "Fragments coverage,",
+                        "ATAC fragments coverage,",
                         current_gene, "gene,",
                         "resolution", current_resolution
                     ),
@@ -767,7 +767,7 @@ if (!is.null(seurat_data@misc$atac_reduce$first_lsi_removed) && seurat_data@misc
 print(paste("--atacdimensions was adjusted to", paste(args$atacdimensions, collapse=", ")))
 
 if (!is.null(args$fragments)){
-    print(paste("Loading fragments data from", args$fragments))
+    print(paste("Loading ATAC fragments data from", args$fragments))
     seurat_data <- io$replace_fragments(args$fragments, seurat_data)                             # will change the default assay to ATAC
     debug$print_info(seurat_data, args)
 }

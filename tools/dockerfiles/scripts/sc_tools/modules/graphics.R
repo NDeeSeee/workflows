@@ -1576,11 +1576,11 @@ fragments_hist <- function(data, rootname, plot_title, split_by, group_by_value=
                 grDevices::dev.off()
             }
 
-            base::print(base::paste("Exporting fragments length histogram to ", rootname, ".(png/pdf)", sep=""))
+            base::print(base::paste("Exporting ATAC fragments length histogram to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
             base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
-            base::print(base::paste("Failed to export fragments length histogram to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+            base::print(base::paste("Failed to export ATAC fragments length histogram to ", rootname, ".(png/pdf) with error - ", e, sep=""))
         }
     )
 }

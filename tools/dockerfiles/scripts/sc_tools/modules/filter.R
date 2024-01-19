@@ -106,9 +106,9 @@ apply_rna_qc_filters <- function(seurat_data, args) {
 
         base::print(base::paste("Filtering", identity))
         base::print(base::paste(" ", mingenes, "<= Genes per cell <=", maxgenes))
-        base::print(base::paste(" ", "Transcripts per cell >=", minumis))
+        base::print(base::paste(" ", "RNA reads per cell >=", minumis))
         base::print(base::paste(" ", "Novelty score >=", minnovelty))
-        base::print(base::paste(" ", "Percentage of transcripts mapped to mitochondrial genes <=", args$maxmt))
+        base::print(base::paste(" ", "Percentage of RNA reads mapped to mitochondrial genes <=", args$maxmt))
 
         filtered_seurat_data <- base::subset(
             seurat_data,
@@ -146,7 +146,7 @@ apply_atac_qc_filters <- function(seurat_data, args) {
         mintssenrich <- args$mintssenrich[i]
 
         base::print(base::paste("Filtering", identity))
-        base::print(base::paste(" ", "Fragments in peaks per cell >=", minfragments))
+        base::print(base::paste(" ", "ATAC fragments in peaks per cell >=", minfragments))
         base::print(base::paste(" ", "Nucleosome signal <=", maxnuclsignal))
         base::print(base::paste(" ", "TSS enrichment score >=", mintssenrich))
 

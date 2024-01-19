@@ -21,7 +21,7 @@ suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 export_all_qc_plots <- function(seurat_data, suffix, args){
     Idents(seurat_data) <- "new.ident"                                                                # safety measure
     selected_features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi")
-    selected_labels=c("Transcripts", "Genes", "Mitochondrial %", "Novelty score")
+    selected_labels=c("RNA reads", "Genes", "Mitochondrial %", "Novelty score")
     datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
 
     qc_metrics_pca <- qc$qc_metrics_pca(
@@ -86,10 +86,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         group_by="new.ident",
         split_by="new.ident",
         x_left_intercept=args$minumis,
-        x_label="Transcripts per cell",
+        x_label="RNA reads per cell",
         y_label="Density",
         legend_title="Dataset",
-        plot_title=paste("Transcripts per cell density (", suffix, ")", sep=""),
+        plot_title=paste("RNA reads per cell density (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
         show_zoomed=FALSE,
         palette_colors=graphics$D40_COLORS,
@@ -130,10 +130,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         gradient_colors=c("lightslateblue", "red", "green"),
         color_limits=c(0, 100),
         color_break=args$maxmt,
-        x_label="Transcripts per cell",
+        x_label="RNA reads per cell",
         y_label="Genes per cell",
         legend_title="Mitochondrial %",
-        plot_title=paste("Genes vs transcripts per cell (", suffix, ")", sep=""),
+        plot_title=paste("Genes vs RNA reads per cell (", suffix, ")", sep=""),
         scale_x_log10=TRUE,
         scale_y_log10=TRUE,
         show_lm=TRUE,
@@ -150,10 +150,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         group_by="new.ident",
         split_by="new.ident",
         x_right_intercept=args$maxmt,
-        x_label="Percentage of transcripts mapped to mitochondrial genes per cell",
+        x_label="Percentage of RNA reads mapped to mitochondrial genes per cell",
         y_label="Density",
         legend_title="Dataset",
-        plot_title=paste("Percentage of transcripts mapped to mitochondrial genes per cell density (", suffix, ")", sep=""),
+        plot_title=paste("Percentage of RNA reads mapped to mitochondrial genes per cell density (", suffix, ")", sep=""),
         show_zoomed=FALSE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
@@ -222,10 +222,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
             group_by="new.ident",
             split_by="condition",
             x_left_intercept=args$minumis,
-            x_label="Transcripts per cell",
+            x_label="RNA reads per cell",
             y_label="Density",
             legend_title="Dataset",
-            plot_title=paste("Split by grouping condition transcripts per cell density (", suffix, ")", sep=""),
+            plot_title=paste("Split by grouping condition RNA reads per cell density (", suffix, ")", sep=""),
             scale_x_log10=TRUE,
             show_zoomed=FALSE,
             palette_colors=graphics$D40_COLORS,
@@ -258,10 +258,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
             group_by="new.ident",
             split_by="condition",
             x_right_intercept=args$maxmt,
-            x_label="Percentage of transcripts mapped to mitochondrial genes per cell",
+            x_label="Percentage of RNA reads mapped to mitochondrial genes per cell",
             y_label="Density",
             legend_title="Dataset",
-            plot_title=paste("Split by grouping condition the percentage of transcripts mapped to mitochondrial genes per cell density (", suffix, ")", sep=""),
+            plot_title=paste("Split by grouping condition the percentage of RNA reads mapped to mitochondrial genes per cell density (", suffix, ")", sep=""),
             show_zoomed=FALSE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
@@ -365,7 +365,7 @@ get_args <- function(){
     parser$add_argument(
         "--minumis",
         help=paste(
-            "Include cells where at least this many UMI (transcripts) are detected.",
+            "Include cells where at least this many RNA reads are detected.",
             "If multiple values provided, each of them will be applied to the",
             "correspondent dataset from the '--mex' input based on the '--identity'",
             "file.",
@@ -395,7 +395,7 @@ get_args <- function(){
     parser$add_argument(
         "--maxmt",
         help=paste(
-            "Include cells with the percentage of transcripts mapped",
+            "Include cells with the percentage of RNA reads mapped",
             "to mitochondrial genes not bigger than this value.",
             "Default: 5 (applied to all datasets)"
         ),
@@ -607,7 +607,7 @@ export_all_qc_plots(                                                            
     args=args
 )
 
-print("Adding genes vs transcripts per cell as gene_rnaumi dimensionality reduction")
+print("Adding genes vs RNA reads per cell as gene_rnaumi dimensionality reduction")
 seurat_data@reductions[["gene_rnaumi"]] <- CreateDimReducObject(
     embeddings=as.matrix(
         seurat_data@meta.data[, c("nCount_RNA", "nFeature_RNA"), drop=FALSE] %>%           # can't be included into the add_rna_qc_metrics function

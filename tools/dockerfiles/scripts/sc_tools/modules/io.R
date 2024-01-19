@@ -122,10 +122,10 @@ export_fragments_coverage <- function(fragments_data, location){
                 "SimpleRleList"
             )
             rtracklayer::export.bw(coverage_data, location)
-            base::print(base::paste("Exporting fragments coverage data to", location, sep=" "))
+            base::print(base::paste("Exporting ATAC fragments coverage data to", location, sep=" "))
         },
         error = function(e){
-            base::print(base::paste("Failed to export fragments coverage data to", location, "due to", e))
+            base::print(base::paste("Failed to export ATAC fragments coverage data to", location, "due to", e))
         }
     )
 }
@@ -538,7 +538,7 @@ load_10x_multiome_data <- function(args, cell_identity_data, grouping_data, seqi
     names(all_cells) <- all_cells
     base::print(
         base::paste(
-            "Preparing fragments for", length(all_cells), "cells"
+            "Preparing ATAC fragments for", length(all_cells), "cells"
         )
     )
     fragments <- Signac::CreateFragmentObject(
@@ -553,7 +553,7 @@ load_10x_multiome_data <- function(args, cell_identity_data, grouping_data, seqi
     )
     base::print(
         base::paste(
-            "Counting fragments overlapping", length(peak_coordinates), "peaks"
+            "Counting ATAC fragments overlapping", length(peak_coordinates), "peaks"
         )
     )
     peak_counts <- Signac::FeatureMatrix(                                                 # need to recalculate feature-barcode matrix to include fragments, not reads
@@ -706,7 +706,7 @@ replace_fragments <- function(location, seurat_data){
     Signac::Fragments(seurat_data[["ATAC"]]) <- NULL                                 # remove old fragments
     all_cells <- SeuratObject::Cells(seurat_data)
     names(all_cells) <- all_cells
-    base::print(base::paste("Preparing fragments for", length(all_cells), "cells"))
+    base::print(base::paste("Preparing ATAC fragments for", length(all_cells), "cells"))
     fragments <- Signac::CreateFragmentObject(
         path=location,
         cells=all_cells,
