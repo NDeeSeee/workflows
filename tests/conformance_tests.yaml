@@ -4392,10 +4392,10 @@
   output:
     dedup_bam_file:
       class: File
-      location: chr4_100_mapped_reads.Aligned.out.bam
+      location: chr4_100_mapped_reads.Aligned.out_dedup.bam
       secondaryFiles:
       - class: File
-        location: chr4_100_mapped_reads.Aligned.out.bam.bai
+        location: chr4_100_mapped_reads.Aligned.out_dedup.bam.bai
     output_stats: null
     stdout_log:
       class: File
@@ -4409,10 +4409,10 @@
   output:
     dedup_bam_file:
       class: File
-      location: chr4_100_mapped_reads.Aligned.out.bam
+      location: results.bam
       secondaryFiles:
       - class: File
-        location: chr4_100_mapped_reads.Aligned.out.bam.bai
+        location: results.bam.bai
     output_stats: null
     stdout_log:
       class: File
