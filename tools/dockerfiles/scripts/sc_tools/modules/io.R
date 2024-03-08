@@ -185,10 +185,17 @@ export_h5seurat <- function(data, location, overwrite=TRUE){
     )
 }
 
-export_h5ad <- function(data, location){
+export_h5ad <- function(data, location, assay="RNA", slot="counts"){
     base::tryCatch(
         expr = {
-            sceasy::convertFormat(data, from="seurat", to="anndata", outFile=location)
+            sceasy::convertFormat(
+                data,
+                from="seurat",
+                to="anndata",
+                outFile=location,
+                assay=assay,
+                main_layer=slot
+            )
             base::print(base::paste("Exporting data as h5ad to", location, sep=" "))
         },
         error = function(e){

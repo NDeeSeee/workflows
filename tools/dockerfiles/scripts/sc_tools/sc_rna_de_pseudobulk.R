@@ -486,6 +486,11 @@ get_args <- function(){
         ),
         type="integer", default=32
     )
+    parser$add_argument(
+        "--seed",
+        help="Seed number for random values. Default: 42",
+        type="integer", default=42
+    )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
     return (args)
 }

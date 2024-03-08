@@ -16,7 +16,6 @@ suppressMessages(io <- modules::use(file.path(HERE, "modules/io.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
-set.seed(42)
 
 # https://bioconductor.org/packages/release/bioc/vignettes/TrajectoryUtils/inst/doc/overview.html
 # https://github.com/dynverse/ti_slingshot/blob/master/package/R/ti_slingshot.R
@@ -421,7 +420,7 @@ get_args <- function(){
     )
     parser$add_argument(
         "--h5ad",
-        help="Save Seurat data to h5ad file. Default: false",
+        help="Save raw counts from the RNA assay to h5ad file. Default: false",
         action="store_true"
     )
     parser$add_argument(
@@ -456,6 +455,11 @@ get_args <- function(){
             "Default: 32"
         ),
         type="integer", default=32
+    )
+    parser$add_argument(
+        "--seed",
+        help="Seed number for random values. Default: 42",
+        type="integer", default=42
     )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
     return (args)
@@ -575,24 +579,13 @@ if(args$cbbuild){
             palette_colors=graphics$D40_COLORS,                              # to have colors correspond to the plots
             rootname=paste(args$output, "_cellbrowser/atac", sep="")
         )
-    } else if ("RNA" %in% names(seurat_data@assays)){
+    } else {
         print("Exporting RNA assay to UCSC Cellbrowser")
         ucsc$export_cellbrowser(
             seurat_data=seurat_data,
             assay="RNA",
             slot="counts",
             short_label="RNA",
-            label_field=label_field,
-            palette_colors=graphics$D40_COLORS,                              # to have colors correspond to the plots
-            rootname=paste(args$output, "_cellbrowser", sep="")
-        )
-    } else {
-        print("Exporting ATAC assay to UCSC Cellbrowser")
-        ucsc$export_cellbrowser(
-            seurat_data=seurat_data,
-            assay="ATAC",
-            slot="counts",
-            short_label="ATAC",
             label_field=label_field,
             palette_colors=graphics$D40_COLORS,                              # to have colors correspond to the plots
             rootname=paste(args$output, "_cellbrowser", sep="")
@@ -609,6 +602,11 @@ if(args$h5seurat){
 }
 
 if(args$h5ad){
-    print("Exporting results to h5ad file")
-    io$export_h5ad(seurat_data, paste(args$output, "_data.h5ad", sep=""))
+    print("Exporting RNA counts to h5ad file")
+    io$export_h5ad(
+        data=seurat_data,
+        location=paste(args$output, "_counts.h5ad", sep=""),
+        assay="RNA",
+        slot="counts"
+    )
 }

@@ -2,22 +2,62 @@
 # Dockerfile
 #
 # Software:         set of R scripts for single-cell data analysis
-# Software Version: v0.0.33
+# Software Version: v0.0.34
 # Description:      Dockerized version of the set of R scripts for
 #                   single-cell data analysis
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         set of R scripts for single-cell data analysis
 # Base Image:       satijalab/seurat:latest
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.33 -f sc-tools-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.33
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.33 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.34 -f sc-tools-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.34
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.34 /bin/bash
 ##########################################################################################################
 #
 # Notes:
 # - if you have problems compiling Harmony
 #   https://github.com/immunogenomics/harmony/pull/165
 # - fix bug in cell cycle genes removal
-#
+# - Quick "smoke" test
+#     sc_rna_filter.R --help && \
+#     sc_multiome_filter.R --help && \
+#     sc_rna_reduce.R --help && \
+#     sc_atac_reduce.R --help && \
+#     sc_rna_cluster.R --help && \
+#     sc_atac_cluster.R --help && \
+#     sc_atac_coverage.R --help && \
+#     sc_atac_dbinding.R --help && \
+#     sc_wnn_cluster.R --help && \
+#     sc_ctype_assign.R --help && \
+#     sc_rna_de_pseudobulk.R --help && \
+#     sc_rna_da_cells.R --help && \
+#     sc_triangulate.R --help && \
+#     sc_rna_trajectory.R --help && \
+#     sc_vdj_profile.R --help 
+# v0.0.34 -- based on biowardrobe2/sc-tools:v0.0.33
+# - Use intrinsicDimension to estimate dimensionality
+#   in sc_rna_reduce.R and sc_rna_cluster.R scripts
+#   if --dimensions parameter was set to 0
+# - Allow to show density levels on UMAP (see
+#   dim_plot function from graphics.R)
+# - Show cell counts on the composition plots (can
+#   disabled when label parameter is set to FALSE)
+# - Allow to set seed in all scripts
+# - Automatically estimate --minumis, --mingenes,
+#   --maxgenes, --maxmt, and --minfragments filtering
+#   thresholds if set to 0 (related to sc_rna_filter.R
+#   and sc_multiome_filter.R scripts)
+# - Updated plots for cell counts comparison between
+#   datasets, groups, clusters, etc in
+#   sc_[rna/atac/wnn]_cluster.R and sc_ctype_assign.R
+#   scripts
+# - Add optional --reduction to sc_ctype_assign.R
+#   scripts to outputs plots only to selected reduction
+#   (if not provided, it will be defined based on the
+#   --source parameter)
+# - Added "RNA reads vs mitochondrial % per cell" plot in
+#   sc_rna_filter.R and sc_multiome_filter.R scripts
+# - Set the default normalization method in sc_rna_reduce.R
+#   to sctglm
 # v0.0.33 -- based on biowardrobe2/sc-tools:v0.0.32
 # - Replace all "Transcipts" with "RNA reads" and
 #   all "Fragments" with "ATAC fragments".
@@ -316,6 +356,8 @@ RUN apt-get update && \
     R -e 'install.packages("magick")' && \
     R -e 'install.packages("MAnorm2")' && \
     R -e 'install.packages("circlize")' && \
+    R -e 'install.packages("intrinsicDimension")' && \
+    R -e 'install.packages("ggnewscale")' && \
 ### Installing R scripts
     chmod +x /usr/local/bin/sc_rna_filter.R && \
     chmod +x /usr/local/bin/sc_multiome_filter.R && \

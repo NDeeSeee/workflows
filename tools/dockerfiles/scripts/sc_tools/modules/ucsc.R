@@ -246,7 +246,11 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, label_field=N
                 color=character(),
                 check.names=FALSE,
                 stringsAsFactors=FALSE
-            ) %>% tibble::add_row(category="NA", color="#E1F6FF")            # color for NA
+            ) %>%
+            tibble::add_row(category="NA", color="#E1F6FF") %>%              # color for NA
+            tibble::add_row(category="G1", color="#80FFB5") %>%              # color for G1 cell cycle phase
+            tibble::add_row(category="S", color="#FFB580") %>%               # color for S cell cycle phase
+            tibble::add_row(category="G2M", color="#8093FF")                 # color for G2M cell cycle phase
 
             if (is.null(meta_fields) || is.null(meta_fields_names)){
                 meta_fields <- c(
@@ -429,7 +433,7 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, label_field=N
                 is_nested=is_nested,
                 dot_radius=dot_radius,
                 dot_alpha=dot_alpha,
-                color_data=if(base::nrow(color_data) > 1) color_data else NULL       # we always have color for NA, so we check > 1
+                color_data=color_data
             )
             base::print(base::paste("Exporting UCSC Cellbrowser data to", rootname, sep=" "))
         },

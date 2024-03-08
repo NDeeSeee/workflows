@@ -27,6 +27,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     graphics$elbow_plot(
         data=seurat_data,
         ndims=50,
+        x_intercept=max(args$dimensions),                  # need to take the max because dimensions was already adjusted to array of values
         reduction="qcpca",                                 # when integrating with Harmony, this will be the PCA that we run before intergration
         plot_title="Elbow plot",
         theme=args$theme,
@@ -322,7 +323,7 @@ get_args <- function(){
             "Default: sct"
         ),
         type="character",
-        default="sct",
+        default="sctglm",
         choices=c("sct", "log", "sctglm")
     )
     parser$add_argument(
@@ -400,8 +401,8 @@ get_args <- function(){
         help=paste(
             "Dimensionality to use for datasets integration (if provided RDS",
             "file includes multiple datasets and --ntgr is not set to 'harmony')",
-            "and UMAP projection (from 1 to 50).",
-            "Default: 10"
+            "and UMAP projection (from 1 to 50). Set to 0 to use auto-estimated",
+            "dimensionality. Default: 10"
         ),
         type="integer", default=10
     )
@@ -478,7 +479,7 @@ get_args <- function(){
     )
     parser$add_argument(
         "--h5ad",
-        help="Save Seurat data to h5ad file. Default: false",
+        help="Save raw counts from the RNA assay to h5ad file. Default: false",
         action="store_true"
     )
     parser$add_argument(
@@ -533,6 +534,11 @@ get_args <- function(){
         ),
         type="integer", default=32
     )
+    parser$add_argument(
+        "--seed",
+        help="Seed number for random values. Default: 42",
+        type="integer", default=42
+    )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
     return (args)
 }
@@ -541,9 +547,12 @@ args <- get_args()
 
 print("Input parameters")
 print(args)
-print("Adjusting --dimensions parameter")
-args$dimensions <- c(1:args$dimensions)
-print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
+
+if (args$dimensions != 0){                       # we extend it to array only when we don't want to auto-estimate it
+    print("Adjusting --dimensions parameter")
+    args$dimensions <- c(1:args$dimensions)
+    print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
+}
 
 print(
     paste(
@@ -655,8 +664,13 @@ if(args$h5seurat){
 }
 
 if(args$h5ad){
-    print("Exporting results to h5ad file")
-    io$export_h5ad(seurat_data, paste(args$output, "_data.h5ad", sep=""))
+    print("Exporting RNA counts to h5ad file")
+    io$export_h5ad(
+        data=seurat_data,
+        location=paste(args$output, "_counts.h5ad", sep=""),
+        assay="RNA",
+        slot="counts"
+    )
 }
 
 if(args$scope){

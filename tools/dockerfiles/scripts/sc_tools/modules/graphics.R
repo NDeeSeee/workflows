@@ -18,6 +18,7 @@ import("reshape2", attach=FALSE)
 import("dittoSeq", attach=FALSE)
 import("Nebulosa", attach=FALSE)
 import("patchwork", attach=FALSE)
+import("ggnewscale", attach=FALSE)
 import("tidyselect", attach=FALSE)
 import("htmlwidgets", attach=FALSE)
 import("scRepertoire", attach=FALSE)
@@ -65,13 +66,15 @@ export(
     "dendro_plot",
     "topology_plot",
     "trajectory_heatmap",
-    "D40_COLORS"
+    "D40_COLORS",
+    "CC_COLORS"
 )
 
 # https://sashamaps.net/docs/resources/20-colors/
 # https://cran.r-project.org/web/packages/Polychrome/vignettes/testgg.html
 # D40_COLORS <- c("#FB1C0D", "#0DE400", "#0D00FF", "#E8B4BD", "#FD00EA", "#0DD1FE", "#FF9B0D", "#0D601C", "#C50D69", "#CACA16", "#722A91", "#00DEBF", "#863B00", "#5D7C91", "#FD84D8", "#C100FB", "#8499FC", "#FD6658", "#83D87A", "#968549", "#DEB6FB", "#832E60", "#A8CAB0", "#FE8F95", "#FE1CBB", "#DF7CF8", "#FF0078", "#F9B781", "#4D493B", "#1C5198", "#7C32CE", "#EFBC16", "#7CD2DE", "#B30DA7", "#9FC0F6", "#7A940D", "#9B0000", "#946D9B", "#C8C2D9", "#94605A")
 D40_COLORS <- c("#FF6E6A", "#71E869", "#6574FF", "#F3A6B5", "#FF5AD6", "#6DDCFE", "#FFBB70", "#43A14E", "#D71C7C", "#E1E333", "#8139A8", "#00D8B6", "#B55C00", "#7FA4B6", "#FFA4E3", "#B300FF", "#9BC4FD", "#FF7E6A", "#9DE98D", "#BFA178", "#E7C2FD", "#8B437D", "#ADCDC0", "#FE9FA4", "#FF53D1", "#D993F9", "#FF47A1", "#FFC171", "#625C51", "#4288C9", "#9767D4", "#F2D61D", "#8EE6FD", "#B940B1", "#B2D5F8", "#9AB317", "#C70000", "#AC8BAC", "#D7D1E4", "#9D8D87")
+CC_COLORS <- c("#80FFB5", "#FFB580", "#8093FF")
 
 get_theme <- function(theme){
     return (
@@ -737,7 +740,7 @@ feature_scatter_plot <- function(data, rootname, x_axis, y_axis, x_label, y_labe
     )
 }
 
-vln_plot <- function(data, features, labels, rootname, plot_title, legend_title, from_meta=FALSE, log=FALSE, group_by=NULL, split_by=NULL, ncol=NULL, show_stats=FALSE, hide_x_text=FALSE, pt_size=NULL, palette_colors=NULL, combine_guides=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+vln_plot <- function(data, features, labels, rootname, plot_title, legend_title, plot_subtitle=NULL, from_meta=FALSE, log=FALSE, group_by=NULL, split_by=NULL, ncol=NULL, show_stats=FALSE, hide_x_text=FALSE, pt_size=NULL, palette_colors=NULL, combine_guides=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
 
@@ -794,7 +797,8 @@ vln_plot <- function(data, features, labels, rootname, plot_title, legend_title,
                 if (hide_x_text){ plots[[i]] <- plots[[i]] + ggplot2::theme(axis.text.x=ggplot2::element_blank()) }
                 return (plots[[i]])
             })
-            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) + patchwork::plot_annotation(title=plot_title)
+            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
+                              patchwork::plot_annotation(title=plot_title, subtitle=plot_subtitle)
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(combined_plots))
@@ -815,7 +819,7 @@ vln_plot <- function(data, features, labels, rootname, plot_title, legend_title,
     )
 }
 
-dim_plot <- function(data, rootname, reduction, plot_title, legend_title, cells=NULL, split_by=NULL, group_by=NULL, highlight_group=NULL, perc_split_by=NULL, perc_group_by=NULL, ncol=NULL, label=FALSE, label_box=FALSE, label_repel=FALSE, label_color="black", label_size=4, fixed=TRUE, alpha=NULL, palette_colors=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+dim_plot <- function(data, rootname, reduction, plot_title, legend_title, plot_subtitle=NULL, cells=NULL, split_by=NULL, group_by=NULL, highlight_group=NULL, show_density=FALSE, ncol=NULL, label=FALSE, label_box=FALSE, label_repel=FALSE, label_color="black", label_size=4, fixed=TRUE, alpha=NULL, palette_colors=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             highlight_cells <- NULL
@@ -852,7 +856,7 @@ dim_plot <- function(data, rootname, reduction, plot_title, legend_title, cells=
                         label.size=label_size
                     ) +
                     get_theme(theme) +
-                    ggplot2::ggtitle(plot_title) +
+                    ggplot2::ggtitle(plot_title, subtitle=plot_subtitle) +
                     ggplot2::guides(color=ggplot2::guide_legend(legend_title, override.aes=list(size=3)))
 
             if (!is.null(fixed) && fixed){
@@ -866,30 +870,34 @@ dim_plot <- function(data, rootname, reduction, plot_title, legend_title, cells=
             }
             if (!is.null(alpha)) { plot$layers[[1]]$aes_params$alpha <- alpha }
 
-            if(!is.null(perc_split_by) && !is.null(perc_group_by)){
-                width <- 2 * width
-                perc_data <- data@meta.data %>%
-                             dplyr::group_by(dplyr::across(tidyselect::all_of(perc_split_by)), dplyr::across(tidyselect::all_of(perc_group_by))) %>%
-                             dplyr::summarise(counts=dplyr::n(), .groups="drop_last") %>%        # drop the perc_group_by grouping level so we can get only groups defined by perc_split_by
-                             dplyr::mutate(freq=counts/sum(counts)*100) %>%                      # sum is taken for the group defined by perc_split_by
-                             dplyr::arrange(dplyr::across(tidyselect::all_of(perc_split_by)), dplyr::across(tidyselect::all_of(perc_group_by)))        # sort for consistency
-                label_data <- data@meta.data %>%
-                             dplyr::group_by(dplyr::across(tidyselect::all_of(perc_split_by))) %>%
-                             dplyr::summarise(counts=dplyr::n(), .groups="drop_last") %>%                      # drops all grouping as we have only one level
-                             dplyr::arrange(dplyr::across(tidyselect::all_of(perc_split_by)))                  # sort for consistency
-                perc_plot <- ggplot2::ggplot(perc_data, ggplot2::aes_string(x=perc_split_by, y="freq", fill=perc_group_by)) +
-                             ggplot2::geom_col(position="dodge", width=0.9, linetype="solid", color="black", show.legend=FALSE) +
-                             ggplot2::xlab("") +
-                             ggplot2::ylab("Cells percentage") +
-                             get_theme(theme) +
-                             ggrepel::geom_label_repel(
-                                label_data, mapping=ggplot2::aes(y=-Inf, label=counts),
-                                color="black", fill="white", segment.colour=NA,
-                                direction="y", size=3, show.legend=FALSE
-                             ) +
-                             Seurat::RotatedAxis()
-                if (!is.null(palette_colors)){ perc_plot <- perc_plot + ggplot2::scale_fill_manual(values=palette_colors) }
-                plot <- plot + perc_plot
+            if (!is.null(show_density) && show_density){
+                plot <- plot +
+                        ggnewscale::new_scale("color") +                    # to have a separate color scale for density counts
+                        ggplot2::geom_density_2d(
+                            ggplot2::aes_string(
+                                x=base::paste0(                             # need to set x and y aesthetics because geom_density_2d can't reach them from the plot
+                                    SeuratObject::Key(
+                                        data@reductions[[reduction]]
+                                    ),
+                                    "1"
+                                ),
+                                y=base::paste0(
+                                    SeuratObject::Key(
+                                        data@reductions[[reduction]]
+                                    ),
+                                    "2"
+                                ),
+                                group=group_by,                             # if not NULL, density is calculated per group (a.k.a cluster, cell type)
+                                colour=ggplot2::after_stat("stat(level)")   # color by height of contour (numeric vector with bin boundaries)
+                            ),
+                            contour_var="count",                            # contours are made based on the densities * on the cell counts withing each bin
+                            linetype="solid",
+                            size=0.5
+                        ) +
+                        ggplot2::scale_colour_distiller(
+                            "Counts",
+                            palette="YlOrRd"
+                        )
             }
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
@@ -1292,7 +1300,7 @@ trajectory_heatmap <- function(                                    # changing th
     )
 }
 
-elbow_plot <- function(data, rootname, plot_title, reduction="pca", ndims=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+elbow_plot <- function(data, rootname, plot_title, reduction="pca", ndims=NULL, x_intercept=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             plot <- Seurat::ElbowPlot(
@@ -1302,6 +1310,28 @@ elbow_plot <- function(data, rootname, plot_title, reduction="pca", ndims=NULL, 
                     ) +
                     get_theme(theme) +
                     ggplot2::ggtitle(plot_title)
+
+            if (!is.null(x_intercept)){                                      # won't fail even if x_intercept > ndims
+                intercept_data <- base::data.frame(x_coord=x_intercept)      # somehow can't add label without using intercept_data
+                plot <- plot +
+                        ggplot2::geom_vline(
+                            intercept_data,
+                            mapping=ggplot2::aes(xintercept=x_coord),
+                            color="red",
+                            size=1
+                        ) +
+                        ggrepel::geom_label_repel(
+                            intercept_data,
+                            mapping=ggplot2::aes(x=x_coord, y=Inf, label=x_coord),
+                            color="white",
+                            fontface="bold",
+                            fill="red",
+                            segment.colour=NA,
+                            direction="y",
+                            size=6,
+                            show.legend=FALSE
+                        )
+            }
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(plot))
@@ -1322,7 +1352,7 @@ elbow_plot <- function(data, rootname, plot_title, reduction="pca", ndims=NULL, 
     )
 }
 
-silhouette_plot <- function(data, rootname, plot_title, legend_title, group_by, dims, downsample=300, reduction="pca", palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+silhouette_plot <- function(data, rootname, plot_title, legend_title, group_by, dims, downsample=300, reduction="pca", plot_subtitle=NULL, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             SeuratObject::Idents(data) <- group_by
@@ -1351,7 +1381,7 @@ silhouette_plot <- function(data, rootname, plot_title, legend_title, group_by, 
                         panel.grid.major=ggplot2::element_blank(),
                         panel.grid.minor=ggplot2::element_blank()
                     ) +
-                    ggplot2::ggtitle(plot_title) +
+                    ggplot2::ggtitle(plot_title, subtitle=plot_subtitle) +
                     ggplot2::guides(fill=ggplot2::guide_legend(legend_title))
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
@@ -1373,7 +1403,7 @@ silhouette_plot <- function(data, rootname, plot_title, legend_title, group_by, 
     )
 }
 
-composition_plot <- function(data, rootname, plot_title, legend_title, x_label, y_label, split_by, group_by, bar_position="fill", palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+composition_plot <- function(data, rootname, plot_title, legend_title, x_label, y_label, split_by, group_by, bar_position="fill", plot_subtitle=NULL, label=TRUE, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     # bar_position can be one of the following
     #   fill  - stacked, percents are diplayed (default)
     #   dodge - grouped, values are displayed
@@ -1396,23 +1426,61 @@ composition_plot <- function(data, rootname, plot_title, legend_title, x_label, 
             plot <- counts_data %>%
                     dplyr::select(-c("total_counts")) %>%                                               # removes "total_counts" column
                     reshape2::melt(id.vars=split_by) %>%                                                # creates "variable" and "value" columns
-                    ggplot2::ggplot(ggplot2::aes_string(x=split_by, y="value")) +
-                    ggplot2::geom_bar(ggplot2::aes(fill=variable), position=bar_position, stat="identity") +
+                    ggplot2::ggplot(
+                        ggplot2::aes_string(
+                            x=split_by,
+                            y="value",
+                            fill="variable",
+                            label="value"
+                        )
+                    ) +
+                    ggplot2::geom_bar(position=bar_position, stat="identity") +
                     ggrepel::geom_label_repel(
-                        label_data, mapping=ggplot2::aes_string(x=split_by, y="-Inf", label="n"),
-                        color="black", fill="white", segment.colour=NA,
-                        direction="y", size=3, show.legend=FALSE
+                        label_data,
+                        mapping=ggplot2::aes_string(x=split_by, y=-Inf, label="n"),
+                        color="white",
+                        fontface="bold",
+                        fill="darkred",
+                        segment.colour=NA,
+                        direction="y",
+                        size=3,
+                        show.legend=FALSE
                     ) +
                     ggplot2::scale_fill_manual(values=palette_colors) +
                     ggplot2::xlab(x_label) +
                     ggplot2::ylab(y_label) +
                     get_theme(theme) +
-                    ggplot2::ggtitle(plot_title) +
+                    ggplot2::ggtitle(plot_title, subtitle=plot_subtitle) +
                     ggplot2::guides(fill=ggplot2::guide_legend(legend_title)) +
                     Seurat::RotatedAxis()
+
             if (bar_position == "fill"){
-                plot <- plot + ggplot2::scale_y_continuous(labels=scales::percent_format(), expand=c(0.01, 0))
+                plot <- plot + ggplot2::scale_y_continuous(labels=scales::percent_format(), expand=c(0.05, 0))
             }
+
+            if (!is.null(label) && label){
+                if (bar_position == "fill"){
+                    plot <- plot +
+                            ggplot2::geom_text(
+                                position=ggplot2::position_fill(vjust=0.5),
+                                angle=0,
+                                color="gray95",
+                                fontface="bold",
+                                size=3
+                            )
+                } else {
+                    plot <- plot +
+                            ggplot2::geom_text(
+                                position=ggplot2::position_dodge(width=0.9),
+                                angle=90,
+                                hjust=-0.2,
+                                color="gray45",
+                                fontface="bold",
+                                size=3
+                            )
+                }
+            }
+
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(plot))
             grDevices::dev.off()
@@ -1651,7 +1719,7 @@ mds_html_plot <- function(norm_counts_data, rootname){
     )
 }
 
-dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, cluster_idents=FALSE, min_pct=0.01, col_min=-2.5, col_max=2.5, theme="classic", pdf=FALSE, width=1200, height=NULL, resolution=100){
+dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, cluster_idents=FALSE, min_pct=0.01, col_min=-2.5, col_max=2.5, plot_subtitle=NULL, theme="classic", pdf=FALSE, width=1200, height=NULL, resolution=100){
     base::tryCatch(
         expr = {
             plot <- Seurat::DotPlot(
@@ -1667,7 +1735,7 @@ dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, clu
                     ggplot2::xlab(x_label) +
                     ggplot2::ylab(y_label) +
                     get_theme(theme) +
-                    ggplot2::ggtitle(plot_title) +
+                    ggplot2::ggtitle(plot_title, subtitle=plot_subtitle) +
                     Seurat::RotatedAxis()
 
             if (is.null(height)){
@@ -1695,7 +1763,7 @@ dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, clu
 }
 
 
-expression_density_plot <- function(data, features, rootname, reduction, plot_title, joint=FALSE, alpha=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+expression_density_plot <- function(data, features, rootname, reduction, plot_title, joint=FALSE, alpha=NULL, fixed=TRUE, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
 
@@ -1715,8 +1783,15 @@ expression_density_plot <- function(data, features, rootname, reduction, plot_ti
                 features <- base::paste(features, collapse="+")
             }
             plots <- base::lapply(seq_along(plots), function(i){
-                plots[[i]] <- plots[[i]] + ggplot2::ggtitle(features[i]) + get_theme(theme)
-                if (!is.null(alpha)) { plots[[i]]$layers[[1]]$aes_params$alpha <- alpha }
+                plots[[i]] <- plots[[i]] +
+                              ggplot2::ggtitle(features[i]) +
+                              get_theme(theme)
+                if (!is.null(alpha)) {
+                    plots[[i]]$layers[[1]]$aes_params$alpha <- alpha
+                }
+                if (!is.null(fixed) && fixed){
+                    plots[[i]] <- plots[[i]] + ggplot2::coord_fixed(ratio=1)
+                }
                 return (plots[[i]])
             })
 
@@ -1742,7 +1817,7 @@ expression_density_plot <- function(data, features, rootname, reduction, plot_ti
 }
 
 
-feature_plot <- function(data, features, labels, rootname, reduction, plot_title, from_meta=FALSE, split_by=NULL, label=FALSE, label_color="black", label_size=4, order=FALSE, color_limits=NULL, color_scales=NULL, gradient_colors=c("lightgrey", "blue"), min_cutoff=NA, max_cutoff=NA, pt_size=NULL, combine_guides=NULL, fixed=TRUE, alpha=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+feature_plot <- function(data, features, labels, rootname, reduction, plot_title, plot_subtitle=NULL, legend_title=NULL, from_meta=FALSE, split_by=NULL, label=FALSE, label_color="black", label_size=4, order=FALSE, color_limits=NULL, color_scales=NULL, gradient_colors=c("lightgrey", "blue"), min_cutoff=NA, max_cutoff=NA, pt_size=NULL, combine_guides=NULL, fixed=TRUE, alpha=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
 
@@ -1806,7 +1881,13 @@ feature_plot <- function(data, features, labels, rootname, reduction, plot_title
                         combine=FALSE       # to return a list of gglots
                     )
             plots <- base::lapply(seq_along(plots), function(i){
-                plots[[i]] <- plots[[i]] + ggplot2::ggtitle(labels_corrected[i]) + get_theme(theme)
+                plots[[i]] <- plots[[i]] +
+                              ggplot2::ggtitle(labels_corrected[i]) +
+                              get_theme(theme)
+                if (!is.null(legend_title)){
+                    plots[[i]] <- plots[[i]] +
+                                  ggplot2::guides(color=ggplot2::guide_colourbar(legend_title))  # the same for all plots, a.k.a "Expression"
+                }
                 if (!is.null(fixed) && fixed){
                     plots[[i]] <- plots[[i]] + ggplot2::coord_fixed(ratio=1)
                 }
@@ -1828,7 +1909,7 @@ feature_plot <- function(data, features, labels, rootname, reduction, plot_title
                 }
                 return (plots[[i]])
             })
-            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides) + patchwork::plot_annotation(title=plot_title)
+            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides) + patchwork::plot_annotation(title=plot_title, subtitle=plot_subtitle)
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(combined_plots))
@@ -1929,7 +2010,7 @@ dim_loadings_plot <- function(data, rootname, plot_title, x_label, y_label, redu
     )
 }
 
-coverage_plot <- function(data, assay, region, group_by, plot_title, rootname, idents=NULL, cells=NULL, features=NULL, expression_assay="RNA", expression_slot="data", extend_upstream=0, extend_downstream=0, tile_cells=100, tile_size=100, show_annotation=TRUE, show_peaks=TRUE, show_tile=FALSE, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=NULL, resolution=100){
+coverage_plot <- function(data, assay, region, group_by, plot_title, rootname, plot_subtitle=NULL, idents=NULL, cells=NULL, features=NULL, expression_assay="RNA", expression_slot="data", extend_upstream=0, extend_downstream=0, tile_cells=100, tile_size=100, show_annotation=TRUE, show_peaks=TRUE, show_tile=FALSE, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=NULL, resolution=100){
     base::tryCatch(
         expr = {
 
@@ -1952,7 +2033,7 @@ coverage_plot <- function(data, assay, region, group_by, plot_title, rootname, i
                 tile.size=tile_size,
                 tile.cells=tile_cells,
                 sep=c("-", "-")
-            ) + patchwork::plot_annotation(title=plot_title)
+            ) + patchwork::plot_annotation(title=plot_title, subtitle=plot_subtitle)
 
             plot[[1]][[1]] <- plot[[1]][[1]] +                                        # for genome coverage plots
                               get_theme(theme) +

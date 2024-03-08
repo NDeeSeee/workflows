@@ -14,7 +14,6 @@ suppressMessages(io <- modules::use(file.path(HERE, "modules/io.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
-set.seed(42)
 
 # Book chapter with the related materials
 # https://www.ncbi.nlm.nih.gov/books/NBK27130/#:~:text=The%20antigen%20receptors%20on%20B,cell%20receptor%E2%80%94that%20are%20associated
@@ -540,7 +539,7 @@ get_args <- function(){
     )
     parser$add_argument(
         "--h5ad",
-        help="Save Seurat data to h5ad file. Default: false",
+        help="Save raw counts from the RNA assay to h5ad file. Default: false",
         action="store_true"
     )
     parser$add_argument(
@@ -583,6 +582,11 @@ get_args <- function(){
             "Default: 32"
         ),
         type="integer", default=32
+    )
+    parser$add_argument(
+        "--seed",
+        help="Seed number for random values. Default: 42",
+        type="integer", default=42
     )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
     return (args)
@@ -681,8 +685,13 @@ if(args$h5seurat){
 }
 
 if(args$h5ad){
-    print("Exporting results to h5ad file")
-    io$export_h5ad(seurat_data, paste(args$output, "_data.h5ad", sep=""))
+    print("Exporting RNA counts to h5ad file")
+    io$export_h5ad(
+        data=seurat_data,
+        location=paste(args$output, "_counts.h5ad", sep=""),
+        assay="RNA",
+        slot="counts"
+    )
 }
 
 if(args$scope){

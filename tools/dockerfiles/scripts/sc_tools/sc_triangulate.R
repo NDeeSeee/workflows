@@ -133,7 +133,7 @@ get_args <- function(){
     )
     parser$add_argument(
         "--h5ad",
-        help="Save Seurat data to h5ad file. Default: false",
+        help="Save raw counts from the RNA and/or ATAC assay(s) to h5ad file(s). Default: false",
         action="store_true"
     )
     parser$add_argument(
@@ -168,6 +168,11 @@ get_args <- function(){
             "Default: 32"
         ),
         type="integer", default=32
+    )
+    parser$add_argument(
+        "--seed",
+        help="Seed number for random values. Default: 42",
+        type="integer", default=42
     )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
     return (args)
@@ -282,7 +287,21 @@ if(args$h5seurat){
     io$export_h5seurat(seurat_data, paste(args$output, "_data.h5seurat", sep=""))
 }
 
-if(args$h5ad){
-    print("Exporting results to h5ad file")
-    io$export_h5ad(seurat_data, paste(args$output, "_data.h5ad", sep=""))
+if(args$h5ad && ("RNA" %in% names(seurat_data@assays))){
+    print("Exporting RNA counts to h5ad file")
+    io$export_h5ad(
+        data=seurat_data,
+        location=paste(args$output, "_rna_counts.h5ad", sep=""),
+        assay="RNA",
+        slot="counts"
+    )
+}
+if(args$h5ad && ("ATAC" %in% names(seurat_data@assays))){
+    print("Exporting ATAC counts to h5ad file")
+    io$export_h5ad(
+        data=seurat_data,
+        location=paste(args$output, "_atac_counts.h5ad", sep=""),
+        assay="ATAC",
+        slot="counts"
+    )
 }

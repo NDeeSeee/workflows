@@ -21,25 +21,43 @@ suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
 export_all_clustering_plots <- function(seurat_data, args){
     Idents(seurat_data) <- "new.ident"                                                               # safety measure
-    downsampled_to <- analyses$get_min_ident_size(SplitObject(seurat_data, split.by="new.ident"))    # need to split it for consistency
-    print(paste("Downsampling datasets to", downsampled_to, "cells per sample"))
-    downsampled_data <- subset(seurat_data, downsample=downsampled_to)
-    for (i in 1:length(args$resolution)) {
+    datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
+    conditions_count <- length(unique(as.vector(as.character(seurat_data@meta.data$condition))))
+    not_default_conditions <- all(
+        as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition))
+    )
+
+    if (datasets_count > 1){
+        Idents(seurat_data) <- "new.ident"
+        min_dataset_size <- analyses$get_min_ident_size(SplitObject(seurat_data, split.by="new.ident"))
+        print(paste("Downsampling to", min_dataset_size, "cells per datasets"))
+        downsampled_per_dataset <- subset(seurat_data, downsample=min_dataset_size)    # downsample per "new.ident"
+        if (conditions_count > 1 && not_default_conditions){
+            Idents(downsampled_per_dataset) <- "condition"
+            min_condition_size <- analyses$get_min_ident_size(SplitObject(downsampled_per_dataset, split.by="condition"))
+            print(paste("Additionally downsampling to", min_condition_size, "cells per grouping condition"))
+            downsampled_per_condition <- subset(downsampled_per_dataset, downsample=min_condition_size)
+            Idents(downsampled_per_dataset) <- "new.ident"
+        }
+    }
+
+    for (i in 1:length(args$resolution)){
         current_resolution <- args$resolution[i]
         graphics$dim_plot(
             data=seurat_data,
             reduction="atacumap",
-            plot_title=paste(
-                "UMAP, colored by cluster,",
+            plot_title="UMAP colored by cluster",
+            plot_subtitle=paste(
+                "All cells;",
                 "resolution", current_resolution
             ),
             legend_title="Cluster",
             group_by=paste("atac_res", current_resolution, sep="."),
-            label=TRUE,
+            label=FALSE,
             label_color="black",
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
-            rootname=paste(args$output, "umap_res", current_resolution, sep="_"),
+            rootname=paste(args$output, "umap_gr_clst_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
         graphics$silhouette_plot(
@@ -47,131 +65,150 @@ export_all_clustering_plots <- function(seurat_data, args){
             reduction="atac_lsi",
             dims=args$dimensions,
             downsample=500,
-            plot_title=paste(
-                "Silhouette scores, resolution",
-                current_resolution
+            plot_title="Silhouette scores",
+            plot_subtitle=paste(
+                "All cells;",
+                "resolution", current_resolution
             ),
             legend_title="Cluster",
             group_by=paste("atac_res", current_resolution, sep="."),
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
-            rootname=paste(args$output, "slh_res", current_resolution, sep="_"),
+            rootname=paste(args$output, "slh_gr_clst_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
-        if (length(unique(as.vector(as.character(Idents(seurat_data))))) > 1){
+        if (datasets_count > 1){
             graphics$dim_plot(
-                data=seurat_data,
+                data=downsampled_per_dataset,
                 reduction="atacumap",
-                plot_title=paste(
-                    "UMAP, colored by cluster,",
-                    "split by dataset,",
+                plot_title="UMAP colored by cluster",
+                plot_subtitle=paste(
+                    "Split by dataset;",
+                    "downsampled to", min_dataset_size,
+                    "cells per dataset;",
                     "resolution", current_resolution
                 ),
                 legend_title="Cluster",
                 group_by=paste("atac_res", current_resolution, sep="."),
                 split_by="new.ident",
-                label=TRUE,
+                show_density=TRUE,
+                label=FALSE,
                 label_color="black",
                 palette_colors=graphics$D40_COLORS,
                 theme=args$theme,
-                rootname=paste(args$output, "umap_spl_idnt_res", current_resolution, sep="_"),
+                rootname=paste(args$output, "umap_gr_clst_spl_idnt_res", current_resolution, sep="_"),
                 pdf=args$pdf
             )
             graphics$composition_plot(
-                data=downsampled_data,
-                plot_title=paste(
-                    "Composition plot, colored by cluster,",
-                    "split by dataset, downsampled,",
+                data=downsampled_per_dataset,
+                plot_title="Composition plot colored by cluster",
+                plot_subtitle=paste(
+                    "Split by dataset;",
+                    "downsampled to", min_dataset_size,
+                    "cells per dataset;",
                     "resolution", current_resolution
                 ),
                 legend_title="Cluster",
                 group_by=paste("atac_res", current_resolution, sep="."),
                 split_by="new.ident",
                 x_label="Dataset",
-                y_label="Cells percentage",
+                y_label="Cell percentage",
                 palette_colors=graphics$D40_COLORS,
                 theme=args$theme,
                 rootname=paste(args$output, "cmp_gr_clst_spl_idnt_res", current_resolution, sep="_"),
                 pdf=args$pdf
             )
             graphics$composition_plot(
-                data=downsampled_data,
-                plot_title=paste(
-                    "Composition plot, colored by dataset,",
-                    "split by cluster, downsampled,",
+                data=downsampled_per_dataset,
+                plot_title="Composition plot colored by dataset",
+                plot_subtitle=paste(
+                    "Split by cluster;",
+                    "downsampled to", min_dataset_size,
+                    "cells per dataset;",
                     "resolution", current_resolution
                 ),
                 legend_title="Dataset",
                 group_by="new.ident",
                 split_by=paste("atac_res", current_resolution, sep="."),
+                bar_position="dodge",
                 x_label="Cluster",
-                y_label="Cells percentage",
+                y_label="Cell counts",
                 palette_colors=graphics$D40_COLORS,
                 theme=args$theme,
                 rootname=paste(args$output, "cmp_gr_idnt_spl_clst_res", current_resolution, sep="_"),
                 pdf=args$pdf
             )
-        }
-        if (
-            all(as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition))) &&
-            length(unique(as.vector(as.character(seurat_data@meta.data$condition)))) > 1
-        ){
-            graphics$dim_plot(
-                data=seurat_data,
-                reduction="atacumap",
-                plot_title=paste(
-                    "UMAP, colored by cluster,",
-                    "split by grouping condition,",
-                    "resolution", current_resolution
-                ),
-                legend_title="Cluster",
-                group_by=paste("atac_res", current_resolution, sep="."),
-                split_by="condition",
-                label=TRUE,
-                label_color="black",
-                palette_colors=graphics$D40_COLORS,
-                theme=args$theme,
-                rootname=paste(args$output, "umap_spl_cnd_res", current_resolution, sep="_"),
-                pdf=args$pdf
-            )
-            graphics$composition_plot(
-                data=downsampled_data,
-                plot_title=paste(
-                    "Composition plot, colored by cluster,",
-                    "split by grouping condition, downsampled,",
-                    "resolution", current_resolution
-                ),
-                legend_title="Cluster",
-                group_by=paste("atac_res", current_resolution, sep="."),
-                split_by="condition",
-                x_label="Condition",
-                y_label="Cells percentage",
-                palette_colors=graphics$D40_COLORS,
-                theme=args$theme,
-                rootname=paste(args$output, "cmp_gr_clst_spl_cnd_res", current_resolution, sep="_"),
-                pdf=args$pdf
-            )
-            graphics$composition_plot(
-                data=downsampled_data,
-                plot_title=paste(
-                    "Composition plot,",
-                    "colored by grouping condition,",
-                    "split by cluster, downsampled,",
-                    "resolution", current_resolution
-                ),
-                legend_title="Condition",
-                group_by="condition",
-                split_by=paste("atac_res", current_resolution, sep="."),
-                x_label="Cluster",
-                y_label="Cells percentage",
-                palette_colors=graphics$D40_COLORS,
-                theme=args$theme,
-                rootname=paste(args$output, "cmp_gr_cnd_spl_clst_res", current_resolution, sep="_"),
-                pdf=args$pdf
-            )
+            if (conditions_count > 1 && not_default_conditions){
+                graphics$dim_plot(
+                    data=downsampled_per_condition,
+                    reduction="atacumap",
+                    plot_title="UMAP colored by cluster",
+                    plot_subtitle=paste(
+                        "Split by grouping condition;",
+                        "first downsampled to", min_dataset_size,
+                        "cells per dataset,",
+                        "then downsampled to", min_condition_size,
+                        "cells per grouping condition;",
+                        "resolution", current_resolution
+                    ),
+                    legend_title="Cluster",
+                    group_by=paste("atac_res", current_resolution, sep="."),
+                    split_by="condition",
+                    show_density=TRUE,
+                    label=FALSE,
+                    label_color="black",
+                    palette_colors=graphics$D40_COLORS,
+                    theme=args$theme,
+                    rootname=paste(args$output, "umap_gr_clst_spl_cnd_res", current_resolution, sep="_"),
+                    pdf=args$pdf
+                )
+                graphics$composition_plot(
+                    data=downsampled_per_condition,
+                    plot_title="Composition plot colored by cluster",
+                    plot_subtitle=paste(
+                        "Split by grouping condition;",
+                        "first downsampled to", min_dataset_size,
+                        "cells per dataset,",
+                        "then downsampled to", min_condition_size,
+                        "cells per grouping condition;",
+                        "resolution", current_resolution
+                    ),
+                    legend_title="Cluster",
+                    group_by=paste("atac_res", current_resolution, sep="."),
+                    split_by="condition",
+                    x_label="Condition",
+                    y_label="Cell percentage",
+                    palette_colors=graphics$D40_COLORS,
+                    theme=args$theme,
+                    rootname=paste(args$output, "cmp_gr_clst_spl_cnd_res", current_resolution, sep="_"),
+                    pdf=args$pdf
+                )
+                graphics$composition_plot(
+                    data=downsampled_per_condition,
+                    plot_title="Composition plot colored by grouping condition",
+                    plot_subtitle=paste(
+                        "Split by cluster;",
+                        "first downsampled to", min_dataset_size,
+                        "cells per dataset,",
+                        "then downsampled to", min_condition_size,
+                        "cells per grouping condition;",
+                        "resolution", current_resolution
+                    ),
+                    legend_title="Condition",
+                    group_by="condition",
+                    split_by=paste("atac_res", current_resolution, sep="."),
+                    bar_position="dodge",
+                    x_label="Cluster",
+                    y_label="Cell counts",
+                    palette_colors=graphics$D40_COLORS,
+                    theme=args$theme,
+                    rootname=paste(args$output, "cmp_gr_cnd_spl_clst_res", current_resolution, sep="_"),
+                    pdf=args$pdf
+                )
+            }
         }
     }
-    rm(downsampled_data)
+    rm(downsampled_per_dataset, downsampled_per_condition)
     gc(verbose=FALSE)
 }
 
@@ -193,35 +230,30 @@ export_all_coverage_plots <- function(seurat_data, args) {
 
     for (i in 1:length(args$resolution)) {
         current_resolution <- args$resolution[i]
-        if (!is.null(args$genes) && length(args$genes) > 0){
-            for (i in 1:length(args$genes)){
-                current_gene <- args$genes[i]
-                graphics$coverage_plot(
-                    data=seurat_data,
-                    assay="ATAC",
-                    region=current_gene,
-                    group_by=paste("atac_res", current_resolution, sep="."),
-                    plot_title=paste(
-                        "ATAC fragments coverage,",
-                        current_gene, "gene,",
-                        "resolution", current_resolution
-                    ),
-                    idents=NULL,                                                               # to include all values from the default "new.ident" column
-                    cells=colnames(seurat_data),                                               # limit to only those cells that are in out seurat_data
-                    features=if("RNA" %in% names(seurat_data@assays)) current_gene else NULL,  # will fail if features are provided without "RNA" assay
-                    expression_assay="RNA",
-                    expression_slot="data",                                                    # use scaled counts
-                    extend_upstream=args$upstream,
-                    extend_downstream=args$downstream,
-                    show_annotation=TRUE,
-                    show_peaks=TRUE,
-                    show_tile=TRUE,
-                    palette_colors=graphics$D40_COLORS,
-                    theme=args$theme,
-                    rootname=paste(args$output, "cvrg_res", current_resolution, current_gene, sep="_"),
-                    pdf=args$pdf
-                )
-            }
+        for (i in 1:length(args$genes)){
+            current_gene <- args$genes[i]
+            graphics$coverage_plot(
+                data=seurat_data,
+                assay="ATAC",
+                region=current_gene,
+                group_by=paste("atac_res", current_resolution, sep="."),
+                plot_title="ATAC fragment coverage",
+                plot_subtitle=current_gene,
+                idents=NULL,                                                               # to include all values from the default "new.ident" column
+                cells=colnames(seurat_data),                                               # limit to only those cells that are in out seurat_data
+                features=if("RNA" %in% names(seurat_data@assays)) current_gene else NULL,  # will fail if features are provided without "RNA" assay
+                expression_assay="RNA",
+                expression_slot="data",                                                    # use scaled counts
+                extend_upstream=args$upstream,
+                extend_downstream=args$downstream,
+                show_annotation=TRUE,
+                show_peaks=TRUE,
+                show_tile=TRUE,
+                palette_colors=graphics$D40_COLORS,
+                theme=args$theme,
+                rootname=paste(args$output, "cvrg_res", current_resolution, current_gene, sep="_"),
+                pdf=args$pdf
+            )
         }
     }
 }
@@ -374,7 +406,7 @@ get_args <- function(){
     )
     parser$add_argument(
         "--h5ad",
-        help="Save Seurat data to h5ad file. Default: false",
+        help="Save raw counts from the ATAC assay to h5ad file. Default: false",
         action="store_true"
     )
     parser$add_argument(
@@ -410,6 +442,11 @@ get_args <- function(){
         ),
         type="integer", default=32
     )
+    parser$add_argument(
+        "--seed",
+        help="Seed number for random values. Default: 42",
+        type="integer", default=42
+    )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
     return (args)
 }
@@ -429,6 +466,7 @@ prod$parallel(args)
 
 print(paste("Loading Seurat data from", args$query))
 seurat_data <- readRDS(args$query)
+
 print("Setting default assay to ATAC")
 DefaultAssay(seurat_data) <- "ATAC"
 debug$print_info(seurat_data, args)
@@ -440,9 +478,13 @@ if (!all(c("atac_lsi", "atacumap") %in% names(seurat_data@reductions))){
 
 print("Adjusting --dimensions parameter")
 if (!is.null(seurat_data@misc$atac_reduce$first_lsi_removed) && seurat_data@misc$atac_reduce$first_lsi_removed){
-    args$dimensions <- c(1:(max(args$dimensions)-1))  # first LSI component has been already removed
+    args$dimensions <- c(                                                                    # first LSI component has been already removed
+        1:min((args$dimensions - 1), ncol(Embeddings(seurat_data, "atac_lsi")))              # use min to make sure it's within the max atac_lsi dimensions
+    )
 } else {
-    args$dimensions <- c(2:args$dimensions)
+    args$dimensions <- c(
+        2:min(args$dimensions, ncol(Embeddings(seurat_data, "atac_lsi")))                    # use min to make sure it's within the max atac_lsi dimensions
+    )
 }
 print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
 
@@ -464,35 +506,22 @@ debug$print_info(seurat_data, args)
 
 export_all_clustering_plots(seurat_data=seurat_data, args=args)
 
-nearest_peaks <- NULL
 if (!is.null(args$genes)){
-    DefaultAssay(seurat_data) <- "ATAC"         # safety measure
     print("Adjusting genes of interest to include only those that are present in the loaded Seurat object")
     args$genes <- unique(args$genes)
     args$genes <- args$genes[args$genes %in% as.vector(as.character(Annotation(seurat_data)$gene_name))]
-    all_peaks <- StringToGRanges(rownames(seurat_data), sep=c("-", "-"))
-    nearest_peaks <- sapply(
-        args$genes,
-        function(gene)
-        GRangesToString(
-            all_peaks[
-                subjectHits(
-                    distanceToNearest(
-                        LookupGeneCoords(seurat_data, gene=gene, assay="ATAC"),
-                        all_peaks
-                    )
-                )
-            ]
-        )
-    )
-    rm(all_peaks)
-    print(nearest_peaks)
+    if (length(args$genes) == 0){
+        print("Neither of the provided genes of interest are present in the loaded Seurat object. Setting back to NULL")
+        args$genes <- NULL                                                                                   # all genes were filtered out, so return to NULL
+    } else {
+        print(paste("--genes was adjusted to", paste(args$genes, collapse=", ")))
+    }
 }
 
 if (!is.null(args$genes) && !is.null(args$fragments)){
     if ("RNA" %in% names(seurat_data@assays)){
         print("Normalizing counts in RNA assay to show average gene expression alongside the coverage plots")
-        DefaultAssay(seurat_data) <- "RNA"                         # for now we will always use RNA even if SCT can be present
+        DefaultAssay(seurat_data) <- "RNA"
         seurat_data <- NormalizeData(seurat_data, verbose=FALSE)
         DefaultAssay(seurat_data) <- "ATAC"                        # safety measure
     }
@@ -505,6 +534,7 @@ if (!is.null(args$genes) && !is.null(args$fragments)){
 all_markers <- NULL
 if (args$diffpeaks){
     print("Identifying differentially accessible peaks between each pair of clusters for all resolutions")
+    DefaultAssay(seurat_data) <- "ATAC"                              # safety measure
     all_markers <- analyses$get_markers_by_res(
         seurat_data=seurat_data,
         assay="ATAC",
@@ -553,6 +583,11 @@ if(args$h5seurat){
 }
 
 if(args$h5ad){
-    print("Exporting results to h5ad file")
-    io$export_h5ad(seurat_data, paste(args$output, "_data.h5ad", sep=""))
+    print("Exporting ATAC counts to h5ad file")
+    io$export_h5ad(
+        data=seurat_data,
+        location=paste(args$output, "_counts.h5ad", sep=""),
+        assay="ATAC",
+        slot="counts"
+    )
 }

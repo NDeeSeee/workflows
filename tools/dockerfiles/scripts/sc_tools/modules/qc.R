@@ -16,6 +16,7 @@ export(
     "qc_metrics_pca",
     "counts_pca",
     "estimate_doublets",
+    "update_qc_thresholds",
     "add_rna_qc_metrics",
     "add_atac_qc_metrics",
     "add_peak_qc_metrics",
@@ -97,6 +98,72 @@ counts_pca <- function(counts_data){
             base::print(base::paste("Failed to compute PCA for counts data due to", e))
         }
     )
+}
+
+update_qc_thresholds <- function(seurat_data, args, qc_keys, qc_columns, qc_coef, remove_rna_doublets=NULL, remove_atac_doublets=NULL){
+    base::print(
+        base::paste(
+            "Attempting to adjust filtering thresholds based",
+            "on the MAD (median absolute deviation)"
+        )
+    )
+    SeuratObject::Idents(seurat_data) <- "new.ident"                                    # safety measure
+    sorted_identities <- base::sort(                                                    # alphabetically sorted identities A -> Z
+        base::unique(
+            base::as.vector(as.character(SeuratObject::Idents(seurat_data)))
+        )
+    )
+    if (!is.null(remove_rna_doublets) && remove_rna_doublets){
+        seurat_data <- base::subset(
+            seurat_data,
+            subset=(rna_doublets == "singlet")
+        )
+    }
+    if (!is.null(remove_atac_doublets) && remove_atac_doublets){
+        seurat_data <- base::subset(
+            seurat_data,
+            subset=(atac_doublets == "singlet")
+        )
+    }
+    splitted_seurat_data <- Seurat::SplitObject(                                        # returns named list
+        seurat_data,
+        split.by="new.ident"
+    )
+    for (key in names(args)){
+        if (key %in% qc_keys){
+            current_qc_key <- key                                                       # for consistency in variables names
+            current_qc_column <- qc_columns[base::which(qc_keys==current_qc_key)]       # will return only one value because qc_keys is unique array
+            current_qc_coef <- qc_coef[base::which(qc_keys==current_qc_key)]            # will return only one value because qc_keys is unique array
+            for (i in 1:length(args[[current_qc_key]])){                                # all items in qc_keys are always vectors
+                current_value <- args[[current_qc_key]][i]
+                current_identity <- sorted_identities[i]
+                if (current_value == 0){
+                    base::print(
+                        base::paste0(
+                            "Setting --", current_qc_key, " for ",
+                            current_identity, " dataset as median(log10(", current_qc_column, "))",
+                            base::ifelse(current_qc_coef > 0, "+", ""),
+                            current_qc_coef, "*mad(log10(", current_qc_column, "))"
+                        )
+                    )
+                    current_log10_data <- log10(splitted_seurat_data[[current_identity]]@meta.data[, current_qc_column])
+                    args[[current_qc_key]][i] <- round(
+                        10^(stats::median(current_log10_data) + current_qc_coef * stats::mad(current_log10_data))
+                    )
+                } else {
+                    base::print(
+                        base::paste0(
+                            "Skipping --", current_qc_key, " for ",
+                            current_identity, " dataset because ", current_value,
+                            " is not equal to 0 and shouldn't be replaced with ",
+                            "auto-estimated threshold"
+                        )
+                    )
+                }
+            }
+        }
+    }
+    return (args)
 }
 
 estimate_doublets <- function(seurat_data, assay, target_column, dbl_rate=NULL, dbl_rate_sd=NULL){    # the logic depends on the value of assay input ("RNA"/"ATAC")

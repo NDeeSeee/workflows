@@ -18,7 +18,9 @@ import("rtracklayer", attach=FALSE)
 import("BiocParallel", attach=FALSE)
 import("magrittr", `%>%`, attach=TRUE)
 import("TrajectoryUtils", attach=FALSE)
+import("intrinsicDimension", attach=FALSE)
 import("SummarizedExperiment", attach=FALSE)
+
 
 export(
     "rna_analyze",
@@ -42,6 +44,7 @@ export(
     "rna_de_analyze",
     "atac_dbinding_analyze",
     "da_analyze",
+    "get_dimensionality",
     "get_de_sample_data",
     "get_de_cell_data",
     "get_bulk_counts_data",
@@ -133,6 +136,10 @@ get_cell_cycle_scores <- function(seurat_data, assay, cell_cycle_data){       # 
         g2m.features=base::as.vector(cell_cycle_data[base::tolower(cell_cycle_data$phase)=="g2/m", "gene_id"]),
         assay=assay,
         verbose=FALSE
+    )
+    seurat_data@meta.data[["Phase"]] <- base::factor(                         # to have the proper order on the plots
+        seurat_data@meta.data[["Phase"]],
+        levels=c("G1", "S", "G2M")
     )
     seurat_data[["CC.Difference"]] <- seurat_data[["S.Score"]] - seurat_data[["G2M.Score"]]   # for softer cell cycle removal (https://satijalab.org/seurat/articles/cell_cycle_vignette.html)
     return (seurat_data)
@@ -512,6 +519,20 @@ rna_preprocess <- function(seurat_data, args, cell_cycle_data=NULL) {
     return (processed_seurat_data)
 }
 
+get_dimensionality <- function(seurat_data, reduction, k=20){                   # https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-02136-7#Sec20
+    estimated_dimensionality <- ceiling(                                        # round up to integer
+        intrinsicDimension::maxLikGlobalDimEst(
+            SeuratObject::Embeddings(
+                seurat_data,
+                reduction
+            ),
+            k=k,
+            unbiased=TRUE
+        )[["dim.est"]]
+    )
+    return (estimated_dimensionality)
+}
+
 rna_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
     SeuratObject::DefaultAssay(seurat_data) <- "RNA"                            # safety measure
     SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
@@ -579,7 +600,12 @@ rna_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
         base::paste(
             "Performing PCA reduction on", SeuratObject::DefaultAssay(seurat_data),
             "assay using 50 principal components for Elbow and QC correlation plots, and",
-            max(args$dimensions), "principal components for UMAP projection"
+            base::ifelse(
+                (length(args$dimensions) == 1 && args$dimensions == 0),
+                "auto-estimated number of",
+                max(args$dimensions)
+            ),
+            "principal components for UMAP projection"
         )
     )
     seurat_data <- Seurat::RunPCA(                # add "qcpca" reduction to be used in elbow and QC correlation plots
@@ -588,6 +614,13 @@ rna_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
         reduction.name="qcpca",
         verbose=FALSE
     )
+    if (length(args$dimensions) == 1 && args$dimensions == 0){         # need to check the length because a number in R is the same as vector of length 1
+        base::print("Estimating datasets dimensionality")
+        estimated_dimensionality <- get_dimensionality(seurat_data, "qcpca")
+        base::print(base::paste("Estimated dimensionality:", estimated_dimensionality))
+        args$dimensions <- c(1:estimated_dimensionality)
+        base::assign("args", args, envir=base::parent.frame())    # to make the updated args available in the env where rna_analyze was called (a.k.a. passed by reference)
+    }
     seurat_data <- Seurat::RunPCA(                # add "pca" reduction to be used in UMAP and Harmony integration
         seurat_data,
         npcs=max(args$dimensions),                # need to take the max because dimensions was already adjusted to array of values

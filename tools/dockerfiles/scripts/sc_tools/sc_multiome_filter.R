@@ -67,7 +67,7 @@ call_peaks <- function(seurat_data, seqinfo_data, args) {
         additional.args=paste(
             "-q", args$qvalue,
             "--keep-dup all",                                                          # our fragments are already deduplicated
-            "--seed 42",                                                               # just in case
+            "--seed", args$seed,                                                       # just in case
             "--tempdir", args$tmpdir
         ),
         verbose=args$verbose
@@ -222,7 +222,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         y_high_intercept=args$maxgenes,
         color_by="mito_percentage",
         highlight_rows=which(seurat_data@meta.data$rna_doublets == "doublet" | seurat_data@meta.data$atac_doublets == "doublet"),    # need a single |
-        gradient_colors=c("lightslateblue", "red", "green"),
+        gradient_colors=c("lightslateblue", "orange", "red"),
         color_limits=c(0, 100),
         color_break=args$maxmt,
         x_label="RNA reads per cell",
@@ -237,6 +237,32 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         width=ifelse(datasets_count > 1, 1200, 600),
         height=ifelse(datasets_count > 1, 800, 400),
         rootname=paste(args$output, suffix, "gene_umi", sep="_"),
+        pdf=args$pdf
+    )
+    graphics$geom_point_plot(
+        data=seurat_data@meta.data,
+        x_axis="mito_percentage",
+        y_axis="nCount_RNA",
+        split_by="new.ident",
+        x_left_intercept=args$maxmt,
+        y_low_intercept=args$minumis,
+        color_by="mito_percentage",
+        highlight_rows=which(seurat_data@meta.data$rna_doublets == "doublet" | seurat_data@meta.data$atac_doublets == "doublet"),    # need a single |
+        gradient_colors=c("lightslateblue", "orange", "red"),
+        color_limits=c(0, 100),
+        color_break=args$maxmt,
+        x_label="Mitochondrial %",
+        y_label="RNA reads per cell",
+        legend_title="Mitochondrial %",
+        plot_title=paste("RNA reads vs mitochondrial % per cell (", suffix, ")", sep=""),
+        scale_x_log10=TRUE,
+        scale_y_log10=TRUE,
+        show_lm=FALSE,
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        width=ifelse(datasets_count > 1, 1200, 600),
+        height=ifelse(datasets_count > 1, 800, 400),
+        rootname=paste(args$output, suffix, "umi_mito", sep="_"),
         pdf=args$pdf
     )
     graphics$geom_density_plot(
@@ -338,7 +364,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         alpha_intercept=1,
         color_by="mito_percentage",
         highlight_rows=which(seurat_data@meta.data$rna_doublets == "doublet" | seurat_data@meta.data$atac_doublets == "doublet"),    # need a single |
-        gradient_colors=c("lightslateblue", "red", "green"),
+        gradient_colors=c("lightslateblue", "orange", "red"),
         color_limits=c(0, 100),
         color_break=args$maxmt,
         legend_title="Mitochondrial %",
@@ -365,7 +391,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         alpha_intercept=1,
         color_by="mito_percentage",
         highlight_rows=which(seurat_data@meta.data$rna_doublets == "doublet" | seurat_data@meta.data$atac_doublets == "doublet"),    # need a single |
-        gradient_colors=c("lightslateblue", "red", "green"),
+        gradient_colors=c("lightslateblue", "orange", "red"),
         color_limits=c(0, 100),
         color_break=args$maxmt,
         legend_title="Mitochondrial %",
@@ -405,7 +431,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             group_by="rna_doublets",
             split_by="new.ident",
             x_label="Dataset",
-            y_label="Cells percentage",
+            y_label="Cell percentage",
             palette_colors=c("#00AEAE", "#0BFFFF"),
             theme=args$theme,
             width=ifelse(datasets_count > 1, 1200, 600),
@@ -422,7 +448,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             group_by="atac_doublets",
             split_by="new.ident",
             x_label="Dataset",
-            y_label="Cells percentage",
+            y_label="Cell percentage",
             palette_colors=c("#00DCDC", "#0BFFFF"),
             theme=args$theme,
             width=ifelse(datasets_count > 1, 1200, 600),
@@ -457,7 +483,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
             group_by="doublets_overlap",
             split_by="new.ident",
             x_label="Dataset",
-            y_label="Cells percentage",
+            y_label="Cell percentage",
             palette_colors=c("#00AEAE", "#008080", "#00DCDC", "#0BFFFF"),
             theme=args$theme,
             width=ifelse(datasets_count > 1, 1200, 600),
@@ -697,7 +723,8 @@ get_args <- function(){
         help=paste(
             "Include cells where at least this many genes are detected. If multiple values",
             "provided, each of them will be applied to the correspondent dataset from the",
-            "'--mex' input based on the '--identity' file.",
+            "'--mex' input based on the '--identity' file. Any 0 will be replaced with the",
+            "auto-estimated threshold (median - 2.5 * MAD) calculated per dataset.",
             "Default: 250 (applied to all datasets)"
         ),
         type="integer", default=250, nargs="*"
@@ -707,7 +734,8 @@ get_args <- function(){
         help=paste(
             "Include cells with the number of genes not bigger than this value. If multiple",
             "values provided, each of them will be applied to the correspondent dataset from",
-            "the '--mex' input based on the '--identity' file.",
+            "the '--mex' input based on the '--identity' file. Any 0 will be replaced with the",
+            "auto-estimated threshold (median + 5 * MAD) calculated per dataset.",
             "Default: 5000 (applied to all datasets)"
         ),
         type="integer", default=5000, nargs="*"
@@ -715,9 +743,10 @@ get_args <- function(){
     parser$add_argument(
         "--minumis",
         help=paste(
-            "Include cells where at least this many RNA reads are detected.",
-            "If multiple values provided, each of them will be applied to the",
-            "correspondent dataset from the '--mex' input based on the '--identity' file.",
+            "Include cells where at least this many RNA reads are detected. If multiple",
+            "values provided, each of them will be applied to the correspondent dataset from",
+            "the '--mex' input based on the '--identity' file. Any 0 will be replaced with the",
+            "auto-estimated threshold (median - 2.5 * MAD) calculated per dataset.",
             "Default: 500 (applied to all datasets)"
         ),
         type="integer", default=500, nargs="*"
@@ -733,9 +762,11 @@ get_args <- function(){
     parser$add_argument(
         "--maxmt",
         help=paste(
-            "Include cells with the percentage of RNA reads mapped to mitochondrial",
-            "genes not bigger than this value.",
-            "Default: 5 (applied to all datasets)"
+            "Include cells with the percentage of RNA reads mapped",
+            "to mitochondrial genes not bigger than this value.",
+            "Set to 0 for using an auto-estimated threshold equal to",
+            "the maximum among (median + 2 * MAD) values calculated per",
+            "dataset. Default: 5 (applied to all datasets)"
         ),
         type="double", default=5
     )
@@ -761,10 +792,11 @@ get_args <- function(){
     parser$add_argument(                                                                    # when loading Cell Ranger data we have cut sites
         "--minfragments",                                                                   # per peak so we recalculate it to have fragments
         help=paste(
-            "Include cells where at least this many ATAC fragments in peaks are",
-            "detected. If multiple values provided, each of them will be",
+            "Include cells where at least this many ATAC fragments in peaks",
+            "are detected. If multiple values provided, each of them will be",
             "applied to the correspondent dataset from the '--mex' input",
-            "based on the '--identity' file.",
+            "based on the '--identity' file. Any 0 will be replaced with the",
+            "auto-estimated threshold (median - 2.5 * MAD) calculated per dataset.",
             "Default: 1000 (applied to all datasets)"
         ),
         type="integer", default=1000, nargs="*"
@@ -898,7 +930,7 @@ get_args <- function(){
     )
     parser$add_argument(
         "--h5ad",
-        help="Save Seurat data to h5ad file. Default: false",
+        help="Save raw counts from the RNA and ATAC assays to h5ad files. Default: false",
         action="store_true"
     )
     parser$add_argument(
@@ -941,6 +973,11 @@ get_args <- function(){
             "Default: 32"
         ),
         type="integer", default=32
+    )
+    parser$add_argument(
+        "--seed",
+        help="Seed number for random values. Default: 42",
+        type="integer", default=42
     )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
     return (args)
@@ -1015,7 +1052,7 @@ idents_after_filtering <- sort(unique(as.vector(as.character(Idents(seurat_data)
 
 print("Adjusting input parameters")
 for (key in names(args)){
-    if (key %in% c("mingenes", "maxgenes", "minumis", "minnovelty", "minfragments", "maxnuclsignal", "mintssenrich", "minfrip", "maxblacklist")){
+    if (key %in% c("mingenes", "maxgenes", "minumis", "minnovelty", "minfragments", "maxnuclsignal", "mintssenrich", "minfrip", "maxblacklist", "maxmt")){
         if (length(args[[key]]) == 1){
             print(paste("Extending filtering parameter", key, "to have a proper size"))
             args[[key]] <- rep(args[[key]][1], length(idents_after_filtering))           # we use number of identities after filtering as we may have potentially removed some of them
@@ -1059,6 +1096,26 @@ seurat_data <- qc$add_atac_qc_metrics(seurat_data, args)
 print("Adding peak QC metrics for peaks called by Cell Ranger ARC")
 seurat_data <- qc$add_peak_qc_metrics(seurat_data, blacklist_data, args)
 debug$print_info(seurat_data, args)
+
+args <- qc$update_qc_thresholds(
+    seurat_data=seurat_data,
+    args=args,
+    qc_keys=c("minumis", "mingenes", "maxgenes", "maxmt"),
+    qc_columns=c("nCount_RNA", "nFeature_RNA", "nFeature_RNA", "mito_percentage"),
+    qc_coef=c(-2.5, -2.5, 5, 2),
+    remove_rna_doublets=TRUE
+)
+args <- qc$update_qc_thresholds(
+    seurat_data=seurat_data,
+    args=args,
+    qc_keys=c("minfragments"),
+    qc_columns=c("nCount_ATAC"),
+    qc_coef=c(-2.5),
+    remove_atac_doublets=TRUE
+)
+print("Filtering thresholds adjusted based on the MAD values")
+args$maxmt <- max(args$maxmt)                                      # need to convert it back to a single value (take max when it was autoestimated)
+print(args)
 
 export_all_qc_plots(
     seurat_data=seurat_data,
@@ -1185,6 +1242,18 @@ if(args$h5seurat){
 }
 
 if(args$h5ad){
-    print("Exporting results to h5ad file")
-    io$export_h5ad(seurat_data, paste(args$output, "_data.h5ad", sep=""))
+    print("Exporting RNA counts to h5ad file")
+    io$export_h5ad(
+        data=seurat_data,
+        location=paste(args$output, "_rna_counts.h5ad", sep=""),
+        assay="RNA",
+        slot="counts"
+    )
+    print("Exporting ATAC counts to h5ad file")
+    io$export_h5ad(
+        data=seurat_data,
+        location=paste(args$output, "_atac_counts.h5ad", sep=""),
+        assay="ATAC",
+        slot="counts"
+    )
 }

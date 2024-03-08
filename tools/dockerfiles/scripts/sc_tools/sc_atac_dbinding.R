@@ -19,8 +19,6 @@ suppressMessages(graphics <- modules::use(file.path(HERE, "modules/graphics.R"))
 suppressMessages(io <- modules::use(file.path(HERE, "modules/io.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 
-set.seed(42)                                                                            # otherwise MAnorm returns different results
-
 
 prepare_fragments_and_peaks <- function(seurat_data, seqinfo_data, args){               # only MACS2 results will be saved to the --output. All other files are in --tmpdir
     print(paste("Splitting ATAC fragments into two BED files by", args$splitby))        # we should always have only two groups because we prefiltered our Seurat object
@@ -123,7 +121,7 @@ prepare_fragments_and_peaks <- function(seurat_data, seqinfo_data, args){       
                     "-q", args$qvalue,
                     "--keep-dup all",                                                          # our fragments are already deduplicated
                     "-B --SPMR",                                                               # to save signal per million reads as bedgraph file
-                    "--seed 42",                                                               # just in case
+                    "--seed", args$seed,                                                       # just in case
                     "--tempdir", args$tmpdir
                 ),
                 cleanup=FALSE,                                                                 # we want to keep outputs after running the script
@@ -509,6 +507,11 @@ get_args <- function(){
             "Default: 32"
         ),
         type="integer", default=32
+    )
+    parser$add_argument(
+        "--seed",
+        help="Seed number for random values. Default: 42",
+        type="integer", default=42
     )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
     return (args)
