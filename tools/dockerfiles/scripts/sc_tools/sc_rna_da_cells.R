@@ -105,7 +105,7 @@ export_plots <- function(seurat_data, da_cells, da_thresholds, args) {
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Single-cell Differential Abundance Analysis")
+    parser <- ArgumentParser(description="Single-Cell Differential Abundance Analysis")
     parser$add_argument(
         "--query",
         help=paste(

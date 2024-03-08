@@ -284,7 +284,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Single-cell ATAC-Seq Dimensionality Reduction Analysis")
+    parser <- ArgumentParser(description="Single-Cell ATAC-Seq Dimensionality Reduction Analysis")
     parser$add_argument(
         "--query",
         help=paste(

@@ -529,7 +529,7 @@ export_heatmaps <- function(seurat_data, markers, args){
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Single-cell Manual Cell Type Assignment")
+    parser <- ArgumentParser(description="Single-Cell Manual Cell Type Assignment")
     parser$add_argument(
         "--query",
         help=paste(

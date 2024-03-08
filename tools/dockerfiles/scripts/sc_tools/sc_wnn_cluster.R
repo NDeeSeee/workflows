@@ -571,7 +571,7 @@ export_heatmaps <- function(seurat_data, markers, args){
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Single-cell WNN Cluster Analysis")
+    parser <- ArgumentParser(description="Single-Cell WNN Cluster Analysis")
     parser$add_argument(
         "--query",
         help=paste(

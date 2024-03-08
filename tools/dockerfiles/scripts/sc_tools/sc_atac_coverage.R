@@ -19,7 +19,7 @@ suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Single-cell ATAC-Seq Genome Coverage")
+    parser <- ArgumentParser(description="Single-Cell ATAC-Seq Genome Coverage")
     parser$add_argument(
         "--query",
         help=paste(

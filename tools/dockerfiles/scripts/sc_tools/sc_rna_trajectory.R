@@ -333,7 +333,7 @@ export_all_plots <- function(seurat_data, args){
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Single-cell RNA-Seq Trajectory Analysis")
+    parser <- ArgumentParser(description="Single-Cell RNA-Seq Trajectory Analysis")
     parser$add_argument(
         "--query",
         help=paste(

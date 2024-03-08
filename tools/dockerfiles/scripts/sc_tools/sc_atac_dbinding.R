@@ -278,7 +278,7 @@ export_processed_plots <- function(seurat_data, db_results, args){
 
 get_args <- function(){
     parser <- ArgumentParser(
-        description="Single-cell ATAC-Seq Differential Binding Analysis"
+        description="Single-Cell ATAC-Seq Differential Accessibility Analysis"
     )
     parser$add_argument(
         "--query",

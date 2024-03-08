@@ -78,7 +78,7 @@ export_all_plots <- function(seurat_data, args){
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Single-cell Label Integration Analysis")
+    parser <- ArgumentParser(description="Single-Cell Label Integration Analysis")
     parser$add_argument(
         "--query",
         help=paste(

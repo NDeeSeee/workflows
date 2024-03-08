@@ -264,7 +264,7 @@ get_genes_to_highlight <- function(de_results, args){
 
 get_args <- function(){
     parser <- ArgumentParser(
-        description="Single-cell Differential Expression Analysis"
+        description="Single-Cell RNA-Seq Differential Expression Analysis"
     )
     parser$add_argument(
         "--query",

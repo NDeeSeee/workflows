@@ -543,7 +543,7 @@ export_heatmaps <- function(seurat_data, markers, args){
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Single-cell RNA-Seq Cluster Analysis")
+    parser <- ArgumentParser(description="Single-Cell RNA-Seq Cluster Analysis")
     parser$add_argument(
         "--query",
         help=paste(
