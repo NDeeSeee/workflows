@@ -211,7 +211,7 @@ inputs:
       prefix: "--padj"
     doc: |
       In the exploratory visualization part of the analysis
-      output only differentially bound peaks with adjusted
+      output only differentially accessible regions with adjusted
       P-value not bigger than this value. Default: 0.05
 
   minimum_logfc:
@@ -220,7 +220,7 @@ inputs:
       prefix: "--logfc"
     doc: |
       In the exploratory visualization part of the analysis
-      output only differentially bound peaks with log2 Fold
+      output only differentially accessible regions with log2 Fold
       Change not smaller than this value. Default: 1.0
 
   export_pdf_plots:
@@ -476,15 +476,15 @@ outputs:
     outputBinding:
       glob: "*_db_sites.tsv"
     doc: |
-      Not filtered differentially bound sites
-      in TSV format.
+      Not filtered differentially accessible regions.
+      TSV format.
 
   dbnd_vlcn_plot_png:
     type: File?
     outputBinding:
       glob: "*_dbnd_vlcn.png"
     doc: |
-      Volcano plot of differentially bound sites.
+      Volcano plot of differentially accessible regions.
       PNG format.
 
   dbnd_vlcn_plot_pdf:
@@ -492,7 +492,7 @@ outputs:
     outputBinding:
       glob: "*_dbnd_vlcn.pdf"
     doc: |
-      Volcano plot of differentially bound sites.
+      Volcano plot of differentially accessible regions.
       PDF format.
 
   first_enrch_bigbed_file:
@@ -557,7 +557,7 @@ $schemas:
 
 label: "Single-Cell ATAC-Seq Differential Accessibility Analysis"
 s:name: "Single-Cell ATAC-Seq Differential Accessibility Analysis"
-s:alternateName: "Identifies differential bound sites between two groups of cells"
+s:alternateName: "Identifies differentially accessible regions between two groups of cells"
 
 s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows/master/tools/sc-atac-dbinding.cwl
 s:codeRepository: https://github.com/Barski-lab/workflows
@@ -597,7 +597,7 @@ s:creator:
 doc: |
   Single-Cell ATAC-Seq Differential Accessibility Analysis
 
-  Identifies differential bound sites between two groups of cells
+  Identifies differentially accessible regions between two groups of cells
   --tmpdir parameter is not exposed as input.
 
 
