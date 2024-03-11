@@ -509,10 +509,9 @@ outputs:
       glob: "*_cmp_gr_ph_spl_clst_res_*.png"
     doc: |
       Composition plot colored by cell cycle phase.
-      Split by cell cycle phase; downsampled
-      to the smallest dataset (if multiple
-      datasets are analyzed jointly); all
-      resolutions.
+      Split by cluster; downsampled to the smallest
+      dataset (if multiple datasets are analyzed
+      jointly); all resolutions.
       PNG format
 
   cmp_gr_ph_spl_clst_res_plot_pdf:
@@ -524,10 +523,9 @@ outputs:
       glob: "*_cmp_gr_ph_spl_clst_res_*.pdf"
     doc: |
       Composition plot colored by cell cycle phase.
-      Split by cell cycle phase; downsampled
-      to the smallest dataset (if multiple
-      datasets are analyzed jointly); all
-      resolutions.
+      Split by cluster; downsampled to the smallest
+      dataset (if multiple datasets are analyzed
+      jointly); all resolutions.
       PDF format
 
   umap_gr_clst_spl_cnd_res_plot_png:
