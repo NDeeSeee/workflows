@@ -764,21 +764,21 @@ outputs:
     outputBinding:
       glob: "*_cellbrowser"
     doc: |
-      UCSC Cellbrowser configuration data.
+      UCSC Cell Browser configuration data.
 
   ucsc_cb_html_data:
     type: Directory?
     outputBinding:
       glob: "*_cellbrowser/html_data"
     doc: |
-      UCSC Cellbrowser html data.
+      UCSC Cell Browser html data.
 
   ucsc_cb_html_file:
     type: File?
     outputBinding:
       glob: "*_cellbrowser/html_data/index.html"
     doc: |
-      UCSC Cellbrowser html index.
+      UCSC Cell Browser html index.
 
   seurat_data_rds:
     type: File
