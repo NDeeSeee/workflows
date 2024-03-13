@@ -819,7 +819,7 @@ vln_plot <- function(data, features, labels, rootname, plot_title, legend_title,
     )
 }
 
-dim_plot <- function(data, rootname, reduction, plot_title, legend_title, plot_subtitle=NULL, cells=NULL, split_by=NULL, group_by=NULL, highlight_group=NULL, show_density=FALSE, ncol=NULL, label=FALSE, label_box=FALSE, label_repel=FALSE, label_color="black", label_size=4, fixed=TRUE, alpha=NULL, palette_colors=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+dim_plot <- function(data, rootname, reduction, plot_title, legend_title, plot_subtitle=NULL, cells=NULL, split_by=NULL, group_by=NULL, highlight_group=NULL, show_density=FALSE, density_bins=10, ncol=NULL, label=FALSE, label_box=FALSE, label_repel=FALSE, label_color="black", label_size=4, fixed=TRUE, alpha=NULL, palette_colors=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             highlight_cells <- NULL
@@ -890,13 +890,14 @@ dim_plot <- function(data, rootname, reduction, plot_title, legend_title, plot_s
                                 group=group_by,                             # if not NULL, density is calculated per group (a.k.a cluster, cell type)
                                 colour=ggplot2::after_stat("stat(level)")   # color by height of contour (numeric vector with bin boundaries)
                             ),
+                            bins=density_bins,
                             contour_var="count",                            # contours are made based on the densities * on the cell counts withing each bin
                             linetype="solid",
-                            size=0.5
+                            size=0.2
                         ) +
                         ggplot2::scale_colour_distiller(
                             "Counts",
-                            palette="YlOrRd"
+                            palette="Greys"
                         )
             }
 
