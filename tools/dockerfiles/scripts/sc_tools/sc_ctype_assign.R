@@ -416,7 +416,8 @@ export_all_expression_plots <- function(seurat_data, args) {
             label=FALSE,
             order=TRUE,
             split_by=args$splitby,
-            max_cutoff="q99",  # to prevent cells with overexpressed gene from distoring the color bar
+            pt_size=1,                                # need to have it fixed, otherwise dots are different on the splitted plot
+            max_cutoff="q99",                         # to prevent cells with overexpressed gene from distoring the color bar
             combine_guides="collect",
             width=800,
             height=ifelse(groups_count == 2, 400, 800),

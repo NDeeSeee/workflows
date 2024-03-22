@@ -85,6 +85,7 @@ export_plots <- function(seurat_data, da_cells, da_thresholds, args) {
             from_meta=TRUE,
             reduction=reduction,
             split_by="new.ident",
+            pt_size=1,                                                                      # need to have it fixed, otherwise dots are different on the splitted plot
             plot_title=paste(
                 "Split by dataset cells UMAP with DA scores for",
                 args$second, "vs", args$first, "comparison"
