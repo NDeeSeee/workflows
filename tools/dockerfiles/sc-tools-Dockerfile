@@ -58,6 +58,9 @@
 #   sc_rna_filter.R and sc_multiome_filter.R scripts
 # - Set the default normalization method in sc_rna_reduce.R
 #   to sctglm
+# - Added --minpct threshold to sc_rna_de_pseudobulk.R
+#   script to remove genes that are not expressed in
+#   the majority of the cells
 # v0.0.33 -- based on biowardrobe2/sc-tools:v0.0.32
 # - Replace all "Transcipts" with "RNA reads" and
 #   all "Fragments" with "ATAC fragments".

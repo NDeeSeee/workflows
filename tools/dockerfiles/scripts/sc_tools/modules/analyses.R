@@ -49,7 +49,8 @@ export(
     "get_de_cell_data",
     "get_bulk_counts_data",
     "get_clustered_data",
-    "get_aggregated_expession"
+    "get_aggregated_expession",
+    "get_average_expression_data"
 )
 
 get_tf_idf_method <- function(method_name){
@@ -1258,27 +1259,62 @@ get_de_sample_data <- function(seurat_data, samples_order, args){               
 }
 
 get_bulk_counts_data <- function(deseq_data, sample_data){
-    base::print("Applying rlog transformation (not blind to the experimental design)")
-    bulk_counts_data <- DESeq2::rlog(deseq_data, blind=FALSE)                              # no reason to use VST as we have less than 30 datasets
-
-    # if (args$norm == "vst"){
-    #     base::print("Applying vst transformation (not blind to the experimental design)")
-    #     bulk_counts_data <- DESeq2::vst(deseq_data, blind=FALSE)
-    # }
-    # if(!is.null(args$batchby) && !is.null(args$remove) && args$remove){
-    #     base::print("Removing batch effect from the normalized counts")
-    #     SummarizedExperiment::assay(bulk_counts_data) <- limma::removeBatchEffect(
-    #         SummarizedExperiment::assay(bulk_counts_data),
-    #         batch=bulk_counts_data[[args$batchby]],
-    #         design=stats::model.matrix(stats::as.formula(base::paste("~",args$splitby)), sample_data)  # should include only splitby
-    #     )
-    # }
-
+    base::print("Applying VST transformation (blind to the experimental design)")
+    bulk_counts_data <- DESeq2::vst(deseq_data, blind=TRUE)                                       # https://rdrr.io/bioc/DESeq2/man/varianceStabilizingTransformation.html
     base::print("Normalized read counts")
     base::print(utils::head(SummarizedExperiment::assay(bulk_counts_data)))
     base::print(dim(SummarizedExperiment::assay(bulk_counts_data)))
     base::print(SummarizedExperiment::colData(bulk_counts_data))
     return (bulk_counts_data)
+}
+
+get_average_expression_data <- function(seurat_data, group_by, assay="RNA", slot="data", features=NULL){
+    if (assay != "RNA" || slot != "data"){
+        base::print("Not implemented feature. Exiting")
+        base::quit(save="no", status=1, runLast=FALSE)
+    }
+    mean_fxn <- function(x){return(log(Matrix::rowMeans(expm1(x))+1, base=2))}          # need to use rowMeans from Matrix, because we work with sparse data
+    if (is.null(features)){
+        features <- base::as.vector(as.character(base::rownames(seurat_data)))          # for RNA assay the rownames should be genes
+    }
+
+    assay_data <- SeuratObject::GetAssayData(                                           # normalized expression data for all cells
+        seurat_data,
+        assay=assay,
+        slot=slot
+    )
+
+    SeuratObject::Idents(seurat_data) <- group_by                                       # need it for WhichCells function
+    cell_groups <- base::unique(                                                        # will have arbitrary order
+        base::as.vector(as.character(seurat_data@meta.data[, group_by]))
+    )
+    collected_expression_data <- NULL
+    for (i in 1:length(cell_groups)){
+        current_group <- cell_groups[i]
+        current_cells <- SeuratObject::WhichCells(
+            seurat_data,
+            idents=current_group
+        )
+        expression_data <- mean_fxn(                                                    # this returns named vector
+                               assay_data[features, current_cells, drop=FALSE]
+                           ) %>%
+                           tibble::enframe(
+                               name="gene",
+                               value=base::paste("log2AvgExp", current_group, sep="_")
+                           ) %>%
+                           base::as.data.frame()
+        if (is.null(collected_expression_data)){
+            collected_expression_data <- expression_data
+        } else {
+            collected_expression_data <- collected_expression_data %>%
+                                         dplyr::left_join(
+                                             expression_data,
+                                             by="gene"
+                                         )
+        }
+    }
+    base::rm(assay_data, cell_groups)
+    return (collected_expression_data)
 }
 
 get_clustered_data <- function(expression_data, center_row, dist, transpose) {
@@ -1583,8 +1619,13 @@ rna_de_analyze <- function(seurat_data, args, excluded_genes=NULL){
             ),
             base::ifelse(
                 !is.null(args$batchby),
-                base::paste0("Model batch effect by ", args$batchby, " column."),
+                base::paste0("Model batch effect by ", args$batchby, " column. "),
                 ""
+            ),
+            base::paste0(
+                "Including only those genes that are detected in not lower ",
+                "than ", args$minpct, " fraction of cells in either of the ",
+                "two tested conditions."
             )
         )
     )
@@ -1592,6 +1633,34 @@ rna_de_analyze <- function(seurat_data, args, excluded_genes=NULL){
     results <- list(de_genes=NULL, bulk=NULL, cell=NULL)                                # to collect all outputs
 
     if(args$test %in% c("deseq", "lrt")){                                               # aggregating to the pseudobulk form
+        base::print(
+            base::paste(
+                "Filtering genes by the fraction of cells",
+                "not lower than", args$minpct
+            )
+        )
+        base::print(base::paste("Genes before filtering", length(selected_genes)))
+        pct_data <- Seurat::FoldChange(                                                 # need to get pct.1 and pct.2 before running DESeq2
+                        seurat_data,
+                        ident.1=args$second,
+                        ident.2=args$first,
+                        group.by=args$splitby,                                          # sets the idents to args$splitby
+                        assay="RNA",
+                        slot="data",                                                    # use data slot for consistency with FindMarkers (shouldn't influence much)
+                        features=selected_genes                                         # running only for selected genes
+                    ) %>%
+                    dplyr::mutate(max_pct=base::pmax(pct.1, pct.2)) %>%
+                    dplyr::filter(.$max_pct >= args$minpct) %>%
+                    dplyr::select(pct.1, pct.2) %>%                                     # we don't need logFC
+                    dplyr::rename(                                                      # because that's how we defined our ident.1 and ident.2
+                        !!base::paste("pct", args$second, sep="_"):="pct.1",
+                        !!base::paste("pct", args$first, sep="_"):="pct.2"
+                    ) %>%
+                    tibble::rownames_to_column(var="gene")
+
+        selected_genes <- pct_data %>% dplyr::pull(gene)                                # replacing selected genes
+        base::print(base::paste("Genes after filtering", length(selected_genes)))
+
         aggregated_seurat_data <- get_aggregated_expession(
             seurat_data,
             group_by="new.ident",                                                       # aggregating by sample, because we want to run pseudobulk
@@ -1680,9 +1749,24 @@ rna_de_analyze <- function(seurat_data, args, excluded_genes=NULL){
         base::print(S4Vectors::mcols(de_genes))
         base::print(utils::head(de_genes))
 
+        base::print("Normalizing read counts data aggregated to pseudobulk form")
+        counts_data <- get_bulk_counts_data(deseq_data, sample_data)
+
         de_genes <- base::as.data.frame(de_genes) %>%
                     stats::na.omit() %>%                                  # exclude all rows where NA is found in any column. See http://bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#pvaluesNA
-                    tibble::rownames_to_column(var="gene")                # gene, baseMean, log2FoldChange, lfcSE, stat, pvalue, padj
+                    tibble::rownames_to_column(var="gene") %>%            # gene, baseMean, log2FoldChange, lfcSE, stat, pvalue, padj
+                    dplyr::left_join(pct_data, by="gene") %>%             # add second_pct and first_pct columns
+                    dplyr::left_join(                                     # to have normalized read counts per sample
+                        as.data.frame(
+                            SummarizedExperiment::assay(counts_data)
+                        ) %>%
+                        dplyr::rename_with(                               # to add prefix to all columns
+                            ~base::paste("AggrExp", .),
+                            tidyselect::everything()
+                        ) %>%
+                        tibble::rownames_to_column(var="gene"),
+                        by="gene"
+                    )
 
         base::print(
             base::paste(
@@ -1691,13 +1775,9 @@ rna_de_analyze <- function(seurat_data, args, excluded_genes=NULL){
             )
         )
 
-        base::print("Normalizing read counts data aggregated to pseudobulk form")
-        counts_data <- get_bulk_counts_data(deseq_data, sample_data)
-
         row_metadata <- de_genes %>%
                         tibble::remove_rownames() %>%
                         tibble::column_to_rownames("gene") %>%
-                        dplyr::select(log2FoldChange, pvalue, padj)  %>%
                         dplyr::filter(.$padj<=args$padj) %>%
                         dplyr::arrange(desc(log2FoldChange))
 
@@ -1754,7 +1834,7 @@ rna_de_analyze <- function(seurat_data, args, excluded_genes=NULL){
             column_metadata=column_metadata,                                             # column metadata per dataset always either default or clustered by new.ident
             counts_data=counts_data                                                      # not filtered normalized counts in a form of SummarizedExperiment
         )
-        base::rm(column_metadata)                                                        # remove it just in case
+        base::rm(column_metadata, pct_data)                                              # remove it just in case
     } else {
         SeuratObject::Idents(seurat_data) <- args$splitby
         de_genes <- Seurat::FindMarkers(
@@ -1765,7 +1845,7 @@ rna_de_analyze <- function(seurat_data, args, excluded_genes=NULL){
                         ident.2=args$first,                        # this is the reference as logFC = ident.1 / ident.2
                         features=selected_genes,
                         logfc.threshold=0.25,                      # using default value
-                        min.pct=0.1,                               # using default value
+                        min.pct=args$minpct,
                         min.diff.pct=-Inf,                         # using default value
                         only.pos=FALSE,                            # we want to have both up and dowregulated genes
                         test.use=args$test,                        # at this moment it should one of the supported types
@@ -1775,10 +1855,22 @@ rna_de_analyze <- function(seurat_data, args, excluded_genes=NULL){
                     ) %>%
                     stats::na.omit() %>%                           # we shouldn't have any NAs, but filter just in case 
                     tibble::rownames_to_column(var="gene") %>%     # gene, p_val, avg_log2FC, pct.1, pct.2, p_val_adj
+                    dplyr::left_join(                              # to add average gene expression per identity
+                        get_average_expression_data(               # should return the same values that FindMarkers used for logFC calculation
+                            seurat_data,
+                            assay="RNA",
+                            slot="data",
+                            group_by=args$splitby,
+                            features=selected_genes
+                        ),
+                        by="gene"
+                    ) %>%
                     dplyr::rename(                                 # gene, pvalue, log2FoldChange, pct.1, pct.2, padj
                         "pvalue"="p_val",
                         "log2FoldChange"="avg_log2FC",
-                        "padj"="p_val_adj"
+                        "padj"="p_val_adj",
+                        !!base::paste("pct", args$second, sep="_"):="pct.1",
+                        !!base::paste("pct", args$first, sep="_"):="pct.2"
                     )
         SeuratObject::Idents(seurat_data) <- "new.ident"
         base::print(base::paste("Number of differentially expressed genes:", base::nrow(de_genes)))
@@ -1786,7 +1878,6 @@ rna_de_analyze <- function(seurat_data, args, excluded_genes=NULL){
         row_metadata <- de_genes %>%
                         tibble::remove_rownames() %>%
                         tibble::column_to_rownames("gene") %>%
-                        dplyr::select(log2FoldChange, pct.1, pct.2, pvalue, padj)  %>%
                         dplyr::filter(.$padj<=args$padj) %>%
                         dplyr::arrange(desc(log2FoldChange))
 
@@ -1803,7 +1894,6 @@ rna_de_analyze <- function(seurat_data, args, excluded_genes=NULL){
 
     base::print("Size of the normalized cell read counts matrix after filtering")
     base::print(dim(counts_mat))
-    base::print(counts_mat[1:5, 1:5])
 
     column_metadata <- get_de_cell_data(
                            seurat_data=seurat_data,

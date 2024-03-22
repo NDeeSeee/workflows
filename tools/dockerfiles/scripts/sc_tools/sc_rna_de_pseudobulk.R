@@ -29,30 +29,32 @@ export_raw_plots <- function(seurat_data, args){
         graphics$dim_plot(
             data=seurat_data,
             reduction=reduction,
-            plot_title=paste0(
-                "UMAP, split by ", args$splitby, ", ",
+            plot_title="UMAP with cells selected for analysis",
+            plot_subtitle=paste0(
+                "Split by ", args$splitby, "; ",
                 ifelse(
                     (!is.null(args$groupby) && !is.null(args$subset)),
-                    paste("subsetted to", paste(args$subset, collapse=", "), "values from the", args$groupby, "column, "),
-                    ""
+                    paste(
+                        "only cells with", paste(args$subset, collapse=", "),
+                        "values in", args$groupby, "metadata column are selected; "
+                    ),
+                    "all cells selected; "
                 ),
-                "reduction", reduction
+                "reduction ", reduction
             ),
-            legend_title=ifelse(
-                (!is.null(args$groupby) && !is.null(args$subset)),
-                args$groupby,
-                args$splitby
-            ),
+            legend_title="",
             split_by=args$splitby,
             group_by=ifelse(
                 (!is.null(args$groupby) && !is.null(args$subset)),
                 args$groupby,
                 args$splitby
             ),
-            highlight_group=if(!is.null(args$groupby) && !is.null(args$subset)) args$subset else NULL,
+            highlight_group=if(!is.null(args$groupby) && !is.null(args$subset)) args$subset
+                            else c(args$second, args$first),                                   # to highlight all cells
             label=FALSE,
             label_color="black",
-            palette_colors=if(!is.null(args$groupby) && !is.null(args$subset)) c("#4CB6BA", "#FB1C0D") else c("darkred", "darkorchid4"),
+            palette_colors=if(!is.null(args$groupby) && !is.null(args$subset)) c("#4CB6BA", "#FB1C0D")
+                           else c("#FB1C0D", "#4CB6BA"),                                       # need to reverse colors
             theme=args$theme,
             rootname=paste(args$output, "umap_rd", reduction, sep="_"),
             pdf=args$pdf
@@ -72,7 +74,7 @@ export_processed_plots <- function(seurat_data, de_results, args){
             rootname=paste(args$output, "mds_plot", sep="_")
         )
 
-        pca_data <- qc$counts_pca(                                      # adds 'group' column to identify the datasets
+        pca_data <- qc$counts_pca(                                      # adds group column to identify the datasets
             SummarizedExperiment::assay(de_results$bulk$counts_data)
         )
 
@@ -110,29 +112,29 @@ export_processed_plots <- function(seurat_data, de_results, args){
         y_cutoff=args$padj,
         x_label="log2 FC",
         y_label="-log10 Padj",
-        plot_title=paste(
-            "Differentially expressed",
-            ifelse(
-                (!is.null(args$genes) && length(args$genes) > 0),
-                "user provided",
-                paste("top", length(genes_to_highlight))
-            ),
-            "genes"
-        ),
+        plot_title="Differentially expressed genes",
         plot_subtitle=paste0(
-            args$second, " vs ", args$first, " for cells split by ", args$splitby, ". ",
-            "Use ", args$test, " test. ",
+            "Split by ", args$splitby, " (", args$second, " vs ", args$first, "); ",
             ifelse(
                 (!is.null(args$groupby) && !is.null(args$subset)),
-                paste("Subsetted to", paste(args$subset, collapse=", "), "values from", args$groupby, "column. "),
-                ""
+                paste(
+                    "only cells with", paste(args$subset, collapse=", "),
+                    "values in", args$groupby, "metadata column are selected; "
+                ),
+                "all cells selected; "
             ),
+            "use ", args$test, " test; ",
             ifelse(
                 (!is.null(args$batchby)),
-                paste0("Model batch effect by ", args$batchby, ". "),
+                paste0("model batch effect by ", args$batchby, "; "),
                 ""
             ),
-            "Adjusted P-value threshold ", args$padj
+            "adjusted P-value threshold ", args$padj, "; ",
+            ifelse(
+                (!is.null(args$genes) && length(args$genes) > 0),
+                "label user provided genes",
+                paste("label top", length(genes_to_highlight), "genes")
+            )
         ),
         caption=paste(nrow(de_results$de_genes), "genes"),
         features=genes_to_highlight,
@@ -146,7 +148,8 @@ export_processed_plots <- function(seurat_data, de_results, args){
             data=seurat_data,
             features=genes_to_highlight,
             labels=genes_to_highlight,
-            plot_title=paste("Gene expression violin plots, split by", args$splitby),
+            plot_title="Gene expression density",
+            plot_subtitle=paste("Split by", args$splitby),
             legend_title=args$splitby,
             log=TRUE,
             pt_size=0,
@@ -166,22 +169,28 @@ export_processed_plots <- function(seurat_data, de_results, args){
                     features=current_gene,
                     labels=current_gene,
                     reduction=reduction,
-                    plot_title=paste0(
-                        "UMAP, gene expression, split by ", args$splitby, ", ",
+                    plot_title="UMAP colored by gene expression",
+                    plot_subtitle=paste0(
+                        "Split by ", args$splitby, "; ",
                         ifelse(
                             (!is.null(args$groupby) && !is.null(args$subset)),
-                            paste("subsetted to", paste(args$subset, collapse=", "), "values from the", args$groupby, "column, "),
-                            ""
+                            paste(
+                                "only cells with", paste(args$subset, collapse=", "),
+                                "values in", args$groupby, "metadata column are selected;\n"
+                            ),
+                            "all cells selected;\n"
                         ),
-                        "reduction", reduction
+                        "reduction ", reduction
                     ),
+                    legend_title="Expression",
                     label=FALSE,
                     order=TRUE,
                     split_by=args$splitby,
+                    pt_size=1,                     # need to have it fixed, otherwise dots are different on the splitted plot
                     combine_guides="collect",
                     theme=args$theme,
-                    width=1200,
-                    height=600,
+                    width=800,
+                    height=400,
                     rootname=paste(args$output, "xpr_per_cell_rd", reduction, current_gene, sep="_"),
                     pdf=args$pdf
                 )
@@ -200,6 +209,17 @@ export_processed_plots <- function(seurat_data, de_results, args){
                 )
             )
         )
+        if (current_column == "new.ident"){                              # to make better names for at least those columns that we know
+            de_results$cell$column_metadata <- de_results$cell$column_metadata %>%
+                                               dplyr::rename("Dataset"="new.ident")
+            seurat_data@meta.data <- seurat_data@meta.data %>%
+                                     dplyr::rename("Dataset"="new.ident")
+        } else if (current_column == "condition"){
+            de_results$cell$column_metadata <- de_results$cell$column_metadata %>%
+                                               dplyr::rename("Condition"="condition")
+            seurat_data@meta.data <- seurat_data@meta.data %>%
+                                     dplyr::rename("Condition"="condition")
+        }
     }
 
     if ("HCL" %in% colnames(de_results$cell$row_metadata)){       # safe to take from cells, as if present in bulk it will be still the same
@@ -222,18 +242,7 @@ export_processed_plots <- function(seurat_data, de_results, args){
         heatmap_colors=c("darkblue", "black", "yellow"),
         group_by=colnames(de_results$cell$column_metadata),
         palette_colors=graphics$D40_COLORS,
-        plot_title=paste0(
-            "Gene expression heatmap",
-            ifelse(
-                (!is.null(args$groupby) && !is.null(args$subset)),
-                paste(
-                    ", subsetted to", paste(args$subset, collapse=", "),
-                    "values from the", args$groupby, "column, "
-                ),
-                ", "
-            ),
-            "adjusted P-value threshold ", args$padj
-        ),
+        plot_title="Gene expression heatmap",
         rootname=paste(args$output, "xpr_htmp", sep="_"),
         pdf=args$pdf
     )
@@ -270,8 +279,8 @@ get_args <- function(){
         "--query",
         help=paste(
             "Path to the RDS file to load Seurat object from. This file should include genes",
-            "expression information stored in the RNA assay. Additionally, 'rnaumap', and/or",
-            "'atacumap', and/or 'wnnumap' dimensionality reductions should be present."
+            "expression information stored in the RNA assay. Additionally, rnaumap, and/or",
+            "atacumap, and/or wnnumap dimensionality reductions should be present."
         ),
         type="character", required="True"
     )
@@ -279,8 +288,8 @@ get_args <- function(){
         "--metadata",
         help=paste(
             "Path to the TSV/CSV file to optionally extend Seurat object metadata with",
-            "categorical values using samples identities. First column - 'library_id'",
-            "should correspond to all unique values from the 'new.ident' column of the",
+            "categorical values using samples identities. First column - library_id",
+            "should correspond to all unique values from the new.ident column of the",
             "loaded Seurat object. If any of the provided in this file columns are already",
             "present in the Seurat object metadata, they will be overwritten. When combined",
             "with --barcodes parameter, first the metadata will be extended, then barcode",
@@ -292,7 +301,7 @@ get_args <- function(){
         "--barcodes",
         help=paste(
             "Path to the TSV/CSV file to optionally prefilter and extend Seurat object",
-            "metadata by selected barcodes. First column should be named as 'barcode'.",
+            "metadata by selected barcodes. First column should be named as barcode.",
             "If file includes any other columns they will be added to the Seurat object",
             "metadata ovewriting the existing ones if those are present.",
             "Default: all cells used, no extra metadata is added"
@@ -391,6 +400,15 @@ get_args <- function(){
             "than this value. Default: 0.05"
         ),
         type="double", default=0.05
+    )
+    parser$add_argument(
+        "--minpct",
+        help=paste(
+            "Include only those genes that are detected in not lower than this",
+            "fraction of cells in either of the two tested conditions.",
+            "Default: 0.1"
+        ),
+        type="double", default=0.1
     )
     parser$add_argument(
         "--genes",
@@ -531,7 +549,7 @@ if (!any(c("rnaumap", "atacumap", "wnnumap") %in% names(seurat_data@reductions))
     print(
         paste(
             "Loaded Seurat object includes neither of the required reductions:",
-            "'rnaumap', and/or 'atacumap', and/or 'wnnumap'.",
+            "rnaumap, and/or atacumap, and/or wnnumap.",
             "Exiting."
         )
     )
