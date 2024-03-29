@@ -2,15 +2,15 @@
 # Dockerfile
 #
 # Software:         set of R scripts for single-cell data analysis
-# Software Version: v0.0.34
+# Software Version: v0.0.35
 # Description:      Dockerized version of the set of R scripts for
 #                   single-cell data analysis
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         set of R scripts for single-cell data analysis
 # Base Image:       satijalab/seurat:latest
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.34 -f sc-tools-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.34
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.34 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.35 -f sc-tools-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.35
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.35 /bin/bash
 ##########################################################################################################
 #
 # Notes:
@@ -19,20 +19,26 @@
 # - fix bug in cell cycle genes removal
 # - Quick "smoke" test
 #     sc_rna_filter.R --help && \
-#     sc_multiome_filter.R --help && \
 #     sc_rna_reduce.R --help && \
-#     sc_atac_reduce.R --help && \
 #     sc_rna_cluster.R --help && \
-#     sc_atac_cluster.R --help && \
-#     sc_atac_coverage.R --help && \
-#     sc_atac_dbinding.R --help && \
-#     sc_wnn_cluster.R --help && \
-#     sc_ctype_assign.R --help && \
 #     sc_rna_de_pseudobulk.R --help && \
 #     sc_rna_da_cells.R --help && \
-#     sc_triangulate.R --help && \
 #     sc_rna_trajectory.R --help && \
+#     sc_atac_filter.R --help && \
+#     sc_atac_reduce.R --help && \
+#     sc_atac_cluster.R --help && \
+#     sc_atac_dbinding.R --help && \
+#     sc_atac_coverage.R --help && \
+#     sc_multiome_filter.R --help && \
+#     sc_wnn_cluster.R --help && \
+#     sc_ctype_assign.R --help && \
+#     sc_triangulate.R --help && \
 #     sc_vdj_profile.R --help 
+#
+# v0.0.35 -- based on biowardrobe2/sc-tools:v0.0.34
+# - Added sc_atac_filter.R script
+# - Refactored plots
+#
 # v0.0.34 -- based on biowardrobe2/sc-tools:v0.0.33
 # - Use intrinsicDimension to estimate dimensionality
 #   in sc_rna_reduce.R and sc_rna_cluster.R scripts
@@ -286,6 +292,7 @@ COPY ./scripts/sc_tools/sc_multiome_filter.R /usr/local/bin/sc_multiome_filter.R
 COPY ./scripts/sc_tools/sc_rna_reduce.R /usr/local/bin/sc_rna_reduce.R
 COPY ./scripts/sc_tools/sc_atac_reduce.R /usr/local/bin/sc_atac_reduce.R
 COPY ./scripts/sc_tools/sc_rna_cluster.R /usr/local/bin/sc_rna_cluster.R
+COPY ./scripts/sc_tools/sc_atac_filter.R /usr/local/bin/sc_atac_filter.R
 COPY ./scripts/sc_tools/sc_atac_cluster.R /usr/local/bin/sc_atac_cluster.R
 COPY ./scripts/sc_tools/sc_atac_coverage.R /usr/local/bin/sc_atac_coverage.R
 COPY ./scripts/sc_tools/sc_atac_dbinding.R /usr/local/bin/sc_atac_dbinding.R
@@ -367,6 +374,7 @@ RUN apt-get update && \
     chmod +x /usr/local/bin/sc_rna_reduce.R && \
     chmod +x /usr/local/bin/sc_atac_reduce.R && \
     chmod +x /usr/local/bin/sc_rna_cluster.R && \
+    chmod +x /usr/local/bin/sc_atac_filter.R && \
     chmod +x /usr/local/bin/sc_atac_cluster.R && \
     chmod +x /usr/local/bin/sc_atac_coverage.R && \
     chmod +x /usr/local/bin/sc_atac_dbinding.R && \

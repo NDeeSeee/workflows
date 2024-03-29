@@ -21,6 +21,8 @@ import("TrajectoryUtils", attach=FALSE)
 import("intrinsicDimension", attach=FALSE)
 import("SummarizedExperiment", attach=FALSE)
 
+HERE <- (function() {return (dirname(sub("--file=", "", commandArgs(trailingOnly=FALSE)[grep("--file=", commandArgs(trailingOnly=FALSE))])))})()
+suppressMessages(io <- modules::use(file.path(HERE, "modules/io.R")))
 
 export(
     "rna_analyze",
@@ -40,6 +42,7 @@ export(
     "get_markers",
     "atac_preprocess",
     "atac_analyze",
+    "call_macs2_peaks",
     "add_wnn_clusters",
     "rna_de_analyze",
     "atac_dbinding_analyze",
@@ -1185,6 +1188,92 @@ atac_analyze <- function(seurat_data, args){
     seurat_data@misc$atac_reduce <- list(
         first_lsi_removed=first_lsi_removed                   # we will need it later to know how many LSI components to use
     )
+    return (seurat_data)
+}
+
+call_macs2_peaks <- function(seurat_data, seqinfo_data, annotation_data, args) {
+    backup_assay <- SeuratObject::DefaultAssay(seurat_data)
+    SeuratObject::DefaultAssay(seurat_data) <- "ATAC"                       # safety measure
+
+    base::print("Adjusting ATAC fragments data to 1bp length Tn5 cut sites")
+    tn5ct_location <- base::file.path(args$tmpdir, "tn5ct.tsv.gz")
+    exit_code <- sys::exec_wait(
+        cmd="sc_tn5_cut_sites.sh",                                          # if it's not found in PATH, R will fail with error
+        args=c(args$fragments, tn5ct_location)
+    )
+    if (exit_code != 0){                                                    # we were able to run sc_tn5_cut_sites.sh, but something went wrong
+        base::print(
+            base::paste0(
+                "Failed to adjust ATAC fragments data to 1bp length ",
+                "Tn5 cut sites with exit code ", exit_code, ". Exiting."
+            )
+        )
+        base::quit(save="no", status=1, runLast=FALSE)                      # force R to exit with error
+    }
+    base::print(
+        base::paste(
+            "Replacing ATAC fragments data with 1bp length",
+            "Tn5 cut sites from", tn5ct_location
+        )
+    )
+    seurat_data <- io$replace_fragments(tn5ct_location, seurat_data)        # will change the default assay to ATAC
+    base::print(
+        base::paste(
+            "Calling MACS2 peaks from 1bp length Tn5",
+            "cut sites for cells grouped by", args$callby,
+            "with --shift -25 --extsize 50 --keep-dup all",
+            "--qvalue", args$qvalue, "parameters"
+        )
+    )
+    macs2_peaks <- Signac::CallPeaks(
+        seurat_data,
+        group.by=args$callby,
+        extsize=50,                                                                    # will be always called with --nomodel, so --shift
+        shift=-25,                                                                     # and --extsize make difference
+        additional.args=base::paste(
+            "-q", args$qvalue,
+            "--keep-dup all",                                                          # our fragments are already deduplicated
+            "--seed", args$seed,                                                       # just in case
+            "--tempdir", args$tmpdir
+        ),
+        verbose=args$verbose
+    )
+
+    base::print(
+        base::paste(
+            "Returning to the original ATAC fragments",
+            "data from", args$fragments
+        )
+    )
+    seurat_data <- io$replace_fragments(args$fragments, seurat_data)
+    base::file.remove(tn5ct_location)                                                  # we don't need Tn5 cut sites file anymore
+
+    SeuratObject::Idents(seurat_data) <- "new.ident"                                   # safety measure - set identities to something standard
+    macs2_counts <- Signac::FeatureMatrix(
+        fragments=Signac::Fragments(seurat_data),                                      # at this moment it points to the original fragments data
+        sep=c("-", "-"),
+        features=macs2_peaks,
+        cells=base::colnames(seurat_data),
+        verbose=args$verbose
+    )
+    base::rm(macs2_peaks)                                                              # remove unused data
+
+    atac_assay <- Signac::CreateChromatinAssay(
+        counts=macs2_counts,
+        sep=c("-", "-"),
+        fragments=Signac::Fragments(seurat_data),                                      # at this moment it points to the original fragments data
+        min.cells=0,                                                                   # setting something other than 0 will update nCount_ATAC, which bring some discrepancy to the QC plots
+        min.features=-1,                                                               # as they check ncount.cell > min.features and by default it's 0, we will remove cells without peaks and won't be able to add new assay to our seurat_data
+        annotation=annotation_data,
+        genome=seqinfo_data                                                            # we will need it later when exporing genome coverage to bigWig files
+    )
+    base::rm(macs2_counts)                                                             # remove unused data
+    seurat_data[["ATAC"]] <- atac_assay
+    base::rm(atac_assay)                                                               # remove unused data
+    base::gc(verbose=FALSE)
+
+    SeuratObject::DefaultAssay(seurat_data) <- backup_assay
+    SeuratObject::Idents(seurat_data) <- "new.ident"                                   # safety measure
     return (seurat_data)
 }
 

@@ -23,6 +23,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
     selected_features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi")
     selected_labels=c("RNA reads", "Genes", "Mitochondrial %", "Novelty score")
     datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
+    conditions_count <- length(unique(as.vector(as.character(seurat_data@meta.data$condition))))
+    not_default_conditions <- all(
+        as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition))
+    )
 
     qc_metrics_pca <- qc$qc_metrics_pca(
         seurat_data=seurat_data,
@@ -34,7 +38,11 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
     graphics$pca_plot(
         pca_data=qc_metrics_pca,
         pcs=c(1, 2),
-        plot_title=paste0("QC metrics PCA (1,2) (", suffix, ")"),
+        plot_title="QC metrics PCA",
+        plot_subtitle=paste0(
+            graphics$expand_qc_suffix(suffix),
+            "; ", "PC1/PC2"
+        ),
         legend_title="QC metrics",
         color_by="labels",
         palette_colors=graphics$D40_COLORS,
@@ -45,7 +53,11 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
     graphics$pca_plot(
         pca_data=qc_metrics_pca,
         pcs=c(2, 3),
-        plot_title=paste0("QC metrics PCA (2,3) (", suffix, ")"),
+        plot_title="QC metrics PCA",
+        plot_subtitle=paste0(
+            graphics$expand_qc_suffix(suffix),
+            "; ", "PC2/PC3"
+        ),
         legend_title="QC metrics",
         color_by="labels",
         palette_colors=graphics$D40_COLORS,
@@ -60,10 +72,11 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         x_label="Dataset",
         y_label="Cells",
         legend_title="Dataset",
-        plot_title=paste("Number of cells per dataset (", suffix, ")", sep=""),
+        plot_title="Number of cells per dataset",
+        plot_subtitle=graphics$expand_qc_suffix(suffix),
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
-        width=ifelse(datasets_count > 1, 1200, 600),
+        width=ifelse(datasets_count > 1, 1200, 400),
         rootname=paste(args$output, suffix, "cells_count", sep="_"),
         pdf=args$pdf
     )
@@ -75,9 +88,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         split_by="new.ident",
         x_left_intercept=args$minumis,
         x_label="RNA reads per cell",
-        y_label="Density",
+        y_label="Distribution",
         legend_title="Dataset",
-        plot_title=paste("RNA reads per cell density (", suffix, ")", sep=""),
+        plot_title="Distribution of RNA reads per cell",
+        plot_subtitle=graphics$expand_qc_suffix(suffix),
         scale_x_log10=TRUE,
         show_zoomed=FALSE,
         palette_colors=graphics$D40_COLORS,
@@ -94,9 +108,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         x_left_intercept=args$mingenes,
         x_right_intercept=args$maxgenes,
         x_label="Genes per cell",
-        y_label="Density",
+        y_label="Distribution",
         legend_title="Dataset",
-        plot_title=paste("Genes per cell density (", suffix, ")", sep=""),
+        plot_title="Distribution of genes per cell",
+        plot_subtitle=graphics$expand_qc_suffix(suffix),
         scale_x_log10=TRUE,
         show_zoomed=FALSE,
         show_ranked=TRUE,
@@ -121,7 +136,8 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         x_label="RNA reads per cell",
         y_label="Genes per cell",
         legend_title="Mitochondrial %",
-        plot_title=paste("Genes vs RNA reads per cell (", suffix, ")", sep=""),
+        plot_title="Genes vs RNA reads per cell",
+        plot_subtitle=graphics$expand_qc_suffix(suffix),
         scale_x_log10=TRUE,
         scale_y_log10=TRUE,
         show_lm=TRUE,
@@ -147,7 +163,8 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         x_label="Mitochondrial %",
         y_label="RNA reads per cell",
         legend_title="Mitochondrial %",
-        plot_title=paste("RNA reads vs mitochondrial % per cell (", suffix, ")", sep=""),
+        plot_title="RNA reads vs mitochondrial % per cell",
+        plot_subtitle=graphics$expand_qc_suffix(suffix),
         scale_x_log10=TRUE,
         scale_y_log10=TRUE,
         show_lm=FALSE,
@@ -165,9 +182,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         split_by="new.ident",
         x_right_intercept=args$maxmt,
         x_label="Percentage of RNA reads mapped to mitochondrial genes per cell",
-        y_label="Density",
+        y_label="Distribution",
         legend_title="Dataset",
-        plot_title=paste("Percentage of RNA reads mapped to mitochondrial genes per cell density (", suffix, ")", sep=""),
+        plot_title="Distribution of RNA reads mapped to mitochondrial genes per cell",
+        plot_subtitle=graphics$expand_qc_suffix(suffix),
         show_zoomed=FALSE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
@@ -182,9 +200,10 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         split_by="new.ident",
         x_left_intercept=args$minnovelty,
         x_label="log10 Genes / log10 UMI per cell",
-        y_label="Density",
+        y_label="Distribution",
         legend_title="Dataset",
-        plot_title=paste("Novelty score per cell density (", suffix, ")", sep=""),
+        plot_title="Distribution of novelty score per cell",
+        plot_subtitle=graphics$expand_qc_suffix(suffix),
         show_zoomed=FALSE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
@@ -198,11 +217,15 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         labels=selected_labels,
         from_meta=TRUE,
         show_stats=TRUE,
-        plot_title=paste("QC metrics per cell density (", suffix, ")", sep=""),
+        plot_title="Distribution of QC metrics per cell",
+        plot_subtitle=graphics$expand_qc_suffix(suffix),
         legend_title="Dataset",
         hide_x_text=TRUE,
         pt_size=0,
         combine_guides="collect",
+        ncol=4,
+        width=ifelse(datasets_count > 1, 1600, 1000),
+        height=400,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
         rootname=paste(args$output, suffix, "qc_mtrcs_dnst", sep="_"),
@@ -212,7 +235,11 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
     if (nrow(seurat_data@meta.data[seurat_data@meta.data$rna_doublets == "doublet", ]) > 0){      # show plot only if we still have doublets
         graphics$composition_plot(
             data=seurat_data,
-            plot_title=paste("Percentage of RNA doublets per dataset (", suffix, ")", sep=""),
+            plot_title="Percentage of RNA doublets",
+            plot_subtitle=paste(
+                graphics$expand_qc_suffix(suffix),
+                sep="; "
+            ),
             legend_title="Dataset",
             group_by="rna_doublets",
             split_by="new.ident",
@@ -220,16 +247,13 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
             y_label="Cell percentage",
             palette_colors=c("#00AEAE", "#0BFFFF"),
             theme=args$theme,
-            width=ifelse(datasets_count > 1, 1200, 600),
+            width=ifelse(datasets_count > 1, 1200, 400),
             rootname=paste(args$output, suffix, "rnadbl", sep="_"),
             pdf=args$pdf
         )
     }
 
-    if (
-        all(as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition))) &&
-        length(unique(as.vector(as.character(seurat_data@meta.data$condition)))) > 1
-    ){
+    if (conditions_count > 1 && not_default_conditions){
         graphics$geom_density_plot(
             data=seurat_data@meta.data,
             x_axis="nCount_RNA",
@@ -237,9 +261,14 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
             split_by="condition",
             x_left_intercept=args$minumis,
             x_label="RNA reads per cell",
-            y_label="Density",
+            y_label="Distribution",
             legend_title="Dataset",
-            plot_title=paste("Split by grouping condition RNA reads per cell density (", suffix, ")", sep=""),
+            plot_title="Distribution of RNA reads per cell",
+            plot_subtitle=paste(
+                graphics$expand_qc_suffix(suffix),
+                "split by grouping condition",
+                sep="; "
+            ),
             scale_x_log10=TRUE,
             show_zoomed=FALSE,
             palette_colors=graphics$D40_COLORS,
@@ -255,9 +284,14 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
             x_left_intercept=args$mingenes,
             x_right_intercept=args$maxgenes,
             x_label="Genes per cell",
-            y_label="Density",
+            y_label="Distribution",
             legend_title="Dataset",
-            plot_title=paste("Split by grouping condition genes per cell density (", suffix, ")", sep=""),
+            plot_title="Distribution of genes per cell",
+            plot_subtitle=paste(
+                graphics$expand_qc_suffix(suffix),
+                "split by grouping condition",
+                sep="; "
+            ),
             scale_x_log10=TRUE,
             show_zoomed=FALSE,
             show_ranked=TRUE,
@@ -273,9 +307,14 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
             split_by="condition",
             x_right_intercept=args$maxmt,
             x_label="Percentage of RNA reads mapped to mitochondrial genes per cell",
-            y_label="Density",
+            y_label="Distribution",
             legend_title="Dataset",
-            plot_title=paste("Split by grouping condition the percentage of RNA reads mapped to mitochondrial genes per cell density (", suffix, ")", sep=""),
+            plot_title="Distribution of RNA reads mapped to mitochondrial genes per cell",
+            plot_subtitle=paste(
+                graphics$expand_qc_suffix(suffix),
+                "split by grouping condition",
+                sep="; "
+            ),
             show_zoomed=FALSE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
@@ -289,9 +328,14 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
             split_by="condition",
             x_left_intercept=args$minnovelty,
             x_label="log10 Genes / log10 UMI per cell",
-            y_label="Density",
+            y_label="Distribution",
             legend_title="Dataset",
-            plot_title=paste("Split by grouping condition the novelty score per cell density (", suffix, ")", sep=""),
+            plot_title="Distribution of novelty score per cell",
+            plot_subtitle=paste(
+                graphics$expand_qc_suffix(suffix),
+                "split by grouping condition",
+                sep="; "
+            ),
             show_zoomed=FALSE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,

@@ -251,7 +251,7 @@ add_rna_qc_metrics <- function(seurat_data, args){
 add_atac_qc_metrics <- function(seurat_data, args){
     backup_assay <- SeuratObject::DefaultAssay(seurat_data)
     SeuratObject::DefaultAssay(seurat_data) <- "ATAC"
-    seurat_data <- Signac::NucleosomeSignal(seurat_data, verbose=FALSE)
+    seurat_data <- Signac::NucleosomeSignal(seurat_data, n=NULL, verbose=FALSE)    # NULL makes it read all fragments, otherwise it depends on the number of cells in seurat_data
     # if 'gene_biotype' are all NAs, then annotation doesn't have real gene_biotype data and we need to use NULL
     tss_positions <- Signac::GetTSSPositions(
         ranges=Signac::Annotation(seurat_data[["ATAC"]]),

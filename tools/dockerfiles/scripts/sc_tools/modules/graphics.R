@@ -66,6 +66,7 @@ export(
     "dendro_plot",
     "topology_plot",
     "trajectory_heatmap",
+    "expand_qc_suffix",
     "D40_COLORS",
     "CC_COLORS"
 )
@@ -73,7 +74,7 @@ export(
 # https://sashamaps.net/docs/resources/20-colors/
 # https://cran.r-project.org/web/packages/Polychrome/vignettes/testgg.html
 # D40_COLORS <- c("#FB1C0D", "#0DE400", "#0D00FF", "#E8B4BD", "#FD00EA", "#0DD1FE", "#FF9B0D", "#0D601C", "#C50D69", "#CACA16", "#722A91", "#00DEBF", "#863B00", "#5D7C91", "#FD84D8", "#C100FB", "#8499FC", "#FD6658", "#83D87A", "#968549", "#DEB6FB", "#832E60", "#A8CAB0", "#FE8F95", "#FE1CBB", "#DF7CF8", "#FF0078", "#F9B781", "#4D493B", "#1C5198", "#7C32CE", "#EFBC16", "#7CD2DE", "#B30DA7", "#9FC0F6", "#7A940D", "#9B0000", "#946D9B", "#C8C2D9", "#94605A")
-D40_COLORS <- c("#FF6E6A", "#71E869", "#6574FF", "#F3A6B5", "#FF5AD6", "#6DDCFE", "#FFBB70", "#43A14E", "#D71C7C", "#E1E333", "#8139A8", "#00D8B6", "#B55C00", "#7FA4B6", "#FFA4E3", "#B300FF", "#9BC4FD", "#FF7E6A", "#9DE98D", "#BFA178", "#E7C2FD", "#8B437D", "#ADCDC0", "#FE9FA4", "#FF53D1", "#D993F9", "#FF47A1", "#FFC171", "#625C51", "#4288C9", "#9767D4", "#F2D61D", "#8EE6FD", "#B940B1", "#B2D5F8", "#9AB317", "#C70000", "#AC8BAC", "#D7D1E4", "#9D8D87")
+D40_COLORS <- c("#00D8B6", "#71E869", "#6574FF", "#F3A6B5", "#FF5AD6", "#6DDCFE", "#FFBB70", "#43A14E", "#D71C7C", "#E1E333", "#8139A8", "#FF6E6A", "#B55C00", "#7FA4B6", "#FFA4E3", "#B300FF", "#9BC4FD", "#FF7E6A", "#9DE98D", "#BFA178", "#E7C2FD", "#8B437D", "#ADCDC0", "#FE9FA4", "#FF53D1", "#D993F9", "#FF47A1", "#FFC171", "#625C51", "#4288C9", "#9767D4", "#F2D61D", "#8EE6FD", "#B940B1", "#B2D5F8", "#9AB317", "#C70000", "#AC8BAC", "#D7D1E4", "#9D8D87")
 CC_COLORS <- c("#80FFB5", "#FFB580", "#8093FF")
 
 get_theme <- function(theme){
@@ -88,6 +89,17 @@ get_theme <- function(theme){
             "minimal"  = ggplot2::theme_minimal(),
             "classic"  = ggplot2::theme_classic(),
             "void"     = ggplot2::theme_void()
+        )
+    )
+}
+
+expand_qc_suffix <- function(suffix){
+    return (
+        switch(
+            suffix,
+            "raw"      = "Unfiltered",
+            "mid_fltr" = "Unfiltered, after MACS2 peak calling",
+            "fltr"     = "Filtered"
         )
     )
 }
@@ -439,7 +451,7 @@ clonotype_chord_plot <- function(data, rootname, clone_by, group_by, plot_title,
     )
 }
 
-geom_bar_plot <- function(data, rootname, x_axis, color_by, x_label, y_label, legend_title, plot_title, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+geom_bar_plot <- function(data, rootname, x_axis, color_by, x_label, y_label, legend_title, plot_title, plot_subtitle=NULL, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             plot <- ggplot2::ggplot(data, ggplot2::aes_string(x=x_axis, fill=color_by)) +
@@ -448,7 +460,7 @@ geom_bar_plot <- function(data, rootname, x_axis, color_by, x_label, y_label, le
                 ggplot2::xlab(x_label) +
                 ggplot2::ylab(y_label) +
                 ggplot2::guides(fill=ggplot2::guide_legend(legend_title), x=ggplot2::guide_axis(angle=45)) +
-                ggplot2::ggtitle(plot_title) +
+                ggplot2::ggtitle(plot_title, subtitle=plot_subtitle) +
                 ggplot2::scale_fill_manual(values=palette_colors) +
                 get_theme(theme)
 
@@ -471,7 +483,7 @@ geom_bar_plot <- function(data, rootname, x_axis, color_by, x_label, y_label, le
     )
 }
 
-geom_density_plot <- function(data, rootname, x_axis, group_by, split_by, x_label, y_label, legend_title, plot_title, x_left_intercept=NULL, x_right_intercept=NULL,  scale_x_log10=FALSE, scale_y_log10=FALSE, alpha=0.7, show_zoomed=FALSE, show_ranked=FALSE, ranked_x_label="Ranked cells", palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+geom_density_plot <- function(data, rootname, x_axis, group_by, split_by, x_label, y_label, legend_title, plot_title, plot_subtitle=NULL, x_left_intercept=NULL, x_right_intercept=NULL,  scale_x_log10=FALSE, scale_y_log10=FALSE, alpha=0.7, show_zoomed=FALSE, show_ranked=FALSE, ranked_x_label="Ranked cells", palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             intercept_data <- data %>%
@@ -481,11 +493,11 @@ geom_density_plot <- function(data, rootname, x_axis, group_by, split_by, x_labe
                               tibble::add_column(color=palette_colors[1:base::nrow(.)])
 
             plot <- ggplot2::ggplot(data, ggplot2::aes_string(x=x_axis, fill=group_by)) +
-                    ggplot2::geom_density(alpha=alpha) +
+                    ggplot2::geom_density(alpha=alpha, trim=TRUE) +                           # set trim to TRUE to make it correspond to what we have in violin plots
                     ggplot2::xlab(x_label) +
                     ggplot2::ylab(y_label) +
                     ggplot2::guides(fill=ggplot2::guide_legend(legend_title)) +
-                    ggplot2::ggtitle(plot_title) +
+                    ggplot2::ggtitle(plot_title, subtitle=plot_subtitle) +
                     ggplot2::facet_wrap(stats::as.formula(base::paste("~", split_by))) +
                     ggplot2::scale_fill_manual(values=palette_colors) +
                     get_theme(theme)
@@ -606,7 +618,7 @@ geom_density_plot <- function(data, rootname, x_axis, group_by, split_by, x_labe
     )
 }
 
-geom_point_plot <- function(data, rootname, x_axis, y_axis, split_by, x_left_intercept, y_low_intercept, color_by, gradient_colors, color_limits, color_break, x_label, y_label, legend_title, plot_title, highlight_rows=NULL, highlight_color="black", highlight_shape=4, y_high_intercept=NULL, scale_x_log10=FALSE, scale_y_log10=FALSE, show_lm=FALSE, show_density=FALSE, alpha=0.2, alpha_intercept=0.5, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+geom_point_plot <- function(data, rootname, x_axis, y_axis, split_by, x_left_intercept, y_low_intercept, color_by, gradient_colors, color_limits, color_break, x_label, y_label, legend_title, plot_title, plot_subtitle=NULL, highlight_rows=NULL, highlight_color="black", highlight_shape=4, y_high_intercept=NULL, scale_x_log10=FALSE, scale_y_log10=FALSE, show_lm=FALSE, show_density=FALSE, alpha=0.2, alpha_intercept=0.5, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             intercept_data <- data %>%
@@ -630,7 +642,7 @@ geom_point_plot <- function(data, rootname, x_axis, y_axis, split_by, x_left_int
                     ggplot2::xlab(x_label) +
                     ggplot2::ylab(y_label) +
                     ggplot2::guides(color=ggplot2::guide_colourbar(legend_title)) +
-                    ggplot2::ggtitle(plot_title) +
+                    ggplot2::ggtitle(plot_title, subtitle=plot_subtitle) +
                     ggplot2::facet_wrap(stats::as.formula(base::paste("~", split_by))) +
                     ggplot2::geom_vline(intercept_data, mapping=ggplot2::aes(xintercept=x_left), color=intercept_data$color, alpha=alpha_intercept) +
                     ggplot2::geom_hline(intercept_data, mapping=ggplot2::aes(yintercept=y_low), color=intercept_data$color, alpha=alpha_intercept) +
@@ -1557,7 +1569,7 @@ corr_plot <- function(data, reduction, qc_columns, qc_labels, plot_title, rootna
     )
 }
 
-tss_plot <- function(data, rootname, plot_title, split_by, group_by_value=NULL, combine_guides=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+tss_plot <- function(data, rootname, plot_title, split_by, plot_subtitle=NULL, group_by_value=NULL, combine_guides=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             SeuratObject::Idents(data) <- split_by
@@ -1569,9 +1581,9 @@ tss_plot <- function(data, rootname, plot_title, split_by, group_by_value=NULL, 
                 group_by <- NULL
                 if (!is.null(group_by_value)){
                     filtered_data$tss_group_by <- base::ifelse(
-                        filtered_data$TSS.enrichment >= group_by_value ,
-                        base::paste("High ", "(bigger or equal to ", group_by_value, ")", sep=""),
-                        base::paste("Low ", "(smaller than ", group_by_value, ")", sep="")
+                        (filtered_data$TSS.enrichment >= group_by_value),
+                        base::paste("a) TSS enrichment score >=", group_by_value),
+                        base::paste("b) TSS enrichment score <", group_by_value)
                     )
                     group_by <- "tss_group_by"
                 }
@@ -1584,7 +1596,7 @@ tss_plot <- function(data, rootname, plot_title, split_by, group_by_value=NULL, 
                     Seurat::NoLegend()
             }
             SeuratObject::Idents(data) <- "new.ident"
-            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides) + patchwork::plot_annotation(title=plot_title)
+            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides) + patchwork::plot_annotation(title=plot_title, subtitle=plot_subtitle)
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(combined_plots))
@@ -1605,7 +1617,7 @@ tss_plot <- function(data, rootname, plot_title, split_by, group_by_value=NULL, 
     )
 }
 
-fragments_hist <- function(data, rootname, plot_title, split_by, group_by_value=NULL, combine_guides=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+fragments_hist <- function(data, rootname, plot_title, split_by, plot_subtitle=NULL, group_by_value=NULL, combine_guides=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             SeuratObject::Idents(data) <- split_by
@@ -1617,9 +1629,9 @@ fragments_hist <- function(data, rootname, plot_title, split_by, group_by_value=
                 group_by <- NULL
                 if (!is.null(group_by_value)){
                     filtered_data$ns_group_by <- base::ifelse(
-                        filtered_data$nucleosome_signal >= group_by_value ,
-                        base::paste("Nucl. signal >= ", group_by_value, sep=""),
-                        base::paste("Nucl. signal < ", group_by_value, sep="")
+                        (filtered_data$nucleosome_signal <= group_by_value),
+                        base::paste("a) Nucl. signal <=", group_by_value),
+                        base::paste("b) Nucl. signal >", group_by_value)
                     )
                     group_by <- "ns_group_by"
                 }
@@ -1633,7 +1645,7 @@ fragments_hist <- function(data, rootname, plot_title, split_by, group_by_value=
                     Seurat::NoLegend()
             }
             SeuratObject::Idents(data) <- "new.ident"
-            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides) + patchwork::plot_annotation(title=plot_title)
+            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides) + patchwork::plot_annotation(title=plot_title, subtitle=plot_subtitle)
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(combined_plots))
@@ -1654,7 +1666,7 @@ fragments_hist <- function(data, rootname, plot_title, split_by, group_by_value=
     )
 }
 
-pca_plot <- function(pca_data, pcs, rootname, plot_title, legend_title, color_by="label", label_size=5, pt_size=8, pt_shape=19, alpha=0.75, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+pca_plot <- function(pca_data, pcs, rootname, plot_title, legend_title, plot_subtitle=NULL, color_by="label", label_size=5, pt_size=8, pt_shape=19, alpha=1, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             x_score_column <- base::paste0("PC", pcs[1])
@@ -1676,7 +1688,7 @@ pca_plot <- function(pca_data, pcs, rootname, plot_title, legend_title, color_by
                         check_overlap=TRUE,
                         show.legend=FALSE
                     ) +
-                    ggplot2::ggtitle(plot_title) +
+                    ggplot2::ggtitle(plot_title, subtitle=plot_subtitle) +
                     ggplot2::guides(color=ggplot2::guide_legend(legend_title)) +
                     ggplot2::scale_color_manual(values=palette_colors) +
                     get_theme(theme)

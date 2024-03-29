@@ -81,7 +81,8 @@ export_processed_plots <- function(seurat_data, de_results, args){
         graphics$pca_plot(
             pca_data=pca_data,
             pcs=c(1, 2),
-            plot_title="Gene expression PCA (1,2)",
+            plot_title="Gene expression PCA",
+            plot_subtitle="PC1/PC2",
             legend_title="Dataset",
             color_by="group",
             palette_colors=graphics$D40_COLORS,
@@ -93,7 +94,8 @@ export_processed_plots <- function(seurat_data, de_results, args){
         graphics$pca_plot(
             pca_data=pca_data,
             pcs=c(2, 3),
-            plot_title="Gene expression PCA (2,3)",
+            plot_title="Gene expression PCA",
+            plot_subtitle="PC2/PC3",
             legend_title="Dataset",
             color_by="group",
             palette_colors=graphics$D40_COLORS,

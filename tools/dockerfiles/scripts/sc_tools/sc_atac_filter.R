@@ -23,13 +23,11 @@ suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
 
 export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
+    DefaultAssay(seurat_data) <- "ATAC"
     Idents(seurat_data) <- "new.ident"                                                                # safety measure
     peak_type <- ifelse(macs2_peaks, "- MACS2", "- 10x")
-    selected_features <- c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "TSS.enrichment", "nucleosome_signal", "nFeature_ATAC", "frip", "blacklist_fraction")
-    selected_labels <- c(
-        "RNA reads", "Genes", "Mitochondrial %", "Novelty score",
-        paste(c("ATAC fragments\nin peaks", "TSS enrichment\nscore", "Nucl. signal", "Peaks", "FRiP", "Bl. regions"), peak_type)
-    )
+    selected_features <- c("nCount_ATAC", "TSS.enrichment", "nucleosome_signal", "nFeature_ATAC", "frip", "blacklist_fraction")
+    selected_labels <- paste(c("ATAC fragments\nin peaks", "TSS enrichment\nscore", "Nucl. signal", "Peaks", "FRiP", "Bl. regions"), peak_type)
     datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
     conditions_count <- length(unique(as.vector(as.character(seurat_data@meta.data$condition))))
     not_default_conditions <- all(
@@ -86,137 +84,6 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         theme=args$theme,
         width=ifelse(datasets_count > 1, 1200, 400),
         rootname=paste(args$output, suffix, "cells_count", sep="_"),
-        pdf=args$pdf
-    )
-
-    graphics$geom_density_plot(
-        data=seurat_data@meta.data,
-        x_axis="nCount_RNA",
-        group_by="new.ident",
-        split_by="new.ident",
-        x_left_intercept=args$minumis,
-        x_label="RNA reads per cell",
-        y_label="Distribution",
-        legend_title="Dataset",
-        plot_title="Distribution of RNA reads per cell",
-        plot_subtitle=graphics$expand_qc_suffix(suffix),
-        scale_x_log10=TRUE,
-        show_zoomed=FALSE,
-        palette_colors=graphics$D40_COLORS,
-        theme=args$theme,
-        height=ifelse(datasets_count > 1, 800, 400),
-        rootname=paste(args$output, suffix, "umi_dnst", sep="_"),
-        pdf=args$pdf
-    )
-    graphics$geom_density_plot(
-        data=seurat_data@meta.data,
-        x_axis="nFeature_RNA",
-        group_by="new.ident",
-        split_by="new.ident",
-        x_left_intercept=args$mingenes,
-        x_right_intercept=args$maxgenes,
-        x_label="Genes per cell",
-        y_label="Distribution",
-        legend_title="Dataset",
-        plot_title="Distribution of genes per cell",
-        plot_subtitle=graphics$expand_qc_suffix(suffix),
-        scale_x_log10=TRUE,
-        show_zoomed=FALSE,
-        show_ranked=TRUE,
-        palette_colors=graphics$D40_COLORS,
-        theme=args$theme,
-        rootname=paste(args$output, suffix, "gene_dnst", sep="_"),
-        pdf=args$pdf
-    )
-    graphics$geom_point_plot(
-        data=seurat_data@meta.data,
-        x_axis="nCount_RNA",
-        y_axis="nFeature_RNA",
-        split_by="new.ident",
-        x_left_intercept=args$minumis,
-        y_low_intercept=args$mingenes,
-        y_high_intercept=args$maxgenes,
-        color_by="mito_percentage",
-        highlight_rows=which(seurat_data@meta.data$rna_doublets == "doublet" | seurat_data@meta.data$atac_doublets == "doublet"),    # need a single |
-        gradient_colors=c("lightslateblue", "orange", "red"),
-        color_limits=c(0, 100),
-        color_break=args$maxmt,
-        x_label="RNA reads per cell",
-        y_label="Genes per cell",
-        legend_title="Mitochondrial %",
-        plot_title="Genes vs RNA reads per cell",
-        plot_subtitle=graphics$expand_qc_suffix(suffix),
-        scale_x_log10=TRUE,
-        scale_y_log10=TRUE,
-        show_lm=TRUE,
-        palette_colors=graphics$D40_COLORS,
-        theme=args$theme,
-        width=ifelse(datasets_count > 1, 1200, 600),
-        height=ifelse(datasets_count > 1, 800, 400),
-        rootname=paste(args$output, suffix, "gene_umi", sep="_"),
-        pdf=args$pdf
-    )
-    graphics$geom_point_plot(
-        data=seurat_data@meta.data,
-        x_axis="mito_percentage",
-        y_axis="nCount_RNA",
-        split_by="new.ident",
-        x_left_intercept=args$maxmt,
-        y_low_intercept=args$minumis,
-        color_by="mito_percentage",
-        highlight_rows=which(seurat_data@meta.data$rna_doublets == "doublet" | seurat_data@meta.data$atac_doublets == "doublet"),    # need a single |
-        gradient_colors=c("lightslateblue", "orange", "red"),
-        color_limits=c(0, 100),
-        color_break=args$maxmt,
-        x_label="Mitochondrial %",
-        y_label="RNA reads per cell",
-        legend_title="Mitochondrial %",
-        plot_title="RNA reads vs mitochondrial % per cell",
-        plot_subtitle=graphics$expand_qc_suffix(suffix),
-        scale_x_log10=TRUE,
-        scale_y_log10=TRUE,
-        show_lm=FALSE,
-        palette_colors=graphics$D40_COLORS,
-        theme=args$theme,
-        width=ifelse(datasets_count > 1, 1200, 600),
-        height=ifelse(datasets_count > 1, 800, 400),
-        rootname=paste(args$output, suffix, "umi_mito", sep="_"),
-        pdf=args$pdf
-    )
-    graphics$geom_density_plot(
-        data=seurat_data@meta.data,
-        x_axis="mito_percentage",
-        group_by="new.ident",
-        split_by="new.ident",
-        x_right_intercept=args$maxmt,
-        x_label="Percentage of RNA reads mapped to mitochondrial genes per cell",
-        y_label="Distribution",
-        legend_title="Dataset",
-        plot_title="Distribution of RNA reads mapped to mitochondrial genes per cell",
-        plot_subtitle=graphics$expand_qc_suffix(suffix),
-        show_zoomed=FALSE,
-        palette_colors=graphics$D40_COLORS,
-        theme=args$theme,
-        height=ifelse(datasets_count > 1, 800, 400),
-        rootname=paste(args$output, suffix, "mito_dnst", sep="_"),
-        pdf=args$pdf
-    )
-    graphics$geom_density_plot(
-        data=seurat_data@meta.data,
-        x_axis="log10_gene_per_log10_umi",
-        group_by="new.ident",
-        split_by="new.ident",
-        x_left_intercept=args$minnovelty,
-        x_label="log10 Genes / log10 UMI per cell",
-        y_label="Distribution",
-        legend_title="Dataset",
-        plot_title="Distribution of novelty score per cell",
-        plot_subtitle=graphics$expand_qc_suffix(suffix),
-        show_zoomed=FALSE,
-        palette_colors=graphics$D40_COLORS,
-        theme=args$theme,
-        height=ifelse(datasets_count > 1, 800, 400),
-        rootname=paste(args$output, suffix, "nvlt_dnst", sep="_"),
         pdf=args$pdf
     )
     graphics$geom_density_plot(
@@ -280,45 +147,17 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         split_by="new.ident",
         x_axis="nCount_ATAC",
         x_label="ATAC fragments in peaks per cell",
-        y_axis="nCount_RNA",
-        y_label="RNA reads per cell",
-        x_left_intercept=args$minfragments,
-        y_low_intercept=args$minumis,
-        alpha_intercept=1,
-        color_by="mito_percentage",
-        highlight_rows=which(seurat_data@meta.data$rna_doublets == "doublet" | seurat_data@meta.data$atac_doublets == "doublet"),    # need a single |
-        gradient_colors=c("lightslateblue", "orange", "red"),
-        color_limits=c(0, 100),
-        color_break=args$maxmt,
-        legend_title="Mitochondrial %",
-        plot_title="RNA reads vs ATAC fragments in peaks per cell",
-        plot_subtitle=graphics$expand_qc_suffix(suffix),
-        scale_x_log10=TRUE,
-        scale_y_log10=TRUE,
-        show_density=TRUE,
-        palette_colors=graphics$D40_COLORS,
-        theme=args$theme,
-        width=ifelse(datasets_count > 1, 1200, 600),
-        height=ifelse(datasets_count > 1, 800, 400),
-        rootname=paste(args$output, suffix, "rna_atac_cnts", sep="_"),
-        pdf=args$pdf
-    )
-    graphics$geom_point_plot(
-        data=seurat_data@meta.data,
-        split_by="new.ident",
-        x_axis="nCount_ATAC",
-        x_label="ATAC fragments in peaks per cell",
         y_axis="TSS.enrichment",
         y_label="TSS enrichment score",
         x_left_intercept=args$minfragments,
         y_low_intercept=args$mintssenrich,
         alpha_intercept=1,
-        color_by="mito_percentage",
-        highlight_rows=which(seurat_data@meta.data$rna_doublets == "doublet" | seurat_data@meta.data$atac_doublets == "doublet"),    # need a single |
-        gradient_colors=c("lightslateblue", "orange", "red"),
-        color_limits=c(0, 100),
-        color_break=args$maxmt,
-        legend_title="Mitochondrial %",
+        color_by="frip",
+        highlight_rows=which(seurat_data@meta.data$atac_doublets == "doublet"),
+        gradient_colors=c("orange", "lightslateblue", "lightslateblue"),
+        color_limits=c(0, 1),
+        color_break=args$minfrip,
+        legend_title="FRiP",
         plot_title="TSS enrichment score vs ATAC fragments in peaks per cell",
         plot_subtitle=graphics$expand_qc_suffix(suffix),
         scale_x_log10=TRUE,
@@ -343,35 +182,14 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         hide_x_text=TRUE,
         pt_size=0,
         combine_guides="collect",
-        ncol=5,
-        width=ifelse(datasets_count > 1, 2000, 1200),
+        ncol=3,
+        width=ifelse(datasets_count > 1, 1200, 800),
         height=800,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
         rootname=paste(args$output, suffix, "qc_mtrcs_dnst", sep="_"),
         pdf=args$pdf
     )
-
-    if (nrow(seurat_data@meta.data[seurat_data@meta.data$rna_doublets == "doublet", ]) > 0){      # show plot only if not all rna doublets have been removed
-        graphics$composition_plot(
-            data=seurat_data,
-            plot_title="Percentage of RNA doublets",
-            plot_subtitle=paste(
-                graphics$expand_qc_suffix(suffix),
-                sep="; "
-            ),
-            legend_title="Dataset",
-            group_by="rna_doublets",
-            split_by="new.ident",
-            x_label="Dataset",
-            y_label="Cell percentage",
-            palette_colors=c("#00AEAE", "#0BFFFF"),
-            theme=args$theme,
-            width=ifelse(datasets_count > 1, 1200, 400),
-            rootname=paste(args$output, suffix, "rnadbl", sep="_"),
-            pdf=args$pdf
-        )
-    }
 
     if (nrow(seurat_data@meta.data[seurat_data@meta.data$atac_doublets == "doublet", ]) > 0){      # show plot only if not all atac doublets have been removed
         graphics$composition_plot(
@@ -394,47 +212,6 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         )
     }
 
-    if (
-        nrow(seurat_data@meta.data[seurat_data@meta.data$rna_doublets == "doublet", ]) > 0 &&             # no reason to show this plot if not both doublets are present
-        nrow(seurat_data@meta.data[seurat_data@meta.data$atac_doublets == "doublet", ]) > 0
-    ){
-        seurat_data@meta.data <- seurat_data@meta.data %>%                                                # temporary column to see doublets overlap between RNA and ATAC
-                                 dplyr::mutate(
-                                     doublets_overlap = dplyr::case_when(
-                                        rna_doublets == "singlet" & atac_doublets == "singlet" ~ "Singlet",
-                                        rna_doublets == "doublet" & atac_doublets == "singlet" ~ "Only RNA",
-                                        rna_doublets == "singlet" & atac_doublets == "doublet" ~ "Only ATAC",
-                                        rna_doublets == "doublet" & atac_doublets == "doublet" ~ "RNA and ATAC"
-                                     )
-                                 ) %>%
-                                 dplyr::mutate(
-                                     doublets_overlap=base::factor(
-                                         doublets_overlap,
-                                         levels=c("Only RNA", "RNA and ATAC", "Only ATAC", "Singlet")     # it sage to set all 4 levels even if some are removed from data
-                                     )
-                                 )
-        graphics$composition_plot(
-            data=seurat_data,
-            plot_title="Percentage of RNA and ATAC doublets",
-            plot_subtitle=paste(
-                graphics$expand_qc_suffix(suffix),
-                sep="; "
-            ),
-            legend_title="Dataset",
-            group_by="doublets_overlap",
-            split_by="new.ident",
-            x_label="Dataset",
-            y_label="Cell percentage",
-            palette_colors=c("#00AEAE", "#008080", "#00DCDC", "#0BFFFF"),
-            theme=args$theme,
-            width=ifelse(datasets_count > 1, 1200, 400),
-            rootname=paste(args$output, suffix, "vrlpdbl", sep="_"),
-            pdf=args$pdf
-        )
-    }
-
-    backup_assay <- DefaultAssay(seurat_data)
-    DefaultAssay(seurat_data) <- "ATAC"
     graphics$tss_plot(
         data=seurat_data,
         split_by="new.ident",
@@ -467,97 +244,8 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         rootname=paste(args$output, suffix, "frgm_hist", sep="_"),
         pdf=args$pdf
     )
-    DefaultAssay(seurat_data) <- backup_assay
-
+    
     if (conditions_count > 1 && not_default_conditions){
-        graphics$geom_density_plot(
-            data=seurat_data@meta.data,
-            x_axis="nCount_RNA",
-            group_by="new.ident",
-            split_by="condition",
-            x_left_intercept=args$minumis,
-            x_label="RNA reads per cell",
-            y_label="Distribution",
-            legend_title="Dataset",
-            plot_title="Distribution of RNA reads per cell",
-            plot_subtitle=paste(
-                graphics$expand_qc_suffix(suffix),
-                "split by grouping condition",
-                sep="; "
-            ),
-            scale_x_log10=TRUE,
-            show_zoomed=FALSE,
-            palette_colors=graphics$D40_COLORS,
-            theme=args$theme,
-            rootname=paste(args$output, suffix, "umi_dnst_spl_cnd", sep="_"),
-            pdf=args$pdf
-        )
-        graphics$geom_density_plot(
-            data=seurat_data@meta.data,
-            x_axis="nFeature_RNA",
-            group_by="new.ident",
-            split_by="condition",
-            x_left_intercept=args$mingenes,
-            x_right_intercept=args$maxgenes,
-            x_label="Genes per cell",
-            y_label="Distribution",
-            legend_title="Dataset",
-            plot_title="Distribution of genes per cell",
-            plot_subtitle=paste(
-                graphics$expand_qc_suffix(suffix),
-                "split by grouping condition",
-                sep="; "
-            ),
-            scale_x_log10=TRUE,
-            show_zoomed=FALSE,
-            show_ranked=TRUE,
-            palette_colors=graphics$D40_COLORS,
-            theme=args$theme,
-            rootname=paste(args$output, suffix, "gene_dnst_spl_cnd", sep="_"),
-            pdf=args$pdf
-        )
-        graphics$geom_density_plot(
-            data=seurat_data@meta.data,
-            x_axis="mito_percentage",
-            group_by="new.ident",
-            split_by="condition",
-            x_right_intercept=args$maxmt,
-            x_label="Percentage of RNA reads mapped to mitochondrial genes per cell",
-            y_label="Distribution",
-            legend_title="Dataset",
-            plot_title="Distribution of RNA reads mapped to mitochondrial genes per cell",
-            plot_subtitle=paste(
-                graphics$expand_qc_suffix(suffix),
-                "split by grouping condition",
-                sep="; "
-            ),
-            show_zoomed=FALSE,
-            palette_colors=graphics$D40_COLORS,
-            theme=args$theme,
-            rootname=paste(args$output, suffix, "mito_dnst_spl_cnd", sep="_"),
-            pdf=args$pdf
-        )
-        graphics$geom_density_plot(
-            data=seurat_data@meta.data,
-            x_axis="log10_gene_per_log10_umi",
-            group_by="new.ident",
-            split_by="condition",
-            x_left_intercept=args$minnovelty,
-            x_label="log10 Genes / log10 UMI per cell",
-            y_label="Distribution",
-            legend_title="Dataset",
-            plot_title="Distribution of novelty score per cell",
-            plot_subtitle=paste(
-                graphics$expand_qc_suffix(suffix),
-                "split by grouping condition",
-                sep="; "
-            ),
-            show_zoomed=FALSE,
-            palette_colors=graphics$D40_COLORS,
-            theme=args$theme,
-            rootname=paste(args$output, suffix, "nvlt_dnst_spl_cnd", sep="_"),
-            pdf=args$pdf
-        )
         graphics$geom_density_plot(
             data=seurat_data@meta.data,
             x_axis="nCount_ATAC",
@@ -629,23 +317,25 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
 }
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Single-Cell Multiome ATAC-Seq and RNA-Seq Filtering Analysis")
+    parser <- ArgumentParser(description="Single-Cell ATAC-Seq Filtering Analysis")
     parser$add_argument(
         "--mex",
         help=paste(
-            "Path to the folder with feature-barcode matrix from Cell Ranger ARC Count/Aggregate",
-            "experiment in MEX format. The rows consist of all the genes and peaks concatenated",
-            "together and the columns are restricted to those barcodes that are identified as cells."
+            "Path to the folder with feature-barcode matrix from Cell Ranger Count (ATAC),",
+            "Cell Ranger Count (RNA+ATAC), Cell Ranger Aggregate (ATAC), or Cell Ranger",
+            "Aggregate (RNA+ATAC) experiment in MEX format. For RNA+ATAC experiments the",
+            "rows consisting genes will be ignored."
         ),
         type="character", required="True"
     )
     parser$add_argument(
         "--identity",
         help=paste(
-            "Path to the metadata TSV/CSV file to set the datasets identities. If '--mex' points to",
-            "the Cell Ranger ARC Aggregate outputs, the aggr.csv file can be used. If Cell Ranger",
-            "ARC Count outputs have been used in the '--mex' input, the file should include at least",
-            "one column - 'library_id' and one row with the alias for Cell Ranger ARC Count experiment."
+            "Path to the metadata TSV/CSV file to set the datasets identities. If --mex points",
+            "to the Cell Ranger Aggregate (ATAC) or Cell Ranger Aggregate (RNA+ATAC) outputs,",
+            "the aggr.csv file can be used. If Cell Ranger Count (ATAC) or Cell Ranger Count",
+            "(RNA+ATAC) outputs have been used in the --mex input, the file should include at",
+            "least one column - library_id and one row with the alias for that experiment."
         ),
         type="character", required="True"
     )
@@ -692,77 +382,6 @@ get_args <- function(){
             "Default: all cells used, no extra metadata is added"
         ),
         type="character"
-    )
-    parser$add_argument(
-        "--rnamincells",
-        help=paste(
-            "Include only genes detected in at least this many cells.",
-            "Default: 5 (applied to all datasets)"
-        ),
-        type="integer", default=5
-    )
-    parser$add_argument(
-        "--mingenes",
-        help=paste(
-            "Include cells where at least this many genes are detected. If multiple values",
-            "provided, each of them will be applied to the correspondent dataset from the",
-            "'--mex' input based on the '--identity' file. Any 0 will be replaced with the",
-            "auto-estimated threshold (median - 2.5 * MAD) calculated per dataset.",
-            "Default: 250 (applied to all datasets)"
-        ),
-        type="integer", default=250, nargs="*"
-    )
-    parser$add_argument(
-        "--maxgenes",
-        help=paste(
-            "Include cells with the number of genes not bigger than this value. If multiple",
-            "values provided, each of them will be applied to the correspondent dataset from",
-            "the '--mex' input based on the '--identity' file. Any 0 will be replaced with the",
-            "auto-estimated threshold (median + 5 * MAD) calculated per dataset.",
-            "Default: 5000 (applied to all datasets)"
-        ),
-        type="integer", default=5000, nargs="*"
-    )
-    parser$add_argument(
-        "--minumis",
-        help=paste(
-            "Include cells where at least this many RNA reads are detected. If multiple",
-            "values provided, each of them will be applied to the correspondent dataset from",
-            "the '--mex' input based on the '--identity' file. Any 0 will be replaced with the",
-            "auto-estimated threshold (median - 2.5 * MAD) calculated per dataset.",
-            "Default: 500 (applied to all datasets)"
-        ),
-        type="integer", default=500, nargs="*"
-    )
-    parser$add_argument(
-        "--mitopattern",
-        help=paste(
-            "Regex pattern to identify mitochondrial genes.",
-            "Default: '^mt-|^MT-'"
-        ),
-        type="character", default="^mt-|^MT-"
-    )
-    parser$add_argument(
-        "--maxmt",
-        help=paste(
-            "Include cells with the percentage of RNA reads mapped",
-            "to mitochondrial genes not bigger than this value.",
-            "Set to 0 for using an auto-estimated threshold equal to",
-            "the maximum among (median + 2 * MAD) values calculated per",
-            "dataset. Default: 5 (applied to all datasets)"
-        ),
-        type="double", default=5
-    )
-    parser$add_argument(
-        "--minnovelty",
-        help=paste(
-            "Include cells with the novelty score not lower than this value, calculated for",
-            "as log10(genes)/log10(UMI) for RNA assay. If multiple values provided, each of them will",
-            "be applied to the correspondent dataset from the '--mex' input based on the",
-            "'--identity' file.",
-            "Default: 0.8 (applied to all datasets)"
-        ),
-        type="double", default=0.8, nargs="*"
     )
     parser$add_argument(
         "--atacmincells",
@@ -831,11 +450,11 @@ get_args <- function(){
     parser$add_argument(
         "--callby",
         help=paste(
-            "Replace Cell Ranger ARC peaks with MACS2 peaks called for cells grouped by",
+            "Replace Cell Ranger peaks with MACS2 peaks called for cells grouped by",
             "the column from the optionally provided --barcodes file. If --barcodes file",
             "was not provided MACS2 peaks can be still called per dataset by setting --callby",
-            "to new.ident. Peaks are called only after applying all RNA related thresholds,",
-            "maximum nucleosome signal, and minimum TSS enrichment scores filters.",
+            "to new.ident. Peaks are called only after applying maximum nucleosome signal",
+            "and minimum TSS enrichment scores filters.",
             "Default: do not call peaks"
         ),
         type="character"
@@ -851,30 +470,10 @@ get_args <- function(){
     parser$add_argument(
         "--removedoublets",
         help=paste(
-            "Remove cells that were identified as doublets. For RNA assay cells",
-            "with UMI < 200 will not be evaluated. Default: do not remove doublets"
+            "Remove cells that were identified as doublets.",
+            "Default: do not remove doublets"
         ),
-        type="character",
-        choices=c("union", "onlyrna", "onlyatac", "intersect")
-    )
-    parser$add_argument(
-        "--rnadbr",
-        help=paste(
-            "Expected RNA doublet rate. Default: 1 percent per thousand",
-            "cells captured with 10x genomics"
-        ),
-        type="double"
-    )
-    parser$add_argument(
-        "--rnadbrsd",
-        help=paste(
-            "Uncertainty range in the RNA doublet rate, interpreted as",
-            "a +/- around the value provided in --rnadbr. Set to 0 to",
-            "disable. Set to 1 to make the threshold depend entirely",
-            "on the misclassification rate. Default: 40 percents of the",
-            "value provided in --rnadbr"
-        ),
-        type="double"
+        action="store_true"
     )
     parser$add_argument(
         "--atacdbr",
@@ -912,7 +511,7 @@ get_args <- function(){
     )
     parser$add_argument(
         "--h5ad",
-        help="Save raw counts from the RNA and ATAC assays to h5ad files. Default: false",
+        help="Save raw counts from the ATAC assay to h5ad file. Default: false",
         action="store_true"
     )
     parser$add_argument(
@@ -1000,24 +599,31 @@ seqinfo_data <- io$load_seqinfo_data(args$seqinfo)
 print(paste("Loading genome annotation data from", args$seqinfo))
 annotation_data <- io$load_annotation_data(args$annotations)
 
-print(paste("Loading gene/peak-barcode matrices from", args$mex))
+print(paste("Loading peak-barcode matrices from", args$mex))
 print(paste("Loading ATAC fragments from", args$fragments))
-seurat_data <- io$load_10x_multiome_data(                                                # identities are set to the "new.ident" column
-    args=args,
-    cell_identity_data=cell_identity_data,
-    grouping_data=grouping_data,
-    seqinfo_data=seqinfo_data,
-    annotation_data=annotation_data
-)
+
+if(file.exists(file.path(args$mex, "features.tsv.gz"))){
+    print("scMultiome data detected, however, only ATAC assay will be loaded.")
+    seurat_data <- io$load_10x_multiome_data(                                           # identities are set to the "new.ident" column
+        args=args,
+        cell_identity_data=cell_identity_data,
+        grouping_data=grouping_data,
+        seqinfo_data=seqinfo_data,
+        annotation_data=annotation_data
+    )
+    DefaultAssay(seurat_data) <- "ATAC"                                                 # can't delete RNA untill it's not default assay anymore
+    seurat_data[["RNA"]] <- NULL                                                        # no reason to keep RNA assay if we don't filter by any of the RNA metrics
+} else {
+    seurat_data <- io$load_10x_atac_data(                                               # identities are set to the "new.ident" column
+        args=args,
+        cell_identity_data=cell_identity_data,
+        grouping_data=grouping_data,
+        seqinfo_data=seqinfo_data,
+        annotation_data=annotation_data
+    )
+}
 debug$print_info(seurat_data, args)
 
-seurat_data <- qc$estimate_doublets(                                                    # we want to search for doublets before we applied any filters
-    seurat_data=seurat_data,
-    assay="RNA",
-    target_column="rna_doublets",
-    dbl_rate=args$rnadbr,
-    dbl_rate_sd=args$rnadbrsd
-)
 seurat_data <- qc$estimate_doublets(                                                    # we want to search for doublets before we applied any filters
     seurat_data=seurat_data,
     assay="ATAC",
@@ -1037,7 +643,7 @@ idents_after_filtering <- sort(unique(as.vector(as.character(Idents(seurat_data)
 
 print("Adjusting input parameters")
 for (key in names(args)){
-    if (key %in% c("mingenes", "maxgenes", "minumis", "minnovelty", "minfragments", "maxnuclsignal", "mintssenrich", "maxblacklist", "maxmt")){
+    if (key %in% c("minfragments", "maxnuclsignal", "mintssenrich", "maxblacklist")){
         if (length(args[[key]]) == 1){
             print(paste("Extending filtering parameter", key, "to have a proper size"))
             args[[key]] <- rep(args[[key]][1], length(idents_after_filtering))           # we use number of identities after filtering as we may have potentially removed some of them
@@ -1074,22 +680,12 @@ for (key in names(args)){
 print("Adjusted parameters")
 print(args)
 
-print("Adding RNA QC metrics for not filtered datasets")
-seurat_data <- qc$add_rna_qc_metrics(seurat_data, args)
 print("Adding ATAC QC metrics for not filtered datasets")
 seurat_data <- qc$add_atac_qc_metrics(seurat_data, args)
-print("Adding peak QC metrics for peaks called by Cell Ranger ARC")
+print("Adding peak QC metrics for peaks called by Cell Ranger ATAC or ARC")
 seurat_data <- qc$add_peak_qc_metrics(seurat_data, blacklist_data, args)
 debug$print_info(seurat_data, args)
 
-args <- qc$update_qc_thresholds(
-    seurat_data=seurat_data,
-    args=args,
-    qc_keys=c("minumis", "mingenes", "maxgenes", "maxmt"),
-    qc_columns=c("nCount_RNA", "nFeature_RNA", "nFeature_RNA", "mito_percentage"),
-    qc_coef=c(-2.5, -2.5, 5, 2),
-    remove_rna_doublets=TRUE
-)
 args <- qc$update_qc_thresholds(
     seurat_data=seurat_data,
     args=args,
@@ -1099,7 +695,6 @@ args <- qc$update_qc_thresholds(
     remove_atac_doublets=TRUE
 )
 print("Filtering thresholds adjusted based on the MAD values")
-args$maxmt <- max(args$maxmt)                                      # need to convert it back to a single value (take max when it was autoestimated)
 print(args)
 
 export_all_qc_plots(
@@ -1109,21 +704,15 @@ export_all_qc_plots(
     macs2_peaks=FALSE
 )
 
-print("Applying filters based on RNA QC metrics")
-seurat_data <- filter$apply_rna_qc_filters(seurat_data, args)                            # cleans up all reductions
-debug$print_info(seurat_data, args)
 print("Applying filters based on ATAC QC metrics")
 seurat_data <- filter$apply_atac_qc_filters(seurat_data, args)                           # cleans up all reductions
 debug$print_info(seurat_data, args)
 
-if (
-    !is.null(args$removedoublets) &&
-    ( args$removedoublets %in% c("union", "onlyrna", "onlyatac", "intersect") )
-){
+if (!is.null(args$removedoublets) && args$removedoublets){
     print("Filtering by estimated doublets")
     seurat_data <- filter$remove_doublets(
         seurat_data,
-        what_to_remove=args$removedoublets
+        what_to_remove="onlyatac"
     )
     debug$print_info(seurat_data, args)
 }
@@ -1142,7 +731,7 @@ if (!is.null(args$callby)){
     print("Updating peak QC metrics after calling MACS2 peaks")
     seurat_data <- qc$add_peak_qc_metrics(seurat_data, blacklist_data, args)             # recalculate peak QC metrics
     debug$print_info(seurat_data, args)
-    export_all_qc_plots(                                                                 # after RNA and ATAC filters have been applied
+    export_all_qc_plots(                                                                 # after ATAC filters have been applied
         seurat_data=seurat_data,
         suffix="mid_fltr",
         args=args,
@@ -1168,28 +757,6 @@ export_all_qc_plots(                                                            
     macs2_peaks=!is.null(args$callby)                                                    # can be both from 10x or MACS2
 )
 
-print("Adding genes vs RNA reads per cell as gene_rnaumi dimensionality reduction")
-seurat_data@reductions[["gene_rnaumi"]] <- CreateDimReducObject(
-    embeddings=as.matrix(
-        seurat_data@meta.data[, c("nCount_RNA", "nFeature_RNA"), drop=FALSE] %>%
-        dplyr::rename("GRU_1"="nCount_RNA", "GRU_2"="nFeature_RNA") %>%
-        dplyr::mutate(GRU_1=log10(GRU_1), GRU_2=log10(GRU_2))
-    ),
-    key="GRU_",
-    assay="RNA"
-)
-
-print("Adding RNA reads vs ATAC fragments in peaks per cell as rnaumi_atacfrgm dimensionality reduction")
-seurat_data@reductions[["rnaumi_atacfrgm"]] <- CreateDimReducObject(
-    embeddings=as.matrix(
-        seurat_data@meta.data[, c("nCount_ATAC", "nCount_RNA"), drop=FALSE] %>%
-        dplyr::rename("RAU_1"="nCount_ATAC", "RAU_2"="nCount_RNA") %>%
-        dplyr::mutate(RAU_1=log10(RAU_1), RAU_2=log10(RAU_2))
-    ),
-    key="RAU_",
-    assay="RNA"
-)
-
 print("Adding TSS enrichment score vs ATAC fragments in peaks per cell as tss_atacfrgm dimensionality reduction")
 seurat_data@reductions[["tss_atacfrgm"]] <- CreateDimReducObject(
     embeddings=as.matrix(
@@ -1205,25 +772,14 @@ if(args$cbbuild){
     print("Exporting filtering results to UCSC Cellbrowser")
     ucsc$export_cellbrowser(
         seurat_data=seurat_data,
-        assay="RNA",
-        slot="counts",
-        short_label="RNA",
-        is_nested=TRUE,
-        palette_colors=graphics$D40_COLORS,                              # to have colors correspond to the plots
-        rootname=paste(args$output, "_cellbrowser/rna", sep=""),
-    )
-    ucsc$export_cellbrowser(
-        seurat_data=seurat_data,
         assay="ATAC",
         slot="counts",
         short_label="ATAC",
-        is_nested=TRUE,
         palette_colors=graphics$D40_COLORS,                              # to have colors correspond to the plots
-        rootname=paste(args$output, "_cellbrowser/atac", sep=""),
+        rootname=paste(args$output, "_cellbrowser", sep=""),
     )
 }
 
-DefaultAssay(seurat_data) <- "RNA"                                       # better to stick to RNA assay by default https://www.biostars.org/p/395951/#395954 
 print("Exporting results to RDS file")
 io$export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
 if(args$h5seurat){
@@ -1232,17 +788,10 @@ if(args$h5seurat){
 }
 
 if(args$h5ad){
-    print("Exporting RNA counts to h5ad file")
-    io$export_h5ad(
-        data=seurat_data,
-        location=paste(args$output, "_rna_counts.h5ad", sep=""),
-        assay="RNA",
-        slot="counts"
-    )
     print("Exporting ATAC counts to h5ad file")
     io$export_h5ad(
         data=seurat_data,
-        location=paste(args$output, "_atac_counts.h5ad", sep=""),
+        location=paste(args$output, "_counts.h5ad", sep=""),
         assay="ATAC",
         slot="counts"
     )

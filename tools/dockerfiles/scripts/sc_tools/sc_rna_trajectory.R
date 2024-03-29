@@ -166,10 +166,8 @@ export_all_plots <- function(seurat_data, args){
         x_label="Pseudotime",
         y_label="Density",
         legend_title="Dataset",
-        plot_title=paste(
-            "Pseudotime density,",
-            "split by dataset"
-        ),
+        plot_title="Pseudotime density",
+        plot_subtitle="Split by dataset",
         show_zoomed=TRUE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,

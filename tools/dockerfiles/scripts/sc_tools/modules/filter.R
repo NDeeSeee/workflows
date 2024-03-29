@@ -96,7 +96,7 @@ apply_rna_qc_filters <- function(seurat_data, args) {
             base::as.vector(as.character(SeuratObject::Idents(seurat_data)))
         )
     )
-    for (i in 1:length(args$minumis)){
+    for (i in 1:length(sorted_identities)){
         identity <- sorted_identities[i]
 
         mingenes <- args$mingenes[i]
@@ -138,7 +138,7 @@ apply_atac_qc_filters <- function(seurat_data, args) {
     merged_seurat_data <- NULL
     SeuratObject::Idents(seurat_data) <- "new.ident"                                                 # safety measure
     sorted_identities <- sort(unique(as.vector(as.character(Idents(seurat_data)))))                  # alphabetically sorted identities A -> Z
-    for (i in 1:length(args$minfragments)){
+    for (i in 1:length(sorted_identities)){
         identity <- sorted_identities[i]
 
         minfragments <- args$minfragments[i]
@@ -176,20 +176,19 @@ apply_peak_qc_filters <- function(seurat_data, args) {
     merged_seurat_data <- NULL
     SeuratObject::Idents(seurat_data) <- "new.ident"                                                 # safety measure
     sorted_identities <- sort(unique(as.vector(as.character(Idents(seurat_data)))))                  # alphabetically sorted identities A -> Z
-    for (i in 1:length(args$mingenes)){
+    for (i in 1:length(sorted_identities)){
         identity <- sorted_identities[i]
 
-        minfrip <- args$minfrip[i]
         maxblacklist <- args$maxblacklist[i]
 
         base::print(base::paste("Filtering", identity))
-        base::print(base::paste(" ", "FRiP >=", minfrip))
+        base::print(base::paste(" ", "FRiP >=", args$minfrip))
         base::print(base::paste(" ", "Ratio of reads in genomic blacklist regions <=", maxblacklist))
 
         filtered_seurat_data <- base::subset(
             seurat_data,
             idents=identity,
-            subset=(frip >= minfrip) & (blacklist_fraction <= maxblacklist)
+            subset=(frip >= args$minfrip) & (blacklist_fraction <= maxblacklist)
         )
         if (is.null(merged_seurat_data)){
             merged_seurat_data <- filtered_seurat_data

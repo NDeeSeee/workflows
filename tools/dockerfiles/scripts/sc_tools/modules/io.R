@@ -30,6 +30,7 @@ export(
     "load_10x_multiome_data",
     "load_10x_rna_data",
     "load_10x_vdj_data",
+    "load_10x_atac_data",
     "load_seqinfo_data",
     "export_h5seurat",
     "export_h5ad",
@@ -37,6 +38,7 @@ export(
     "export_fragments_coverage",
     "export_coverage",
     "load_cell_cycle_data",
+    "load_annotation_data",
     "replace_fragments"
 )
 
@@ -493,6 +495,30 @@ load_seqinfo_data <- function(location) {
     return (seqinfo_data)
 }
 
+load_annotation_data <- function(location) {
+    annotation_data <- rtracklayer::import(location, format="GFF")
+    if( !("gene_biotype" %in% base::colnames(GenomicRanges::mcols(annotation_data))) ){
+        base::print(
+            paste(
+                "Loaded genome annotation doesn't have gene_biotype column.",
+                "Setting to NA"
+            )
+        )
+        annotation_data$gene_biotype <- NA                                                               # some Signac functions fail without this column
+    }
+    if( !("tx_id" %in% base::colnames(GenomicRanges::mcols(annotation_data))) ){
+        base::print(
+            base::paste(
+                "Loaded genome annotation doesn't have tx_id column.",
+                "Setting it from transcript_id"
+            )
+        )
+        annotation_data$tx_id <- annotation_data$transcript_id                                                # https://github.com/stuart-lab/signac/issues/1159
+    }
+    base::print(base::paste("Genome annotation data is successfully loaded from ", location))
+    return (annotation_data)
+}
+
 assign_identities <- function(seurat_data, cell_identity_data, grouping_data){
     SeuratObject::Idents(seurat_data) <- "orig.ident"                                     # safety measure to make sure we get correct Idents
     idents <- as.numeric(as.character(SeuratObject::Idents(seurat_data)))                 # need to properly convert factor to numeric vector
@@ -512,40 +538,87 @@ assign_identities <- function(seurat_data, cell_identity_data, grouping_data){
     return (seurat_data)
 }
 
-load_10x_multiome_data <- function(args, cell_identity_data, grouping_data, seqinfo_data) {
-    base::suppressMessages(raw_data <- Seurat::Read10X(data.dir=args$mex))
+load_10x_atac_data <- function(args, cell_identity_data, grouping_data, seqinfo_data, annotation_data) {
+    barcodes_location <- base::file.path(args$mex, "barcodes.tsv")
+    peaks_location <- base::file.path(args$mex, "peaks.bed")
+    all_cells <- utils::read.table(              # a vector of all cells found by Cell Ranger ATAC pipeline
+        barcodes_location,
+        sep=get_file_type(barcodes_location),
+        header=FALSE,
+        check.names=FALSE,
+        stringsAsFactors=FALSE                   # will be already a vector, not factor
+    ) %>% dplyr::pull(1)                         # barcodes.tsv doesn't have header, so we pull it by index
+    names(all_cells) <- all_cells                # makes is named vector
+
+    base::print(
+        base::paste(
+            "Preparing ATAC fragments for",
+            length(all_cells), "cells"
+        )
+    )
+    fragments <- Signac::CreateFragmentObject(
+        path=args$fragments,
+        cells=all_cells,
+        validate.fragments=TRUE,
+        verbose=FALSE
+    )
+    peak_coordinates <- rtracklayer::import(
+        peaks_location,
+        format="BED",
+        genome=seqinfo_data                      # probably doesn't influence on anything
+    )
+    base::print(
+        base::paste(
+            "Counting ATAC fragments overlapping",
+            length(peak_coordinates), "peaks"
+        )
+    )
+    peak_counts <- Signac::FeatureMatrix(                                                 # need to recalculate feature-barcode matrix to include fragments, not reads
+        fragments=fragments,
+        sep=c("-", "-"),                                                                  # unexplainable bug - fails if use sep=c(":", "-")
+        features=peak_coordinates,
+        cells=all_cells,
+        verbose=FALSE
+    )
+
     seurat_data <- SeuratObject::CreateSeuratObject(
-        counts=raw_data$`Gene Expression`,
-        min.cells=args$rnamincells,
+        counts=Signac::CreateChromatinAssay(
+            counts=peak_counts,
+            sep=c("-", "-"),
+            fragments=fragments,
+            min.cells=args$atacmincells,
+            annotation=annotation_data,
+            genome=seqinfo_data                                                           # we will need it when we want to export genome coverage to bigWig files
+        ),
+        assay="ATAC",
         names.delim="-",
         names.field=2
     )
-    annotation <- rtracklayer::import(args$annotations, format="GFF")
+    base::print("Assigning new dataset identities")
+    seurat_data <- assign_identities(seurat_data, cell_identity_data, grouping_data)
+    base::rm(all_cells, fragments, peak_coordinates, peak_counts)               # removing unused data
+    base::gc(verbose=FALSE)
+    return (seurat_data)
+}
 
-    if( !("gene_biotype" %in% base::colnames(GenomicRanges::mcols(annotation))) ){
-        base::print(
-            paste(
-                "Loaded genome annotation doesn't have 'gene_biotype' column.",
-                "Setting to NA"
-            )
-        )
-        annotation$gene_biotype <- NA                                                               # some Signac functions fail without this column
-    }
-    if( !("tx_id" %in% base::colnames(GenomicRanges::mcols(annotation))) ){
-        base::print(
-            base::paste(
-                "Loaded genome annotation doesn't have 'tx_id' column.",
-                "Setting it from 'transcript_id'"
-            )
-        )
-        annotation$tx_id <- annotation$transcript_id                                                # https://github.com/stuart-lab/signac/issues/1159
-    }
-
+load_10x_multiome_data <- function(args, cell_identity_data, grouping_data, seqinfo_data, annotation_data) {
+    base::suppressMessages(raw_data <- Seurat::Read10X(data.dir=args$mex))
+    seurat_data <- SeuratObject::CreateSeuratObject(
+        counts=raw_data$`Gene Expression`,
+        min.cells=base::ifelse(                # in case we call it from sc_atac_filter.R script
+            is.null(args$rnamincells),         # and we don't have rnamincells parameter.
+            1,                                 # This influences only on the number of genes and
+            args$rnamincells                   # is not used as RNA assay is not needed in sc_atac_filter.R
+        ),
+        names.delim="-",
+        names.field=2
+    )
     all_cells <- SeuratObject::Cells(seurat_data)
     names(all_cells) <- all_cells
     base::print(
         base::paste(
-            "Preparing ATAC fragments for", length(all_cells), "cells"
+            "Preparing ATAC fragments for",
+            length(all_cells), "cells"
         )
     )
     fragments <- Signac::CreateFragmentObject(
@@ -560,7 +633,8 @@ load_10x_multiome_data <- function(args, cell_identity_data, grouping_data, seqi
     )
     base::print(
         base::paste(
-            "Counting ATAC fragments overlapping", length(peak_coordinates), "peaks"
+            "Counting ATAC fragments overlapping",
+            length(peak_coordinates), "peaks"
         )
     )
     peak_counts <- Signac::FeatureMatrix(                                                 # need to recalculate feature-barcode matrix to include fragments, not reads
@@ -575,12 +649,12 @@ load_10x_multiome_data <- function(args, cell_identity_data, grouping_data, seqi
         sep=c("-", "-"),
         fragments=fragments,
         min.cells=args$atacmincells,
-        annotation=annotation,
+        annotation=annotation_data,
         genome=seqinfo_data                                                               # we will need it when we want to export genome coverage to bigWig files
     )
     base::print("Assigning new dataset identities")
     seurat_data <- assign_identities(seurat_data, cell_identity_data, grouping_data)
-    base::rm(raw_data, annotation, all_cells, fragments, peak_coordinates, peak_counts)   # removing unused data
+    base::rm(raw_data, all_cells, fragments, peak_coordinates, peak_counts)               # removing unused data
     base::gc(verbose=FALSE)
     return (seurat_data)
 }
