@@ -673,6 +673,16 @@ get_args <- function(){
         action="store_true"
     )
     parser$add_argument(
+        "--loupe",
+        help=paste(
+            "Save raw counts from the RNA assay to Loupe file.",
+            "By enabling this feature you accept the End-User",
+            "License Agreement available at https://10xgen.com/EULA.",
+            "Default: false"
+        ),
+        action="store_true"
+    )
+    parser$add_argument(
         "--cbbuild",
         help="Export results to UCSC Cell Browser. Default: false",
         action="store_true"
@@ -863,6 +873,16 @@ if(args$h5ad){
         location=paste(args$output, "_counts.h5ad", sep=""),
         assay="RNA",
         slot="counts"
+    )
+}
+
+if(args$loupe){
+    print("Exporting RNA counts to Loupe file")
+    ucsc$export_loupe(
+        seurat_data=seurat_data,
+        assay="RNA",
+        active_cluster=paste("rna_res", args$resolution[1], sep="."),
+        rootname=paste0(args$output, "_counts")
     )
 }
 

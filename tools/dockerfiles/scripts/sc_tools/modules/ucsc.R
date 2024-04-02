@@ -1,15 +1,64 @@
 import("dplyr", attach=FALSE)
 import("Seurat", attach=FALSE)
 import("Signac", attach=FALSE)
+import("loupeR", attach=FALSE)
 import("data.table", attach=FALSE)
 import("reticulate", attach=FALSE)
 import("tidyselect", attach=FALSE)
 import("magrittr", `%>%`, attach=TRUE)
 
 export(
-    "export_cellbrowser"
+    "export_cellbrowser",
+    "export_loupe"
 )
 
+DEFAULT_META_FIELDS <- c(
+    "nCount_RNA",
+    "nFeature_RNA",
+    "mito_percentage",
+    "log10_gene_per_log10_umi",
+    "S.Score",
+    "G2M.Score",
+    "Phase",
+    "rna_doublets",
+    "atac_doublets",
+    "nCount_ATAC",
+    "nFeature_ATAC",
+    "TSS.enrichment",
+    "nucleosome_signal",
+    "frip",
+    "blacklist_fraction",
+    "CTgene",
+    "CTnt",
+    "CTaa",
+    "CTstrict",
+    "Frequency",
+    "cloneType"
+)
+
+DEFAULT_META_FIELDS_NAMES <- c(
+    "RNA reads",
+    "Genes",
+    "Mitochondrial %",
+    "Novelty score",
+    "S score",
+    "G2M score",
+    "Phase",
+    "RNA doublets",
+    "ATAC doublets",
+    "ATAC fragments in peaks",
+    "Peaks",
+    "TSS enrichment score",
+    "Nucleosome signal",
+    "FRiP",
+    "Bl. regions",
+    "Cl. VDJC gene seq.",
+    "Cl. nucl. seq.",
+    "Cl. amino acid seq.",
+    "Cl. nucl. & gene seq.",
+    "Cl. frequency",
+    "Cl. group"
+)
 
 get_matrix <- function(object, slot){
     if (slot == "counts") {
@@ -241,6 +290,12 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, label_field=N
             SeuratObject::DefaultAssay(seurat_data) <- assay                 # safety measure
             SeuratObject::Idents(seurat_data) <- "new.ident"                 # safety measure
 
+            datasets_count <- length(base::unique(base::as.vector(as.character(seurat_data@meta.data$new.ident))))
+            conditions_count <- length(base::unique(base::as.vector(as.character(seurat_data@meta.data$condition))))
+            not_default_conditions <- all(
+                base::as.vector(as.character(seurat_data@meta.data$new.ident)) != base::as.vector(as.character(seurat_data@meta.data$condition))
+            )
+
             color_data <- base::data.frame(                                  # here we will collect all colors
                 category=character(),
                 color=character(),
@@ -253,52 +308,8 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, label_field=N
             tibble::add_row(category="G2M", color="#8093FF")                 # color for G2M cell cycle phase
 
             if (is.null(meta_fields) || is.null(meta_fields_names)){
-                meta_fields <- c(
-                    "nCount_RNA",
-                    "nFeature_RNA",
-                    "mito_percentage",
-                    "log10_gene_per_log10_umi",
-                    "S.Score",
-                    "G2M.Score",
-                    "Phase",
-                    "rna_doublets",
-                    "atac_doublets",
-                    "nCount_ATAC",
-                    "nFeature_ATAC",
-                    "TSS.enrichment",
-                    "nucleosome_signal",
-                    "frip",
-                    "blacklist_fraction",
-                    "CTgene",
-                    "CTnt",
-                    "CTaa",
-                    "CTstrict",
-                    "Frequency",
-                    "cloneType"
-                )
-                meta_fields_names <- c(
-                    "RNA reads",
-                    "Genes",
-                    "Mitochondrial %",
-                    "Novelty score",
-                    "S score",
-                    "G2M score",
-                    "Phase",
-                    "RNA doublets",
-                    "ATAC doublets",
-                    "ATAC fragments in peaks",
-                    "Peaks",
-                    "TSS enrichment score",
-                    "Nucleosome signal",
-                    "FRiP",
-                    "Bl. regions",
-                    "Cl. VDJC gene seq.",
-                    "Cl. nucl. seq.",
-                    "Cl. amino acid seq.",
-                    "Cl. nucl. & gene seq.",
-                    "Cl. frequency",
-                    "Cl. group"
-                )
+                meta_fields <- DEFAULT_META_FIELDS
+                meta_fields_names <- DEFAULT_META_FIELDS_NAMES
             }
 
             # clonotype_fileds <- c("CTgene", "CTnt", "CTaa", "CTstrict", "Frequency", "cloneType")
@@ -309,7 +320,7 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, label_field=N
             #                              )
             # }
 
-            if (length(base::unique(base::as.vector(as.character(seurat_data@meta.data$new.ident)))) > 1){
+            if (datasets_count > 1){
                 meta_fields <- base::append(meta_fields, "new.ident", 0)
                 meta_fields_names <- base::append(meta_fields_names, "Dataset", 0)
                 if (!is.null(palette_colors)){
@@ -320,10 +331,7 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, label_field=N
                 }
             }
 
-            if (
-                all(base::as.vector(as.character(seurat_data@meta.data$new.ident)) != base::as.vector(as.character(seurat_data@meta.data$condition))) &&
-                length(base::unique(base::as.vector(as.character(seurat_data@meta.data$condition)))) > 1
-            ){
+            if (conditions_count > 1 && not_default_conditions){
                 meta_fields <- base::append(meta_fields, "condition", 1)
                 meta_fields_names <- base::append(meta_fields_names, "Condition", 1)
                 if (!is.null(palette_colors)){
@@ -442,6 +450,112 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, label_field=N
         },
         finally = {
             SeuratObject::DefaultAssay(seurat_data) <- backup_assay
+        }
+    )
+}
+
+export_loupe <- function(seurat_data, assay, rootname, active_cluster=NULL, meta_fields=NULL, meta_fields_names=NULL){
+    base::tryCatch(
+        expr = {
+
+            datasets_count <- length(base::unique(base::as.vector(as.character(seurat_data@meta.data$new.ident))))
+            conditions_count <- length(base::unique(base::as.vector(as.character(seurat_data@meta.data$condition))))
+            not_default_conditions <- all(
+                base::as.vector(as.character(seurat_data@meta.data$new.ident)) != base::as.vector(as.character(seurat_data@meta.data$condition))
+            )
+
+            if (is.null(meta_fields) || is.null(meta_fields_names)){
+                meta_fields <- DEFAULT_META_FIELDS
+                meta_fields_names <- DEFAULT_META_FIELDS_NAMES
+            }
+
+            if (datasets_count > 1){
+                meta_fields <- base::append(meta_fields, "new.ident", 0)
+                meta_fields_names <- base::append(meta_fields_names, "Dataset", 0)
+            }
+
+            if (conditions_count > 1 && not_default_conditions){
+                meta_fields <- base::append(meta_fields, "condition", 1)
+                meta_fields_names <- base::append(meta_fields_names, "Condition", 1)
+            }
+
+            clustering_fields <- base::grep("_res\\.", base::colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
+            clustering_fields_names <- base::as.vector(
+                base::unlist(                                                                              # when nothing found it returns named list that should be unlisted
+                    base::sapply(
+                        clustering_fields,
+                        function(line) {
+                            split_line <- base::unlist(base::strsplit(line, split="_res\\."))
+                            base::paste("Clustering (", split_line[1], " ", split_line[2], ")", sep="")
+                        }
+                    )
+                )
+            )
+            meta_fields <- base::append(meta_fields, clustering_fields)
+            meta_fields_names <- base::append(meta_fields_names, clustering_fields_names)
+
+            custom_fields <- base::grep("^custom_", base::colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
+            custom_fields_names <- base::gsub("custom_", "Custom ", custom_fields)
+            meta_fields <- base::append(meta_fields, custom_fields)
+            meta_fields_names <- base::append(meta_fields_names, custom_fields_names)
+
+            quartile_fields <- base::grep("^quartile_", base::colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
+            quartile_fields_names <- base::gsub("quartile_", "Quartile ", quartile_fields)
+            meta_fields <- base::append(meta_fields, quartile_fields)
+            meta_fields_names <- base::append(meta_fields_names, quartile_fields_names)
+
+            pseudotime_fields <- base::grep("^ptime_", base::colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
+            pseudotime_fields_names <- base::gsub("ptime_", "Pseudotime from ", pseudotime_fields)
+            meta_fields <- base::append(meta_fields, pseudotime_fields)
+            meta_fields_names <- base::append(meta_fields_names, pseudotime_fields_names)
+
+            all_colnames <- base::colnames(seurat_data@meta.data)              # need to have it outside of the loop
+            for (i in 1:length(all_colnames)){                                 # removes all unused columns and renames remaining ones
+                if (!(all_colnames[i] %in% meta_fields)){
+                    base::print(base::paste("Removing", all_colnames[i], "column"))
+                    seurat_data@meta.data[[all_colnames[i]]] <- NULL
+                } else {
+                    current_alias <- meta_fields_names[base::match(all_colnames[i], meta_fields)]
+                    base::print(base::paste("Renaming", all_colnames[i], "column to", current_alias))
+                    base::colnames(seurat_data@meta.data)[base::colnames(seurat_data@meta.data) == all_colnames[i]] <- current_alias
+                }
+            }
+
+            SeuratObject::DefaultAssay(seurat_data) <- assay
+
+            if(
+                !is.null(active_cluster) &&
+                (active_cluster %in% meta_fields) &&
+                (meta_fields_names[base::match(active_cluster, meta_fields)] %in% base::colnames(seurat_data@meta.data))
+            ){
+                active_cluster <- meta_fields_names[base::match(active_cluster, meta_fields)]
+                base::print(base::paste("Setting active cluster to", active_cluster))
+                SeuratObject::Idents(seurat_data) <- active_cluster
+            } else {
+                base::print("Setting active cluster to Dataset")
+                SeuratObject::Idents(seurat_data) <- "Dataset"     # Dataset should be always present, because it's our new.ident
+            }
+
+            loupeR::create_loupe_from_seurat(
+                obj=seurat_data,                                   # will always use counts slot
+                output_name=rootname,                              # should be without extension
+                force=TRUE                                         # to overwrite existing file
+            )
+
+            base::print(
+                base::paste(
+                    "Exporting counts from the Seurat",
+                    "object as Loupe file to", rootname
+                )
+            )
+        },
+        error = function(e){
+            base::print(
+                base::paste(
+                    "Failed to export counts from the Seurat",
+                    "object as Loupe file with error -", e
+                )
+            )
         }
     )
 }

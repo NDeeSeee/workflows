@@ -11,7 +11,7 @@ requirements:
 
 hints:
 - class: DockerRequirement
-  dockerPull: biowardrobe2/sc-tools:v0.0.35
+  dockerPull: biowardrobe2/sc-tools:v0.0.36
 
 
 inputs:
@@ -200,6 +200,16 @@ inputs:
       prefix: "--h5ad"
     doc: |
       Save raw counts from the RNA assay to h5ad file.
+      Default: false
+
+  export_loupe_data:
+    type: boolean?
+    inputBinding:
+      prefix: "--loupe"
+    doc: |
+      Save raw counts from the RNA assay to Loupe file. By
+      enabling this feature you accept the End-User License
+      Agreement available at https://10xgen.com/EULA.
       Default: false
 
   export_scope_data:
@@ -798,6 +808,14 @@ outputs:
       Seurat object.
       H5AD format
 
+  seurat_data_cloupe:
+    type: File?
+    outputBinding:
+      glob: "*_counts.cloupe"
+    doc: |
+      Seurat object.
+      Loupe format
+
   seurat_data_scope:
     type: File?
     outputBinding:
@@ -942,6 +960,10 @@ s:about: |
     --verbose             Print debug information. Default: false
     --h5seurat            Save Seurat data to h5seurat file. Default: false
     --h5ad                Save raw counts from the RNA assay to h5ad file.
+                          Default: false
+    --loupe               Save raw counts from the RNA assay to Loupe file. By
+                          enabling this feature you accept the End-User License
+                          Agreement available at https://10xgen.com/EULA.
                           Default: false
     --cbbuild             Export results to UCSC Cell Browser. Default: false
     --scope               Save Seurat data to SCope compatible loom file.

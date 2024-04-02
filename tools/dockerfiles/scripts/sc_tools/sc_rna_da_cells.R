@@ -218,6 +218,16 @@ get_args <- function(){
         action="store_true"
     )
     parser$add_argument(
+        "--loupe",
+        help=paste(
+            "Save raw counts from the RNA assay to Loupe file.",
+            "By enabling this feature you accept the End-User",
+            "License Agreement available at https://10xgen.com/EULA.",
+            "Default: false"
+        ),
+        action="store_true"
+    )
+    parser$add_argument(
         "--cbbuild",
         help="Export results to UCSC Cell Browser. Default: false",
         action="store_true"
@@ -380,7 +390,6 @@ if(args$cbbuild){
             assay="RNA",
             slot="counts",
             short_label="RNA",
-            features=args$genes,                                             # can be NULL
             is_nested=TRUE,
             label_field=paste0("Clustering (da_", args$second, "_vs_", args$first, " ", args$resolution[1], ")"),                   # always use only the first resolution
             rootname=paste(args$output, "_cellbrowser/rna", sep=""),
@@ -390,7 +399,6 @@ if(args$cbbuild){
             assay="ATAC",
             slot="counts",
             short_label="ATAC",
-            features=nearest_peaks,                                          # use nearest to the genes if interest peaks
             is_nested=TRUE,
             label_field=paste0("Clustering (da_", args$second, "_vs_", args$first, " ", args$resolution[1], ")"),                   # always use only the first resolution
             rootname=paste(args$output, "_cellbrowser/atac", sep=""),
@@ -402,7 +410,6 @@ if(args$cbbuild){
             assay="RNA",
             slot="counts",
             short_label="RNA",
-            features=args$genes,                                             # can be NULL
             label_field=paste0("Clustering (da_", args$second, "_vs_", args$first, " ", args$resolution[1], ")"),                   # always use only the first resolution
             rootname=paste(args$output, "_cellbrowser", sep=""),
         )
@@ -423,5 +430,15 @@ if(args$h5ad){
         location=paste(args$output, "_counts.h5ad", sep=""),
         assay="RNA",
         slot="counts"
+    )
+}
+
+if(args$loupe){
+    print("Exporting RNA counts to Loupe file")
+    ucsc$export_loupe(
+        seurat_data=seurat_data,
+        assay="RNA",
+        active_cluster=paste0("da_", args$second, "_vs_", args$first, "_res.", args$resolution[1]),
+        rootname=paste0(args$output, "_counts")
     )
 }

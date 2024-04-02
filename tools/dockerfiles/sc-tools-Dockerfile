@@ -2,15 +2,15 @@
 # Dockerfile
 #
 # Software:         set of R scripts for single-cell data analysis
-# Software Version: v0.0.35
+# Software Version: v0.0.36
 # Description:      Dockerized version of the set of R scripts for
 #                   single-cell data analysis
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         set of R scripts for single-cell data analysis
 # Base Image:       satijalab/seurat:latest
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.35 -f sc-tools-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.35
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.35 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.36 -f sc-tools-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.36
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.36 /bin/bash
 ##########################################################################################################
 #
 # Notes:
@@ -34,6 +34,11 @@
 #     sc_ctype_assign.R --help && \
 #     sc_triangulate.R --help && \
 #     sc_vdj_profile.R --help 
+#
+# v0.0.36 -- based on biowardrobe2/sc-tools:v0.0.35
+# - Export RNA counts data to Loupe file (loupeR v1.1.0)
+#   Need to patch eula.R as a notice to aggree with
+#   EULA is shown in the --loupe parameter.
 #
 # v0.0.35 -- based on biowardrobe2/sc-tools:v0.0.34
 # - Added sc_atac_filter.R script
@@ -286,24 +291,10 @@ ENV SCIPY_VERSION "1.7.3"
 ENV NUMPY_VERSION "1.22.0"
 ENV HTSLIB_VERSION "1.17"
 ENV HTSLIB_URL "https://github.com/samtools/htslib/releases/download/${HTSLIB_VERSION}/htslib-${HTSLIB_VERSION}.tar.bz2"
+ENV LOUPER_VERSION "1.1.0"
+ENV LOUPER_URL "https://github.com/10XGenomics/loupeR/releases/download/v${LOUPER_VERSION}/loupeR_Linux.tar.gz"
 
-COPY ./scripts/sc_tools/sc_rna_filter.R /usr/local/bin/sc_rna_filter.R
-COPY ./scripts/sc_tools/sc_multiome_filter.R /usr/local/bin/sc_multiome_filter.R
-COPY ./scripts/sc_tools/sc_rna_reduce.R /usr/local/bin/sc_rna_reduce.R
-COPY ./scripts/sc_tools/sc_atac_reduce.R /usr/local/bin/sc_atac_reduce.R
-COPY ./scripts/sc_tools/sc_rna_cluster.R /usr/local/bin/sc_rna_cluster.R
-COPY ./scripts/sc_tools/sc_atac_filter.R /usr/local/bin/sc_atac_filter.R
-COPY ./scripts/sc_tools/sc_atac_cluster.R /usr/local/bin/sc_atac_cluster.R
-COPY ./scripts/sc_tools/sc_atac_coverage.R /usr/local/bin/sc_atac_coverage.R
-COPY ./scripts/sc_tools/sc_atac_dbinding.R /usr/local/bin/sc_atac_dbinding.R
-COPY ./scripts/sc_tools/sc_wnn_cluster.R /usr/local/bin/sc_wnn_cluster.R
-COPY ./scripts/sc_tools/sc_ctype_assign.R /usr/local/bin/sc_ctype_assign.R
-COPY ./scripts/sc_tools/sc_rna_de_pseudobulk.R /usr/local/bin/sc_rna_de_pseudobulk.R
-COPY ./scripts/sc_tools/sc_rna_da_cells.R /usr/local/bin/sc_rna_da_cells.R
-COPY ./scripts/sc_tools/sc_triangulate.R /usr/local/bin/sc_triangulate.R
-COPY ./scripts/sc_tools/sc_rna_trajectory.R /usr/local/bin/sc_rna_trajectory.R
-COPY ./scripts/sc_tools/sc_tn5_cut_sites.sh /usr/local/bin/sc_tn5_cut_sites.sh
-COPY ./scripts/sc_tools/sc_vdj_profile.R /usr/local/bin/sc_vdj_profile.R
+COPY ./scripts/sc_tools/sc_* /usr/local/bin/
 COPY ./scripts/sc_tools/modules/*.R /usr/local/bin/modules/
 COPY ./scripts/sc_tools/data/*.csv /opt/sc_tools/
 
@@ -368,6 +359,11 @@ RUN apt-get update && \
     R -e 'install.packages("circlize")' && \
     R -e 'install.packages("intrinsicDimension")' && \
     R -e 'install.packages("ggnewscale")' && \
+    wget ${LOUPER_URL} && \
+    tar xzf loupeR_Linux.tar.gz && \
+    sed -i 's/file\.exists(eula_lock_file())/TRUE/g' /tmp/loupeR/R/eula.R && \
+    R -e 'install.packages("/tmp/loupeR", repos=NULL, type="source")' && \
+    R -e 'library("loupeR"); loupeR::setup()' && \
 ### Installing R scripts
     chmod +x /usr/local/bin/sc_rna_filter.R && \
     chmod +x /usr/local/bin/sc_multiome_filter.R && \
