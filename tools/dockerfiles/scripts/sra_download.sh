@@ -116,7 +116,7 @@ for SRA in ${SRA_IDS[@]}; do
     fi
 done;
 
-for MERGED in read*.gz; do
+for MERGED in ${RANDOM_PREFIX}_read*.gz; do
     echo "#### `basename $MERGED`" >> merged_fastq_stats.md
     echo "**`zcat $MERGED | wc -l`** lines, **`stat -c%s $MERGED`** bytes" >> merged_fastq_stats.md
 done;
