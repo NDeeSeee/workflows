@@ -1,5 +1,7 @@
 #!/bin/bash
 
+RANDOM_PREFIX=$(tr -dc a-z </dev/urandom | head -c 10)
+
 SRA_IDS=()
 PARAMS=()
 
@@ -75,7 +77,7 @@ for SRA in ${SRA_IDS[@]}; do
         if [[ $EXIT_CODE -ne 0 ]]
         then
             echo "- Error. Failed to prefetch $SRA as sra type with exit code $EXIT_CODE. Cleaning downloaded files." >> debug.md
-            rm -f read_*.fastq.gz
+            rm -f ${RANDOM_PREFIX}_read_*.fastq.gz
             break
         fi
         DATA_TYPE="sra"           # changing data type to "sra" as from now we assume that all SRR should have sra type
@@ -88,8 +90,8 @@ for SRA in ${SRA_IDS[@]}; do
             echo "\`\`\`" >> single_fastq_stats.md
             echo "`zcat $FASTQ | head -n 20`" >> single_fastq_stats.md
             echo "\`\`\`" >> single_fastq_stats.md
-            echo "Adding $FASTQ to read_$j.fastq.gz"
-            cat $FASTQ >> read_$j.fastq.gz
+            echo "Adding $FASTQ to ${RANDOM_PREFIX}_read_$j.fastq.gz"
+            cat $FASTQ >> ${RANDOM_PREFIX}_read_$j.fastq.gz
             rm -f $FASTQ
             (( j++ ))
         done;
@@ -98,17 +100,17 @@ for SRA in ${SRA_IDS[@]}; do
         if [[ $DATA_TYPE = "sra" ]]
         then
             echo "- Error. Previous SRR was downloaded as sra data type. Current $SRA has TenX type. Cleaning downloaded files." >> debug.md
-            rm -f read_*.fastq.gz
+            rm -f ${RANDOM_PREFIX}_read_*.fastq.gz
             break
         fi
         cellranger bamtofastq $SRA/*.bam extracted_fastq
-        cat extracted_fastq/*/*_L00*_R1_00*.fastq.gz > read_1.fastq.gz
-        cat extracted_fastq/*/*_L00*_R2_00*.fastq.gz > read_2.fastq.gz
+        cat extracted_fastq/*/*_L00*_R1_00*.fastq.gz > ${RANDOM_PREFIX}_read_1.fastq.gz
+        cat extracted_fastq/*/*_L00*_R2_00*.fastq.gz > ${RANDOM_PREFIX}_read_2.fastq.gz
         rm -rf $SRA extracted_fastq
         if [[ ${#SRA_IDS[@]} -ne 1 ]]
         then
             echo "- Error. Merging multiple SRR identifiers extacted to BAM is not correct. Cleaning downloaded files." >> debug.md
-            rm -f read_*.fastq.gz
+            rm -f ${RANDOM_PREFIX}_read_*.fastq.gz
             break
         fi
     fi
