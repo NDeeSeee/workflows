@@ -360,14 +360,14 @@ get_args <- function(){
     parser$add_argument(
         "--identity",
         help=paste(
-            "Path to the metadata TSV/CSV file to set the datasets identities. If '--mex' points to",
-            "the Cell Ranger Aggregate outputs, the aggregation.csv file can be used. In case of",
-            "using feature-barcode matrices from a single or multiple Cell Ranger Count experiments",
-            "the file with identities should include at least one column - 'library_id', and a row",
-            "with aliases per each experiment from the '--mex' input. The order of rows should correspond",
-            "to the order of feature-barcode matrices provided in the '--mex' parameter."
+            "Path to the metadata TSV/CSV file to set the datasets identities, if '--mex' points to",
+            "the Cell Ranger Aggregate outputs. The aggregation.csv file can be used. In case of",
+            "using feature-barcode matrices the file with identities should include at least one",
+            "column - 'library_id', and a row with aliases per each experiment from the '--mex'",
+            "input. The order of rows should correspond to the order of feature-barcode matrices",
+            "provided in the '--mex' parameter."
         ),
-        type="character", required="True"
+        type="character"
     )
     parser$add_argument(
         "--grouping",
@@ -560,21 +560,12 @@ get_args <- function(){
         type="integer", default=42
     )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    print(args)
     return (args)
 }
 
 
 args <- get_args()
-
-print("Input parameters")
-print(args)
-
-print(
-    paste(
-        "Setting parallelization to", args$cpus, "cores, and", args$memory,
-        "GB of memory allowed to be shared between the processes"
-    )
-)
 prod$parallel(args)
 
 print(paste("Loading datasets identities from", args$identity))

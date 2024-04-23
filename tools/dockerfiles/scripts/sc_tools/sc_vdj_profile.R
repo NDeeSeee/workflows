@@ -6,425 +6,596 @@ options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)}
 suppressMessages(library(Seurat))
 suppressMessages(library(modules))
 suppressMessages(library(argparse))
+suppressMessages(library(tidyverse))
 
 HERE <- (function() {return (dirname(sub("--file=", "", commandArgs(trailingOnly=FALSE)[grep("--file=", commandArgs(trailingOnly=FALSE))])))})()
 suppressMessages(debug <- modules::use(file.path(HERE, "modules/debug.R")))
 suppressMessages(graphics <- modules::use(file.path(HERE, "modules/graphics.R")))
 suppressMessages(io <- modules::use(file.path(HERE, "modules/io.R")))
+suppressMessages(qc <- modules::use(file.path(HERE, "modules/qc.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
 
 # Book chapter with the related materials
 # https://www.ncbi.nlm.nih.gov/books/NBK27130/#:~:text=The%20antigen%20receptors%20on%20B,cell%20receptor%E2%80%94that%20are%20associated
+# https://www.sc-best-practices.org/air_repertoire/ir_profiling.html#raw-data
+# https://www.sciencedirect.com/science/article/pii/S0958166920301051
 
 
 export_all_plots <- function(seurat_data, args){
     Idents(seurat_data) <- "new.ident"                                                               # safety measure
     datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
     conditions_count <- length(unique(as.vector(as.character(seurat_data@meta.data$condition))))
+    donor_count <- length(unique(as.vector(as.character(seurat_data@meta.data$donor))))              # by this time it should be already present in the seurat object
+    not_default_conditions <- all(
+        as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition))
+    )
+    not_default_donor <- all(
+        as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$donor))
+    )
+    selected_features <- c("clonalFrequency_TRA", "clonalFrequency_TRB", "clonalFrequency_IGH", "clonalFrequency_IGL", "clonalFrequency_both")
+    selected_labels <- c("TRA", "TRB", "IGH", "IGL", "Both")
+    max_frequency <- max(
+        seurat_data@meta.data %>%
+        dplyr::rowwise() %>%
+        dplyr::mutate(
+            max_frequency = max(
+                dplyr::c_across(
+                    tidyselect::any_of(selected_features)      # some columns might be missing
+                )
+            )
+        ) %>%
+        dplyr::pull(max_frequency)
+    )
 
-    graphics$clonotype_bar_plot(
+    graphics$clonotype_quant_plot(
         data=seurat_data,
         clone_by=args$cloneby,
-        chains="both",
+        chains=seurat_data@misc$vdj$chains,
         x_label="Dataset",
-        y_label="Clonotypes %",
+        y_label="Unique clonotypes %",
         legend_title="Dataset",
-        plot_title=paste(
-            "Unique clonotypes,",
-            "split by dataset"
+        plot_title="Percentage of unique clonotypes per dataset",
+        plot_subtitle=paste(
+            "Split by chain;",
+            "filtered by clonotype frequency per donor >=",
+            args$minfrequency
         ),
-        split_by="new.ident",
+        group_by="new.ident",
+        min_frequency=args$minfrequency,
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        combine_guides="collect",
+        width=ifelse(datasets_count > 1, 1200, 400),
+        rootname=paste(args$output, "cl_qnt_gr_idnt_spl_ch", sep="_"),
+        pdf=args$pdf
+    )
+
+    graphics$clonotype_abundance_plot(
+        data=seurat_data,
+        clone_by=args$cloneby,
+        chains=seurat_data@misc$vdj$chains,
+        x_label="Clonotype frequency",
+        y_label="Distribution",
+        legend_title="Dataset",
+        plot_title="Distribution of clonotype frequencies per dataset",
+        plot_subtitle=paste(
+            "Split by chain;",
+            "filtered by clonotype frequency per donor >=",
+            args$minfrequency
+        ),
+        group_by="new.ident",
+        min_frequency=args$minfrequency,
         scale=TRUE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
         combine_guides="collect",
-        rootname=paste(args$output, "count_spl_idnt", sep="_"),
+        height=400,
+        rootname=paste(args$output, "cl_dnst_gr_idnt_spl_ch", sep="_"),
         pdf=args$pdf
     )
 
-    graphics$clonotype_bar_plot(
-        data=seurat_data,
-        clone_by=args$cloneby,
-        chains="both",
-        x_label="Cluster",
-        y_label="Clonotypes %",
-        legend_title="Cluster",
-        plot_title=paste(
-            "Unique clonotypes,",
-            "split by cluster"
-        ),
-        split_by=args$source,
-        scale=TRUE,
-        palette_colors=graphics$D40_COLORS,
-        theme=args$theme,
-        combine_guides="collect",
-        rootname=paste(args$output, "count_spl_clst", sep="_"),
-        pdf=args$pdf
+    top_clones_per_dataset <- floor(                                       # we don't want to exceed the number of available colors
+        length(graphics$D40_COLORS)/
+        length(seurat_data@misc$vdj$chains)/                               # each chain should have a separate set of colors
+        datasets_count                                                     # for the worst scenario when neither of datasets have shared clonotypes
     )
-
-    graphics$clonotype_homeostasis_plot(
+    graphics$clonotype_alluvial_plot(
         data=seurat_data,
         clone_by=args$cloneby,
-        chains="both",
+        chains=seurat_data@misc$vdj$chains,
         x_label="Dataset",
-        y_label="Relative Abundance",
-        legend_title="Clonotype group",
-        plot_title=paste(
-            "Clonal space homeostasis,",
-            "split by dataset"
+        y_label="Proportion",
+        legend_title="Clonotype",
+        plot_title="Proportion of top shared clonotypes between datasets",
+        plot_subtitle=paste0(
+            "Split by chain; ",
+            "filtered by clonotype frequency per donor >= ",
+            args$minfrequency, "; ",
+            "top ", top_clones_per_dataset, " clonotypes ",
+            "selected from each dataset"
         ),
-        split_by="new.ident",
-        palette_colors=c("#2E86C1", "#5DADE2", "#A9DFBF", "#E74C3C", "#CB4335"),
+        group_by="new.ident",
+        min_frequency=args$minfrequency,
+        top_clones=top_clones_per_dataset,
+        palette_colors=graphics$D40_COLORS,
         theme=args$theme,
         combine_guides="collect",
-        rootname=paste(args$output, "hmst_spl_idnt", sep="_"),
+        ncol=3,
+        legend_position="bottom",
+        rootname=paste(args$output, "allu_gr_idnt_spl_ch", sep="_"),
         pdf=args$pdf
     )
 
     graphics$clonotype_homeostasis_plot(
         data=seurat_data,
         clone_by=args$cloneby,
-        chains="both",
-        x_label="Cluster",
-        y_label="Relative Abundance",
-        legend_title="Clonotype group",
-        plot_title=paste(
-            "Clonal space homeostasis,",
-            "split by cluster"
+        chains=seurat_data@misc$vdj$chains,
+        x_label="Dataset",
+        y_label="Proportion",
+        legend_title="Clonotype size",
+        plot_title="Proportion of clonotype frequencies per dataset",
+        plot_subtitle=paste(
+            "Split by chain;",
+            "not filtered by clonotype frequency"
         ),
-        split_by=args$source,
-        palette_colors=c("#2E86C1", "#5DADE2", "#A9DFBF", "#E74C3C", "#CB4335"),
+        group_by="new.ident",
+        min_frequency=0,
+        palette_colors=c("#080808", "#571357", "#BD3265", "#F28D30", "#FCFF9A"),
         theme=args$theme,
         combine_guides="collect",
-        rootname=paste(args$output, "hmst_spl_clst", sep="_"),
+        ncol=3,
+        rootname=paste(args$output, "hmst_gr_idnt_spl_ch", sep="_"),
         pdf=args$pdf
     )
 
     graphics$clonotype_overlap_plot(
         data=seurat_data,
         clone_by=args$cloneby,
-        chains="both",
-        plot_title=paste(
-            "Clonotypes similarity,",
-            "split by cluster"
-        ),
-        split_by=args$source,
-        x_label="Cluster",
-        y_label="Cluster",
-        method="morisita",
-        theme=args$theme,
-        combine_guides="collect",
-        rootname=paste(args$output, "vrlp_spl_clst", sep="_"),
-        pdf=args$pdf
-    )
-
-    graphics$clonotype_overlap_plot(
-        data=seurat_data,
-        clone_by=args$cloneby,
-        chains="both",
-        plot_title=paste(
-            "Clonotypes similarity,",
-            "split by dataset"
-        ),
-        split_by="new.ident",
+        chains=seurat_data@misc$vdj$chains,
         x_label="Dataset",
         y_label="Dataset",
-        method="morisita",
-        theme=args$theme,
-        combine_guides="collect",
-        rootname=paste(args$output, "vrlp_spl_idnt", sep="_"),
-        pdf=args$pdf
-    )
-
-    graphics$clonotype_network_plot(
-        data=seurat_data,
-        reduction="rnaumap",
-        clone_by=args$cloneby,
-        chains="both",
-        plot_title=paste(
-            "Clonotypes network,",
-            "colored by cluster"
+        plot_title="Overlap of clonotypes between datasets",
+        plot_subtitle=paste(
+            "Split by chain;",
+            "filtered by clonotype frequency per donor >=",
+            args$minfrequency
         ),
-        legend_title="Cluster",
-        group_by=args$source,
-        theme=args$theme,
-        pt_size=0.5,
-        combine_guides="collect",
-        rootname=paste(args$output, "ntwr_gr_clst", sep="_"),
-        pdf=args$pdf
-    )
-
-    graphics$clonotype_network_plot(
-        data=seurat_data,
-        reduction="rnaumap",
-        clone_by=args$cloneby,
-        chains="both",
-        plot_title=paste(
-            "Clonotypes network,",
-            "colored by dataset"
-        ),
-        legend_title="Dataset",
         group_by="new.ident",
+        min_frequency=args$minfrequency,
+        methods=c("raw", "jaccard"),
+        gradient_colors=c("lightgrey", "blue", "black", "orange"),
         theme=args$theme,
-        pt_size=0.5,
         combine_guides="collect",
-        rootname=paste(args$output, "ntwr_gr_idnt", sep="_"),
+        ncol=3,
+        nrow=2,
+        rootname=paste(args$output, "vrlp_gr_idnt_spl_ch", sep="_"),
         pdf=args$pdf
     )
 
     graphics$clonotype_diversity_plot(
         data=seurat_data,
         clone_by=args$cloneby,
-        chains="both",
-        plot_title=paste(
-            "Clonotypes diversity,",
-            "colored by cluster,",
-            "split by dataset"
-        ),
-        legend_title="Cluster",
-        split_by="new.ident",
-        group_by=args$source,
-        x_label="Dataset",
-        y_label="Index Score",
-        theme=args$theme,
-        width=1600,
-        alpha=0.75,
-        combine_guides="collect",
-        rootname=paste(args$output, "dvrs_gr_clst_spl_idnt", sep="_"),
-        pdf=args$pdf
-    )
-
-    graphics$clonotype_diversity_plot(
-        data=seurat_data,
-        clone_by=args$cloneby,
-        chains="both",
-        plot_title=paste(
-            "Clonotypes diversity,",
-            "colored by dataset,",
-            "split by cluster"
-        ),
+        chains=seurat_data@misc$vdj$chains,
+        x_label=if(donor_count > 1 && not_default_donor) "Donor" else NULL,
+        y_label="Score",
         legend_title="Dataset",
-        split_by=args$source,
+        plot_title="Diversity of clonotypes per dataset",
+        plot_subtitle=paste(
+            "Split by chain;",
+            "not filtered by clonotype frequency"
+        ),
         group_by="new.ident",
-        x_label="Cluster",
-        y_label="Index Score",
+        split_by=if(donor_count > 1 && not_default_donor) "donor" else NULL,    # optionally split by donor (score values remain the same)
+        min_frequency=0,
         theme=args$theme,
-        width=1600,
-        alpha=0.75,
+        ncol=1,
         combine_guides="collect",
-        rootname=paste(args$output, "dvrs_gr_idnt_spl_clst", sep="_"),
+        rootname=paste(args$output, "dvrs_gr_idnt_spl_ch", sep="_"),
         pdf=args$pdf
     )
 
-    features <- c("V", "D", "J", "C")
-    # if Idents are set to "new.ident" it will be used in
-    # group_by(df[,ncol(df)], df[,y.axis], element.names)
-    # because the last column in df will be identity
-    for (i in 1:length(features)){
-        current_feature <- features[i]
-        graphics$clonotype_feature_plot(
-            data=seurat_data,
-            feature=current_feature,
-            chains="both",
-            plot_title=paste(
-                "Relative usage of", current_feature,
-                "genes, split by cluster"
-            ),
-            x_label="Gene",
-            y_label="Mean gene usage",
-            split_by=args$source,
-            order_by="variance",
-            scale=TRUE,
-            theme=args$theme,
-            combine_guides="collect",
-            width=1600,
-            height=1200,
-            rootname=paste(args$output, "gene_spl_clst", base::tolower(current_feature), sep="_"),
-            pdf=args$pdf
-        )
-        graphics$clonotype_feature_plot(
-            data=seurat_data,
-            feature=current_feature,
-            chains="both",
-            plot_title=paste(
-                "Relative usage of", current_feature,
-                "genes, split by dataset"
-            ),
-            x_label="Gene",
-            y_label="Mean gene usage",
-            split_by="new.ident",
-            order_by="variance",
-            scale=TRUE,
-            theme=args$theme,
-            combine_guides="collect",
-            width=1600,
-            height=1200,
-            rootname=paste(args$output, "gene_spl_idnt", base::tolower(current_feature), sep="_"),
-            pdf=args$pdf
-        )
-    }
-
-    graphics$clonotype_chord_plot(
+    graphics$clonotype_feature_plot(
         data=seurat_data,
         clone_by=args$cloneby,
-        plot_title=paste(
-            "Shared clonotype,",
-            "colored by cluster"
-        ),
-        group_by=args$source,
-        theme=args$theme,
-        rootname=paste(args$output, "chrd_gr_clst", sep="_"),
-        pdf=args$pdf
-    )
-
-    graphics$clonotype_chord_plot(
-        data=seurat_data,
-        clone_by=args$cloneby,
-        plot_title=paste(
-            "Shared clonotype,",
-            "colored by dataset"
+        chains=seurat_data@misc$vdj$chains,
+        x_label="Gene",
+        y_label="Proportion",
+        plot_title="Distribution of gene usage per dataset",
+        plot_subtitle=paste(
+            "Split by chain;",
+            "filtered by clonotype frequency per donor >=",
+            args$minfrequency
         ),
         group_by="new.ident",
+        order_by="variance",
+        min_frequency=args$minfrequency,
+        scale=TRUE,
         theme=args$theme,
-        rootname=paste(args$output, "chrd_gr_idnt", sep="_"),
+        ncol=ifelse("TRA" %in% seurat_data@misc$vdj$chains, 5, 3),
+        width=ifelse("TRA" %in% seurat_data@misc$vdj$chains, 5*500, 3*500),
+        height=datasets_count * 400,
+        combine_guides="collect",
+        rootname=paste(args$output, "gene_gr_idnt_spl_ch", sep="_"),
         pdf=args$pdf
     )
 
-    if (
-        all(as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition))) &&
-        conditions_count > 1
-    ){
-        graphics$clonotype_chord_plot(
+    graphics$feature_plot(
+        data=seurat_data,
+        features=selected_features,
+        labels=selected_labels,
+        from_meta=TRUE,
+        reduction="rnaumap",
+        legend_title="Frequency",
+        plot_title="UMAP colored by clonotype frequency",
+        plot_subtitle=paste(
+            "Split by chain;",
+            "filtered by clonotype frequency per donor >=",
+            args$minfrequency
+        ),
+        label=FALSE,
+        order=TRUE,
+        pt_size=0.5,                                                  # need to have it fixed, otherwise dots are different on the splitted plot
+        alpha=0.5,
+        gradient_colors=c("lightgrey", "lightgrey", "darkred", "orange"),
+        color_limits=c(0, max_frequency),
+        color_scales=c(0, args$minfrequency-0.001*args$minfrequency, args$minfrequency, max_frequency),
+        color_breaks=c(0, args$minfrequency, max_frequency),
+        ncol=3,
+        height=400,
+        combine_guides="collect",
+        theme=args$theme,
+        rootname=paste(args$output, "umap_cl_freq_spl_ch", sep="_"),
+        pdf=args$pdf
+    )
+
+    if (donor_count > 1 && not_default_donor){
+
+        graphics$clonotype_quant_plot(
             data=seurat_data,
             clone_by=args$cloneby,
-            plot_title=paste(
-                "Shared clonotype,",
-                "colored by grouping condition"
+            chains=seurat_data@misc$vdj$chains,
+            x_label="Donor",
+            y_label="Unique clonotypes %",
+            legend_title="Donor",
+            plot_title="Percentage of unique clonotypes per donor",
+            plot_subtitle=paste(
+                "Split by chain;",
+                "filtered by clonotype frequency per donor >=",
+                args$minfrequency
             ),
-            group_by="condition",
+            group_by="donor",
+            min_frequency=args$minfrequency,
+            palette_colors=graphics$D40_COLORS,
             theme=args$theme,
-            rootname=paste(args$output, "chrd_gr_cnd", sep="_"),
+            combine_guides="collect",
+            width=ifelse(donor_count > 1, 1200, 400),
+            rootname=paste(args$output, "cl_qnt_gr_dnr_spl_ch", sep="_"),
             pdf=args$pdf
         )
 
-        graphics$clonotype_bar_plot(
+        graphics$clonotype_abundance_plot(
             data=seurat_data,
             clone_by=args$cloneby,
-            chains="both",
-            x_label="Condition",
-            y_label="Clonotypes %",
-            legend_title="Condition",
-            plot_title=paste(
-                "Unique clonotypes,",
-                "split by grouping condition"
+            chains=seurat_data@misc$vdj$chains,
+            x_label="Clonotype frequency",
+            y_label="Distribution",
+            legend_title="Donor",
+            plot_title="Distribution of clonotype frequencies per donor",
+            plot_subtitle=paste(
+                "Split by chain;",
+                "filtered by clonotype frequency per donor >=",
+                args$minfrequency
             ),
-            split_by="condition",
+            group_by="donor",
+            min_frequency=args$minfrequency,
             scale=TRUE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
             combine_guides="collect",
-            rootname=paste(args$output, "count_spl_cnd", sep="_"),
+            height=400,
+            rootname=paste(args$output, "cl_dnst_gr_dnr_spl_ch", sep="_"),
+            pdf=args$pdf
+        )
+
+        top_clones_per_donor <- floor(
+            length(graphics$D40_COLORS)/
+            length(seurat_data@misc$vdj$chains)/
+            donor_count
+        )
+        graphics$clonotype_alluvial_plot(
+            data=seurat_data,
+            clone_by=args$cloneby,
+            chains=seurat_data@misc$vdj$chains,
+            x_label="Donor",
+            y_label="Proportion",
+            legend_title="Clonotype",
+            plot_title="Proportion of top shared clonotypes between donors",
+            plot_subtitle=paste0(
+                "Split by chain; ",
+                "filtered by clonotype frequency per donor >= ",
+                args$minfrequency, "; ",
+                "top ", top_clones_per_donor, " clonotypes ",
+                "selected from each donor"
+            ),
+            group_by="donor",
+            min_frequency=args$minfrequency,
+            top_clones=top_clones_per_donor,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            combine_guides="collect",
+            ncol=3,
+            legend_position="bottom",
+            rootname=paste(args$output, "allu_gr_dnr_spl_ch", sep="_"),
             pdf=args$pdf
         )
 
         graphics$clonotype_homeostasis_plot(
             data=seurat_data,
             clone_by=args$cloneby,
-            chains="both",
-            x_label="Condition",
-            y_label="Relative Abundance",
-            legend_title="Clonotype group",
-            plot_title=paste(
-                "Clonal space homeostasis,",
-                "split by grouping condition"
+            chains=seurat_data@misc$vdj$chains,
+            x_label="Donor",
+            y_label="Proportion",
+            legend_title="Clonotype size",
+            plot_title="Proportion of clonotype frequencies per donor",
+            plot_subtitle=paste(
+                "Split by chain;",
+                "not filtered by clonotype frequency"
             ),
-            split_by="condition",
-            palette_colors=c("#2E86C1", "#5DADE2", "#A9DFBF", "#E74C3C", "#CB4335"),
+            group_by="donor",
+            min_frequency=0,
+            palette_colors=c("#080808", "#571357", "#BD3265", "#F28D30", "#FCFF9A"),
             theme=args$theme,
             combine_guides="collect",
-            rootname=paste(args$output, "hmst_spl_cnd", sep="_"),
+            ncol=3,
+            rootname=paste(args$output, "hmst_gr_dnr_spl_ch", sep="_"),
             pdf=args$pdf
         )
 
         graphics$clonotype_overlap_plot(
             data=seurat_data,
             clone_by=args$cloneby,
-            chains="both",
-            plot_title=paste(
-                "Clonotypes similarity,",
-                "split by grouping condition"
+            chains=seurat_data@misc$vdj$chains,
+            x_label="Donor",
+            y_label="Donor",
+            plot_title="Overlap of clonotypes between donors",
+            plot_subtitle=paste(
+                "Split by chain;",
+                "filtered by clonotype frequency per donor >=",
+                args$minfrequency
             ),
-            split_by="condition",
+            group_by="donor",
+            min_frequency=args$minfrequency,
+            methods=c("raw", "jaccard"),
+            gradient_colors=c("lightgrey", "blue", "black", "orange"),
+            theme=args$theme,
+            combine_guides="collect",
+            ncol=3,
+            nrow=2,
+            rootname=paste(args$output, "vrlp_gr_dnr_spl_ch", sep="_"),
+            pdf=args$pdf
+        )
+
+        graphics$clonotype_diversity_plot(
+            data=seurat_data,
+            clone_by=args$cloneby,
+            chains=seurat_data@misc$vdj$chains,
+            x_label=NULL,
+            y_label="Score",
+            legend_title="Donor",
+            plot_title="Diversity of clonotypes per donor",
+            plot_subtitle=paste(
+                "Split by chain;",
+                "not filtered by clonotype frequency"
+            ),
+            group_by="donor",
+            split_by=NULL,
+            min_frequency=0,
+            theme=args$theme,
+            ncol=1,
+            combine_guides="collect",
+            rootname=paste(args$output, "dvrs_gr_dnr_spl_ch", sep="_"),
+            pdf=args$pdf
+        )
+
+        graphics$clonotype_feature_plot(
+            data=seurat_data,
+            clone_by=args$cloneby,
+            chains=seurat_data@misc$vdj$chains,
+            x_label="Gene",
+            y_label="Proportion",
+            plot_title="Distribution of gene usage per donor",
+            plot_subtitle=paste(
+                "Split by chain;",
+                "filtered by clonotype frequency per donor >=",
+                args$minfrequency
+            ),
+            group_by="donor",
+            order_by="variance",
+            min_frequency=args$minfrequency,
+            scale=TRUE,
+            theme=args$theme,
+            ncol=ifelse("TRA" %in% seurat_data@misc$vdj$chains, 5, 3),
+            width=ifelse("TRA" %in% seurat_data@misc$vdj$chains, 5*500, 3*500),
+            height=donor_count * 400,
+            combine_guides="collect",
+            rootname=paste(args$output, "gene_gr_dnr_spl_ch", sep="_"),
+            pdf=args$pdf
+        )
+    }
+
+    if (conditions_count > 1 && not_default_conditions){
+
+        graphics$clonotype_quant_plot(
+            data=seurat_data,
+            clone_by=args$cloneby,
+            chains=seurat_data@misc$vdj$chains,
+            x_label="Condition",
+            y_label="Unique clonotypes %",
+            legend_title="Condition",
+            plot_title="Percentage of unique clonotypes per grouping condition",
+            plot_subtitle=paste(
+                "Split by chain;",
+                "filtered by clonotype frequency per donor >=",
+                args$minfrequency
+            ),
+            group_by="condition",
+            min_frequency=args$minfrequency,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            combine_guides="collect",
+            width=ifelse(conditions_count > 1, 1200, 400),
+            rootname=paste(args$output, "cl_qnt_gr_cnd_spl_ch", sep="_"),
+            pdf=args$pdf
+        )
+
+        graphics$clonotype_abundance_plot(
+            data=seurat_data,
+            clone_by=args$cloneby,
+            chains=seurat_data@misc$vdj$chains,
+            x_label="Clonotype frequency",
+            y_label="Distribution",
+            legend_title="Condition",
+            plot_title="Distribution of clonotype frequencies per grouping condition",
+            plot_subtitle=paste(
+                "Split by chain;",
+                "filtered by clonotype frequency per donor >=",
+                args$minfrequency
+            ),
+            group_by="condition",
+            min_frequency=args$minfrequency,
+            scale=TRUE,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            combine_guides="collect",
+            height=400,
+            rootname=paste(args$output, "cl_dnst_gr_cnd_spl_ch", sep="_"),
+            pdf=args$pdf
+        )
+
+        top_clones_per_condition <- floor(
+            length(graphics$D40_COLORS)/
+            length(seurat_data@misc$vdj$chains)/
+            conditions_count
+        )
+        graphics$clonotype_alluvial_plot(
+            data=seurat_data,
+            clone_by=args$cloneby,
+            chains=seurat_data@misc$vdj$chains,
+            x_label="Condition",
+            y_label="Proportion",
+            legend_title="Clonotype",
+            plot_title="Proportion of top shared clonotypes between grouping conditions",
+            plot_subtitle=paste0(
+                "Split by chain; ",
+                "filtered by clonotype frequency per donor >= ",
+                args$minfrequency, "; ",
+                "top ", top_clones_per_condition, " clonotypes ",
+                "selected from each grouping condition"
+            ),
+            group_by="condition",
+            min_frequency=args$minfrequency,
+            top_clones=top_clones_per_condition,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            combine_guides="collect",
+            ncol=3,
+            legend_position="bottom",
+            rootname=paste(args$output, "allu_gr_cnd_spl_ch", sep="_"),
+            pdf=args$pdf
+        )
+
+        graphics$clonotype_homeostasis_plot(
+            data=seurat_data,
+            clone_by=args$cloneby,
+            chains=seurat_data@misc$vdj$chains,
+            x_label="Condition",
+            y_label="Proportion",
+            legend_title="Clonotype size",
+            plot_title="Proportion of clonotype frequencies per grouping condition",
+            plot_subtitle=paste(
+                "Split by chain;",
+                "not filtered by clonotype frequency"
+            ),
+            group_by="condition",
+            min_frequency=0,
+            palette_colors=c("#080808", "#571357", "#BD3265", "#F28D30", "#FCFF9A"),
+            theme=args$theme,
+            combine_guides="collect",
+            ncol=3,
+            rootname=paste(args$output, "hmst_gr_cnd_spl_ch", sep="_"),
+            pdf=args$pdf
+        )
+
+        graphics$clonotype_overlap_plot(
+            data=seurat_data,
+            clone_by=args$cloneby,
+            chains=seurat_data@misc$vdj$chains,
             x_label="Condition",
             y_label="Condition",
-            method="morisita",
+            plot_title="Overlap of clonotypes between grouping conditions",
+            plot_subtitle=paste(
+                "Split by chain;",
+                "filtered by clonotype frequency per donor >=",
+                args$minfrequency
+            ),
+            group_by="condition",
+            min_frequency=args$minfrequency,
+            methods=c("raw", "jaccard"),
+            gradient_colors=c("lightgrey", "blue", "black", "orange"),
             theme=args$theme,
             combine_guides="collect",
-            rootname=paste(args$output, "vrlp_spl_cnd", sep="_"),
+            ncol=3,
+            nrow=2,
+            rootname=paste(args$output, "vrlp_gr_cnd_spl_ch", sep="_"),
             pdf=args$pdf
         )
 
-        graphics$clonotype_network_plot(
+        graphics$clonotype_diversity_plot(
             data=seurat_data,
-            reduction="rnaumap",
             clone_by=args$cloneby,
-            chains="both",
-            plot_title=paste(
-                "Clonotypes network,",
-                "colored by grouping condition"
-            ),
+            chains=seurat_data@misc$vdj$chains,
+            x_label=NULL,
+            y_label="Score",
             legend_title="Condition",
+            plot_title="Diversity of clonotypes per grouping condition",
+            plot_subtitle=paste(
+                "Split by chain;",
+                "not filtered by clonotype frequency"
+            ),
             group_by="condition",
+            split_by=NULL,
+            min_frequency=0,
             theme=args$theme,
-            pt_size=0.5,
+            ncol=1,
             combine_guides="collect",
-            rootname=paste(args$output, "ntwr_gr_cnd", sep="_"),
+            rootname=paste(args$output, "dvrs_gr_cnd_spl_ch", sep="_"),
             pdf=args$pdf
         )
 
-        graphics$clonotype_diversity_plot(
+        graphics$clonotype_feature_plot(
             data=seurat_data,
             clone_by=args$cloneby,
-            chains="both",
-            plot_title=paste(
-                "Clonotypes diversity,",
-                "colored by cluster,",
-                "split by grouping condition"
+            chains=seurat_data@misc$vdj$chains,
+            x_label="Gene",
+            y_label="Proportion",
+            plot_title="Distribution of gene usage per grouping condition",
+            plot_subtitle=paste(
+                "Split by chain;",
+                "filtered by clonotype frequency per donor >=",
+                args$minfrequency
             ),
-            legend_title="Cluster",
-            split_by="condition",
-            group_by=args$source,
-            x_label="Condition",
-            y_label="Index Score",
-            theme=args$theme,
-            width=1600,
-            alpha=0.75,
-            combine_guides="collect",
-            rootname=paste(args$output, "dvrs_gr_clst_spl_cnd", sep="_"),
-            pdf=args$pdf
-        )
-
-        graphics$clonotype_diversity_plot(
-            data=seurat_data,
-            clone_by=args$cloneby,
-            chains="both",
-            plot_title=paste(
-                "Clonotypes diversity,",
-                "colored by grouping condition,",
-                "split by cluster"
-            ),
-            legend_title="Dataset",
-            split_by=args$source,
             group_by="condition",
-            x_label="Condition",
-            y_label="Index Score",
+            order_by="variance",
+            min_frequency=args$minfrequency,
+            scale=TRUE,
             theme=args$theme,
-            width=1600,
-            alpha=0.75,
+            ncol=ifelse("TRA" %in% seurat_data@misc$vdj$chains, 5, 3),
+            width=ifelse("TRA" %in% seurat_data@misc$vdj$chains, 5*500, 3*500),
+            height=conditions_count * 400,
             combine_guides="collect",
-            rootname=paste(args$output, "dvrs_gr_cnd_spl_clst", sep="_"),
+            rootname=paste(args$output, "gene_gr_cnd_spl_ch", sep="_"),
             pdf=args$pdf
         )
     }
@@ -440,8 +611,10 @@ get_args <- function(){
         help=paste(
             "Path to the RDS file to load Seurat object from. This",
             "file should include gene expression information stored",
-            "in the RNA assay, as well as 'pca' and 'rnaumap'",
-            "dimensionality reductions applied to that assay."
+            "in the RNA assay, as well as pca and rnaumap dimensionality",
+            "reductions applied to that assay. If loaded Seurat object",
+            "includes multiple datasets, it should have a donor column",       # donor is a required column when aggregating multiple Cell Ranger Multi samples
+            "to define grouping for clonotype calling."
         ),
         type="character", required="True"
     )
@@ -484,14 +657,6 @@ get_args <- function(){
         type="character"
     )
     parser$add_argument(
-        "--source",
-        help=paste(
-            "Column from the metadata of the loaded Seurat",
-            "object to select clusters from."
-        ),
-        type="character", required="True"
-    )
-    parser$add_argument(
         "--cloneby",
         help=paste(
             "Defines how to call the clonotype. gene: based on VDJC gene",
@@ -503,24 +668,31 @@ get_args <- function(){
         choices=c("gene", "nt", "aa", "strict")
     )
     parser$add_argument(
-        "--groupby",
+        "--minfrequency",
         help=paste(
-            "Column from the metadata of the loaded Seurat object",
-            "to group cells for clonotype frequency calculation.",
-            "Default: group by dataset"
+            "Minimum frequency (number of cells) per clonotype to be reported.",
+            "Default: 3"
         ),
-        type="character", default="new.ident"
+        type="integer", default=3
     )
     parser$add_argument(
-        "--strictness",
+        "--filter",
         help=paste(
-            "Apply stringency filters. Removemulti: remove any cell",
-            "with more than 2 immune receptor chains. Filtermulti:",
-            "isolate the top 2 expressed chains in cell with multiple",
-            "chains. Default: do not apply any filters."
+            "Stringency filters to be applied.",
+            "cells: remove cells with more than 2 chains.",
+            "chains: remove chains exceeding 2 (select the most expressed ones).",
+            "Default: do not apply any filters."
         ),
         type="character",
-        choices=c("removemulti", "filtermulti")
+        choices=c("cells", "chains")
+    )
+    parser$add_argument(
+        "--removepartial",
+        help=paste(
+            "Remove cells with only one chain detected.",
+            "Default: keep all cells if at least one chain detected"
+        ),
+        action="store_true"
     )
     parser$add_argument(
         "--pdf",
@@ -599,21 +771,12 @@ get_args <- function(){
         type="integer", default=42
     )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    print(args)
     return (args)
 }
 
 
 args <- get_args()
-
-print("Input parameters")
-print(args)
-
-print(
-    paste(
-        "Setting parallelization to", args$cpus, "cores, and", args$memory,
-        "GB of memory allowed to be shared between the processes"
-    )
-)
 prod$parallel(args)
 
 print(paste("Loading Seurat data from", args$query))
@@ -667,6 +830,11 @@ debug$print_info(seurat_data, args)
 export_all_plots(
     seurat_data=seurat_data,
     args=args
+)
+
+io$export_clonotypes(
+    data=seurat_data,
+    location=paste0(args$output, "_clonotypes.tsv")
 )
 
 if(args$cbbuild){

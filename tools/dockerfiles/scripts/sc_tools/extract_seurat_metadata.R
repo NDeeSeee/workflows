@@ -144,12 +144,12 @@ get_args <- function(){
         type="integer", default=32
     )
     args <- parser$parse_args(commandArgs(trailingOnly=TRUE))
+    print(args)
     return (args)
 }
 
 
 args <- get_args()
-print(args)
 
 print(paste("Setting parallelization parameters to", args$cpus, "cores, and", args$memory, "GB of memory"))
 setup_parallelization(args)

@@ -193,6 +193,7 @@ get_args <- function(){
         type="integer", default=1
     )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    print(args)
     return (args)
 }
 

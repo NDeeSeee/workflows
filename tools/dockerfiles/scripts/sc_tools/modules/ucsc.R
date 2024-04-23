@@ -28,12 +28,30 @@ DEFAULT_META_FIELDS <- c(
     "nucleosome_signal",
     "frip",
     "blacklist_fraction",
-    "CTgene",
-    "CTnt",
-    "CTaa",
-    "CTstrict",
-    "Frequency",
-    "cloneType"
+
+    "donor",
+
+    "clonotype_TRA",
+    "clonotype_TRB",
+    "clonotype_IGH",
+    "clonotype_IGL",
+    "clonotype_both",
+
+    "clonalFrequency_TRA",
+    "clonalFrequency_TRB",
+    "clonalFrequency_IGH",
+    "clonalFrequency_IGL",
+    "clonalFrequency_both",
+
+    "quartile_nCount_RNA",
+    "quartile_nFeature_RNA",
+    "quartile_mito_percentage",
+    "quartile_nCount_ATAC",
+    "quartile_nFeature_ATAC",
+    "quartile_TSS.enrichment",
+    "quartile_nucleosome_signal",
+    "quartile_frip",
+    "quartile_blacklist_fraction"
 )
 
 DEFAULT_META_FIELDS_NAMES <- c(
@@ -52,12 +70,30 @@ DEFAULT_META_FIELDS_NAMES <- c(
     "Nucleosome signal",
     "FRiP",
     "Bl. regions",
-    "Cl. VDJC gene seq.",
-    "Cl. nucl. seq.",
-    "Cl. amino acid seq.",
-    "Cl. nucl. & gene seq.",
-    "Cl. frequency",
-    "Cl. group"
+
+    "Clonotype donor",
+
+    "Clonotype TRA",
+    "Clonotype TRB",
+    "Clonotype IGH",
+    "Clonotype IGL",
+    "Clonotype Both",
+
+    "Clonotype frequency TRA",
+    "Clonotype frequency TRB",
+    "Clonotype frequency IGH",
+    "Clonotype frequency IGL",
+    "Clonotype frequency Both",
+
+    "Quartiles of RNA reads",
+    "Quartiles of Genes",
+    "Quartiles of Mitochondrial %",
+    "Quartiles of ATAC fragments in peaks",
+    "Quartiles of Peaks",
+    "Quartiles of TSS enrichment score",
+    "Quartiles of Nucleosome signal",
+    "Quartiles of FRiP",
+    "Quartiles of Bl. regions"
 )
 
 get_matrix <- function(object, slot){
@@ -378,19 +414,6 @@ export_cellbrowser <- function(seurat_data, assay, slot, rootname, label_field=N
                 }
             }
 
-            quartile_fields <- base::grep("^quartile_", base::colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
-            quartile_fields_names <- base::gsub("quartile_", "Quartile ", quartile_fields)
-            meta_fields <- base::append(meta_fields, quartile_fields)
-            meta_fields_names <- base::append(meta_fields_names, quartile_fields_names)
-            if (!is.null(palette_colors) && length(quartile_fields) > 0){                                  # need to check if quartile_fields is not empty
-                for (i in 1:length(quartile_fields)){
-                    color_data <- base::rbind(
-                        color_data,
-                        get_color_data(seurat_data, quartile_fields[i], palette_colors)
-                    )
-                }
-            }
-
             pseudotime_fields <- base::grep("^ptime_", base::colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
             pseudotime_fields_names <- base::gsub("ptime_", "Pseudotime from ", pseudotime_fields)
             meta_fields <- base::append(meta_fields, pseudotime_fields)
@@ -498,11 +521,6 @@ export_loupe <- function(seurat_data, assay, rootname, active_cluster=NULL, meta
             custom_fields_names <- base::gsub("custom_", "Custom ", custom_fields)
             meta_fields <- base::append(meta_fields, custom_fields)
             meta_fields_names <- base::append(meta_fields_names, custom_fields_names)
-
-            quartile_fields <- base::grep("^quartile_", base::colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
-            quartile_fields_names <- base::gsub("quartile_", "Quartile ", quartile_fields)
-            meta_fields <- base::append(meta_fields, quartile_fields)
-            meta_fields_names <- base::append(meta_fields_names, quartile_fields_names)
 
             pseudotime_fields <- base::grep("^ptime_", base::colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
             pseudotime_fields_names <- base::gsub("ptime_", "Pseudotime from ", pseudotime_fields)

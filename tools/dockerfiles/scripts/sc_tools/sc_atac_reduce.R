@@ -489,24 +489,17 @@ get_args <- function(){
         type="integer", default=42
     )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    print(args)
     return (args)
 }
 
 args <- get_args()
 
-print("Input parameters")
-print(args)
 print("Adjusting --dimensions parameter")
 args$dimensions <- c(2:args$dimensions)                                                   # first LSI component is always excluded
 print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
 args$minvarpeaks <- paste0("q", args$minvarpeaks)                                         # need to have it in a form of "qN", for example "q0"
 
-print(
-    paste(
-        "Setting parallelization to", args$cpus, "cores, and", args$memory,
-        "GB of memory allowed to be shared between the processes"
-    )
-)
 prod$parallel(args)
 
 print(paste("Loading Seurat data from", args$query))
@@ -544,7 +537,7 @@ seurat_data <- qc$quartile_qc_metrics(
         "nCount_ATAC", "nFeature_ATAC", "TSS.enrichment",
         "nucleosome_signal", "frip", "blacklist_fraction"
     ),
-    prefix="quartile"                                                       # we will use this prefix in ucsc$export_cellbrowser function
+    prefix="quartile"                                                     # we use this prefix in DEFAULT_META_FIELDS from ucsc.R
 )
 debug$print_info(seurat_data, args)
 

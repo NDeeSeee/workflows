@@ -794,21 +794,12 @@ get_args <- function(){
         type="integer", default=42
     )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    print(args)
     return (args)
 }
 
 
 args <- get_args()
-
-print("Input parameters")
-print(args)
-
-print(
-    paste(
-        "Setting parallelization to", args$cpus, "cores, and", args$memory,
-        "GB of memory allowed to be shared between the processes"
-    )
-)
 prod$parallel(args)
 
 print(paste("Loading Seurat data from", args$query))

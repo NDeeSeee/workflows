@@ -16,6 +16,7 @@ import("magrittr", `%>%`, attach=TRUE)
 export(
     "get_file_type",
     "export_data",
+    "export_clonotypes",
     "export_rds",
     "export_gct",
     "export_cls",
@@ -163,6 +164,80 @@ export_data <- function(data, location, row_names=FALSE, col_names=TRUE, quote=F
     )
 }
 
+export_clonotypes <- function(data, location, row_names=FALSE, col_names=TRUE, quote=FALSE){
+    base::tryCatch(
+        expr = {
+
+            conditions_count <- length(
+                base::unique(
+                    base::as.vector(as.character(data@meta.data$condition))
+                )
+            )
+            not_default_conditions <- all(
+                base::as.vector(as.character(data@meta.data$new.ident)) != base::as.vector(as.character(data@meta.data$condition))
+            )
+
+            clonotype_data <- base::data.frame(
+                                  barcode=SeuratObject::Cells(data),
+                                  dataset=data@meta.data$new.ident,
+                                  donor=data@meta.data$donor
+                              )
+
+            if (conditions_count > 1 && not_default_conditions){
+                clonotype_data <- base::cbind(clonotype_data, data@meta.data$condition)
+            }
+
+            clonotype_data <- base::cbind(
+                clonotype_data,
+                data@meta.data[, base::paste0("clonotype_", data@misc$vdj$chains)]
+            )
+
+            clonotype_data <- base::cbind(
+                clonotype_data,
+                data@meta.data[, base::paste0("clonalFrequency_", data@misc$vdj$chains)]
+            )
+
+            ct_gene <- stringr::str_split(data@meta.data$CTgene, "_", simplify=TRUE)    # may return "" values
+            ct_aa <- stringr::str_split(data@meta.data$CTaa, "_", simplify=TRUE)        # may return "" values
+            ct_nt <- stringr::str_split(data@meta.data$CTnt, "_", simplify=TRUE)        # may return "" values
+            ct_gene[ct_gene == ""] <- NA                                                # for consistency with all clonotypes and frequency columns
+            ct_aa[ct_aa == ""] <- NA                                                    # for consistency with all clonotypes and frequency columns
+            ct_nt[ct_nt == ""] <- NA                                                    # for consistency with all clonotypes and frequency columns
+
+            for (i in 1:length(data@misc$vdj$chains)){
+                current_chain <- data@misc$vdj$chains[i]
+                if (current_chain == "both") next                                       # we don't want to export both
+                chain_position <- switch(
+                    current_chain,
+                    "TRA" = 1,
+                    "TRB" = 2,
+                    "IGL" = 1,
+                    "IGH" = 2
+                )
+                clonotype_data <- clonotype_data %>%
+                    dplyr::mutate(
+                        !!paste(current_chain, "gene", sep="_") := ct_gene[, chain_position],
+                        !!paste(current_chain, "aa", sep="_") := ct_aa[, chain_position],
+                        !!paste(current_chain, "nt", sep="_") := ct_nt[, chain_position]
+                    )
+            }
+
+            utils::write.table(
+                clonotype_data,
+                file=location,
+                sep=get_file_type(location),
+                row.names=row_names,
+                col.names=col_names,
+                quote=quote
+            )
+            base::print(base::paste("Exporting clonotypes to", location))
+        },
+        error = function(e){
+            base::print(base::paste("Failed to export clonotypes to", location, "due to", e))
+        }
+    )
+}
+
 export_rds <- function(data, location){
     base::tryCatch(
         expr = {
@@ -281,21 +356,31 @@ export_scope_loom <- function(data, location, assay="RNA", slot="counts"){
 }
 
 load_cell_identity_data <- function(location) {
-    cell_identity_data <- utils::read.table(
-        location,
-        sep=get_file_type(location),
-        header=TRUE,
+    default_cell_identity_data <- base::data.frame(
+        library_id="Sample",
         check.names=FALSE,
         stringsAsFactors=FALSE
     )
-    if ("sample_id" %in% base::colnames(cell_identity_data)){             # the latest cellranger changed the name from library_id to sample_id
+    if (!is.null(location)){
+        cell_identity_data <- utils::read.table(
+            location,
+            sep=get_file_type(location),
+            header=TRUE,
+            check.names=FALSE,
+            stringsAsFactors=FALSE
+        )
+        if ("sample_id" %in% base::colnames(cell_identity_data)){             # the latest cellranger changed the name from library_id to sample_id
+            cell_identity_data <- cell_identity_data %>%
+                                  dplyr::rename("library_id"="sample_id")     # we use "library_id" in our code
+        }
+        # prepend with LETTERS, otherwise the order on the plot will be arbitrary sorted
         cell_identity_data <- cell_identity_data %>%
-                              dplyr::rename("library_id"="sample_id")     # we use "library_id" in our code
+                              dplyr::mutate("library_id"=base::paste(LETTERS[1:base::nrow(cell_identity_data)], .$library_id))
+        base::print(base::paste("Datasets identities were successfully loaded from ", location))
+        return (cell_identity_data)
     }
-    # prepend with LETTERS, otherwise the order on the plot will be arbitrary sorted
-    cell_identity_data <- cell_identity_data %>%
-                          dplyr::mutate("library_id"=base::paste(LETTERS[1:base::nrow(cell_identity_data)], .$library_id))
-    return (cell_identity_data)
+    base::print("Datasets identities are not provided. Applying defaults")
+    return (default_cell_identity_data)
 }
 
 extend_metadata <- function(seurat_data, location, seurat_ref_column, meta_ref_column, split_by=NULL, seurat_target_columns=NULL){
@@ -529,6 +614,9 @@ assign_identities <- function(seurat_data, cell_identity_data, grouping_data){
     }
     seurat_data[["new.ident"]] <- new_ident
     seurat_data[["condition"]] <- grouping_data$condition[base::match(seurat_data$new.ident, grouping_data$library_id)]
+    if ("donor" %in% base::colnames(cell_identity_data)){                                 # if we work with aggregated Cell Ranger Multi runs we have this column
+        seurat_data[["donor"]] <- cell_identity_data$donor[idents]
+    }
     SeuratObject::Idents(seurat_data) <- "new.ident"
     if (base::nrow(cell_identity_data) > length(base::unique(base::as.vector(as.character(SeuratObject::Idents(seurat_data)))))){
         base::print("Identity file includes more than expected number of rows. Exiting.")
@@ -724,6 +812,27 @@ load_10x_vdj_data <- function(seurat_data, args) {
             "Loading congtigs annotations from", args$contigs
         )
     )
+
+    if (!("donor" %in% base::colnames(seurat_data@meta.data))){
+        datasets_count <- length(base::unique(base::as.vector(as.character(seurat_data@meta.data$new.ident))))
+        if (datasets_count > 1){
+            base::print(
+                base::paste(
+                    "Loaded data includes more then 1 dataset,",        # aggregated data from multiple Cell Ranger Multi samples will always include donor column
+                    "but donor column is not present. Exiting."
+                )
+            )
+            base::quit(save="no", status=1, runLast=FALSE)
+        }
+        base::print(
+            base::paste(
+                "Assigning all cells to the same default",
+                "donor, as only one dataset is loaded."
+            )
+        )
+        seurat_data@meta.data[["donor"]] <- seurat_data@meta.data$new.ident
+    }
+
     congtigs_data <- scRepertoire::createHTOContigList(            # should work even if seurat_data includes only one dataset
         contig=utils::read.table(
             args$contigs,
@@ -732,53 +841,99 @@ load_10x_vdj_data <- function(seurat_data, args) {
             check.names=FALSE,
             stringsAsFactors=FALSE
         ),
-        sc=seurat_data,                                                # the order of barcode suffixes should be the same as in contigs
-        group.by="new.ident"
+        sc=seurat_data,                                            # the order of barcode suffixes should be the same as in contigs
+        group.by="donor"                                           # we group by donor to call clonotypes similar to what Cell Ranger Multi does
     )
 
-    remove_multi=!is.null(args$strictness) && args$strictness == "removemulti"
-    filter_multi=!is.null(args$strictness) && args$strictness == "filtermulti"
-    if (remove_multi || filter_multi){
-        base::print(
-            base::paste(
-                "Applied filtering options:",
-                "remove_multi", remove_multi,
-                "filter_multi", filter_multi
-            )
+    filter_by_cells=!is.null(args$filter) && args$filter == "cells"
+    filter_by_chains=!is.null(args$filter) && args$filter == "chains"
+    base::print(
+        base::paste0(
+            "Combining contigs.",
+            base::ifelse(filter_by_cells, " Filtering by cells.", ""),
+            base::ifelse(filter_by_chains, " Filtering by chains.", "")
         )
-    }
-
+    )
     detected_chains <- base::sort(base::unique(congtigs_data[[1]]$chain))      # assuming that taking the first item from the list is ok
     if (base::identical(c("TRA", "TRB"), detected_chains)) {
-        base::print("Combining T Cell receptor contigs")
-        congtigs_data <- scRepertoire::combineTCR(
-            df=congtigs_data,
-            removeNA=TRUE,                                                     # remove any chain without values
-            removeMulti=remove_multi,
-            filterMulti=filter_multi
+        congtigs_data <- scRepertoire::combineTCR(                             # combining contigs into clonotypes within each donor, because congtigs_data is a list
+            input.data=congtigs_data,
+            removeNA=FALSE,                                                    # should be FALSE, because of https://github.com/ncborcherding/scRepertoire/issues/293
+            removeMulti=filter_by_cells,
+            filterMulti=filter_by_chains
         )
     } else if (base::identical(c("IGH", "IGL"), detected_chains)){
-        base::print("Combining B Cell receptor contigs")
         congtigs_data <- scRepertoire::combineBCR(
-            df=congtigs_data,
-            removeNA=TRUE,                                                     # remove any chain without values
-            removeMulti=remove_multi,
-            filterMulti=filter_multi
+            input.data=congtigs_data,
+            removeNA=FALSE,                                                    # not tested for BCR, but better to follow the same logic as for combineTCR
+            removeMulti=filter_by_cells,
+            filterMulti=filter_by_chains
         )
     } else {
         base::print("Not implemented chains detected. Exiting")
         quit(save="no", status=1, runLast=FALSE)
     }
 
-    seurat_data <- scRepertoire::combineExpression(
-        df=congtigs_data,
-        sc=seurat_data,
-        cloneCall=args$cloneby,
-        group.by=args$groupby                                          # "new.ident" should be equal to "none"
+    if (args$removepartial){
+        base::print("Removing cells with only one chain detected")
+        for(i in seq_along(congtigs_data)) {
+            congtigs_data[[i]] <- congtigs_data[[i]] %>%
+                tidyr::drop_na(
+                    tidyselect::any_of(
+                        c("TCR1", "TCR2", "IGH", "IGLC")        # doesn't fail because of the missing columns, so it can be used for both TCR and BCR
+                    )
+                )
+        }
+    }
+
+    seurat_data@misc$vdj <- list(
+        chains=c(detected_chains, "both")                       # will always be either c("TRA", "TRB", "both") or c("IGH", "IGL", "both")
     )
+    for (i in 1:length(seurat_data@misc$vdj$chains)){           # we want to calculate it per chain, because clonalFrequency that we filter by will be different
+        current_chain <- seurat_data@misc$vdj$chains[i]
+
+        seurat_data <- scRepertoire::combineExpression(         # creates clonalProportion (n/nrow) and clonalFrequency (n) columns calculated within donor based on the selected chain
+            input.data=congtigs_data,                           # this is a list split by donor
+            sc.data=seurat_data,
+            cloneCall=args$cloneby,
+            chain=current_chain,                                # chains are concatenated with _ when current_chain is both
+            proportion=TRUE,                                    # we don't use calculated clonalProportion, so this parameter is not important
+            group.by=NULL                                       # congtigs_data is already a list, so we don't need to provide group.by
+        )
+        base::print(utils::head(seurat_data@meta.data, n=5))
+
+        seurat_data@meta.data <- seurat_data@meta.data %>%
+                                 dplyr::mutate(                                                              # to have 0 instead of NA for numeric column
+                                     clonalFrequency=dplyr::if_else(                                         # calculated per donor
+                                         is.na(clonalFrequency),
+                                         0,
+                                         clonalFrequency
+                                     )
+                                 ) %>%
+                                 dplyr::mutate(                                                              # pretty formating because we show it in the UCSC Cell Browser
+                                     !!base::paste0("clonotype_", current_chain):=dplyr::if_else(            # use temp for easy access
+                                         clonalFrequency < args$minfrequency,                                # calculated for current_chain
+                                         NA,
+                                         base::gsub(
+                                             ";|_|\\.+", " ",                                                # ; means multiple chains, _ splits chains in "both"
+                                             base::gsub(
+                                                "NA|None", "",                                               # to remove all NA and None values
+                                                .[[scRepertoire:::.convertClonecall(args$cloneby)]]
+                                             )
+                                         )
+                                     )
+                                 ) %>%
+                                 dplyr::rename(
+                                     !!base::paste0("clonalFrequency_", current_chain):="clonalFrequency"    # this column is not filtered
+                                 ) %>%
+                                 dplyr::select(-c("clonalProportion", "cloneSize"))                          # we also remove cloneSize even if it's used by scRepertoire
+                                                                                                             # in some plots (they remove by NA). We want to filter by
+                                                                                                             # our clonotype_[chain] column. We can't use multiple cloneSize
+                                                                                                             # columns because cloneSize is harcoded in scRepertoire
+    }
+
     base::rm(congtigs_data)
     base::gc(verbose=FALSE)
-
     return (seurat_data)
 }
 

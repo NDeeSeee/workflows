@@ -29,13 +29,16 @@ import("SummarizedExperiment", attach=FALSE)
 
 
 export(
-    "clonotype_bar_plot",
+    "clonotype_quant_plot",
+    "clonotype_abundance_plot",
+    "clonotype_alluvial_plot",
     "clonotype_feature_plot",
     "clonotype_homeostasis_plot",
     "clonotype_overlap_plot",
-    "clonotype_network_plot",
+#   "clonotype_network_plot",
     "clonotype_chord_plot",
     "clonotype_diversity_plot",
+    "filter_by_clonotype",
     "geom_bar_plot",
     "geom_density_plot",
     "geom_point_plot",
@@ -104,31 +107,49 @@ expand_qc_suffix <- function(suffix){
     )
 }
 
-clonotype_bar_plot <- function(data, rootname, clone_by, chains, split_by, x_label, y_label, legend_title, plot_title, scale=TRUE, palette_colors=D40_COLORS, combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+filter_by_clonotype <- function(data, clone_by, chain, min_frequency){
+    clonotype_column <- scRepertoire:::.convertClonecall(clone_by)
+    frequency_column <- base::paste0("clonalFrequency_", chain)
+    data@meta.data <- data@meta.data %>%
+                      dplyr::mutate(
+                          !!clonotype_column:=dplyr::if_else(            # we don't need to update other columns, because we set cloneSize based on it
+                              .[[frequency_column]] < min_frequency,
+                              NA,
+                              .[[clonotype_column]]
+                          )
+                      ) %>%
+                      dplyr::mutate(
+                          cloneSize=.[[clonotype_column]]                # scRepertoire uses it for filtering to exclude NA
+                      )
+    return (data)
+}
+
+clonotype_quant_plot <- function(data, rootname, clone_by, chains, group_by, x_label, y_label, legend_title, plot_title, plot_subtitle=NULL, min_frequency=0, palette_colors=D40_COLORS, combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             plots <- list()
-            for (i in 1:length(chains)){          # should work fine even if chains is not a vector
+            for (i in 1:length(chains)){                                            # should work fine even if chains is not a vector
                 current_chain <- chains[i]
-                plots[[current_chain]] <- scRepertoire::quantContig(
-                    data,
+                plots[[current_chain]] <- scRepertoire::clonalQuant(
+                    input.data=filter_by_clonotype(data, clone_by, current_chain, min_frequency),
                     cloneCall=clone_by,
                     chain=current_chain,
-                    scale=scale,
-                    split.by=split_by
+                    group.by=group_by,
+                    scale=TRUE                                           # to always show percentage
                 ) +
                 ggplot2::xlab(x_label) +
                 ggplot2::ylab(y_label) +
-                ggplot2::guides(fill=ggplot2::guide_legend(legend_title), x=ggplot2::guide_axis(angle=45)) +
+                ggplot2::ylim(c(0, 100)) +                               # to have the same scale when multiple chains are shown
+                ggplot2::guides(
+                    fill=ggplot2::guide_legend(legend_title),
+                    x=ggplot2::guide_axis(angle=45)
+                ) +
                 ggplot2::scale_fill_manual(values=palette_colors) +
+                ggplot2::ggtitle(current_chain) +
                 get_theme(theme)
-                if (current_chain != "both"){
-                    plots[[current_chain]] <- plots[[current_chain]] +
-                                              ggplot2::ggtitle(current_chain)
-                }
             }
             combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
-                              patchwork::plot_annotation(title=plot_title)
+                              patchwork::plot_annotation(title=plot_title, subtitle=plot_subtitle)
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(combined_plots))
@@ -140,39 +161,145 @@ clonotype_bar_plot <- function(data, rootname, clone_by, chains, split_by, x_lab
                 grDevices::dev.off()
             }
 
-            base::print(base::paste("Exporting clonotype bar plot to ", rootname, ".(png/pdf)", sep=""))
+            base::print(base::paste("Exporting clonotype quant plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
             base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
-            base::print(base::paste("Failed to export clonotype bar plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+            base::print(base::paste("Failed to export clonotype quant plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
         }
     )
 }
 
-clonotype_homeostasis_plot <- function(data, rootname, clone_by, chains, split_by, x_label, y_label, legend_title, plot_title, palette_colors=D40_COLORS, combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+clonotype_abundance_plot <- function(data, rootname, clone_by, chains, group_by, x_label, y_label, legend_title, plot_title, plot_subtitle=NULL, min_frequency=0, scale=TRUE, palette_colors=D40_COLORS, combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+    base::tryCatch(
+        expr = {
+            plots <- list()
+            for (i in 1:length(chains)){          # should work fine even if chains is not a vector
+                current_chain <- chains[i]
+                plots[[current_chain]] <- scRepertoire::clonalAbundance(
+                    input.data=filter_by_clonotype(data, clone_by, current_chain, min_frequency),
+                    cloneCall=clone_by,
+                    chain=current_chain,
+                    group.by=group_by,
+                    scale=scale
+                ) +
+                ggplot2::xlab(x_label) +
+                ggplot2::ylab(y_label) +
+                ggplot2::guides(
+                    fill=ggplot2::guide_legend(legend_title),
+                    color=ggplot2::guide_legend(legend_title),
+                    x=ggplot2::guide_axis(angle=45)
+                ) +
+                ggplot2::scale_fill_manual(values=palette_colors) +
+                ggplot2::scale_color_manual(values=palette_colors) +
+                ggplot2::ggtitle(current_chain) +
+                get_theme(theme)
+            }
+            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
+                              patchwork::plot_annotation(title=plot_title, subtitle=plot_subtitle)
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            base::suppressMessages(base::print(combined_plots))
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                base::suppressMessages(base::print(combined_plots))
+                grDevices::dev.off()
+            }
+
+            base::print(base::paste("Exporting clonotype abundance plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export clonotype abundance plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
+clonotype_alluvial_plot <- function(data, rootname, clone_by, chains, group_by, x_label, y_label, legend_title, plot_title, plot_subtitle=NULL, min_frequency=0, top_clones=NULL, legend_position="bottom", palette_colors=D40_COLORS, combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+    base::tryCatch(
+        expr = {
+            plots <- list()
+            start_from <- 1
+            for (i in 1:length(chains)){                                                               # should work fine even if chains is not a vector
+                current_chain <- chains[i]
+                plots[[current_chain]] <- scRepertoire::clonalCompare(
+                    input.data=filter_by_clonotype(data, clone_by, current_chain, min_frequency),
+                    cloneCall=clone_by,
+                    chain=current_chain,
+                    top.clones=top_clones,                                                             # if it's too many, we won't have enough colors and plot will fail
+                    group.by=group_by,
+                    graph="alluvial"
+                ) +
+                ggplot2::xlab(x_label) +
+                ggplot2::ylab(y_label) +
+                ggplot2::ylim(c(0, 1)) +                                                               # to have the same scale when multiple chains are shown
+                ggplot2::guides(
+                    fill=ggplot2::guide_legend(base::paste(legend_title, current_chain)),
+                    x=ggplot2::guide_axis(angle=45)
+                ) +
+                ggplot2::ggtitle(current_chain) +
+                get_theme(theme)
+
+                colors_needed <- length(base::unique(ggplot2::ggplot_build(plots[[current_chain]])$data[[1]]$fill))
+                plots[[current_chain]] <- plots[[current_chain]] +
+                                          ggplot2::scale_fill_manual(
+                                              values=palette_colors[start_from:(start_from+colors_needed-1)]
+                                          )
+                start_from <- start_from+colors_needed
+            }
+
+            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
+                              patchwork::plot_annotation(
+                                  title=plot_title,
+                                  subtitle=plot_subtitle,
+                                  theme=ggplot2::theme(legend.position=legend_position)
+                              )
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            base::suppressMessages(base::print(combined_plots))
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                base::suppressMessages(base::print(combined_plots))
+                grDevices::dev.off()
+            }
+
+            base::print(base::paste("Exporting clonotype alluvial plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export clonotype alluvial plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
+clonotype_homeostasis_plot <- function(data, rootname, clone_by, chains, group_by, x_label, y_label, legend_title, plot_title, plot_subtitle=NULL, min_frequency=0, palette_colors=D40_COLORS, combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             plots <- list()
             for (i in 1:length(chains)){          # should work fine even if chains is not a vector
                 current_chain <- chains[i]
                 plots[[current_chain]] <- scRepertoire::clonalHomeostasis(
-                    data,
+                    input.data=filter_by_clonotype(data, clone_by, current_chain, min_frequency),
                     cloneCall=clone_by,
                     chain=current_chain,
-                    split.by=split_by
+                    group.by=group_by
                 ) +
                 ggplot2::xlab(x_label) +
                 ggplot2::ylab(y_label) +
                 ggplot2::guides(fill=ggplot2::guide_legend(legend_title), x=ggplot2::guide_axis(angle=45)) +
                 ggplot2::scale_fill_manual(values=palette_colors) +
+                ggplot2::ggtitle(current_chain) +
                 get_theme(theme)
-                if (current_chain != "both"){
-                    plots[[current_chain]] <- plots[[current_chain]] +
-                                              ggplot2::ggtitle(current_chain)
-                }
             }
             combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
-                              patchwork::plot_annotation(title=plot_title)
+                              patchwork::plot_annotation(
+                                  title=plot_title,
+                                  subtitle=plot_subtitle
+                              )
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(combined_plots))
@@ -193,38 +320,75 @@ clonotype_homeostasis_plot <- function(data, rootname, clone_by, chains, split_b
     )
 }
 
-clonotype_overlap_plot <- function(data, rootname, clone_by, chains, split_by, x_label, y_label, plot_title, method="morisita", color_limits=c(0, 1), gradient_colors=c("lightgrey", "blue"), na_color="white", combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+clonotype_overlap_plot <- function(data, rootname, clone_by, chains, group_by, x_label, y_label, plot_title, plot_subtitle=NULL, min_frequency=0, methods="morisita", gradient_colors=c("lightgrey", "blue"), na_color="white", combine_guides=NULL, ncol=NULL, nrow=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             plots <- list()
-            for (i in 1:length(chains)){                                  # should work fine even if chains is not a vector
-                current_chain <- chains[i]
-                plots[[current_chain]] <- scRepertoire::clonalOverlap(
-                    data,
-                    cloneCall=clone_by,
-                    method=method,
-                    chain=current_chain,
-                    split.by=split_by
-                ) +
-                ggplot2::xlab(x_label) +
-                ggplot2::ylab(y_label) +
-                ggplot2::guides(
-                    x=ggplot2::guide_axis(angle=45),
-                    y=ggplot2::guide_axis(angle=90)
-                ) +
-                ggplot2::scale_fill_gradientn(                            # we need to rescale all plots to the same limits otherwise legend is not combined
-                    colors=gradient_colors,
-                    limits=color_limits,
-                    na.value=na_color
-                ) +
-                get_theme(theme)
-                if (current_chain != "both"){
-                    plots[[current_chain]] <- plots[[current_chain]] +
-                                              ggplot2::ggtitle(current_chain)
+            start_from <- 1                                                                      # to have different colors for different methods
+            for (i in 1:length(methods)){
+                current_method <- methods[i]
+                current_range <- NA                                                              # should be independent for each method
+                for (j in 1:length(chains)){
+                    current_chain <- chains[j]
+                    current_plot <- base::paste(current_method, current_chain, sep="_")
+                    plots[[current_plot]] <- scRepertoire::clonalOverlap(
+                        input.data=filter_by_clonotype(data, clone_by, current_chain, min_frequency),
+                        cloneCall=clone_by,
+                        method=current_method,
+                        chain=current_chain,
+                        group.by=group_by
+                    ) +
+                    ggplot2::xlab(x_label) +
+                    ggplot2::ylab(y_label) +
+                    ggplot2::guides(
+                        x=ggplot2::guide_axis(angle=45),
+                        y=ggplot2::guide_axis(angle=90)
+                    ) +
+                    ggplot2::ggtitle(base::paste(current_chain)) +
+                    ggplot2::coord_fixed(ratio=1) +
+                    get_theme(theme)
+
+                    if (current_method == "raw"){                                                    # we want don't know the ranges only for raw
+                        current_range <- range(
+                            as.numeric(                                                              # doesn't fail with NA
+                                c(
+                                    current_range,                                                   # it's either NA in the first iteration or a vector with the previous min max
+                                    ggplot2::ggplot_build(plots[[current_plot]])$data[[3]]$label     # it's ok to take labels only for raw, because labels are rounded and raw are integers
+                                )
+                            ),
+                            na.rm=TRUE
+                        )
+                    } else if (current_method == "cosine") {
+                        current_range <- c(-1, 1)
+                    } else {
+                        current_range <- c(0, 1)
+                    }
+                }
+
+                if (length(gradient_colors) >= (2 * length(methods))){                               # check if we have enough colors (2 per method)
+                    current_colors <- gradient_colors[start_from:(start_from+1)]
+                    start_from <- start_from + 2
+                } else {
+                    current_colors <- gradient_colors                                                # apply the same colors for all methods
+                }
+
+                for (j in 1:length(chains)){                                                         # we need to rescale all plots to the same limits otherwise legend is not combined
+                    current_chain <- chains[j]
+                    current_plot <- base::paste(current_method, current_chain, sep="_")
+                    plots[[current_plot]] <- plots[[current_plot]] +
+                                             ggplot2::scale_fill_gradientn(
+                                                 colors=current_colors,
+                                                 limits=current_range,
+                                                 na.value=na_color
+                                             ) 
                 }
             }
-            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
-                              patchwork::plot_annotation(title=plot_title)
+
+            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol, nrow=nrow) +
+                              patchwork::plot_annotation(
+                                  title=plot_title,
+                                  subtitle=plot_subtitle
+                              )
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(combined_plots))
@@ -245,93 +409,119 @@ clonotype_overlap_plot <- function(data, rootname, clone_by, chains, split_by, x
     )
 }
 
-clonotype_network_plot <- function(data, reduction, rootname, clone_by, chains, group_by, legend_title, plot_title, fixed=TRUE, pt_size=1, alpha=1, palette_colors=D40_COLORS, combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+# clonotype_network_plot <- function(data, reduction, rootname, clone_by, chains, group_by, legend_title, plot_title, plot_subtitle=NULL, min_frequency=0, fixed=TRUE, pt_size=1, alpha=1, legend_position="bottom", palette_colors=D40_COLORS, combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+#     base::tryCatch(
+#         expr = {
+#             library("ggraph")                                             # need to include it as library, otherwise clonalNetwork fails
+#             groups <- base::sort(
+#                 base::unique(
+#                     base::as.vector(
+#                         as.character(data@meta.data[[group_by]])
+#                     )
+#                 )
+#             )
+#             plots <- list()
+#             for (i in 1:length(chains)){
+#                 current_chain <- chains[i]
+#                 current_data <- filter_by_clonotype(                       # may have different number of clonotypes depending on the selected clone_by and chain
+#                     data=data,
+#                     clone_by=clone_by,
+#                     chain=current_chain,
+#                     min_frequency=min_frequency
+#                 )
+
+#                 for (j in 1:length(groups)){
+#                     current_group <- groups[j]
+#                     current_plot <- base::paste(current_chain, current_group, sep="_")
+#                     plots[[current_plot]] <- scRepertoire::clonalNetwork(
+#                         sc.data=current_data,
+#                         reduction=reduction,
+#                         group.by=group_by,
+#                         cloneCall=clone_by,
+#                         filter.identity=current_group,
+#                         chain=current_chain
+#                     ) +
+#                     ggplot2::scale_color_manual(
+#                         values=palette_colors
+#                     ) +
+#                     ggplot2::guides(                                          # need to add new guides because they were completely removed in clonalNetwork
+#                         colour=ggplot2::guide_legend(
+#                             title=legend_title,
+#                             title.position="top",
+#                             direction="horizontal"
+#                         )
+#                     ) +
+#                     ggplot2::ggtitle(base::paste(current_chain, current_group)) +
+#                     get_theme(theme)
+
+#                     plots[[current_plot]]$layers[[1]]$aes_params$size <- pt_size      # we need to add at least some size, because alpha doesn't work without it
+#                     plots[[current_plot]]$layers[[1]]$aes_params$alpha <- alpha
+
+#                     if (!is.null(fixed) && fixed){
+#                         plots[[current_plot]] <- plots[[current_plot]] + ggplot2::coord_fixed(ratio=1)
+#                     }
+#                 }
+#             }
+#             combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
+#                               patchwork::plot_annotation(
+#                                   title=plot_title,
+#                                   subtitle=plot_subtitle,
+#                                   theme=ggplot2::theme(legend.position=legend_position)
+#                               )
+
+#             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+#             base::suppressMessages(base::print(combined_plots))
+#             grDevices::dev.off()
+
+#             if (!is.null(pdf) && pdf) {
+#                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+#                 base::suppressMessages(base::print(combined_plots))
+#                 grDevices::dev.off()
+#             }
+
+#             base::print(base::paste("Exporting clonotype network plot to ", rootname, ".(png/pdf)", sep=""))
+#         },
+#         error = function(e){
+#             base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+#             base::print(base::paste("Failed to export clonotype network plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+#         }
+#     )
+# }
+
+clonotype_diversity_plot <- function(data, rootname, clone_by, chains, group_by, x_label, y_label, legend_title, plot_title, plot_subtitle=NULL, split_by=NULL, min_frequency=0, palette_colors=D40_COLORS, combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
-            library("ggraph")                                             # need to include it as library, otherwise clonalNetwork fails
             plots <- list()
-            for (i in 1:length(chains)){                                  # should work fine even if chains is not a vector
-                current_chain <- chains[i]
-                plots[[current_chain]] <- scRepertoire::clonalNetwork(
-                    data,
-                    reduction=reduction,
-                    identity=group_by,
-                    cloneCall=clone_by,
-                    chain=current_chain
-                ) +
-                ggplot2::scale_color_manual(
-                    values=palette_colors
-                ) +
-                ggplot2::guides(                                          # need to add new guides because they were completely removed in clonalNetwork
-                    colour=ggplot2::guide_legend(
-                        title=legend_title,
-                        title.position="top",
-                        direction="horizontal"
-                    )
-                ) +
-                get_theme(theme)
-                if (current_chain != "both"){
-                    plots[[current_chain]] <- plots[[current_chain]] +
-                                              ggplot2::ggtitle(current_chain)
-                }
-                plots[[current_chain]]$layers[[1]]$aes_params$size <- pt_size      # we need to add at least some size, because alpha doesn't work without it
-                plots[[current_chain]]$layers[[1]]$aes_params$alpha <- alpha
-
-                if (!is.null(fixed) && fixed){
-                    plots[[current_chain]] <- plots[[current_chain]] + ggplot2::coord_fixed(ratio=1)
-                }
-
-            }
-            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
-                              patchwork::plot_annotation(title=plot_title)
-
-            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
-            base::suppressMessages(base::print(combined_plots))
-            grDevices::dev.off()
-
-            if (!is.null(pdf) && pdf) {
-                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
-                base::suppressMessages(base::print(combined_plots))
-                grDevices::dev.off()
-            }
-
-            base::print(base::paste("Exporting clonotype network plot to ", rootname, ".(png/pdf)", sep=""))
-        },
-        error = function(e){
-            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
-            base::print(base::paste("Failed to export clonotype network plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
-        }
-    )
-}
-
-clonotype_diversity_plot <- function(data, rootname, clone_by, chains, split_by, group_by, x_label, y_label, legend_title, plot_title, pt_size=1, alpha=1, palette_colors=D40_COLORS, combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
-    base::tryCatch(
-        expr = {
-            plots <- list()
-            for (i in 1:length(chains)){                                    # should work fine even if chains is not a vector
+            for (i in 1:length(chains)){
                 current_chain <- chains[i]
                 plots[[current_chain]] <- scRepertoire::clonalDiversity(
-                    data,
+                    input.data=filter_by_clonotype(data, clone_by, current_chain, min_frequency),
                     cloneCall=clone_by,
                     chain=current_chain,
                     group.by=group_by,
-                    x.axis=split_by,
-                    split.by="new.ident"                                    # doesn't influence anything, but may fail if not set to new.ident
+                    x.axis=split_by
                 ) +
                 ggplot2::xlab(x_label) +
                 ggplot2::ylab(y_label) +
-                ggplot2::guides(color=ggplot2::guide_legend(legend_title), x=ggplot2::guide_axis(angle=45)) +
-                ggplot2::scale_color_manual(values=palette_colors) +
+                ggplot2::guides(fill=ggplot2::guide_legend(legend_title), x=ggplot2::guide_axis(angle=45)) +
+                ggplot2::scale_fill_manual(values=palette_colors) +
+                ggplot2::ggtitle(current_chain) +
                 get_theme(theme)
-                if (current_chain != "both"){
+
+                if (is.null(split_by)){                                       # to have clean x axis if we don't split by anything
                     plots[[current_chain]] <- plots[[current_chain]] +
-                                              ggplot2::ggtitle(current_chain)
+                        ggplot2::theme(
+                            axis.text.x=ggplot2::element_blank(),
+                            axis.ticks.x=ggplot2::element_blank()
+                        )
                 }
-                plots[[current_chain]]$layers[[2]]$aes_params$size <- pt_size      # we need to add at least some size, because alpha doesn't work without it
-                plots[[current_chain]]$layers[[2]]$aes_params$alpha <- alpha
+
             }
             combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
-                              patchwork::plot_annotation(title=plot_title)
+                              patchwork::plot_annotation(
+                                  title=plot_title,
+                                  subtitle=plot_subtitle
+                              )
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(combined_plots))
@@ -352,34 +542,74 @@ clonotype_diversity_plot <- function(data, rootname, clone_by, chains, split_by,
     )
 }
 
-clonotype_feature_plot <- function(data, rootname, feature, chains, split_by, x_label, y_label, plot_title, order_by="variance", scale=TRUE, combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+clonotype_feature_plot <- function(data, rootname, clone_by, chains, group_by, x_label, y_label, plot_title, plot_subtitle=NULL, min_frequency=0, order_by="variance", scale=TRUE, combine_guides=NULL, ncol=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             plots <- list()
-            for (i in 1:length(chains)){                                    # should work fine even if chains is not a vector
+            genes_shown <- c()
+            for (i in 1:length(chains)){
                 current_chain <- chains[i]
-                plots[[current_chain]] <- scRepertoire::vizGenes(
-                    data,
-                    gene=feature,
+                chain_features <- switch(
+                    current_chain,
+                    "TRA" = c("TRAV", "TRAJ"),
+                    "TRB" = c("TRBV", "TRBD", "TRBJ"),
+                    "IGH" = c("IGHV", "IGHJ"),
+                    "IGL" = c("IGLV"),
+                    "both" = if("TRA" %in% data@misc$vdj$chains)           # we check for "both" in data, because chains input can be just a single value "both"
+                             c("TRAV", "TRAJ", "TRBV", "TRBD", "TRBJ")
+                             else c("IGHV", "IGHJ", "IGLV")
+                )
+                current_data <- filter_by_clonotype(                       # may have different number of clonotypes depending on the selected clone_by and chain
+                    data=data,
+                    clone_by=clone_by,
                     chain=current_chain,
-                    y.axis=split_by,
-                    split.by="new.ident",                            # doesn't influence anything, but may fail if not set to new.ident
-                    group.by=NULL,                                   # doesn't influence anything
-                    order=order_by,                                  # can be either "variance" or "gene"
-                    plot="bar",
-                    scale=scale
-                ) +
-                ggplot2::xlab(x_label) +
-                ggplot2::ylab(y_label) +
-                ggplot2::guides(x=ggplot2::guide_axis(angle=45)) +
-                get_theme(theme)
-                if (current_chain != "both"){
-                    plots[[current_chain]] <- plots[[current_chain]] +
-                                              ggplot2::ggtitle(current_chain)
+                    min_frequency=min_frequency
+                )
+                for (j in 1:length(chain_features)){
+                    current_feature <- chain_features[j]
+                    current_plot <- base::paste(current_chain, current_feature, sep="_")
+
+                    plots[[current_plot]] <- scRepertoire::vizGenes(
+                        input.data=current_data,
+                        x.axis=current_feature,
+                        y.axis=NULL,                                       # will be internally assigned to group_by parameter
+                        group.by=group_by,
+                        order=order_by,                                    # can be either "variance" or "gene"
+                        plot="barplot",
+                        scale=scale
+                    ) +
+                    ggplot2::xlab(x_label) +
+                    ggplot2::ylab(y_label) +
+                    ggplot2::guides(x=ggplot2::guide_axis(angle=45)) +
+                    ggplot2::ggtitle(
+                        base::paste0(current_chain, " (", current_feature, ")")
+                    ) +
+                    get_theme(theme)
+
+                    if (!is.null(scale) && scale){
+                        plots[[current_plot]] <- plots[[current_plot]] +    # to have the same scale if we are showing proportion 
+                                                 ggplot2::ylim(c(0, 1))
+                    }
+
+                    genes_shown <- c(
+                        genes_shown,
+                        length(
+                            ggplot2::ggplot_build(plots[[current_plot]])$layout$panel_params[[1]]$x$get_labels()
+                        )
+                    )
                 }
             }
-            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
-                              patchwork::plot_annotation(title=plot_title)
+
+            combined_plots <- patchwork::wrap_plots(
+                                  plots,
+                                  guides=combine_guides,
+                                  ncol=ncol,
+                                  widths=genes_shown[1:ncol]                # safe even when ncol is bigger than length of genes_shown
+                              ) +
+                              patchwork::plot_annotation(
+                                  title=plot_title,
+                                  subtitle=plot_subtitle
+                              )
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(combined_plots))
@@ -400,12 +630,12 @@ clonotype_feature_plot <- function(data, rootname, feature, chains, split_by, x_
     )
 }
 
-clonotype_chord_plot <- function(data, rootname, clone_by, group_by, plot_title, proportion=TRUE, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=800, height=800, resolution=100){
+clonotype_chord_plot <- function(data, rootname, clone_by, group_by, plot_title, proportion=TRUE, min_frequency=0, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=800, height=800, resolution=100){
     base::tryCatch(
         expr = {
 
             chord_data <- scRepertoire::getCirclize(
-                sc=data,
+                sc=filter_by_clonotype(data, clone_by, "both", min_frequency),   # getCirclize doesn't support chain selection, so we use both here
                 cloneCall=clone_by,
                 group.by=group_by,
                 proportion=proportion
@@ -1830,7 +2060,7 @@ expression_density_plot <- function(data, features, rootname, reduction, plot_ti
 }
 
 
-feature_plot <- function(data, features, labels, rootname, reduction, plot_title, plot_subtitle=NULL, legend_title=NULL, from_meta=FALSE, split_by=NULL, label=FALSE, label_color="black", label_size=4, order=FALSE, color_limits=NULL, color_scales=NULL, gradient_colors=c("lightgrey", "blue"), min_cutoff=NA, max_cutoff=NA, pt_size=NULL, combine_guides=NULL, fixed=TRUE, alpha=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+feature_plot <- function(data, features, labels, rootname, reduction, plot_title, plot_subtitle=NULL, legend_title=NULL, from_meta=FALSE, split_by=NULL, label=FALSE, label_color="black", label_size=4, order=FALSE, color_limits=NULL, color_breaks=NULL, color_scales=NULL, gradient_colors=c("lightgrey", "blue"), min_cutoff=NA, max_cutoff=NA, pt_size=NULL, ncol=NULL, combine_guides=NULL, fixed=TRUE, alpha=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
 
@@ -1917,12 +2147,18 @@ feature_plot <- function(data, features, labels, rootname, reduction, plot_title
                                   ggplot2::scale_colour_gradientn(
                                       colors=gradient_colors,                  # colors can be redefined only when color_limits and color_scales are set
                                       values=scales::rescale(color_scales),
-                                      limits=color_limits
+                                      na.value="lightgrey",
+                                      limits=color_limits,
+                                      breaks=if(!is.null(color_breaks)) color_breaks else ggplot2::waiver()
                                   )
                 }
                 return (plots[[i]])
             })
-            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides) + patchwork::plot_annotation(title=plot_title, subtitle=plot_subtitle)
+            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
+                              patchwork::plot_annotation(
+                                  title=plot_title,
+                                  subtitle=plot_subtitle
+                              )
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(combined_plots))

@@ -2,15 +2,15 @@
 # Dockerfile
 #
 # Software:         set of R scripts for single-cell data analysis
-# Software Version: v0.0.36
+# Software Version: v0.0.37
 # Description:      Dockerized version of the set of R scripts for
 #                   single-cell data analysis
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         set of R scripts for single-cell data analysis
 # Base Image:       satijalab/seurat:latest
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.36 -f sc-tools-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.36
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.36 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.37 -f sc-tools-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.37
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.37 /bin/bash
 ##########################################################################################################
 #
 # Notes:
@@ -34,6 +34,16 @@
 #     sc_ctype_assign.R --help && \
 #     sc_triangulate.R --help && \
 #     sc_vdj_profile.R --help 
+#
+# v0.0.37 -- based on biowardrobe2/sc-tools:v0.0.36
+# - Updated sc_vdj_profile.R (uses scRepertoire v2.0.0)
+# - load_cell_identity_data now support default identity
+# - assign_identities now assigns donor if it wasn't present
+# - --identity parameters is now optional in sc_atac_filter.R,
+#   sc_multiome_filter.R, and sc_rna_filter.R scripts
+# - Updated UCSC CellBrowser version to 1.2.5 (need to rename
+#   the file chosen-sprite@2x.png, because it can't be
+#   returned by cwltool as output)
 #
 # v0.0.36 -- based on biowardrobe2/sc-tools:v0.0.35
 # - Export RNA counts data to Loupe file (loupeR v1.1.0)
@@ -283,7 +293,7 @@ ENV DEBIAN_FRONTEND noninteractive
 WORKDIR /tmp
 
 ENV R_MAX_VSIZE=200000000000
-ENV CB_VERSION "1.1.1"
+ENV CB_VERSION "1.2.5"
 ENV MACS2_URL "https://github.com/macs3-project/MACS.git"
 ENV MACS2_VERSION "2.2.8"
 ENV SCTRIANGULATE_VERSION "0.12.0"
@@ -317,6 +327,10 @@ RUN apt-get update && \
     pip3 install scipy==${SCIPY_VERSION} && \
     pip3 install anndata && \
     pip3 install cellbrowser==${CB_VERSION} && \
+    cd /usr/local/lib/python3.8/dist-packages/cellbrowser/cbWeb/ext && \
+    mv chosen-sprite@2x.png chosen-sprite_2x.png && \
+    sed -i 's/chosen-sprite@2x.png/chosen-sprite_2x.png/g' chosen.1.8.2.min.css && \
+    cd - && \
     pip3 install -U numba && \
     pip3 install MAnorm2-utils && \
     git clone --depth 1 --branch v${MACS2_VERSION} ${MACS2_URL} && \
@@ -345,7 +359,7 @@ RUN apt-get update && \
     R -e 'devtools::install_github("aertslab/SCopeLoomR", upgrade = "never")' && \
     R -e 'devtools::install_github("dynverse/dynfeature", upgrade = "never")' && \
     R -e 'devtools::install_github("dynverse/dynplot", upgrade = "never")' && \
-    R -e 'devtools::install_github("ncborcherding/scRepertoire@v1", upgrade = "never")' && \
+    R -e 'devtools::install_github("ncborcherding/scRepertoire@v2.0.0", upgrade = "never")' && \
     R -e 'install.packages("LambertW")' && \
     R -e 'install.packages("nortest")' && \
     R -e 'install.packages("doParallel")' && \

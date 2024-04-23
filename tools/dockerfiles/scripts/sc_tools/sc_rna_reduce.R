@@ -550,13 +550,11 @@ get_args <- function(){
         type="integer", default=42
     )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    print(args)
     return (args)
 }
 
 args <- get_args()
-
-print("Input parameters")
-print(args)
 
 if (args$dimensions != 0){                       # we extend it to array only when we don't want to auto-estimate it
     print("Adjusting --dimensions parameter")
@@ -564,12 +562,6 @@ if (args$dimensions != 0){                       # we extend it to array only wh
     print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
 }
 
-print(
-    paste(
-        "Setting parallelization to", args$cpus, "cores, and", args$memory,
-        "GB of memory allowed to be shared between the processes"
-    )
-)
 prod$parallel(args)
 
 print(paste("Loading Seurat data from", args$query))
@@ -633,7 +625,7 @@ print("Quantifying QC metrics")
 seurat_data <- qc$quartile_qc_metrics(
     seurat_data=seurat_data,
     features=c("nCount_RNA", "nFeature_RNA", "mito_percentage"),
-    prefix="quartile"                                                     # we will use this prefix in ucsc$export_cellbrowser function
+    prefix="quartile"                                                     # we use this prefix in DEFAULT_META_FIELDS from ucsc.R
 )
 debug$print_info(seurat_data, args)
 

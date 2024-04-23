@@ -331,13 +331,11 @@ get_args <- function(){
     parser$add_argument(
         "--identity",
         help=paste(
-            "Path to the metadata TSV/CSV file to set the datasets identities. If --mex points",
-            "to the Cell Ranger Aggregate (ATAC) or Cell Ranger Aggregate (RNA+ATAC) outputs,",
-            "the aggr.csv file can be used. If Cell Ranger Count (ATAC) or Cell Ranger Count",
-            "(RNA+ATAC) outputs have been used in the --mex input, the file should include at",
-            "least one column - library_id and one row with the alias for that experiment."
+            "Path to the metadata TSV/CSV file to set the datasets identities, if --mex points",
+            "to the Cell Ranger Aggregate (ATAC) or Cell Ranger Aggregate (RNA+ATAC) outputs.",
+            "The aggr.csv file can be used."
         ),
-        type="character", required="True"
+        type="character"
     )
     parser$add_argument(
         "--fragments",
@@ -561,21 +559,12 @@ get_args <- function(){
         type="integer", default=42
     )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    print(args)
     return (args)
 }
 
 
 args <- get_args()
-
-print("Input parameters")
-print(args)
-
-print(
-    paste(
-        "Setting parallelization to", args$cpus, "cores, and", args$memory,
-        "GB of memory allowed to be shared between the processes"
-    )
-)
 prod$parallel(args)
 
 print(paste("Loading datasets identities from", args$identity))

@@ -266,12 +266,12 @@ get_args <- function(){
         type="integer", default=42
     )
     args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    print(args)
     return (args)
 }
 
 args <- get_args()
-print("Input parameters")
-print(args)
+
 print("Adjusting --dimensions parameter")
 args$dimensions <- c(1:args$dimensions)
 print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
@@ -280,12 +280,6 @@ if(!is.null(args$ranges)){
     args$ranges <- sort(args$ranges, decreasing=TRUE)   # for consistency with other parts of the program
 }
 
-print(
-    paste(
-        "Setting parallelization to", args$cpus, "cores, and", args$memory,
-        "GB of memory allowed to be shared between the processes"
-    )
-)
 prod$parallel(args)
 
 print(paste("Loading Seurat data from", args$query))

@@ -8,6 +8,10 @@ export(
 
 print_info <- function(seurat_data, args) {
     if (!is.null(args$verbose) && args$verbose){
+        base::print("Datasets")
+        base::print(base::unique(base::as.vector(as.character(seurat_data@meta.data$new.ident))))
+        base::print("Conditions")
+        base::print(base::unique(base::as.vector(as.character(seurat_data@meta.data$condition))))
         base::print("Assays")
         base::print(seurat_data@assays)
         base::print("Reductions")
