@@ -71,14 +71,22 @@ export(
     "trajectory_heatmap",
     "expand_qc_suffix",
     "D40_COLORS",
+    "D24_COLORS",
     "CC_COLORS"
 )
 
 # https://sashamaps.net/docs/resources/20-colors/
 # https://cran.r-project.org/web/packages/Polychrome/vignettes/testgg.html
-# D40_COLORS <- c("#FB1C0D", "#0DE400", "#0D00FF", "#E8B4BD", "#FD00EA", "#0DD1FE", "#FF9B0D", "#0D601C", "#C50D69", "#CACA16", "#722A91", "#00DEBF", "#863B00", "#5D7C91", "#FD84D8", "#C100FB", "#8499FC", "#FD6658", "#83D87A", "#968549", "#DEB6FB", "#832E60", "#A8CAB0", "#FE8F95", "#FE1CBB", "#DF7CF8", "#FF0078", "#F9B781", "#4D493B", "#1C5198", "#7C32CE", "#EFBC16", "#7CD2DE", "#B30DA7", "#9FC0F6", "#7A940D", "#9B0000", "#946D9B", "#C8C2D9", "#94605A")
-D40_COLORS <- c("#00D8B6", "#71E869", "#6574FF", "#F3A6B5", "#FF5AD6", "#6DDCFE", "#FFBB70", "#43A14E", "#D71C7C", "#E1E333", "#8139A8", "#FF6E6A", "#B55C00", "#7FA4B6", "#FFA4E3", "#B300FF", "#9BC4FD", "#FF7E6A", "#9DE98D", "#BFA178", "#E7C2FD", "#8B437D", "#ADCDC0", "#FE9FA4", "#FF53D1", "#D993F9", "#FF47A1", "#FFC171", "#625C51", "#4288C9", "#9767D4", "#F2D61D", "#8EE6FD", "#B940B1", "#B2D5F8", "#9AB317", "#C70000", "#AC8BAC", "#D7D1E4", "#9D8D87")
-CC_COLORS <- c("#80FFB5", "#FFB580", "#8093FF")
+D40_COLORS <- c("#FB1C0D", "#0DE400", "#0D00FF", "#E8B4BD", "#FD00EA", "#0DD1FE", "#FF9B0D", "#0D601C", "#C50D69", "#CACA16", "#722A91", "#00DEBF", "#863B00", "#5D7C91", "#FD84D8", "#C100FB", "#8499FC", "#FD6658", "#83D87A", "#968549", "#DEB6FB", "#832E60", "#A8CAB0", "#FE8F95", "#FE1CBB", "#DF7CF8", "#FF0078", "#F9B781", "#4D493B", "#1C5198", "#7C32CE", "#EFBC16", "#7CD2DE", "#B30DA7", "#9FC0F6", "#7A940D", "#9B0000", "#946D9B", "#C8C2D9", "#94605A")
+# D40_COLORS <- c("#00D8B6", "#71E869", "#6574FF", "#F3A6B5", "#FF5AD6", "#6DDCFE", "#FFBB70", "#43A14E", "#D71C7C", "#E1E333", "#8139A8", "#FF6E6A", "#B55C00", "#7FA4B6", "#FFA4E3", "#B300FF", "#9BC4FD", "#FF7E6A", "#9DE98D", "#BFA178", "#E7C2FD", "#8B437D", "#ADCDC0", "#FE9FA4", "#FF53D1", "#D993F9", "#FF47A1", "#FFC171", "#625C51", "#4288C9", "#9767D4", "#F2D61D", "#8EE6FD", "#B940B1", "#B2D5F8", "#9AB317", "#C70000", "#AC8BAC", "#D7D1E4", "#9D8D87")
+D24_COLORS <- c(
+  "#4E79A7", "#F28E2C", "#4EAE4B", "#D95F02", "#7570B3",
+  "#E7298A", "#66A61E", "#E6AB02", "#A6761D", "#1B9E77",
+  "#D95F02", "#7570B3", "#E7298A", "#66A61E", "#E6AB02",
+  "#A6761D", "#1B9E77", "#D95F02", "#7570B3", "#E7298A",
+  "#66A61E", "#E6AB02", "#A6761D", "#1B9E77"
+)
+CC_COLORS <- c("#FB1C0D", "#0DE400", "#0D00FF")
 
 get_theme <- function(theme){
     return (
@@ -848,15 +856,21 @@ geom_density_plot <- function(data, rootname, x_axis, group_by, split_by, x_labe
     )
 }
 
-geom_point_plot <- function(data, rootname, x_axis, y_axis, split_by, x_left_intercept, y_low_intercept, color_by, gradient_colors, color_limits, color_break, x_label, y_label, legend_title, plot_title, plot_subtitle=NULL, highlight_rows=NULL, highlight_color="black", highlight_shape=4, y_high_intercept=NULL, scale_x_log10=FALSE, scale_y_log10=FALSE, show_lm=FALSE, show_density=FALSE, alpha=0.2, alpha_intercept=0.5, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+geom_point_plot <- function(data, rootname, x_axis, y_axis, split_by, color_by, gradient_colors, color_limits, color_break, x_label, y_label, legend_title, plot_title, plot_subtitle=NULL, x_left_intercept=NULL, y_low_intercept=NULL, y_high_intercept=NULL, highlight_rows=NULL, highlight_color="black", highlight_shape=4, scale_x_log10=FALSE, scale_y_log10=FALSE, show_lm=FALSE, show_density=FALSE, alpha=0.2, alpha_intercept=0.5, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             intercept_data <- data %>%
                               dplyr::select(tidyselect::all_of(split_by)) %>%
                               dplyr::distinct() %>%
                               dplyr::arrange(dplyr::across(tidyselect::all_of(split_by))) %>%
-                              tibble::add_column(color=palette_colors[1:base::nrow(.)], x_left=x_left_intercept, y_low=y_low_intercept)
+                              tibble::add_column(color=palette_colors[1:base::nrow(.)])
 
+            if (!is.null(x_left_intercept)){
+                intercept_data <- intercept_data %>% tibble::add_column(x_left=x_left_intercept)
+            }
+            if (!is.null(y_low_intercept)){
+                intercept_data <- intercept_data %>% tibble::add_column(y_low=y_low_intercept)
+            }
             if (!is.null(y_high_intercept)){
                 intercept_data <- intercept_data %>% tibble::add_column(y_high=y_high_intercept)
             }
@@ -874,18 +888,6 @@ geom_point_plot <- function(data, rootname, x_axis, y_axis, split_by, x_left_int
                     ggplot2::guides(color=ggplot2::guide_colourbar(legend_title)) +
                     ggplot2::ggtitle(plot_title, subtitle=plot_subtitle) +
                     ggplot2::facet_wrap(stats::as.formula(base::paste("~", split_by))) +
-                    ggplot2::geom_vline(intercept_data, mapping=ggplot2::aes(xintercept=x_left), color=intercept_data$color, alpha=alpha_intercept) +
-                    ggplot2::geom_hline(intercept_data, mapping=ggplot2::aes(yintercept=y_low), color=intercept_data$color, alpha=alpha_intercept) +
-                    ggrepel::geom_label_repel(
-                        intercept_data, mapping=ggplot2::aes(x=x_left, y=Inf, label=x_left),
-                        color="black", fill=intercept_data$color, alpha=alpha_intercept, direction="y", size=3,
-                        show.legend=FALSE
-                    ) +
-                    ggrepel::geom_label_repel(
-                        intercept_data, mapping=ggplot2::aes(x=Inf, y=y_low, label=y_low),
-                        color="black", fill=intercept_data$color, alpha=alpha_intercept, direction="x", size=3,
-                        show.legend=FALSE
-                    ) +
                     get_theme(theme)
 
             if (show_lm){ plot <- plot + ggplot2::stat_smooth(method=stats::lm) }
@@ -899,6 +901,24 @@ geom_point_plot <- function(data, rootname, x_axis, y_axis, split_by, x_left_int
                 )
             }
 
+            if (!is.null(x_left_intercept)){
+                plot <- plot +
+                        ggplot2::geom_vline(intercept_data, mapping=ggplot2::aes(xintercept=x_left), color=intercept_data$color, alpha=alpha_intercept) +
+                        ggrepel::geom_label_repel(
+                            intercept_data, mapping=ggplot2::aes(x=x_left, y=Inf, label=x_left),
+                            color="black", fill=intercept_data$color, alpha=alpha_intercept, direction="y", size=3,
+                            show.legend=FALSE
+                        )
+            }
+            if (!is.null(y_low_intercept)){
+                plot <- plot +
+                        ggplot2::geom_hline(intercept_data, mapping=ggplot2::aes(yintercept=y_low), color=intercept_data$color, alpha=alpha_intercept) +
+                        ggrepel::geom_label_repel(
+                            intercept_data, mapping=ggplot2::aes(x=Inf, y=y_low, label=y_low),
+                            color="black", fill=intercept_data$color, alpha=alpha_intercept, direction="x", size=3,
+                            show.legend=FALSE
+                        )
+            }
             if (!is.null(y_high_intercept)){
                 plot <- plot +
                         ggplot2::geom_hline(intercept_data, mapping=ggplot2::aes(yintercept=y_high), color=intercept_data$color, alpha=alpha_intercept) +
@@ -982,19 +1002,25 @@ feature_scatter_plot <- function(data, rootname, x_axis, y_axis, x_label, y_labe
     )
 }
 
-vln_plot <- function(data, features, labels, rootname, plot_title, legend_title, plot_subtitle=NULL, from_meta=FALSE, log=FALSE, group_by=NULL, split_by=NULL, ncol=NULL, show_stats=FALSE, hide_x_text=FALSE, pt_size=NULL, palette_colors=NULL, combine_guides=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+vln_plot <- function(data, features, labels, rootname, plot_title, legend_title, plot_subtitle=NULL, from_meta=FALSE, scale_y_log10=FALSE, group_by=NULL, split_by=NULL, ncol=NULL, show_stats=FALSE, hide_x_text=FALSE, pt_size=NULL, palette_colors=NULL, combine_guides=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
 
             features_corrected <- features
             labels_corrected <- labels
+            if (length(scale_y_log10) == 1){
+                scale_y_log10 <- rep(scale_y_log10, length(features_corrected))
+            }
+            scale_y_log10_corrected <- scale_y_log10
             if (from_meta){
                 features_corrected <- c()
                 labels_corrected <- c()
+                scale_y_log10_corrected <- c()
                 for (i in 1:length(features)){
                     if (features[i] %in% base::colnames(data@meta.data)){
                         features_corrected <- c(features_corrected, features[i])
                         labels_corrected <- c(labels_corrected, labels[i])
+                        scale_y_log10_corrected <- c(scale_y_log10_corrected, scale_y_log10[i])
                     } else {
                         base::print(
                             base::paste(
@@ -1012,7 +1038,7 @@ vln_plot <- function(data, features, labels, rootname, plot_title, legend_title,
                          pt.size=pt_size,
                          group.by=group_by,
                          split.by=split_by,
-                         log=log,
+                         log=FALSE,          # we will scale it later with scale_y_log10 if needed
                          combine=FALSE       # to return a list of gglots
                      )
             plots <- base::lapply(seq_along(plots), function(i){
@@ -1035,6 +1061,12 @@ vln_plot <- function(data, features, labels, rootname, plot_title, legend_title,
                                       color="darkblue"
                                   )
                 }
+
+                if (scale_y_log10_corrected[i]){
+                    plots[[i]] <- plots[[i]] +
+                                  ggplot2::scale_y_log10() + ggplot2::annotation_logticks(sides="l", alpha=0.3)
+                }
+
                 if (!is.null(palette_colors)){ plots[[i]] <- plots[[i]] + ggplot2::scale_fill_manual(values=palette_colors) }
                 if (hide_x_text){ plots[[i]] <- plots[[i]] + ggplot2::theme(axis.text.x=ggplot2::element_blank()) }
                 return (plots[[i]])

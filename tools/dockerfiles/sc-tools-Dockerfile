@@ -44,6 +44,7 @@
 # - Updated UCSC CellBrowser version to 1.2.5 (need to rename
 #   the file chosen-sprite@2x.png, because it can't be
 #   returned by cwltool as output)
+# - Added QC-plots for all cluestering pipelines
 #
 # v0.0.36 -- based on biowardrobe2/sc-tools:v0.0.35
 # - Export RNA counts data to Loupe file (loupeR v1.1.0)

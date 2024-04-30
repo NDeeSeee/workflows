@@ -5,6 +5,7 @@ import("Seurat", attach=FALSE)
 import("Signac", attach=FALSE)
 import("tibble", attach=FALSE)
 import("sceasy", attach=FALSE)
+import("forcats", attach=FALSE)
 import("SeuratDisk", attach=FALSE)
 import("SCopeLoomR", attach=FALSE)
 import("rtracklayer", attach=FALSE)
@@ -437,8 +438,10 @@ extend_metadata <- function(seurat_data, location, seurat_ref_column, meta_ref_c
         current_meta_source_column <- meta_source_columns[i]
         current_seurat_target_column <- seurat_target_columns[i]
         base::print(base::paste("Adding", current_meta_source_column, "as", current_seurat_target_column, "column"))
-        seurat_data[[current_seurat_target_column]] <- base::as.factor(                                  # need as.factor, otherwise the order on the plots might be mismatched
-            metadata[[current_meta_source_column]][base::match(seurat_ref_values, meta_ref_values)]
+        seurat_data[[current_seurat_target_column]] <- forcats::fct_infreq(                             # a factor ordered by frequency
+            base::as.factor(
+                metadata[[current_meta_source_column]][base::match(seurat_ref_values, meta_ref_values)]
+            )
         )
     }
     base::rm(metadata, seurat_ref_values, meta_ref_values)
@@ -446,21 +449,64 @@ extend_metadata <- function(seurat_data, location, seurat_ref_column, meta_ref_c
 }
 
 refine_metadata_levels <- function(seurat_data){
-    for (i in base::colnames(seurat_data@meta.data)){
-        if (base::is.factor(seurat_data@meta.data[[i]])){
-            base::print(base::paste("Re-evaluating levels for a factor column", i))
+    for (current_column in base::colnames(seurat_data@meta.data)){
+        if (base::is.factor(seurat_data@meta.data[[current_column]])){
+            base::print(base::paste("Re-evaluating levels for a factor column", current_column))
             base::print(
                 base::paste(
-                    "before:", base::paste(base::levels(seurat_data@meta.data[[i]]), collapse=", ")
+                    "before:", base::paste(base::levels(seurat_data@meta.data[[current_column]]), collapse=", ")
                 )
             )
-            seurat_data@meta.data[[i]] <- base::droplevels(seurat_data@meta.data[[i]])  # need to drop levels of the removed values
+            seurat_data@meta.data[[current_column]] <- base::droplevels(seurat_data@meta.data[[current_column]])  # need to drop levels of the removed values
             base::print(
                 base::paste(
-                    "after:", base::paste(base::levels(seurat_data@meta.data[[i]]), collapse=", ")
+                    "after:", base::paste(base::levels(seurat_data@meta.data[[current_column]]), collapse=", ")
                 )
             )
         }
+    }
+
+    clustering_columns <- base::grep(                                            # should select only clustering columns
+        "^rna_res\\.|^atac_res\\.|^wsnn_res\\.",
+        base::colnames(seurat_data@meta.data),
+        value=TRUE,
+        ignore.case=TRUE
+    )
+    for (current_column in clustering_columns){                                  # can be either factor or vector
+        base::tryCatch(
+            expr = {
+                base::print(
+                    base::paste(
+                        "Forcing", current_column, "clustering column",
+                        "to be a factor with numerically sorted levels"
+                    )
+                )
+                current_data <- as.numeric(
+                    base::as.vector(                                             # in case we are working with factor, we need to take values, not levels
+                        as.character(seurat_data@meta.data[[current_column]])
+                    )
+                )
+                if(any(is.na(current_data))){                                    # safety measure to stop when converted non-numerical values
+                    base::stop("Failed to convert to numeric")
+                }
+                seurat_data@meta.data[[current_column]] <- base::factor(
+                    seurat_data@meta.data[[current_column]],
+                    levels=as.character(                                         # need to be a character, otherwise it's not shown as categorical value on plots
+                        base::sort(
+                            base::unique(current_data)
+                        )
+                    )
+                )
+            },
+            error = function(e){
+                base::print(
+                    base::paste(
+                        "Failed to reorder", current_column,
+                        "clustering column with error -", e
+                    )
+                )
+            }
+        )
     }
     return (seurat_data)
 }

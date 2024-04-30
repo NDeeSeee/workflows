@@ -19,6 +19,106 @@ suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
 
+export_all_qc_plots <- function(seurat_data, args){
+
+    for (i in 1:length(args$resolution)){
+        current_resolution <- args$resolution[i]
+        current_cluster_column <- paste("atac_res", current_resolution, sep=".")
+        Idents(seurat_data) <- current_cluster_column                                # othervise it will be split by dataset in vln_plot
+
+        graphics$geom_bar_plot(
+            data=seurat_data@meta.data,
+            x_axis=current_cluster_column,
+            color_by=current_cluster_column,
+            x_label="Cluster",
+            y_label="Cells",
+            legend_title="Cluster",
+            plot_title="Number of cells per cluster",
+            plot_subtitle=paste(
+                "All cells;",
+                "resolution", current_resolution
+            ),
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "cell_cnts_gr_clst_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+
+        graphics$geom_point_plot(
+            data=seurat_data@meta.data,
+            x_axis="nCount_ATAC",
+            y_axis="TSS.enrichment",
+            split_by=current_cluster_column,
+            color_by="frip",
+            highlight_rows=which(seurat_data@meta.data$atac_doublets == "doublet"),
+            gradient_colors=c("orange", "lightslateblue", "lightslateblue"),
+            color_limits=c(0, 1),
+            color_break=min(seurat_data@meta.data$frip),
+            x_label="ATAC fragments in peaks per cell",
+            y_label="TSS enrichment score",
+            legend_title="FRiP",
+            plot_title="TSS enrichment score vs ATAC fragments in peaks per cell",
+            plot_subtitle=paste(
+                "Split by cluster;",
+                "all cells;",
+                "resolution", current_resolution
+            ),
+            scale_x_log10=TRUE,
+            scale_y_log10=FALSE,
+            show_density=TRUE,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "tss_frgm_spl_clst_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+
+        if (nrow(seurat_data@meta.data[seurat_data@meta.data$atac_doublets == "doublet", ]) > 0){
+            graphics$composition_plot(
+                data=seurat_data,
+                plot_title="Percentage of ATAC doublets per cluster",
+                plot_subtitle=paste(
+                    "All cells;",
+                    "resolution", current_resolution
+                ),
+                legend_title="Cluster",
+                group_by="atac_doublets",
+                split_by=current_cluster_column,
+                x_label="Cluster",
+                y_label="Cell percentage",
+                palette_colors=c("#00DCDC", "#0BFFFF"),
+                theme=args$theme,
+                rootname=paste(args$output, "atacdbl_gr_clst_res", current_resolution, sep="_"),
+                pdf=args$pdf
+            )
+        }
+
+        graphics$vln_plot(
+            data=seurat_data,
+            features=c("nCount_ATAC", "nFeature_ATAC", "nucleosome_signal", "TSS.enrichment", "frip", "blacklist_fraction"),
+            labels=c("ATAC fragments in peaks", "Peaks", "Nucl. signal", "TSS enrichment score", "FRiP", "Bl. regions"),
+            scale_y_log10=c(TRUE, TRUE, FALSE, FALSE, FALSE, FALSE),
+            from_meta=TRUE,
+            show_stats=TRUE,
+            plot_title="Distribution of QC metrics per cell colored by cluster",
+            plot_subtitle=paste(
+                "All cells;",
+                "resolution", current_resolution
+            ),
+            legend_title="Cluster",
+            pt_size=0,
+            combine_guides="collect",
+            ncol=1,
+            height=1600,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "qc_mtrcs_dnst_gr_clst_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+
+    }
+}
+
+
 export_all_clustering_plots <- function(seurat_data, args){
     Idents(seurat_data) <- "new.ident"                                                               # safety measure
     datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
@@ -495,7 +595,15 @@ seurat_data <- analyses$add_clusters(
 )
 debug$print_info(seurat_data, args)
 
-export_all_clustering_plots(seurat_data=seurat_data, args=args)
+export_all_qc_plots(
+    seurat_data=seurat_data,
+    args=args
+)
+
+export_all_clustering_plots(
+    seurat_data=seurat_data,
+    args=args
+)
 
 if (!is.null(args$genes)){
     print("Adjusting genes of interest to include only those that are present in the loaded Seurat object")

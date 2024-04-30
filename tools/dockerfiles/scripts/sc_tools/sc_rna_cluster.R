@@ -20,6 +20,131 @@ suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
 
+export_all_qc_plots <- function(seurat_data, args){
+
+    for (i in 1:length(args$resolution)){
+        current_resolution <- args$resolution[i]
+        current_cluster_column <- paste("rna_res", current_resolution, sep=".")
+        Idents(seurat_data) <- current_cluster_column            # othervise it will be split by dataset in vln_plot
+
+        graphics$geom_bar_plot(
+            data=seurat_data@meta.data,
+            x_axis=current_cluster_column,
+            color_by=current_cluster_column,
+            x_label="Cluster",
+            y_label="Cells",
+            legend_title="Cluster",
+            plot_title="Number of cells per cluster",
+            plot_subtitle=paste(
+                "All cells;",
+                "resolution", current_resolution
+            ),
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "cell_cnts_gr_clst_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+
+        graphics$geom_point_plot(
+            data=seurat_data@meta.data,
+            x_axis="nCount_RNA",
+            y_axis="nFeature_RNA",
+            split_by=current_cluster_column,
+            color_by="mito_percentage",
+            highlight_rows=which(seurat_data@meta.data$rna_doublets == "doublet"),
+            gradient_colors=c("lightslateblue", "orange", "red"),                       # to have the same scale, even if only blue values are present
+            color_limits=c(0, 100),
+            color_break=ceiling(max(seurat_data@meta.data$mito_percentage)),            # we take the round max, because data is already filtered
+            x_label="RNA reads per cell",
+            y_label="Genes per cell",
+            legend_title="Mitochondrial %",
+            plot_title="Genes vs RNA reads per cell",
+            plot_subtitle=paste(
+                "Split by cluster;",
+                "all cells;",
+                "resolution", current_resolution
+            ),
+            scale_x_log10=TRUE,
+            scale_y_log10=TRUE,
+            show_lm=TRUE,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "gene_umi_spl_clst_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+
+        graphics$geom_point_plot(
+            data=seurat_data@meta.data,
+            x_axis="mito_percentage",
+            y_axis="nCount_RNA",
+            split_by=current_cluster_column,
+            color_by="mito_percentage",
+            highlight_rows=which(seurat_data@meta.data$rna_doublets == "doublet"),
+            gradient_colors=c("lightslateblue", "orange", "red"),
+            color_limits=c(0, 100),
+            color_break=ceiling(max(seurat_data@meta.data$mito_percentage)),            # we take the round max, because data is already filtered
+            x_label="Mitochondrial %",
+            y_label="RNA reads per cell",
+            legend_title="Mitochondrial %",
+            plot_title="RNA reads vs mitochondrial % per cell",
+            plot_subtitle=paste(
+                "Split by cluster;",
+                "all cells;",
+                "resolution", current_resolution
+            ),
+            scale_x_log10=TRUE,
+            scale_y_log10=TRUE,
+            show_lm=FALSE,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "umi_mito_spl_clst_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+
+        if (nrow(seurat_data@meta.data[seurat_data@meta.data$rna_doublets == "doublet", ]) > 0){      # show plot only if we still have doublets
+            graphics$composition_plot(
+                data=seurat_data,
+                plot_title="Percentage of RNA doublets per cluster",
+                plot_subtitle=paste(
+                    "All cells;",
+                    "resolution", current_resolution
+                ),
+                legend_title="Cluster",
+                group_by="rna_doublets",
+                split_by=current_cluster_column,
+                x_label="Cluster",
+                y_label="Cell percentage",
+                palette_colors=c("#00AEAE", "#0BFFFF"),
+                theme=args$theme,
+                rootname=paste(args$output, "rnadbl_gr_clst_res", current_resolution, sep="_"),
+                pdf=args$pdf
+            )
+        }
+
+        graphics$vln_plot(
+            data=seurat_data,
+            features=c("nCount_RNA", "nFeature_RNA", "mito_percentage"),
+            labels=c("RNA reads", "Genes", "Mitochondrial %"),
+            scale_y_log10=c(TRUE, TRUE, FALSE),
+            from_meta=TRUE,
+            show_stats=TRUE,
+            plot_title="Distribution of QC metrics per cell colored by cluster",
+            plot_subtitle=paste(
+                "All cells;",
+                "resolution", current_resolution
+            ),
+            legend_title="Cluster",
+            pt_size=0,
+            combine_guides="collect",
+            ncol=1,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "qc_mtrcs_dnst_gr_clst_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+    }
+}
+
 export_all_clustering_plots <- function(seurat_data, args){
     Idents(seurat_data) <- "new.ident"                                                               # safety measure
     datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
@@ -445,7 +570,7 @@ export_all_expression_plots <- function(seurat_data, args) {
                     "Resolution", current_resolution
                 ),
                 legend_title="Cluster",
-                log=TRUE,
+                scale_y_log10=TRUE,
                 pt_size=0,
                 combine_guides="collect",
                 width=800,
@@ -776,6 +901,11 @@ seurat_data <- analyses$add_clusters(
     args=args
 )
 debug$print_info(seurat_data, args)
+
+export_all_qc_plots(
+    seurat_data=seurat_data,
+    args=args
+)
 
 export_all_clustering_plots(
     seurat_data=seurat_data,

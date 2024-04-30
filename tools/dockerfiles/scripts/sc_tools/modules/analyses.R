@@ -701,6 +701,7 @@ add_clusters <- function(seurat_data, assay, graph_name, reduction, args){
         algorithm=get_cluster_algorithm(args$algorithm),
         verbose=FALSE
     )
+    seurat_data <- io$refine_metadata_levels(seurat_data)                             # relevels clustering columns
     return (seurat_data)
 }
 
@@ -828,7 +829,6 @@ add_trajectory <- function(seurat_data, args){
     )
 
     seurat_data@meta.data[[paste0("ptime_", args$reduction)]] <- seurat_data@misc$trajectories[[args$reduction]]$dyno$pseudotime
-
     base::rm(embeddings_mat, slingshot_data, progressions)
     base::gc(verbose=FALSE)
 
@@ -947,6 +947,7 @@ add_wnn_clusters <- function(seurat_data, graph_name, reductions, dimensions, ar
         resolution=args$resolution,
         verbose=FALSE
     )
+    seurat_data <- io$refine_metadata_levels(seurat_data)                       # relevels clustering columns
     return (seurat_data)
 }
 
@@ -2094,7 +2095,6 @@ da_analyze <- function(seurat_data, args){
         base::print(da_regions$DA.stat)
         base::rm(da_regions)
     }
-
     base::rm(idents, sample_data, first_group, second_group, embeddings)         # remove unused data
     base::gc(verbose=FALSE)
     return (

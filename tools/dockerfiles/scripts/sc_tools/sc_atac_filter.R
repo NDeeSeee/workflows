@@ -83,7 +83,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
         width=ifelse(datasets_count > 1, 1200, 400),
-        rootname=paste(args$output, suffix, "cells_count", sep="_"),
+        rootname=paste(args$output, suffix, "cell_cnts", sep="_"),
         pdf=args$pdf
     )
     graphics$geom_density_plot(

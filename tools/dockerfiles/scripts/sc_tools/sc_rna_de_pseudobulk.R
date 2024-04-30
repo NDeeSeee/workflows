@@ -153,7 +153,7 @@ export_processed_plots <- function(seurat_data, de_results, args){
             plot_title="Gene expression density",
             plot_subtitle=paste("Split by", args$splitby),
             legend_title=args$splitby,
-            log=TRUE,
+            scale_y_log10=TRUE,
             pt_size=0,
             group_by=args$splitby,
             combine_guides="collect",

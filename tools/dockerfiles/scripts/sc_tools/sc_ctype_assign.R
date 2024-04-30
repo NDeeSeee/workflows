@@ -21,6 +21,272 @@ suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
 
+export_all_qc_plots <- function(seurat_data, args){
+    Idents(seurat_data) <- args$target                                # othervise it will be split by dataset in vln_plot
+
+    graphics$geom_bar_plot(
+        data=seurat_data@meta.data,
+        x_axis=args$target,
+        color_by=args$target,
+        x_label="Cell type",
+        y_label="Cells",
+        legend_title="Cell type",
+        plot_title="Number of cells per cell type",
+        plot_subtitle="All cells",
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        rootname=paste(args$output, "cell_cnts_gr_ctyp", sep="_"),
+        pdf=args$pdf
+    )
+
+    # need to select certain parameters depending on what assays are present
+    if (all(c("RNA", "ATAC") %in% names(seurat_data@assays))){
+        color_by <- "mito_percentage"
+        highlight_rows <- which(seurat_data@meta.data$rna_doublets == "doublet" | seurat_data@meta.data$atac_doublets == "doublet")
+        gradient_colors <- c("lightslateblue", "orange", "red")
+        color_limits <- c(0, 100)
+        color_break <- ceiling(max(seurat_data@meta.data$mito_percentage))
+        legend_title <- "Mitochondrial %"
+        ncol <- 2
+        width <- 2400
+        height <- 1200
+    } else if ("RNA" %in% names(seurat_data@assays)){
+        color_by <- "mito_percentage"
+        highlight_rows <- which(seurat_data@meta.data$rna_doublets == "doublet")
+        gradient_colors <- c("lightslateblue", "orange", "red")
+        color_limits <- c(0, 100)
+        color_break <- ceiling(max(seurat_data@meta.data$mito_percentage))
+        legend_title <- "Mitochondrial %"
+        ncol <- 1
+        width <- 1200
+        height <- 800
+    } else {
+        color_by <- "frip"
+        highlight_rows <- which(seurat_data@meta.data$atac_doublets == "doublet")
+        gradient_colors <- c("orange", "lightslateblue", "lightslateblue")
+        color_limits <- c(0, 1)
+        color_break <- min(seurat_data@meta.data$frip)
+        legend_title <- "FRiP"
+        ncol <- 1
+        width <- 1200
+        height <- 1600
+    }
+
+    if ("RNA" %in% names(seurat_data@assays)){
+        graphics$geom_point_plot(
+            data=seurat_data@meta.data,
+            x_axis="nCount_RNA",
+            y_axis="nFeature_RNA",
+            split_by=args$target,
+            color_by=color_by,
+            highlight_rows=highlight_rows,
+            gradient_colors=gradient_colors,
+            color_limits=color_limits,
+            color_break=color_break,
+            legend_title=legend_title,
+            x_label="RNA reads per cell",
+            y_label="Genes per cell",
+            plot_title="Genes vs RNA reads per cell",
+            plot_subtitle=paste(
+                "Split by cell type;",
+                "all cells"
+            ),
+            scale_x_log10=TRUE,
+            scale_y_log10=TRUE,
+            show_lm=TRUE,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "gene_umi_spl_ctyp", sep="_"),
+            pdf=args$pdf
+        )
+
+        graphics$geom_point_plot(
+            data=seurat_data@meta.data,
+            x_axis="mito_percentage",
+            y_axis="nCount_RNA",
+            split_by=args$target,
+            color_by=color_by,
+            highlight_rows=highlight_rows,
+            gradient_colors=gradient_colors,
+            color_limits=color_limits,
+            color_break=color_break,
+            legend_title=legend_title,
+            x_label="Mitochondrial %",
+            y_label="RNA reads per cell",
+            plot_title="RNA reads vs mitochondrial % per cell",
+            plot_subtitle=paste(
+                "Split by cell type;",
+                "all cells"
+            ),
+            scale_x_log10=TRUE,
+            scale_y_log10=TRUE,
+            show_lm=FALSE,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "umi_mito_spl_ctyp", sep="_"),
+            pdf=args$pdf
+        )
+
+        if (nrow(seurat_data@meta.data[seurat_data@meta.data$rna_doublets == "doublet", ]) > 0){
+            graphics$composition_plot(
+                data=seurat_data,
+                plot_title="Percentage of RNA doublets per cell type",
+                plot_subtitle="All cells",
+                legend_title="Cell type",
+                group_by="rna_doublets",
+                split_by=args$target,
+                x_label="Cell type",
+                y_label="Cell percentage",
+                palette_colors=c("#00AEAE", "#0BFFFF"),
+                theme=args$theme,
+                rootname=paste(args$output, "rnadbl_gr_ctyp", sep="_"),
+                pdf=args$pdf
+            )
+        }
+    }
+
+    if ("ATAC" %in% names(seurat_data@assays)){
+        graphics$geom_point_plot(
+            data=seurat_data@meta.data,
+            x_axis="nCount_ATAC",
+            y_axis="TSS.enrichment",
+            split_by=args$target,
+            color_by=color_by,
+            highlight_rows=highlight_rows,
+            gradient_colors=gradient_colors,
+            color_limits=color_limits,
+            color_break=color_break,
+            legend_title=legend_title,
+            x_label="ATAC fragments in peaks per cell",
+            y_label="TSS enrichment score",
+            plot_title="TSS enrichment score vs ATAC fragments in peaks per cell",
+            plot_subtitle=paste(
+                "Split by cell type;",
+                "all cells"
+            ),
+            scale_x_log10=TRUE,
+            scale_y_log10=FALSE,
+            show_density=TRUE,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "tss_frgm_spl_ctyp", sep="_"),
+            pdf=args$pdf
+        )
+
+        if (nrow(seurat_data@meta.data[seurat_data@meta.data$atac_doublets == "doublet", ]) > 0){
+            graphics$composition_plot(
+                data=seurat_data,
+                plot_title="Percentage of ATAC doublets per cell type",
+                plot_subtitle="All cells",
+                legend_title="Cell type",
+                group_by="atac_doublets",
+                split_by=args$target,
+                x_label="Cell type",
+                y_label="Cell percentage",
+                palette_colors=c("#00DCDC", "#0BFFFF"),
+                theme=args$theme,
+                rootname=paste(args$output, "atacdbl_gr_ctyp", sep="_"),
+                pdf=args$pdf
+            )
+        }
+    }
+
+    if (all(c("RNA", "ATAC") %in% names(seurat_data@assays))){
+        graphics$geom_point_plot(
+            data=seurat_data@meta.data,
+            x_axis="nCount_ATAC",
+            y_axis="nCount_RNA",
+            split_by=args$target,
+            color_by=color_by,
+            highlight_rows=highlight_rows,
+            gradient_colors=gradient_colors,
+            color_limits=color_limits,
+            color_break=color_break,
+            legend_title=legend_title,
+            x_label="ATAC fragments in peaks per cell",
+            y_label="RNA reads per cell",
+            plot_title="RNA reads vs ATAC fragments in peaks per cell",
+            plot_subtitle=paste(
+                "Split by cell type;",
+                "all cells"
+            ),
+            scale_x_log10=TRUE,
+            scale_y_log10=TRUE,
+            show_density=TRUE,
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "rna_atac_cnts_spl_ctyp", sep="_"),
+            pdf=args$pdf
+        )
+
+        if (
+            nrow(seurat_data@meta.data[seurat_data@meta.data$rna_doublets == "doublet", ]) > 0 &&
+            nrow(seurat_data@meta.data[seurat_data@meta.data$atac_doublets == "doublet", ]) > 0
+        ){
+            seurat_data@meta.data <- seurat_data@meta.data %>%
+                                        dplyr::mutate(
+                                            doublets_overlap = dplyr::case_when(
+                                                rna_doublets == "singlet" & atac_doublets == "singlet" ~ "Singlet",
+                                                rna_doublets == "doublet" & atac_doublets == "singlet" ~ "Only RNA",
+                                                rna_doublets == "singlet" & atac_doublets == "doublet" ~ "Only ATAC",
+                                                rna_doublets == "doublet" & atac_doublets == "doublet" ~ "RNA and ATAC"
+                                            )
+                                        ) %>%
+                                        dplyr::mutate(
+                                            doublets_overlap=base::factor(
+                                                doublets_overlap,
+                                                levels=c("Only RNA", "RNA and ATAC", "Only ATAC", "Singlet")
+                                            )
+                                        )
+            graphics$composition_plot(
+                data=seurat_data,
+                plot_title="Percentage of RNA and ATAC doublets per cell type",
+                plot_subtitle="All cells",
+                legend_title="Cell type",
+                group_by="doublets_overlap",
+                split_by=args$target,
+                x_label="Cell type",
+                y_label="Cell percentage",
+                palette_colors=c("#00AEAE", "#008080", "#00DCDC", "#0BFFFF"),
+                theme=args$theme,
+                rootname=paste(args$output, "vrlpdbl_gr_ctyp", sep="_"),
+                pdf=args$pdf
+            )
+        }
+    }
+
+    graphics$vln_plot(                                                           # won't fail even if some columns are not present
+        data=seurat_data,
+        features=c(
+            "nCount_RNA", "nFeature_RNA", "mito_percentage",
+            "nCount_ATAC", "TSS.enrichment", "nucleosome_signal", "nFeature_ATAC", "frip", "blacklist_fraction"
+        ),
+        labels=c(
+            "RNA reads", "Genes", "Mitochondrial %",
+            "ATAC fragments in peaks", "TSS enrichment score", "Nucl. signal", "Peaks", "FRiP", "Bl. regions"
+        ),
+        scale_y_log10=c(
+            TRUE, TRUE, FALSE,
+            TRUE, FALSE, FALSE, TRUE, FALSE, FALSE
+        ),
+        from_meta=TRUE,
+        show_stats=TRUE,
+        plot_title="Distribution of QC metrics per cell colored by cell type",
+        plot_subtitle="All cells",
+        legend_title="Cell type",
+        pt_size=0,
+        combine_guides="collect",
+        ncol=ncol,
+        width=width,
+        height=height,
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        rootname=paste(args$output, "qc_mtrcs_dnst_gr_ctyp", sep="_"),
+        pdf=args$pdf
+    )
+}
+
+
 export_all_clustering_plots <- function(seurat_data, args){
     Idents(seurat_data) <- "new.ident"                                                               # safety measure
     datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
@@ -443,7 +709,7 @@ export_all_expression_plots <- function(seurat_data, args) {
             labels=current_gene,
             plot_title="Gene expression density",
             legend_title="Cell type",
-            log=TRUE,
+            scale_y_log10=TRUE,
             pt_size=0,
             combine_guides="collect",
             width=800,
@@ -880,7 +1146,15 @@ if ( (!is.null(args$fragments)) && ("ATAC" %in% names(seurat_data@assays)) ){
     debug$print_info(seurat_data, args)
 }
 
-export_all_clustering_plots(seurat_data=seurat_data, args=args)
+export_all_qc_plots(
+    seurat_data=seurat_data,
+    args=args
+)
+
+export_all_clustering_plots(
+    seurat_data=seurat_data,
+    args=args
+)
 
 if (!is.null(args$genes)){
     print("Adjusting genes of interest to include only those that are present in the loaded Seurat object")

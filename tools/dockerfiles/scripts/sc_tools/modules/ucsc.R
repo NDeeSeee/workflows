@@ -299,7 +299,7 @@ coords=%s'
 }
 
 get_color_data <- function(seurat_data, metadata_column, palette_colors){
-    categories <- base::levels(seurat_data@meta.data[[metadata_column]])
+    categories <- base::levels(seurat_data@meta.data[[metadata_column]])       # will depend on the order of levels
     if (is.null(categories)) {                                                 # not a factor
         categories <- base::sort(                                              # alphabetically sorted
             base::unique(

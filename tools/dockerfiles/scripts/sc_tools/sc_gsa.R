@@ -44,7 +44,6 @@ export_all_plots <- function(seurat_data, gene_sets, args) {
             labels=current_label,
             plot_title=paste("Gene signature score density per cell group"),
             legend_title="Group",
-            log=FALSE,
             pt_size=0,
             combine_guides="collect",
             width=800,
