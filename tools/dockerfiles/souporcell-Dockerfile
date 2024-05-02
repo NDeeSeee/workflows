@@ -1,0 +1,35 @@
+##########################################################################################################
+# Dockerfile
+#
+# Software:         Souporcell
+# Software Version: 2.5
+# Description:      Clustering mixed-genotype scRNAseq experiments by individual
+# Website:          https://github.com/wheaton5/souporcell
+# Provides:         https://github.com/michael-kotliar/souporcell
+# Base Image:       cumulusprod/souporcell:2.5
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/souporcell:v0.0.1 -f souporcell-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/souporcell:v0.0.1
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/souporcell:v0.0.1 /bin/bash
+##########################################################################################################
+
+
+### Base Image
+FROM --platform=linux/amd64 cumulusprod/souporcell:2.5
+LABEL maintainer="misha.kotliar@gmail.com"
+ENV DEBIAN_FRONTEND noninteractive
+
+
+################## BEGIN INSTALLATION ######################
+
+WORKDIR /tmp
+
+### Patching the script
+RUN wget https://raw.githubusercontent.com/michael-kotliar/souporcell/ee5fbfced67b283012f9aac423b366f440a6766c/souporcell_pipeline.py && \
+    rm -f /opt/souporcell/souporcell_pipeline.py && \
+    mv souporcell_pipeline.py /opt/souporcell/souporcell_pipeline.py && \
+    chmod +x /opt/souporcell/souporcell_pipeline.py && \
+### Cleaning
+    apt-get clean && \
+    apt-get purge && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /usr/share/doc/* && \
+    strip /usr/local/bin/*; true
