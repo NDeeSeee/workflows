@@ -1096,6 +1096,31 @@ vln_plot <- function(data, features, labels, rootname, plot_title, legend_title,
 dim_plot <- function(data, rootname, reduction, plot_title, legend_title, plot_subtitle=NULL, cells=NULL, split_by=NULL, group_by=NULL, highlight_group=NULL, show_density=FALSE, density_bins=10, ncol=NULL, label=FALSE, label_box=FALSE, label_repel=FALSE, label_color="black", label_size=4, fixed=TRUE, alpha=NULL, palette_colors=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
+
+            if (
+                !is.null(show_density) && show_density &&                             # we want to show density contours
+                (!is.null(group_by) || !is.null(split_by))                            # densities will calculated per groups that can be defined by group_by and/or split_by
+            ){                                                                        # we need to exclude cells that form groups of only 1 cell
+                excluded_groups <- data@meta.data %>%
+                                   dplyr::group_by(
+                                       dplyr::across(tidyselect::any_of(group_by)),   # at least one of them won't be NULL
+                                       dplyr::across(tidyselect::any_of(split_by))
+                                   ) %>%
+                                   dplyr::summarize(counts=dplyr::n()) %>%            # calculcate cells per group
+                                   dplyr::ungroup() %>%
+                                   dplyr::filter(.$counts < 2) %>%                    # select groups with only 1 cell
+                                   base::as.data.frame()
+                excluded_cells <- data@meta.data %>%                                  # vector of barcodes to be excluded, might be character(0)
+                                  dplyr::semi_join(
+                                      excluded_groups,
+                                      by=stats::na.omit(c(split_by, group_by))        # will exclude possible NULL from the vector
+                                  ) %>%
+                                  tibble::rownames_to_column(var="barcode") %>%
+                                  dplyr::pull(barcode)
+                data <- base::subset(data, cells=excluded_cells, invert=TRUE)         # safe to run even when excluded_cells is NULL
+                cells <- base::subset(cells, !(cells %in% excluded_cells))            # safe to run even when cells and/or excluded_cells are NULL
+            }
+
             highlight_cells <- NULL
             if (!is.null(group_by) && !is.null(highlight_group)){
                 SeuratObject::Idents(data) <- group_by
@@ -1146,7 +1171,6 @@ dim_plot <- function(data, rootname, reduction, plot_title, legend_title, plot_s
 
             if (!is.null(show_density) && show_density){
                 plot <- plot +
-                        ggnewscale::new_scale("color") +                    # to have a separate color scale for density counts
                         ggplot2::geom_density_2d(
                             ggplot2::aes_string(
                                 x=base::paste0(                             # need to set x and y aesthetics because geom_density_2d can't reach them from the plot
@@ -1161,17 +1185,13 @@ dim_plot <- function(data, rootname, reduction, plot_title, legend_title, plot_s
                                     ),
                                     "2"
                                 ),
-                                group=group_by,                             # if not NULL, density is calculated per group (a.k.a cluster, cell type)
-                                colour=ggplot2::after_stat("stat(level)")   # color by height of contour (numeric vector with bin boundaries)
+                                group=group_by                              # if not NULL, density is calculated per group (a.k.a cluster, cell type)
                             ),
                             bins=density_bins,
                             contour_var="count",                            # contours are made based on the densities * on the cell counts withing each bin
                             linetype="solid",
-                            size=0.2
-                        ) +
-                        ggplot2::scale_colour_distiller(
-                            "Counts",
-                            palette="Greys"
+                            colour="black",                                 # all contours will be black
+                            size=0.1
                         )
             }
 

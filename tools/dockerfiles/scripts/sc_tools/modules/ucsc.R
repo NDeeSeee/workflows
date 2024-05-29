@@ -274,6 +274,68 @@ coords=%s'
         )
     }
 
+    if (SeuratObject::DefaultAssay(object) == "ATAC"){                                        # for searching nearest peaks by gene name
+        annotation_data <- base::as.data.frame(Signac::Annotation(object)) %>%                # if we have ATAC assay, Annotation should be also present
+                           dplyr::filter(.$type=="transcript") %>%
+                           dplyr::group_by(seqnames, strand, gene_id) %>%                     # to account for a replicates in the gene names
+                           dplyr::arrange(desc(width), .by_group=TRUE) %>%
+                           dplyr::slice_head(n=1) %>%                                         # takes the coordinates of the longest transcript within each group
+                           dplyr::ungroup() %>%
+                           dplyr::mutate("score"=0) %>%                                       # add empty score column to corresond to BED format
+                           dplyr::select(
+                               c("seqnames", "start", "end", "gene_id", "score", "strand")
+                           )
+        gene_symbols <- annotation_data %>%
+                        dplyr::select(c("gene_id")) %>%
+                        dplyr::mutate("gene_id_copy"=gene_id)
+
+        cb_dir <- base::path.expand("~/cellbrowserData/genes")                                # should be saved in the user's home directory
+        if (!base::dir.exists(cb_dir)) {
+            base::dir.create(cb_dir, recursive=TRUE)
+        }
+        utils::write.table(
+            annotation_data,
+            base::gzfile(base::file.path(cb_dir, "genome.current.bed.gz")),
+            sep="\t",
+            row.names=FALSE,
+            col.names=FALSE,
+            quote=FALSE
+        )
+        utils::write.table(
+            gene_symbols,
+            base::gzfile(base::file.path(cb_dir, "current.symbols.tsv.gz")),
+            sep="\t",
+            row.names=FALSE,
+            col.names=FALSE,
+            quote=FALSE
+        )
+        exit_code <- sys::exec_wait(
+            cmd="cbGenes",
+            args=c(
+                "json",
+                "genome",
+                "current",
+                base::path.expand(base::file.path(cb_dir, "genome.current.json"))
+            )
+        )
+        if (exit_code != 0){
+            base::print(
+                base::paste0(
+                    "Failed to create genome.current.json ",
+                    "with exit code ", exit_code, ". Exiting."
+                )
+            )
+            base::quit(save="no", status=1, runLast=FALSE)
+        }
+        local_config <- base::paste(
+            local_config,
+            'atacSearch="genome.current"',
+            sep="\n"
+        )
+        base::rm(annotation_data, gene_symbols)
+        base::gc(verbose=FALSE)
+    }
+
     html_data_dir <- base::file.path(rootname, "html_data")
     if (is_nested){
         local_config <- base::paste(local_config, 'dataRoot="../"', sep="\n")

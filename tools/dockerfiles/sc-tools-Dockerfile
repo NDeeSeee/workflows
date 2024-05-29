@@ -2,15 +2,15 @@
 # Dockerfile
 #
 # Software:         set of R scripts for single-cell data analysis
-# Software Version: v0.0.37
+# Software Version: v0.0.38
 # Description:      Dockerized version of the set of R scripts for
 #                   single-cell data analysis
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         set of R scripts for single-cell data analysis
 # Base Image:       satijalab/seurat:latest
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.37 -f sc-tools-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.37
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.37 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.38 -f sc-tools-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.38
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.38 /bin/bash
 ##########################################################################################################
 #
 # Notes:
@@ -35,6 +35,17 @@
 #     sc_triangulate.R --help && \
 #     sc_vdj_profile.R --help 
 #
+# v0.0.38 -- based on satijalab/seurat:latest
+# - Fixed bug with contours ploting for the groups
+#   with only one cell
+# - Added searching nearest peaks by genes in the USCS
+#   Cell Browser generated from ATAC
+# - Need to update patchwork package, because when used
+#   from the base image, it causes a bug explained here
+#   https://github.com/Watts-College/paf-515-spr-2024/issues/9
+# - need to install libgit2-dev, otherwise devtools fails to
+#   install
+#
 # v0.0.37 -- based on biowardrobe2/sc-tools:v0.0.36
 # - Updated sc_vdj_profile.R (uses scRepertoire v2.0.0)
 # - load_cell_identity_data now support default identity
@@ -44,7 +55,7 @@
 # - Updated UCSC CellBrowser version to 1.2.5 (need to rename
 #   the file chosen-sprite@2x.png, because it can't be
 #   returned by cwltool as output)
-# - Added QC-plots for all cluestering pipelines
+# - Added QC-plots for all clustering pipelines
 #
 # v0.0.36 -- based on biowardrobe2/sc-tools:v0.0.35
 # - Export RNA counts data to Loupe file (loupeR v1.1.0)
@@ -293,17 +304,17 @@ ENV DEBIAN_FRONTEND noninteractive
 
 WORKDIR /tmp
 
-ENV R_MAX_VSIZE=200000000000
-ENV CB_VERSION "1.2.5"
-ENV MACS2_URL "https://github.com/macs3-project/MACS.git"
-ENV MACS2_VERSION "2.2.8"
-ENV SCTRIANGULATE_VERSION "0.12.0"
-ENV SCIPY_VERSION "1.7.3"
-ENV NUMPY_VERSION "1.22.0"
-ENV HTSLIB_VERSION "1.17"
-ENV HTSLIB_URL "https://github.com/samtools/htslib/releases/download/${HTSLIB_VERSION}/htslib-${HTSLIB_VERSION}.tar.bz2"
-ENV LOUPER_VERSION "1.1.0"
-ENV LOUPER_URL "https://github.com/10XGenomics/loupeR/releases/download/v${LOUPER_VERSION}/loupeR_Linux.tar.gz"
+ENV R_MAX_VSIZE=200000000000 \
+    CB_VERSION=1.2.5 \
+    MACS2_VERSION=2.2.8 \
+    SCTRIANGULATE_VERSION=0.12.0 \
+    SCIPY_VERSION=1.7.3 \
+    NUMPY_VERSION=1.22.4 \
+    HTSLIB_VERSION=1.17 \
+    LOUPER_VERSION=1.1.0 \
+    MACS2_URL=https://github.com/macs3-project/MACS.git
+ENV HTSLIB_URL=https://github.com/samtools/htslib/releases/download/${HTSLIB_VERSION}/htslib-${HTSLIB_VERSION}.tar.bz2 \
+    LOUPER_URL=https://github.com/10XGenomics/loupeR/releases/download/v${LOUPER_VERSION}/loupeR_Linux.tar.gz
 
 COPY ./scripts/sc_tools/sc_* /usr/local/bin/
 COPY ./scripts/sc_tools/modules/*.R /usr/local/bin/modules/
@@ -314,7 +325,7 @@ RUN apt-get update && \
     apt-get install libgcc-10-dev python3-dev python3-pip libxml2-dev libcurl4-openssl-dev \
                     libssl-dev pandoc libudunits2-dev libgdal-dev libcairo2-dev libharfbuzz-dev \
                     libfribidi-dev libbz2-dev tk libfontconfig1-dev libfreetype6-dev libpng-dev \
-                    libtiff5-dev libjpeg-dev libmagick++-dev vim -y && \
+                    libtiff5-dev libjpeg-dev libmagick++-dev vim libgit2-dev -y && \
     wget -q -O - $HTSLIB_URL | tar -jxv && \
     cd htslib-${HTSLIB_VERSION} && \
     ./configure --prefix=/usr/local/ && \
@@ -374,6 +385,7 @@ RUN apt-get update && \
     R -e 'install.packages("circlize")' && \
     R -e 'install.packages("intrinsicDimension")' && \
     R -e 'install.packages("ggnewscale")' && \
+    R -e 'install.packages("patchwork")' && \
     wget ${LOUPER_URL} && \
     tar xzf loupeR_Linux.tar.gz && \
     sed -i 's/file\.exists(eula_lock_file())/TRUE/g' /tmp/loupeR/R/eula.R && \
