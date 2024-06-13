@@ -1,0 +1,68 @@
+#################################################################
+# Software Version: v0.0.1
+# Description:      MAnorm2 for quantitatively comparing groups of ChIP-seq samples
+# Website:          https://github.com/tushiqi/MAnorm2
+# Provides:         MAnorm2
+# Base Image:       r-base:4.4.0
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/manorm2:v0.0.1 -f manorm2-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/manorm2:v0.0.1
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/manorm2:v0.0.1 /bin/bash
+#################################################################
+
+### Base Image
+FROM r-base:4.4.0
+LABEL maintainer="misha.kotliar@gmail.com"
+
+ENV DEBIAN_FRONTEND noninteractive
+ENV SAMTOOLS_VERSION "1.20"
+ENV HTSLIB_URL "https://github.com/samtools/htslib/releases/download/${SAMTOOLS_VERSION}/htslib-${SAMTOOLS_VERSION}.tar.bz2"
+ENV SAMTOOLS_URL "https://github.com/samtools/samtools/releases/download/${SAMTOOLS_VERSION}/samtools-${SAMTOOLS_VERSION}.tar.bz2"
+
+################## BEGIN INSTALLATION ######################
+WORKDIR /tmp
+COPY ./scripts/run_manorm2.R /usr/local/bin/run_manorm2.R
+
+### Installing dependencies
+RUN apt-get update && \
+    apt-get install -y vim pandoc cmake python3-dev python3-pip libxml2-dev \
+                       libssl-dev libcurl4-openssl-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev \
+                       libpng-dev libtiff5-dev libjpeg-dev file && \
+### Installing Samtools
+    wget -q -O - $HTSLIB_URL | tar -jxv && \
+    cd htslib-${SAMTOOLS_VERSION} && \
+    ./configure --prefix=/usr/local/ && \
+    make -j 4 && \
+    make install && \
+    cd .. && \
+    wget -q -O - $SAMTOOLS_URL | tar -jxv && \
+    cd samtools-${SAMTOOLS_VERSION} && \
+    ./configure --prefix=/usr/local/ && \
+    make -j 4 && \
+    make install && \
+    cd .. && \
+### Installing Python packages
+    pip3 install --break-system-packages argparse && \
+    pip3 install --break-system-packages MAnorm2-utils && \
+### Installing R packages
+    R -e "install.packages('BiocManager')" && \
+    R -e "install.packages('future')" && \
+    R -e "BiocManager::install(c('BiocParallel', 'hopach', 'cmapR', 'EnhancedVolcano','Glimma', 'profileplyr', 'sva'))" && \
+    R -e 'install.packages("argparse", repo = "https://cloud.r-project.org/")' && \
+    R -e 'install.packages("ggpubr", repo = "https://cloud.r-project.org/")' && \
+    R -e 'install.packages("tidyverse", repo = "https://cloud.r-project.org/")' && \
+    R -e 'install.packages("MAnorm2")' && \
+### Installing scripts
+    chmod +x /usr/local/bin/run_manorm2.R && \
+### Downloading blacklist regions files
+    mkdir -p /opt/manorm2 && \
+    wget https://raw.githubusercontent.com/Boyle-Lab/Blacklist/61a04d2c5e49341d76735d485c61f0d1177d08a8/lists/hg38-blacklist.v2.bed.gz && \
+    wget https://raw.githubusercontent.com/Boyle-Lab/Blacklist/61a04d2c5e49341d76735d485c61f0d1177d08a8/lists/hg19-blacklist.v2.bed.gz && \
+    wget https://raw.githubusercontent.com/Boyle-Lab/Blacklist/61a04d2c5e49341d76735d485c61f0d1177d08a8/lists/mm10-blacklist.v2.bed.gz && \
+    gzip -d hg38-blacklist.v2.bed.gz && mv hg38-blacklist.v2.bed /opt/manorm2/ && \
+    gzip -d hg19-blacklist.v2.bed.gz && mv hg19-blacklist.v2.bed /opt/manorm2/ && \
+    gzip -d mm10-blacklist.v2.bed.gz && mv mm10-blacklist.v2.bed /opt/manorm2/ && \
+### Cleaning
+    apt-get clean && \
+    apt-get purge && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /usr/share/doc/* && \
+    strip /usr/local/bin/*; true
