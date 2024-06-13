@@ -2,7 +2,7 @@
 # Dockerfile
 #
 # Software:         BioWardrobe DESeq/DESeq2 script
-# Software Version: v0.0.27
+# Software Version: v0.0.28
 # Description:      Dockerized version of DESeq/DESeq2 script from BioWardrobe
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         run_deseq.R
@@ -16,10 +16,19 @@
 #                   argparse          latest
 #                   pheatmap          latest
 # Base Image:       r-base:4.0.4
-# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/scidap-deseq:v0.0.27 -f scidap-deseq-Dockerfile .
-# Pull Cmd:         docker pull biowardrobe2/scidap-deseq:v0.0.27
-# Run Cmd:          docker run --rm -ti biowardrobe2/scidap-deseq:v0.0.27 /bin/bash
+# Build Cmd:        docker build --no-cache --rm -t biowardrobe2/scidap-deseq:v0.0.28 -f scidap-deseq-Dockerfile .
+# Pull Cmd:         docker pull biowardrobe2/scidap-deseq:v0.0.28
+# Run Cmd:          docker run --rm -ti biowardrobe2/scidap-deseq:v0.0.28 /bin/bash
 #################################################################
+# v0.0.28
+#
+# - Added optional --batchcorrection parameter for DESeq2 (combatseq (provided design-formula) or limma)
+# - Changed default adjusted p-value to 0.1 (in correspondance with alpha)
+# - Added regulation parameter for DESeq2 (up, down, both) and appropriate altHypothesis
+# - Added --lfcthreshold parameter for DESeq2 (changed default to 0.59, because it has more biological sense)
+# - Changed center to min-max scaling before HOPACH clustering
+# - Added blind = F parameter for DESeq2 vst and rlog (to take into account design-formula)
+# - Removed RPKM filtering (not needed for DESeq2 as explained by developer while independence filtering provided)
 #
 # v0.0.27
 # - Update run_deseq.R to export baseMean column
