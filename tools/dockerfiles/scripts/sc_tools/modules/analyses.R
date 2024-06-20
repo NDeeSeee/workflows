@@ -1127,11 +1127,22 @@ atac_preprocess <- function(seurat_data, args) {
             dims=args$dimensions,                                                               # don't need to use more than we are going to use in UMAP
             verbose=FALSE
         )
+        min_anchors_count <- min(                                                               # the minimum number of anchors found between datasets
+            base::subset(                                                                       # more details are here https://github.com/satijalab/seurat/issues/3930
+                base::as.data.frame(
+                    base::table(
+                        integration_anchors@anchors[, c("dataset1", "dataset2")]
+                    )
+                ),
+                dataset1 != dataset2                                                            # this will remove zeros, because there is no anchors within the same dataset
+            )$Freq
+        )
+        base::print(base::paste("The minimum intergration anchors count:", min_anchors_count))
         integrated_seurat_data <- Seurat::IntegrateEmbeddings(
             anchorset=integration_anchors,
             reductions=processed_seurat_data[["lsi"]],
             new.reduction.name="atac_lsi",                                                      # adding "atac_lsi" for consistency
-            k.weight=min(get_min_ident_size(splitted_seurat_data), 100),                        # k.weight 100 by default, but shouldn't be bigger than the min number of cells among all identities after filtering
+            k.weight=min(min_anchors_count, 100),                                               # k.weight 100 by default, but shouldn't be bigger than the min number of integration anchors
             dims.to.integrate=args$dimensions,                                                  # will always overwrite with 1:ncol(x = reductions), so no difference what to use here
         )
         qclsi_reduction <- processed_seurat_data[["qclsi"]]                                     # need it for QC correlation plots
