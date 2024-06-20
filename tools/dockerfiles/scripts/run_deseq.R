@@ -873,11 +873,11 @@ if (length(args$treated) > 1 && length(args$untreated) > 1) {
       )
       pca_intgroup <- c("conditions", "batch")
     } else {
-      vst <- DESeq2::vst(dse, blind = FALSE)
+      vst <- DESeq2::varianceStabilizingTransformation(dse, blind = FALSE)
       pca_intgroup <- c("conditions", "batch")
     }
   } else {
-    vst <- DESeq2::vst(dse, blind = FALSE)
+    vst <- DESeq2::varianceStabilizingTransformation(dse, blind = FALSE)
     pca_intgroup <- c("conditions")
   }
   
@@ -913,7 +913,7 @@ if (length(args$treated) > 1 && length(args$untreated) > 1) {
   
   export_ma_plot(res, paste(args$output, "_ma_plot", sep = ""))
   
-  vsd <- exprs(DESeq2::vst(cdsD, blind = FALSE))
+  vsd <- exprs(DESeq2::varianceStabilizingTransformation(cdsD, blind = FALSE))
   rownames(vsd) <- collected_isoforms[, c("GeneId")]
   mat <- vsd[order(rowMeans(counts(cdsD, normalized = TRUE)),
                    decreasing =
@@ -979,7 +979,7 @@ print(
 )
 
 row_metadata <- collected_isoforms %>%
-  dplyr::filter(.$padj <= args$padj) %>%
+  dplyr::filter(.$padj <= args$fdr) %>%
   dplyr::mutate_at("GeneId", toupper) %>%
   dplyr::distinct(GeneId, .keep_all = TRUE) %>% # to prevent from failing when input files are not grouped by GeneId
   remove_rownames() %>%

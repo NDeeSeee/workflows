@@ -119,8 +119,9 @@ inputs:
     inputBinding:
       prefix: "--fdr"
     doc: |
-      In the exploratory visualization part of the analysis output only features
-      with adjusted P-value not bigger than this value. Default: 0.1
+      In the exploratory visualization part of the analysis output only features,
+      with adjusted p-value (FDR) not bigger than this value. Also the significance,
+      cutoff used for optimizing the independent filtering. Default: 0.1.
   
   lfcthreshold:
     type: float?
@@ -132,7 +133,13 @@ inputs:
       Default: 0.59 (about 1.5 fold change)
       
   regulation:
-    type: string?
+    type:
+      - "null"
+      - type: enum
+        symbols:
+          - "up"
+          - "down"
+          - "both"
     inputBinding:
       prefix: "--regulation"
     doc: |
@@ -140,10 +147,14 @@ inputs:
       'up' for upregulated genes, 'down' for downregulated genes,
       'both' for both up and downregulated genes. Default: both
     default: "both"
-    enum: ["up", "down", "both"]
     
   batchcorrection:
-    type: string?
+    type:
+      - "null"
+      - type: enum
+        symbols:
+          - "combatseq"
+          - "limma"
     inputBinding:
       prefix: "--batchcorrection"
     doc: |
@@ -151,7 +162,6 @@ inputs:
       'combatseq' applies ComBat_seq at the beginning of the analysis.
       'limma' applies removeBatchEffect after differential expression analysis (DEA). Default: combatseq
     default: "combatseq"
-    enum: ["combatseq", "limma"]
     
   batch_file:
     type: File?
