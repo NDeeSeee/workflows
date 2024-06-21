@@ -170,10 +170,10 @@ export_gct <- function(counts_mat,
         rownames_to_column("id") %>%
         mutate_at("id", as.vector)
       gct_data <- new("GCT",
-                      mat = counts_mat[row_metadata$id, col_metadata$id],
-                      # to guarantee the order and number of row/columns
-                      rdesc = row_metadata,
-                      cdesc = col_metadata
+        mat = counts_mat[row_metadata$id, col_metadata$id],
+        # to guarantee the order and number of row/columns
+        rdesc = row_metadata,
+        cdesc = col_metadata
       )
       write_gct(
         ds = gct_data,
@@ -196,30 +196,30 @@ export_cls <- function(categories, location) {
       on.exit(base::close(output_stream), add = TRUE) # can't put it in 'finally' as there is no access to output_stream variable
       base::cat(
         base::paste(length(categories), # number of datasets
-                    length(base::levels(categories)), # number of different categories
-                    "1", # should be always 1
-                    sep = "\t"
+          length(base::levels(categories)), # number of different categories
+          "1", # should be always 1
+          sep = "\t"
         ),
         base::paste("#", base::paste(
           base::unique(as.character(categories)), # preserves the order, but removes duplicates
           collapse = "\t"
         ), sep = "\t"),
         base::paste(base::paste(as.character(categories),
-                                collapse =
-                                  "\t"
+          collapse =
+            "\t"
         ), sep = "\t"),
         file = output_stream,
         sep = "\n"
       )
       base::print(base::paste("Exporting CLS data to", location,
-                              sep =
-                                " "
+        sep =
+          " "
       ))
     },
     error = function(e) {
       base::print(base::paste("Failed to export CLS data to ", location, "with error - ", e,
-                              sep =
-                                ""
+        sep =
+          ""
       ))
     }
   )
@@ -231,7 +231,7 @@ get_clustered_data <- function(expression_data, dist, transpose) {
     print("Transposing expression data")
     expression_data <- t(expression_data)
   }
-  
+
   expression_data <- apply(
     expression_data,
     1,
@@ -239,15 +239,15 @@ get_clustered_data <- function(expression_data, dist, transpose) {
       scale_min_max(x)
     }
   )
-  
+
   print("Running HOPACH")
   hopach_results <- hopach(expression_data)
-  
+
   if (transpose) {
     print("Transposing expression data")
     expression_data <- t(expression_data)
   }
-  
+
   print("Parsing cluster labels")
   clusters <- as.data.frame(hopach_results$clustering$labels)
   colnames(clusters) <- "label"
@@ -257,7 +257,7 @@ get_clustered_data <- function(expression_data, dist, transpose) {
     paste0("c", a %/% b %% 10)
   }))
   clusters <- clusters[, c(-1), drop = FALSE]
-  
+
   return(list(
     order = as.vector(hopach_results$clustering$order),
     expression = expression_data,
@@ -296,8 +296,8 @@ load_isoform_set <- function(filenames,
     new_read_colname <- paste(prefixes[i], conditions, sep = "_")
     colnames(isoforms)[colnames(isoforms) == read_colname] <- new_read_colname
     colnames(isoforms)[colnames(isoforms) == rpkm_colname] <- paste(conditions, i, rpkm_colname,
-                                                                    sep =
-                                                                      " "
+      sep =
+        " "
     )
     if (!is.null(batch_metadata)) {
       batch <- batch_metadata[prefixes[i], "batch"]
@@ -316,8 +316,8 @@ load_isoform_set <- function(filenames,
         )
       )
       column_data_frame <- data.frame(conditions, batch,
-                                      row.names =
-                                        c(new_read_colname)
+        row.names =
+          c(new_read_colname)
       )
     } else {
       print(
@@ -342,9 +342,9 @@ load_isoform_set <- function(filenames,
       )
     } else {
       collected_data$collected_isoforms <- merge(collected_data$collected_isoforms,
-                                                 isoforms,
-                                                 by = intersect_by,
-                                                 sort = FALSE
+        isoforms,
+        by = intersect_by,
+        sort = FALSE
       )
       collected_data$read_colnames <- c(collected_data$read_colnames, new_read_colname)
       collected_data$column_data <- rbind(collected_data$column_data, column_data_frame)
@@ -357,7 +357,7 @@ load_isoform_set <- function(filenames,
     ignore.case = TRUE
   )
   collected_data$collected_isoforms[rpkm_colname_alias] <- format(rowSums(collected_data$collected_isoforms[, rpkm_columns, drop = FALSE]) / length(filenames),
-                                                                  digits = digits
+    digits = digits
   )
   collected_data$rpkm_colnames <- c(collected_data$rpkm_colnames, rpkm_colname_alias)
   collected_data$collected_isoforms <- collected_data$collected_isoforms[, !colnames(collected_data$collected_isoforms) %in% rpkm_columns]
@@ -380,7 +380,7 @@ export_ma_plot <- function(data,
       )
       plotMA(data)
       dev.off()
-      
+
       pdf(
         file = paste(rootname, ".pdf", sep = ""),
         width = round(width / resolution),
@@ -388,10 +388,10 @@ export_ma_plot <- function(data,
       )
       plotMA(data)
       dev.off()
-      
+
       cat(paste("\nExport MA-plot to ", rootname, ".(png/pdf)", "\n",
-                sep =
-                  ""
+        sep =
+          ""
       ))
     },
     error = function(e) {
@@ -418,7 +418,7 @@ export_pca_plot <- function(data,
     expr = {
       pca_data <- plotPCA(data, intgroup = intgroup, returnData = TRUE)
       percentVar <- round(100 * attr(pca_data, "percentVar"))
-      
+
       png(
         filename = paste(rootname, ".png", sep = ""),
         width = width,
@@ -439,7 +439,7 @@ export_pca_plot <- function(data,
           )
       )
       dev.off()
-      
+
       pdf(
         file = paste(rootname, ".pdf", sep = ""),
         width = round(width / resolution),
@@ -459,10 +459,10 @@ export_pca_plot <- function(data,
           )
       )
       dev.off()
-      
+
       cat(paste("\nExport PCA-plot to ", rootname, ".(png/pdf)", "\n",
-                sep =
-                  ""
+        sep =
+          ""
       ))
     },
     error = function(e) {
@@ -502,7 +502,7 @@ export_heatmap <- function(mat_data,
         cluster_cols = FALSE
       )
       dev.off()
-      
+
       pdf(
         file = paste(rootname, ".pdf", sep = ""),
         width = round(width / resolution),
@@ -517,7 +517,7 @@ export_heatmap <- function(mat_data,
         cluster_cols = FALSE
       )
       dev.off()
-      
+
       cat(paste(
         "\nExport expression heatmap to ",
         rootname,
@@ -560,7 +560,7 @@ assert_args <- function(args) {
     }
   } else {
     if ((length(args$ualias) != length(args$untreated)) |
-        (length(args$talias) != length(args$treated))) {
+      (length(args$talias) != length(args$treated))) {
       cat("\nNot correct number of inputs provided as -u, -t, -ua, -ut")
       quit(
         save = "no",
@@ -569,11 +569,11 @@ assert_args <- function(args) {
       )
     }
   }
-  
+
   if (length(args$treated) == 1 || length(args$untreated) == 1) {
     args$batchfile <- NULL # reset batchfile to NULL. We don't need it for DESeq even if it was provided
   }
-  
+
   if (!is.null(args$batchfile)) {
     batch_metadata <- read.table(
       args$batchfile,
@@ -591,7 +591,7 @@ assert_args <- function(args) {
       args$batchfile <- NULL
     }
   }
-  
+
   return(args)
 }
 
@@ -615,32 +615,32 @@ get_args <- function() {
     nargs = "+"
   )
   parser$add_argument("-ua",
-                      "--ualias",
-                      help = "Unique aliases for untreated (condition 1) expression files. Default: basenames of -u without extensions",
-                      type = "character",
-                      nargs = "*"
+    "--ualias",
+    help = "Unique aliases for untreated (condition 1) expression files. Default: basenames of -u without extensions",
+    type = "character",
+    nargs = "*"
   )
   parser$add_argument("-ta",
-                      "--talias",
-                      help = "Unique aliases for treated (condition 2) expression files. Default: basenames of -t without extensions",
-                      type = "character",
-                      nargs = "*"
+    "--talias",
+    help = "Unique aliases for treated (condition 2) expression files. Default: basenames of -t without extensions",
+    type = "character",
+    nargs = "*"
   )
   parser$add_argument("-un",
-                      "--uname",
-                      help = "Name for untreated (condition 1), use only letters and numbers",
-                      type = "character",
-                      default = "untreated"
+    "--uname",
+    help = "Name for untreated (condition 1), use only letters and numbers",
+    type = "character",
+    default = "untreated"
   )
   parser$add_argument("-tn",
-                      "--tname",
-                      help = "Name for treated (condition 2), use only letters and numbers",
-                      type = "character",
-                      default = "treated"
+    "--tname",
+    help = "Name for treated (condition 2), use only letters and numbers",
+    type = "character",
+    default = "treated"
   )
   parser$add_argument("-bf", "--batchfile",
-                      help = "Metadata file for multi-factor analysis. Headerless TSV/CSV file. First column - names from --ualias and --talias, second column - batch group name. Default: None", type =
-                        "character"
+    help = "Metadata file for multi-factor analysis. Headerless TSV/CSV file. First column - names from --ualias and --talias, second column - batch group name. Default: None", type =
+      "character"
   )
   parser$add_argument(
     "--fdr",
@@ -665,22 +665,26 @@ get_args <- function() {
   parser$add_argument(
     "--batchcorrection",
     help = paste(
-      "Batch correction method to be applied. 'combatseq' applies ComBat_seq",
-      "at the beginning of the analysis. 'limma' applies removeBatchEffect",
-      "after differential expression analysis (DEA). Default: combatseq"
+      "Specifies the batch correction method to be applied.
+      - 'combatseq' applies ComBat_seq at the beginning of the analysis, removing batch effects from the design formula before differential expression analysis.
+      - 'limmaremovebatcheffect' applies removeBatchEffect from the limma package after differential expression analysis, incorporating batch effects into the model during DE analysis.
+      - Default: none"
     ),
     type = "character",
-    choices = c("combatseq", "limma"),
-    default = "combatseq"
+    choices = c("none", "combatseq", "limmaremovebatcheffect"),
+    default = "none"
   )
   parser$add_argument(
     "--regulation",
     help = paste(
-      "Direction of differential expression comparison. 'up' for upregulated genes,",
-      "'down' for downregulated genes, 'both' for both up and downregulated genes. Default: both"
+      "Direction of differential expression comparison. β is the log2 fold change.",
+      "'both' for both up and downregulated genes (|β| > lfcThreshold for greaterAbs and |β| < lfcThreshold for lessAbs, with p-values being two-tailed or maximum of the upper and lower tests, respectively); ",
+      "'up' for upregulated genes (β > lfcThreshold in condition2 compared to condition1); ",
+      "'down' for downregulated genes (β < -lfcThreshold in condition2 compared to condition1). ",
+      "Default: both"
     ),
     type = "character",
-    choices = c("up", "down", "both"),
+    choices = c("both", "up", "down"),
     default = "both"
   )
   parser$add_argument(
@@ -728,16 +732,16 @@ get_args <- function() {
     )
   )
   parser$add_argument("-o",
-                      "--output",
-                      help = "Output prefix. Default: deseq",
-                      type = "character",
-                      default = "./deseq"
+    "--output",
+    help = "Output prefix. Default: deseq",
+    type = "character",
+    default = "./deseq"
   )
   parser$add_argument("-d",
-                      "--digits",
-                      help = "Precision, number of digits to print. Default: 3",
-                      type = "integer",
-                      default = 3
+    "--digits",
+    help = "Precision, number of digits to print. Default: 3",
+    type = "integer",
+    default = 3
   )
   parser$add_argument(
     "-p",
@@ -801,7 +805,7 @@ print(head(countData))
 # Run DESeq or DESeq2
 if (length(args$treated) > 1 && length(args$untreated) > 1) {
   suppressMessages(library(DESeq2))
-  
+
   if (!is.null(args$batchfile)) {
     if (args$batchcorrection == "combatseq") {
       design <- ~conditions
@@ -818,30 +822,32 @@ if (length(args$treated) > 1 && length(args$untreated) > 1) {
         group = NULL
       )
     } else {
-      print(paste(
-        "Including",
-        args$batchfile,
-        "as part of the design-formula"
-      ))
-      design <- ~ conditions + batch # We use simple +, because batch is not biologically interesting for us.
+      if (args$batchcorrection == "limmaremovebatcheffect") {
+        print(paste(
+          "Including",
+          args$batchfile,
+          "as part of the design-formula"
+        ))
+        design <- ~ conditions + batch # We use simple +, because batch is not biologically interesting for us.
+      }
     }
   } else {
     design <- ~conditions
   }
-  
+
   print("Run DESeq2 analysis")
-  
+
   dse <- DESeqDataSetFromMatrix(
     countData = countData,
     colData = column_data,
     design = design
   )
   dsq <- DESeq(dse)
-  
+
   # for norm count file. Batch correction doens't influence it
   normCounts <- counts(dsq, normalized = TRUE)
   rownames(normCounts) <- toupper(collected_isoforms[, c("GeneId")])
-  
+
   altHypothesis <- if (args$regulation == "up") {
     "greater"
   } else if (args$regulation == "down") {
@@ -849,7 +855,7 @@ if (length(args$treated) > 1 && length(args$untreated) > 1) {
   } else {
     "greaterAbs"
   }
-  
+
   res <- results(
     dsq,
     contrast = c("conditions", args$uname, args$tname),
@@ -858,11 +864,11 @@ if (length(args$treated) > 1 && length(args$untreated) > 1) {
     independentFiltering = T,
     altHypothesis = altHypothesis
   )
-  
+
   export_ma_plot(res, paste(args$output, "_ma_plot", sep = ""))
-  
+
   # for PCA and heatmap
-  
+
   if (!is.null(args$batchfile)) {
     if (args$batchcorrection == "limma") {
       vst <- DESeq2::rlog(dse, blind = FALSE)
@@ -880,7 +886,7 @@ if (length(args$treated) > 1 && length(args$untreated) > 1) {
     vst <- DESeq2::varianceStabilizingTransformation(dse, blind = FALSE)
     pca_intgroup <- c("conditions")
   }
-  
+
   export_pca_plot(vst, paste(args$output, "_pca_plot", sep = ""), pca_intgroup)
   export_mds_html_plot(
     # need it only whne we have at least three samples
@@ -890,8 +896,8 @@ if (length(args$treated) > 1 && length(args$untreated) > 1) {
   vsd <- assay(vst)
   rownames(vsd) <- collected_isoforms[, c("GeneId")]
   mat <- vsd[order(rowMeans(counts(dsq, normalized = TRUE)),
-                   decreasing =
-                     TRUE
+    decreasing =
+      TRUE
   )[1:30], ]
   DESeqRes <- as.data.frame(res[, c(1, 2, 5, 6)])
 } else {
@@ -900,24 +906,24 @@ if (length(args$treated) > 1 && length(args$untreated) > 1) {
   cds <- newCountDataSet(countData, column_data[, "conditions"])
   cdsF <- estimateSizeFactors(cds)
   cdsD <- estimateDispersions(cdsF,
-                              method = "blind",
-                              sharingMode = "fit-only",
-                              fitType = "local"
+    method = "blind",
+    sharingMode = "fit-only",
+    fitType = "local"
   )
   normCounts <- counts(cdsD, normalized = TRUE)
   rownames(normCounts) <- toupper(collected_isoforms[, c("GeneId")])
   res <- nbinomTest(cdsD, args$uname, args$tname)
   infLFC <- is.infinite(res$log2FoldChange)
   res$log2FoldChange[infLFC] <- log2((res$baseMeanB[infLFC] + 0.1) / (res$baseMeanA[infLFC] +
-                                                                        0.1))
-  
+    0.1))
+
   export_ma_plot(res, paste(args$output, "_ma_plot", sep = ""))
-  
+
   vsd <- exprs(DESeq2::varianceStabilizingTransformation(cdsD, blind = FALSE))
   rownames(vsd) <- collected_isoforms[, c("GeneId")]
   mat <- vsd[order(rowMeans(counts(cdsD, normalized = TRUE)),
-                   decreasing =
-                     TRUE
+    decreasing =
+      TRUE
   )[1:30], ]
   DESeqRes <- res[, c(2, 6, 7, 8)]
   colnames(DESeqRes)[3] <- "pvalue" # in DESeq2 it's pvalue, need to use the same here
@@ -946,12 +952,12 @@ collected_isoforms <- data.frame(
   check.rows = F
 )
 collected_isoforms[, "'-LOG10(pval)'"] <- format(-log(as.numeric(collected_isoforms$pvalue), 10),
-                                                 digits =
-                                                   args$digits
+  digits =
+    args$digits
 )
 collected_isoforms[, "'-LOG10(padj)'"] <- format(-log(as.numeric(collected_isoforms$padj), 10),
-                                                 digits =
-                                                   args$digits
+  digits =
+    args$digits
 )
 
 
@@ -966,8 +972,8 @@ write.table(
   quote = FALSE
 )
 print(paste("Export DESeq report to ", collected_isoforms_filename,
-            sep =
-              ""
+  sep =
+    ""
 ))
 
 print(
@@ -1040,6 +1046,6 @@ export_gct(
 
 print("Exporting CLS phenotype data")
 export_cls(categories = col_metadata[, "conditions"], paste(args$output, "_phenotypes.cls",
-                                                            sep =
-                                                              ""
+  sep =
+    ""
 ))
