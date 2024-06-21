@@ -1127,7 +1127,7 @@ atac_preprocess <- function(seurat_data, args) {
             dims=args$dimensions,                                                               # don't need to use more than we are going to use in UMAP
             verbose=FALSE
         )
-        min_anchors_count <- min(                                                               # the minimum number of anchors found between datasets
+        min_anchors_found <- min(                                                               # the minimum number of anchors found between datasets
             base::subset(                                                                       # more details are here https://github.com/satijalab/seurat/issues/3930
                 base::as.data.frame(
                     base::table(
@@ -1137,13 +1137,47 @@ atac_preprocess <- function(seurat_data, args) {
                 dataset1 != dataset2                                                            # this will remove zeros, because there is no anchors within the same dataset
             )$Freq
         )
-        base::print(base::paste("The minimum intergration anchors count:", min_anchors_count))
-        integrated_seurat_data <- Seurat::IntegrateEmbeddings(
-            anchorset=integration_anchors,
-            reductions=processed_seurat_data[["lsi"]],
-            new.reduction.name="atac_lsi",                                                      # adding "atac_lsi" for consistency
-            k.weight=min(min_anchors_count, 100),                                               # k.weight 100 by default, but shouldn't be bigger than the min number of integration anchors
-            dims.to.integrate=args$dimensions,                                                  # will always overwrite with 1:ncol(x = reductions), so no difference what to use here
+        base::print(
+            base::paste(
+                "The minimum number of intergration anchors is", min_anchors_found
+            )
+        )
+        integrated_seurat_data <- base::tryCatch(
+            expr = {
+                k_weight <- min(max(min_anchors_found, 10), 100)                                # will be always from 10 to 100
+                base::print(
+                    base::paste(
+                        "Attempting to integrate embeddings using k.weight set to", k_weight
+                    )
+                )
+                return (
+                    Seurat::IntegrateEmbeddings(
+                        anchorset=integration_anchors,
+                        reductions=processed_seurat_data[["lsi"]],
+                        new.reduction.name="atac_lsi",                                          # adding "atac_lsi" for consistency
+                        k.weight=k_weight,
+                        dims.to.integrate=args$dimensions                                       # will always overwrite with 1:ncol(x = reductions), so no difference what to use here
+                    )
+                )
+            },
+            error = function(e){
+                base::print(base::paste("Failed to integrate embeddings with error", e))
+                k_weight <- min(max(round(min_anchors_found/2), 10), 100)                       # will be always from 10 to 100
+                base::print(
+                    base::paste(
+                        "Attempting to integrate embeddings using k.weight set to", k_weight
+                    )
+                )
+                return (
+                    Seurat::IntegrateEmbeddings(
+                        anchorset=integration_anchors,
+                        reductions=processed_seurat_data[["lsi"]],
+                        new.reduction.name="atac_lsi",
+                        k.weight=k_weight,
+                        dims.to.integrate=args$dimensions
+                    )
+                )
+            }
         )
         qclsi_reduction <- processed_seurat_data[["qclsi"]]                                     # need it for QC correlation plots
         processed_seurat_data <- integrated_seurat_data
