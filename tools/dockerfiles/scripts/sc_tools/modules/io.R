@@ -900,7 +900,16 @@ load_10x_vdj_data <- function(seurat_data, args) {
             base::ifelse(filter_by_chains, " Filtering by chains.", "")
         )
     )
-    detected_chains <- base::sort(base::unique(congtigs_data[[1]]$chain))      # assuming that taking the first item from the list is ok
+    detected_chains <- base::sort(                                             # we need to combine chains from all if the list items
+        base::unique(
+            base::unlist(base::lapply(congtigs_data, function(d) d$chain))
+        )
+    )
+    base::print(
+        base::paste(
+            "Detected chains:", base::paste(detected_chains, collapse=", ")
+        )
+    )
     if (base::identical(c("TRA", "TRB"), detected_chains)) {
         congtigs_data <- scRepertoire::combineTCR(                             # combining contigs into clonotypes within each donor, because congtigs_data is a list
             input.data=congtigs_data,
