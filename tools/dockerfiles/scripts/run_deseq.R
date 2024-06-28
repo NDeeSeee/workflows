@@ -240,7 +240,7 @@ generate_md <- function(batchcorrection, batchfile, deseq_results, output_file) 
   if (!is.null(deseq_results)) {
     # Capture the summary output
     summary_output <- capture.output({
-      summary(results(deseq_results))
+      summary(deseq_results)
     })
 
     # Parse the relevant information
