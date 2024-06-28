@@ -217,6 +217,7 @@ COPY ./scripts/run_deseq.R /usr/local/bin/run_deseq.R
 
 # NB: Here we only update run_deseq.R script
 RUN  chmod +x /usr/local/bin/run_deseq.R && \
+     R -e 'install.packages("kableExtra", repo = "https://cloud.r-project.org/")' && \
 #    chmod +x /usr/local/bin/run_deseq_lrt.R && \
 #    chmod +x /usr/local/bin/get_gene_n_tss.R && \
 ### Cleaning
