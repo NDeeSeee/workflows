@@ -856,7 +856,21 @@ geom_density_plot <- function(data, rootname, x_axis, group_by, split_by, x_labe
     )
 }
 
-geom_point_plot <- function(data, rootname, x_axis, y_axis, split_by, color_by, gradient_colors, color_limits, color_break, x_label, y_label, legend_title, plot_title, plot_subtitle=NULL, x_left_intercept=NULL, y_low_intercept=NULL, y_high_intercept=NULL, highlight_rows=NULL, highlight_color="black", highlight_shape=4, scale_x_log10=FALSE, scale_y_log10=FALSE, show_lm=FALSE, show_density=FALSE, alpha=0.2, alpha_intercept=0.5, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+geom_point_plot <- function(
+    data, rootname,
+    x_axis, y_axis,
+    split_by, color_by,
+    gradient_colors, color_limits, color_break,
+    x_label, y_label,
+    legend_title, plot_title, plot_subtitle=NULL,
+    x_left_intercept=NULL, y_low_intercept=NULL, y_high_intercept=NULL,
+    highlight_rows=NULL, highlight_color="black", highlight_shape=4,
+    scale_x_log10=FALSE, scale_y_log10=FALSE,
+    show_lm=FALSE, show_density=FALSE, density_bins=6,
+    alpha=0.2, alpha_intercept=0.5,
+    palette_colors=D40_COLORS, theme="classic",
+    pdf=FALSE, width=1200, height=800, resolution=100
+){
     base::tryCatch(
         expr = {
             intercept_data <- data %>%
@@ -890,8 +904,15 @@ geom_point_plot <- function(data, rootname, x_axis, y_axis, split_by, color_by, 
                     ggplot2::facet_wrap(stats::as.formula(base::paste("~", split_by))) +
                     get_theme(theme)
 
-            if (show_lm){ plot <- plot + ggplot2::stat_smooth(method=stats::lm) }
-            if (show_density){ plot <- plot + ggplot2::geom_density_2d(colour="darkgrey", linetype="solid", alpha=0.75) }
+            if (show_lm){
+                plot <- plot +
+                        ggplot2::stat_smooth(
+                            method=stats::lm,
+                            linetype="dashed",
+                            colour="black",
+                            size=0.25
+                        )
+            }
             if (!is.null(highlight_rows) && length(highlight_rows) > 0){
                 plot <- plot + ggplot2::geom_point(
                     data=data[highlight_rows, ],
@@ -900,7 +921,16 @@ geom_point_plot <- function(data, rootname, x_axis, y_axis, split_by, color_by, 
                     alpha=0.5
                 )
             }
-
+            if (show_density){                                              # we want to have it shown above the highlighted cells
+                plot <- plot +
+                        ggplot2::geom_density_2d(                           # this densities can't be used for comparing the number of cell between the facets
+                            linetype="solid",
+                            bins=density_bins,
+                            contour_var="ndensity",                         # scales densities to a maximum of 1 making the number of contours the same in each facet
+                            colour="black",                                 # all contours will be black
+                            size=0.1
+                        )
+            }
             if (!is.null(x_left_intercept)){
                 plot <- plot +
                         ggplot2::geom_vline(intercept_data, mapping=ggplot2::aes(xintercept=x_left), color=intercept_data$color, alpha=alpha_intercept) +
@@ -1002,7 +1032,16 @@ feature_scatter_plot <- function(data, rootname, x_axis, y_axis, x_label, y_labe
     )
 }
 
-vln_plot <- function(data, features, labels, rootname, plot_title, legend_title, plot_subtitle=NULL, from_meta=FALSE, scale_y_log10=FALSE, group_by=NULL, split_by=NULL, ncol=NULL, show_stats=FALSE, hide_x_text=FALSE, pt_size=NULL, palette_colors=NULL, combine_guides=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+vln_plot <- function(
+    data, features, labels,
+    rootname, plot_title, legend_title,
+    plot_subtitle=NULL,
+    from_meta=FALSE, scale_y_log10=FALSE,
+    group_by=NULL, split_by=NULL,
+    ncol=NULL, show_box_plots=FALSE, hide_x_text=FALSE, rotate_labels=FALSE,
+    legend_position="right", pt_size=NULL, palette_colors=NULL, combine_guides=NULL,
+    theme="classic", pdf=FALSE, width=NULL, height=NULL, resolution=100
+){
     base::tryCatch(
         expr = {
 
@@ -1036,7 +1075,7 @@ vln_plot <- function(data, features, labels, rootname, plot_title, legend_title,
                          data,
                          features=features_corrected,
                          pt.size=pt_size,
-                         group.by=group_by,
+                         group.by=group_by,  # will be used instead of the default identities
                          split.by=split_by,
                          log=FALSE,          # we will scale it later with scale_y_log10 if needed
                          combine=FALSE       # to return a list of gglots
@@ -1045,15 +1084,19 @@ vln_plot <- function(data, features, labels, rootname, plot_title, legend_title,
                 plots[[i]] <- plots[[i]] +
                               ggplot2::ggtitle(labels_corrected[i]) +
                               get_theme(theme) +
-                              ggplot2::theme(axis.title.x=ggplot2::element_blank()) +
+                              ggplot2::theme(
+                                  axis.title.x=ggplot2::element_blank(),
+                                  legend.position=legend_position
+                              ) +
                               ggplot2::guides(fill=ggplot2::guide_legend(legend_title)) +
-                              ggplot2::stat_boxplot(width=0.15, geom="errorbar") +
-                              ggplot2::geom_boxplot(width=0.15, outlier.alpha=0) +
                               Seurat::RotatedAxis()
-                if (show_stats){                        # https://stackoverflow.com/questions/56434187/label-whiskers-on-ggplot-boxplot-when-there-are-outliers
+
+                if (show_box_plots){
                     plots[[i]] <- plots[[i]] +
-                                  ggplot2::stat_summary(
-                                      ggplot2::aes(label=round(..y.., digits=2)),
+                                  ggplot2::stat_boxplot(width=0.1, geom="errorbar", linewidth=0.25) +
+                                  ggplot2::geom_boxplot(width=0.1, outlier.alpha=0, linewidth=0.25) +
+                                  ggplot2::stat_summary(                                                 # https://stackoverflow.com/questions/56434187/label-whiskers-on-ggplot-boxplot-when-there-are-outliers
+                                      ggplot2::aes(label=scales::comma(round(..y.., digits=2))),
                                       geom="text",
                                       fun.y=function(y) grDevices::boxplot.stats(y)$stats[c(1, 5)],
                                       position=ggplot2::position_nudge(x=0.35), 
@@ -1062,17 +1105,62 @@ vln_plot <- function(data, features, labels, rootname, plot_title, legend_title,
                                   )
                 }
 
+                if (rotate_labels){                                                                      # removes titles and puts the labels on the Y axis
+                    plots[[i]] <- plots[[i]] +
+                                  ggplot2::ggtitle(NULL) +
+                                  ggplot2::ylab(labels_corrected[i])
+                }
+
                 if (scale_y_log10_corrected[i]){
                     plots[[i]] <- plots[[i]] +
                                   ggplot2::scale_y_log10() + ggplot2::annotation_logticks(sides="l", alpha=0.3)
                 }
 
-                if (!is.null(palette_colors)){ plots[[i]] <- plots[[i]] + ggplot2::scale_fill_manual(values=palette_colors) }
-                if (hide_x_text){ plots[[i]] <- plots[[i]] + ggplot2::theme(axis.text.x=ggplot2::element_blank()) }
+                if (!is.null(palette_colors)){
+                    plots[[i]] <- plots[[i]] +
+                                  ggplot2::scale_fill_manual(values=palette_colors)
+                }
+
+                if (hide_x_text){
+                    plots[[i]] <- plots[[i]] +
+                                  ggplot2::theme(axis.text.x=ggplot2::element_blank())
+                }
+
                 return (plots[[i]])
             })
-            combined_plots <- patchwork::wrap_plots(plots, guides=combine_guides, ncol=ncol) +
-                              patchwork::plot_annotation(title=plot_title, subtitle=plot_subtitle)
+
+            columns_number <- ifelse(is.null(ncol), ceiling(sqrt(length(plots))), ncol)               # tries to make a square
+            combined_plots <- patchwork::wrap_plots(
+                                  plots,
+                                  guides=combine_guides,
+                                  ncol=columns_number
+                              ) +
+                              patchwork::plot_annotation(
+                                  title=plot_title,
+                                  subtitle=plot_subtitle,
+                                  theme=ggplot2::theme(legend.position=legend_position)
+                              )
+
+            if (is.null(width)){
+                current_identities <- SeuratObject::Idents(data)
+                if (!is.null(group_by)){
+                    current_identities <- data@meta.data[[group_by]]                                  # in case we group not by the default identities
+                }
+                width_scale <- ifelse(show_box_plots, 0.5, 0.3)                                       # need more space when showing stats
+                width <- round(
+                    length(
+                        base::unique(base::as.vector(as.character(current_identities)))
+                    ) * columns_number * width_scale * resolution
+                )
+                width <- base::ifelse(width < 600, 600, width)
+            }
+            if (is.null(height)){
+                height_scale <- ifelse(from_meta, 2, 1.5)                                             # need more space when showing QC metrics from the meta data
+                height <- round(
+                    ceiling(length(plots)/columns_number) * height_scale * resolution
+                )
+                height <- base::ifelse(height < 400, 400, height)
+            }
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(combined_plots))

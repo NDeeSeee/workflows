@@ -25,10 +25,17 @@ suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
     Idents(seurat_data) <- "new.ident"                                                                # safety measure
     peak_type <- ifelse(macs2_peaks, "- MACS2", "- 10x")
-    selected_features <- c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "nCount_ATAC", "TSS.enrichment", "nucleosome_signal", "nFeature_ATAC", "frip", "blacklist_fraction")
+    selected_features <- c(
+        "nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi",
+        "nCount_ATAC", "TSS.enrichment", "nucleosome_signal", "nFeature_ATAC", "frip", "blacklist_fraction"
+    )
     selected_labels <- c(
         "RNA reads", "Genes", "Mitochondrial %", "Novelty score",
         paste(c("ATAC fragments\nin peaks", "TSS enrichment\nscore", "Nucl. signal", "Peaks", "FRiP", "Bl. regions"), peak_type)
+    )
+    selected_scales <- c(
+        TRUE, TRUE, FALSE, FALSE,
+        TRUE, FALSE, FALSE, TRUE, FALSE, FALSE
     )
     datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
     conditions_count <- length(unique(as.vector(as.character(seurat_data@meta.data$condition))))
@@ -149,6 +156,8 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         scale_x_log10=TRUE,
         scale_y_log10=TRUE,
         show_lm=TRUE,
+        show_density=TRUE,
+        density_bins=4,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
         width=ifelse(datasets_count > 1, 1200, 600),
@@ -176,6 +185,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         scale_x_log10=TRUE,
         scale_y_log10=TRUE,
         show_lm=FALSE,
+        show_density=TRUE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
         width=ifelse(datasets_count > 1, 1200, 600),
@@ -335,17 +345,15 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
         data=seurat_data,
         features=selected_features,
         labels=selected_labels,
+        scale_y_log10=selected_scales,
         from_meta=TRUE,
-        show_stats=TRUE,
+        show_box_plots=TRUE,
         plot_title="Distribution of QC metrics per cell",
         plot_subtitle=graphics$expand_qc_suffix(suffix),
         legend_title="Dataset",
         hide_x_text=TRUE,
         pt_size=0,
         combine_guides="collect",
-        ncol=5,
-        width=ifelse(datasets_count > 1, 2000, 1200),
-        height=800,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
         rootname=paste(args$output, suffix, "qc_mtrcs_dnst", sep="_"),
