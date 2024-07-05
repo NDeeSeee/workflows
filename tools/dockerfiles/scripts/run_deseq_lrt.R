@@ -57,83 +57,83 @@ INTERSECT_BY <- c("RefseqId", "GeneId", "Chrom", "TxStart", "TxEnd", "Strand")
 
 
 get_file_type <- function (filename) {
-    ext = tools::file_ext(filename)
-    separator = ","
-    if (ext == "tsv"){
-        separator = "\t"
-    }
-    return (separator)
+  ext = tools::file_ext(filename)
+  separator = ","
+  if (ext == "tsv"){
+    separator = "\t"
+  }
+  return (separator)
 }
 
 
 load_expression_data <- function(filenames, prefixes, read_colname, rpkm_colname, intersect_by) {
-    collected_isoforms=NULL
-    for (i in 1:length(filenames)) {
-        isoforms <- read.table(filenames[i], sep=get_file_type(filenames[i]), header=TRUE, stringsAsFactors=FALSE)
-        print(paste("Load ", nrow(isoforms), " rows from ", filenames[i], sep=""))
-        colnames(isoforms)[colnames(isoforms) == read_colname] <- paste(prefixes[i], read_colname, sep=" ")
-        colnames(isoforms)[colnames(isoforms) == rpkm_colname] <- paste(prefixes[i], rpkm_colname, sep=" ")
-        if (is.null(collected_isoforms)){
-            collected_isoforms <- isoforms
-        } else {
-            collected_isoforms <- merge(collected_isoforms, isoforms, by=intersect_by, sort = FALSE)
-        }
+  collected_isoforms=NULL
+  for (i in 1:length(filenames)) {
+    isoforms <- read.table(filenames[i], sep=get_file_type(filenames[i]), header=TRUE, stringsAsFactors=FALSE)
+    print(paste("Load ", nrow(isoforms), " rows from ", filenames[i], sep=""))
+    colnames(isoforms)[colnames(isoforms) == read_colname] <- paste(prefixes[i], read_colname, sep=" ")
+    colnames(isoforms)[colnames(isoforms) == rpkm_colname] <- paste(prefixes[i], rpkm_colname, sep=" ")
+    if (is.null(collected_isoforms)){
+      collected_isoforms <- isoforms
+    } else {
+      collected_isoforms <- merge(collected_isoforms, isoforms, by=intersect_by, sort = FALSE)
     }
-    print(paste("Number of rows common for all loaded files ", nrow(collected_isoforms), sep=""))
-    return (collected_isoforms)
+  }
+  print(paste("Number of rows common for all loaded files ", nrow(collected_isoforms), sep=""))
+  return (collected_isoforms)
 }
 
 
 assert_args <- function(args){
-    if ( length(args$input) != length(args$name) ){
-            print("Exiting: --input and --name have different number of values")
-            quit(save = "no", status = 1, runLast = FALSE)
-    }
+  if ( length(args$input) != length(args$name) ){
+    print("Exiting: --input and --name have different number of values")
+    quit(save = "no", status = 1, runLast = FALSE)
+  }
+  if ( length(args$contrast) != 3 ){
+    args$contrast = unlist(strsplit(args$contrast,"\\s+",fixed=FALSE))  # split by any number of spaces
+    print("Split --contrast by spaces")
+    print(args$contrast)
     if ( length(args$contrast) != 3 ){
-            args$contrast = unlist(strsplit(args$contrast,"\\s+",fixed=FALSE))  # split by any number of spaces
-            print("Split --contrast by spaces")
-            print(args$contrast)
-            if ( length(args$contrast) != 3 ){
-                print("Exiting: --contrast should have exaclty three values")
-                quit(save = "no", status = 1, runLast = FALSE)
-            }
+      print("Exiting: --contrast should have exaclty three values")
+      quit(save = "no", status = 1, runLast = FALSE)
     }
-    tryCatch(
-        expr = {
-            # Try to load design formula
-            design_formula = as.formula(args$design)
-        },
-        error = function(e){ 
-            print(paste("Exiting: failed to load --design ", args$design, " as formula",  sep=""))
-            quit(save = "no", status = 1, runLast = FALSE)
-        }
-    )
-    tryCatch(
-        expr = {
-            # Try to load reduced formula
-            reduced_formula = as.formula(args$reduced)
-        },
-        error = function(e){ 
-            print(paste("Exiting: failed to load --reduced ", args$reduced, " as formula",  sep=""))
-            quit(save = "no", status = 1, runLast = FALSE)
-        }
-    )
-    return (args)
+  }
+  tryCatch(
+    expr = {
+      # Try to load design formula
+      design_formula = as.formula(args$design)
+    },
+    error = function(e){ 
+      print(paste("Exiting: failed to load --design ", args$design, " as formula",  sep=""))
+      quit(save = "no", status = 1, runLast = FALSE)
+    }
+  )
+  tryCatch(
+    expr = {
+      # Try to load reduced formula
+      reduced_formula = as.formula(args$reduced)
+    },
+    error = function(e){ 
+      print(paste("Exiting: failed to load --reduced ", args$reduced, " as formula",  sep=""))
+      quit(save = "no", status = 1, runLast = FALSE)
+    }
+  )
+  return (args)
 }
 
 
 get_args <- function(){
-    parser <- ArgumentParser(description="Run DeSeq2 for multi-factor analysis using LRT (likelihood ratio or chi-squared test)")
-    parser$add_argument("-i", "--input",    help="Grouped by gene / TSS/ isoform expression files, formatted as CSV/TSV",                                                       type="character", required="True", nargs="+")
-    parser$add_argument("-n", "--name",     help="Unique names for input files, no special characters, spaces are allowed. Number and order corresponds to --input",            type="character", required="True", nargs="+")
-    parser$add_argument("-m", "--meta",     help="Metadata file to describe relation between samples, where first column corresponds to --name, formatted as CSV/TSV",          type="character", required="True")
-    parser$add_argument("-d", "--design",   help="Design formula. Should start with ~. See DeSeq2 manual for details",                                                          type="character", required="True")
-    parser$add_argument("-r", "--reduced",  help="Reduced formula to compare against with the term(s) of interest removed. Should start with ~. See DeSeq2 manual for details", type="character", required="True")
-    parser$add_argument("-c", "--contrast", help="Contrast to be be applied for output, formatted as Factor Numerator Denominator or Factor Numerator Denominator",           type="character", required="True", nargs="+")
-    parser$add_argument("-o", "--output",   help="Output prefix for generated files", type="character", default="./deseq")
-    parser$add_argument("-p", "--threads",  help="Threads number",                    type="integer",   default=1)
-    args <- assert_args(parser$parse_args(commandArgs(trailingOnly = TRUE)))
-    return (args)
+  parser <- ArgumentParser(description="Run DeSeq2 for multi-factor analysis using LRT (likelihood ratio or chi-squared test)")
+  parser$add_argument("-i", "--input",    help="Grouped by gene / TSS/ isoform expression files, formatted as CSV/TSV",                                                       type="character", required="True", nargs="+")
+  parser$add_argument("-n", "--name",     help="Unique names for input files, no special characters, spaces are allowed. Number and order corresponds to --input",            type="character", required="True", nargs="+")
+  parser$add_argument("-m", "--meta",     help="Metadata file to describe relation between samples, where first column corresponds to --name, formatted as CSV/TSV",          type="character", required="True")
+  parser$add_argument("-d", "--design",   help="Design formula. Should start with ~. See DeSeq2 manual for details",                                                          type="character", required="True")
+  parser$add_argument("-r", "--reduced",  help="Reduced formula to compare against with the term(s) of interest removed. Should start with ~. See DeSeq2 manual for details", type="character", required="True")
+  parser$add_argument("-c", "--contrast", help="Contrast to be be applied for output, formatted as Factor Numerator Denominator or Factor Numerator Denominator",           type="character", required="True", nargs="+")
+  parser$add_argument("-o", "--output",   help="Output prefix for generated files", type="character", default="./deseq")
+  parser$add_argument("-p", "--threads",  help="Threads number",                    type="integer",   default=1)
+  args <- assert_args(parser$parse_args(commandArgs(trailingOnly = TRUE)))
+  return (args)
 }
 
 
@@ -170,18 +170,18 @@ colnames(read_counts_data_df) <- lapply(colnames(read_counts_data_df), function(
 print("Read counts data")
 print(head(read_counts_data_df))
 tryCatch(
-    expr = {
-        # Try reorder columns in read_counts_data_df based on metadata_df rownames
-        print("Reorder read count columns based on the row names from the provided metadata file")
-        read_counts_data_df = read_counts_data_df[,rownames(metadata_df)]
-        print(head(read_counts_data_df))
-    },
-    error = function(e){ 
-        print("Exiting: failed to reorder read count columns based on the row names from the provided metadata file")
-        print(paste("Count data columns -", paste(colnames(read_counts_data_df), collapse=" "), sep=" "))
-        print(paste("Metadata file rows -", paste(rownames(metadata_df), collapse=" "), sep=" "))
-        quit(save = "no", status = 1, runLast = FALSE)
-    }
+  expr = {
+    # Try reorder columns in read_counts_data_df based on metadata_df rownames
+    print("Reorder read count columns based on the row names from the provided metadata file")
+    read_counts_data_df = read_counts_data_df[,rownames(metadata_df)]
+    print(head(read_counts_data_df))
+  },
+  error = function(e){ 
+    print("Exiting: failed to reorder read count columns based on the row names from the provided metadata file")
+    print(paste("Count data columns -", paste(colnames(read_counts_data_df), collapse=" "), sep=" "))
+    print(paste("Metadata file rows -", paste(rownames(metadata_df), collapse=" "), sep=" "))
+    quit(save = "no", status = 1, runLast = FALSE)
+  }
 )
 
 print("Run DESeq2 using LRT")
