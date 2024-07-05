@@ -98,7 +98,7 @@ export_all_qc_plots <- function(seurat_data, args){
             labels=c("ATAC fragments in peaks", "Peaks", "Nucl. signal", "TSS enrichment score", "FRiP", "Bl. regions"),
             scale_y_log10=c(TRUE, TRUE, FALSE, FALSE, FALSE, FALSE),
             from_meta=TRUE,
-            show_stats=TRUE,
+            show_box_plots=TRUE,
             plot_title="Distribution of QC metrics per cell colored by cluster",
             plot_subtitle=paste(
                 "All cells;",
@@ -107,8 +107,6 @@ export_all_qc_plots <- function(seurat_data, args){
             legend_title="Cluster",
             pt_size=0,
             combine_guides="collect",
-            ncol=1,
-            height=1600,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
             rootname=paste(args$output, "qc_mtrcs_dnst_gr_clst_res", current_resolution, sep="_"),

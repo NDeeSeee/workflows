@@ -68,6 +68,8 @@ export_all_qc_plots <- function(seurat_data, args){
             scale_x_log10=TRUE,
             scale_y_log10=TRUE,
             show_lm=TRUE,
+            show_density=TRUE,
+            density_bins=4,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
             rootname=paste(args$output, "gene_umi_spl_clst_res", current_resolution, sep="_"),
@@ -96,6 +98,7 @@ export_all_qc_plots <- function(seurat_data, args){
             scale_x_log10=TRUE,
             scale_y_log10=TRUE,
             show_lm=FALSE,
+            show_density=TRUE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
             rootname=paste(args$output, "umi_mito_spl_clst_res", current_resolution, sep="_"),
@@ -251,7 +254,7 @@ export_all_qc_plots <- function(seurat_data, args){
                 TRUE, FALSE, FALSE, TRUE, FALSE, FALSE
             ),
             from_meta=TRUE,
-            show_stats=TRUE,
+            show_box_plots=TRUE,
             plot_title="Distribution of QC metrics per cell colored by cluster",
             plot_subtitle=paste(
                 "All cells;",
@@ -260,9 +263,6 @@ export_all_qc_plots <- function(seurat_data, args){
             legend_title="Cluster",
             pt_size=0,
             combine_guides="collect",
-            ncol=2,
-            width=2400,
-            height=1200,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
             rootname=paste(args$output, "qc_mtrcs_dnst_gr_clst_res", current_resolution, sep="_"),
@@ -668,28 +668,23 @@ export_all_expression_plots <- function(seurat_data, args) {
             rootname=paste(args$output, "xpr_avg_res", current_resolution, sep="_"),
             pdf=args$pdf
         )
-        for (i in 1:length(args$genes)){
-            current_gene <- args$genes[i]
-            graphics$vln_plot(
-                data=seurat_data,
-                features=current_gene,
-                labels=current_gene,
-                plot_title="Gene expression density",
-                plot_subtitle=paste(
-                    "Resolution", current_resolution
-                ),
-                legend_title="Cluster",
-                scale_y_log10=TRUE,
-                pt_size=0,
-                combine_guides="collect",
-                width=800,
-                height=600,
-                palette_colors=graphics$D40_COLORS,
-                theme=args$theme,
-                rootname=paste(args$output, "xpr_dnst_res", current_resolution, current_gene, sep="_"),
-                pdf=args$pdf
-            )
-        }
+        graphics$vln_plot(
+            data=seurat_data,
+            features=args$genes,
+            labels=args$genes,
+            plot_title="Gene expression density",
+            plot_subtitle=paste(
+                "Resolution", current_resolution
+            ),
+            legend_title="Cluster",
+            rotate_labels=TRUE,
+            pt_size=0,
+            combine_guides="collect",
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "xpr_dnst_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
     }
     SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
 }

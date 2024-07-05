@@ -20,8 +20,9 @@ suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
 export_all_qc_plots <- function(seurat_data, suffix, args){
     Idents(seurat_data) <- "new.ident"                                                                # safety measure
-    selected_features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi")
-    selected_labels=c("RNA reads", "Genes", "Mitochondrial %", "Novelty score")
+    selected_features <- c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi")
+    selected_labels <- c("RNA reads", "Genes", "Mitochondrial %", "Novelty score")
+    selected_scales <- c(TRUE, TRUE, FALSE, FALSE)
     datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
     conditions_count <- length(unique(as.vector(as.character(seurat_data@meta.data$condition))))
     not_default_conditions <- all(
@@ -141,6 +142,8 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         scale_x_log10=TRUE,
         scale_y_log10=TRUE,
         show_lm=TRUE,
+        show_density=TRUE,
+        density_bins=4,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
         width=ifelse(datasets_count > 1, 1200, 600),
@@ -168,6 +171,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         scale_x_log10=TRUE,
         scale_y_log10=TRUE,
         show_lm=FALSE,
+        show_density=TRUE,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
         width=ifelse(datasets_count > 1, 1200, 600),
@@ -215,17 +219,15 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
         data=seurat_data,
         features=selected_features,
         labels=selected_labels,
+        scale_y_log10=selected_scales,
         from_meta=TRUE,
-        show_stats=TRUE,
+        show_box_plots=TRUE,
         plot_title="Distribution of QC metrics per cell",
         plot_subtitle=graphics$expand_qc_suffix(suffix),
         legend_title="Dataset",
         hide_x_text=TRUE,
         pt_size=0,
         combine_guides="collect",
-        ncol=4,
-        width=ifelse(datasets_count > 1, 1600, 1000),
-        height=400,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
         rootname=paste(args$output, suffix, "qc_mtrcs_dnst", sep="_"),

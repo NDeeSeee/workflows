@@ -94,6 +94,8 @@ export_all_qc_plots <- function(seurat_data, args){
             scale_x_log10=TRUE,
             scale_y_log10=TRUE,
             show_lm=TRUE,
+            show_density=TRUE,
+            density_bins=4,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
             rootname=paste(args$output, "gene_umi_spl_ctyp", sep="_"),
@@ -121,6 +123,7 @@ export_all_qc_plots <- function(seurat_data, args){
             scale_x_log10=TRUE,
             scale_y_log10=TRUE,
             show_lm=FALSE,
+            show_density=TRUE,
             palette_colors=graphics$D40_COLORS,
             theme=args$theme,
             rootname=paste(args$output, "umi_mito_spl_ctyp", sep="_"),
@@ -270,15 +273,12 @@ export_all_qc_plots <- function(seurat_data, args){
             TRUE, FALSE, FALSE, TRUE, FALSE, FALSE
         ),
         from_meta=TRUE,
-        show_stats=TRUE,
+        show_box_plots=TRUE,
         plot_title="Distribution of QC metrics per cell colored by cell type",
         plot_subtitle="All cells",
         legend_title="Cell type",
         pt_size=0,
         combine_guides="collect",
-        ncol=ncol,
-        width=width,
-        height=height,
         palette_colors=graphics$D40_COLORS,
         theme=args$theme,
         rootname=paste(args$output, "qc_mtrcs_dnst_gr_ctyp", sep="_"),
@@ -669,6 +669,21 @@ export_all_expression_plots <- function(seurat_data, args) {
         pdf=args$pdf
     )
 
+    graphics$vln_plot(
+        data=seurat_data,
+        features=args$genes,
+        labels=args$genes,
+        plot_title="Gene expression density",
+        legend_title="Cell type",
+        rotate_labels=TRUE,
+        pt_size=0,
+        combine_guides="collect",
+        palette_colors=graphics$D40_COLORS,
+        theme=args$theme,
+        rootname=paste(args$output, "xpr_dnst", sep="_"),
+        pdf=args$pdf
+    )
+
     for (i in 1:length(args$genes)){
         current_gene <- args$genes[i]
         graphics$feature_plot(
@@ -701,22 +716,6 @@ export_all_expression_plots <- function(seurat_data, args) {
             height=800,
             theme=args$theme,
             rootname=paste(args$output, "xpr_per_cell_sgnl", current_gene, sep="_"),
-            pdf=args$pdf
-        )
-        graphics$vln_plot(
-            data=seurat_data,
-            features=current_gene,
-            labels=current_gene,
-            plot_title="Gene expression density",
-            legend_title="Cell type",
-            scale_y_log10=TRUE,
-            pt_size=0,
-            combine_guides="collect",
-            width=800,
-            height=600,
-            palette_colors=graphics$D40_COLORS,
-            theme=args$theme,
-            rootname=paste(args$output, "xpr_dnst", current_gene, sep="_"),
             pdf=args$pdf
         )
     }

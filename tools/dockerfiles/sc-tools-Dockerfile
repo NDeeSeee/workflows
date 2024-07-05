@@ -2,15 +2,15 @@
 # Dockerfile
 #
 # Software:         set of R scripts for single-cell data analysis
-# Software Version: v0.0.38
+# Software Version: v0.0.39
 # Description:      Dockerized version of the set of R scripts for
 #                   single-cell data analysis
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         set of R scripts for single-cell data analysis
 # Base Image:       satijalab/seurat:latest
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.38 -f sc-tools-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.38
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.38 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.39 -f sc-tools-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.39
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.39 /bin/bash
 ##########################################################################################################
 #
 # Notes:
@@ -34,6 +34,17 @@
 #     sc_ctype_assign.R --help && \
 #     sc_triangulate.R --help && \
 #     sc_vdj_profile.R --help 
+#
+#
+# v0.0.39 -- based on biowardrobe2/sc-tools:v0.0.38_as_base
+# - Install Nebulosa from the GitHub because of this bug 
+#   https://github.com/powellgenomicslab/Nebulosa/issues/22
+# - Replace gene expression violin plot to show all genes
+#   on the same plot. Show not log-normalized scale on y-axis
+#   so the plot better correspond to the information show on
+#   the dot plot. Refactore vln_plot function to automatically
+#   adjust columns number, width, height depending on the data.
+# - Updated geom_point_plot to show densities in the better way.
 #
 # v0.0.38 -- based on satijalab/seurat:latest
 # - Fixed bug with contours ploting for the groups
@@ -360,7 +371,7 @@ RUN apt-get update && \
     R -e "BiocManager::install(c('BiocGenerics', 'DelayedArray', 'DelayedMatrixStats','limma', \
                                  'S4Vectors', 'SingleCellExperiment', 'SummarizedExperiment', \
                                  'batchelor', 'DESeq2', 'Rsamtools', 'rtracklayer', \
-                                 'glmGamPoi', 'Nebulosa', 'limma', 'EnhancedVolcano', 'LoomExperiment', \
+                                 'glmGamPoi', 'limma', 'EnhancedVolcano', 'LoomExperiment', \
                                  'hopach', 'Glimma', 'dittoSeq', 'cmapR', 'ComplexHeatmap', 'scDblFinder', \
                                  'slingshot', 'traviz'))" && \
     R -e 'install.packages("fastmatch")' && \
@@ -372,6 +383,7 @@ RUN apt-get update && \
     R -e 'devtools::install_github("dynverse/dynfeature", upgrade = "never")' && \
     R -e 'devtools::install_github("dynverse/dynplot", upgrade = "never")' && \
     R -e 'devtools::install_github("ncborcherding/scRepertoire@v2.0.0", upgrade = "never")' && \
+    R -e 'devtools::install_github("powellgenomicslab/Nebulosa@1f0714dd4adee2f9dee2946084e5ca14765e77ae", upgrade = "never")' && \
     R -e 'install.packages("LambertW")' && \
     R -e 'install.packages("nortest")' && \
     R -e 'install.packages("doParallel")' && \
