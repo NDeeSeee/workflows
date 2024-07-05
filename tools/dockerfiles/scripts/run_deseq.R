@@ -759,6 +759,16 @@ get_args <- function() {
     default = 0.59
   )
   parser$add_argument(
+    "--use_lfc_thresh",
+    help = paste(
+      "Flag to indicate whether to use lfcthreshold as the null hypothesis value in the results function call.",
+      "If TRUE, lfcthreshold is used in the hypothesis test (i.e., genes are tested against this threshold).",
+      "If FALSE, the null hypothesis is set to 0, and lfcthreshold is used only as a downstream filter.",
+      "Default: FALSE"
+    ),
+    action = "store_true"
+  )
+  parser$add_argument(
     "--rowdist",
     help = paste(
       "Distance metric for HOPACH row clustering. Ignored if --cluster is not",
@@ -908,7 +918,8 @@ if (length(args$treated) > 1 && length(args$untreated) > 1) {
   # for norm count file. Batch correction doens't influence it
   normCounts <- counts(dsq, normalized = TRUE)
   rownames(normCounts) <- toupper(collected_isoforms[, c("GeneId")])
-
+  
+  # Determine altHypothesis and lfcThreshold based on the flag
   altHypothesis <- if (args$regulation == "up") {
     "greater"
   } else if (args$regulation == "down") {
@@ -916,13 +927,16 @@ if (length(args$treated) > 1 && length(args$untreated) > 1) {
   } else {
     "greaterAbs"
   }
+  
+  lfcThreshold <- if (args$use_lfc_thresh) args$lfcthreshold else 0
 
+  # Perform DESeq2 results analysis
   res <- results(
     dsq,
     contrast = c("conditions", args$uname, args$tname),
     alpha = args$fdr,
-    lfcThreshold = args$lfcthreshold,
-    independentFiltering = T,
+    lfcThreshold = lfcThreshold,
+    independentFiltering = TRUE,
     altHypothesis = altHypothesis
   )
 
@@ -964,32 +978,7 @@ if (length(args$treated) > 1 && length(args$untreated) > 1) {
   )[1:30], ]
   DESeqRes <- as.data.frame(res[, c(1, 2, 5, 6)])
 } else {
-  print("Run DESeq analysis")
-  suppressMessages(library(DESeq))
-  cds <- newCountDataSet(countData, column_data[, "conditions"])
-  cdsF <- estimateSizeFactors(cds)
-  cdsD <- estimateDispersions(cdsF,
-    method = "blind",
-    sharingMode = "fit-only",
-    fitType = "local"
-  )
-  normCounts <- counts(cdsD, normalized = TRUE)
-  rownames(normCounts) <- toupper(collected_isoforms[, c("GeneId")])
-  res <- nbinomTest(cdsD, args$uname, args$tname)
-  infLFC <- is.infinite(res$log2FoldChange)
-  res$log2FoldChange[infLFC] <- log2((res$baseMeanB[infLFC] + 0.1) / (res$baseMeanA[infLFC] +
-    0.1))
-
-  export_ma_plot(res, paste(args$output, "_ma_plot", sep = ""))
-
-  vsd <- exprs(DESeq2::varianceStabilizingTransformation(cdsD, blind = FALSE))
-  rownames(vsd) <- collected_isoforms[, c("GeneId")]
-  mat <- vsd[order(rowMeans(counts(cdsD, normalized = TRUE)),
-    decreasing =
-      TRUE
-  )[1:30], ]
-  DESeqRes <- res[, c(2, 6, 7, 8)]
-  colnames(DESeqRes)[3] <- "pvalue" # in DESeq2 it's pvalue, need to use the same here
+  print("You are trying to run DESeq2 with only one replicate, which is not possible.")
 }
 
 # Expression data heatmap of the 30 most highly expressed genes
