@@ -1,9 +1,11 @@
 # install_packages.R
 
-# List of CRAN packages to install
+# List of CRAN packages to install, including dependencies
 cran_packages <- c(
+  "googledrive", "googlesheets4", "httr", "ragg", "rvest", "xml2",
   "locfit", "tidyverse", "patchwork", "argparse", "data.table",
-  "pheatmap", "ggrepel", "htmlwidgets", "devtools", "kableExtra"
+  "pheatmap", "ggrepel", "htmlwidgets", "devtools", "kableExtra",
+  "systemfonts", "svglite"
 )
 
 # List of Bioconductor packages to install
