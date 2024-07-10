@@ -584,7 +584,7 @@ blacklist_data <- io$load_blacklist_data(args$blacklist)
 print(paste("Loading chromosome length information from", args$seqinfo))
 seqinfo_data <- io$load_seqinfo_data(args$seqinfo)
 
-print(paste("Loading genome annotation data from", args$seqinfo))
+print(paste("Loading genome annotation data from", args$annotations))
 annotation_data <- io$load_annotation_data(args$annotations)
 
 print(paste("Loading peak-barcode matrices from", args$mex))

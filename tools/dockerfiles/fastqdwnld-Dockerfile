@@ -1,12 +1,17 @@
 ####################################################################################################################################
 # Software:         sratoolkit, Cell Ranger, E-utilities
-# Software Version: 0.0.3
+# Software Version: 0.0.4
 # Description:      Set of utilities to download SRA data
-# Base Image:       cumulusprod/cellranger:7.0.0
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/fastqdwnld:v0.0.3 -f fastqdwnld-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/fastqdwnld:v0.0.3
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/fastqdwnld:v0.0.3 /bin/bash
+# Base Image:       cumulusprod/cellranger:8.0.1
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/fastqdwnld:v0.0.4 -f fastqdwnld-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/fastqdwnld:v0.0.4
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/fastqdwnld:v0.0.4 /bin/bash
 ####################################################################################################################################
+#
+# 0.0.4
+# - Update base image from cumulusprod/cellranger:7.0.0
+#   to cumulusprod/cellranger:8.0.1
+# - Update SRA toolkit version from 3.0.5 to 3.1.1
 #
 # 0.0.3
 # - Uses random prefix to add to the filename
@@ -17,7 +22,7 @@
 #
 
 ### Base Image
-FROM --platform=linux/amd64 cumulusprod/cellranger:7.0.0
+FROM --platform=linux/amd64 cumulusprod/cellranger:8.0.1
 LABEL maintainer="misha.kotliar@gmail.com"
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -27,7 +32,7 @@ WORKDIR /tmp
 
 ### Installing sratoolkit
 
-ENV SRA_VERSION 3.0.5
+ENV SRA_VERSION 3.1.1
 ENV SRA_URL "https://ftp-trace.ncbi.nlm.nih.gov/sra/sdk/${SRA_VERSION}/sratoolkit.${SRA_VERSION}-ubuntu64.tar.gz"
 
 COPY ./scripts/sra_download.sh /usr/local/bin/sra_download.sh
