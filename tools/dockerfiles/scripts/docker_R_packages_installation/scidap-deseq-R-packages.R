@@ -10,7 +10,8 @@ cran_packages <- c(
 
 # List of Bioconductor packages to install
 bioc_packages <- c(
-  "BiocParallel", "DESeq2", "limma", "EnhancedVolcano", "hopach", "cmapR"
+  "BiocParallel", "limma", "EnhancedVolcano", "hopach", "cmapR", "XVector",
+  "S4Arrays", "SparseArray", "GenomicRanges", "DelayedArray", "DESeq2"
 )
 
 # Function to install and check CRAN packages
@@ -44,11 +45,12 @@ install_and_check_cran(cran_packages)
 install_and_check_bioc(bioc_packages)
 
 # Install additional packages from GitHub
+install.packages("devtools", repos = "https://cloud.r-project.org")
 if (!require("devtools", character.only = TRUE)) {
-  install.packages("devtools", repos = "https://cloud.r-project.org")
+  stop("Package devtools failed to install.")
 }
 devtools::install_github("hasaru-k/GlimmaV2")
-if (!require("GlimmaV2", character.only = TRUE)) {
+if (!require("Glimma", character.only = TRUE)) {
   stop("Package GlimmaV2 failed to install from GitHub.")
 }
 
