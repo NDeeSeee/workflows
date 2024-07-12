@@ -77,7 +77,17 @@ export(
 
 # https://sashamaps.net/docs/resources/20-colors/
 # https://cran.r-project.org/web/packages/Polychrome/vignettes/testgg.html
-D40_COLORS <- c("#FB1C0D", "#0DE400", "#0D00FF", "#E8B4BD", "#FD00EA", "#0DD1FE", "#FF9B0D", "#0D601C", "#C50D69", "#CACA16", "#722A91", "#00DEBF", "#863B00", "#5D7C91", "#FD84D8", "#C100FB", "#8499FC", "#FD6658", "#83D87A", "#968549", "#DEB6FB", "#832E60", "#A8CAB0", "#FE8F95", "#FE1CBB", "#DF7CF8", "#FF0078", "#F9B781", "#4D493B", "#1C5198", "#7C32CE", "#EFBC16", "#7CD2DE", "#B30DA7", "#9FC0F6", "#7A940D", "#9B0000", "#946D9B", "#C8C2D9", "#94605A")
+D40_COLORS <- c(
+  "#FB1C0D", "#0DE400", "#0D00FF", "#E8B4BD", "#FD00EA", "#0DD1FE", "#FF9B0D", "#0D601C",
+  "#C50D69", "#CACA16", "#722A91", "#00DEBF", "#863B00", "#5D7C91", "#FD84D8", "#C100FB",
+  "#8499FC", "#FD6658", "#83D87A", "#968549", "#DEB6FB", "#832E60", "#A8CAB0", "#FE8F95",
+  "#FE1CBB", "#DF7CF8", "#FF0078", "#F9B781", "#4D493B", "#1C5198", "#7C32CE", "#EFBC16",
+  "#7CD2DE", "#B30DA7", "#9FC0F6", "#7A940D", "#9B0000", "#946D9B", "#C8C2D9", "#94605A",
+  "#34A1EB", "#FFA07A", "#FFD700", "#8A2BE2", "#7FFF00", "#D2691E", "#FF7F50", "#6495ED",
+  "#DC143C", "#00FFFF", "#00008B", "#008B8B", "#B8860B", "#A9A9A9", "#006400", "#BDB76B",
+  "#8B008B", "#556B2F", "#FF8C00", "#9932CC", "#8B0000", "#E9967A", "#8FBC8F", "#483D8B",
+  "#2F4F4F", "#00CED1", "#9400D3", "#FF1493", "#00BFFF", "#696969", "#1E90FF", "#B22222"
+)
 # D40_COLORS <- c("#00D8B6", "#71E869", "#6574FF", "#F3A6B5", "#FF5AD6", "#6DDCFE", "#FFBB70", "#43A14E", "#D71C7C", "#E1E333", "#8139A8", "#FF6E6A", "#B55C00", "#7FA4B6", "#FFA4E3", "#B300FF", "#9BC4FD", "#FF7E6A", "#9DE98D", "#BFA178", "#E7C2FD", "#8B437D", "#ADCDC0", "#FE9FA4", "#FF53D1", "#D993F9", "#FF47A1", "#FFC171", "#625C51", "#4288C9", "#9767D4", "#F2D61D", "#8EE6FD", "#B940B1", "#B2D5F8", "#9AB317", "#C70000", "#AC8BAC", "#D7D1E4", "#9D8D87")
 D24_COLORS <- c(
   "#4E79A7", "#F28E2C", "#4EAE4B", "#D95F02", "#7570B3",

@@ -54,6 +54,8 @@
 #   compatible MEX format
 # - Added sc_cb_utils_split_mex.R script to split feature-barcode
 #   matrix produced by Cell Ranger ARC into RNA and ATAC counts
+# - Added extra 32 colors to D40_COLORS to not fail when there are
+#   to many clusters
 #
 # v0.0.38 -- based on satijalab/seurat:latest
 # - Fixed bug with contours ploting for the groups
