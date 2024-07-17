@@ -33,8 +33,9 @@
 #     sc_wnn_cluster.R --help && \
 #     sc_ctype_assign.R --help && \
 #     sc_triangulate.R --help && \
-#     sc_vdj_profile.R --help 
-#
+#     sc_vdj_profile.R --help && \
+#     sc_cb_utils_atac_search.R --help && \
+#     sc_cb_utils_split_mex.R --help
 #
 # v0.0.39 -- based on biowardrobe2/sc-tools:v0.0.38_as_base
 # - Install Nebulosa from the GitHub because of this bug 
@@ -45,6 +46,16 @@
 #   the dot plot. Refactore vln_plot function to automatically
 #   adjust columns number, width, height depending on the data.
 # - Updated geom_point_plot to show densities in the better way.
+# - Added sc_cb_utils_atac_search.R script to create a file
+#   required by the UCSC Cellbrowser for searching peaks by the
+#   nearest genes. We need it when generating UCSC Cellbrowser
+#   from the CellRanger ARC/ATAC outputs.
+# - Intall DropletUtils to export results into Cell Ranger
+#   compatible MEX format
+# - Added sc_cb_utils_split_mex.R script to split feature-barcode
+#   matrix produced by Cell Ranger ARC into RNA and ATAC counts
+# - Added extra 32 colors to D40_COLORS to not fail when there are
+#   to many clusters
 #
 # v0.0.38 -- based on satijalab/seurat:latest
 # - Fixed bug with contours ploting for the groups
@@ -373,7 +384,7 @@ RUN apt-get update && \
                                  'batchelor', 'DESeq2', 'Rsamtools', 'rtracklayer', \
                                  'glmGamPoi', 'limma', 'EnhancedVolcano', 'LoomExperiment', \
                                  'hopach', 'Glimma', 'dittoSeq', 'cmapR', 'ComplexHeatmap', 'scDblFinder', \
-                                 'slingshot', 'traviz'))" && \
+                                 'slingshot', 'traviz', 'DropletUtils'))" && \
     R -e 'install.packages("fastmatch")' && \
     R -e 'install.packages("RcppRoll")' && \
     R -e 'devtools::install_github("stuart-lab/signac@1.11.0", upgrade = "never")' && \
@@ -421,6 +432,8 @@ RUN apt-get update && \
     chmod +x /usr/local/bin/sc_rna_trajectory.R && \
     chmod +x /usr/local/bin/sc_vdj_profile.R && \
     chmod +x /usr/local/bin/sc_tn5_cut_sites.sh && \
+    chmod +x /usr/local/bin/sc_cb_utils_atac_search.R && \
+    chmod +x /usr/local/bin/sc_cb_utils_split_mex.R && \
 ### Downloading blacklist regions files
     wget https://raw.githubusercontent.com/Boyle-Lab/Blacklist/61a04d2c5e49341d76735d485c61f0d1177d08a8/lists/hg38-blacklist.v2.bed.gz && \
     wget https://raw.githubusercontent.com/Boyle-Lab/Blacklist/61a04d2c5e49341d76735d485c61f0d1177d08a8/lists/hg19-blacklist.v2.bed.gz && \
