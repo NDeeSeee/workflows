@@ -17,7 +17,9 @@ inputs:
       position: 1
 
   input_file:
-    type: File
+    type:
+      - File
+      - File[]
     inputBinding:
       position: 2
 
@@ -34,7 +36,7 @@ outputs:
   output_file:
     type: File
     outputBinding:
-      glob: $(inputs.input_file.basename)
+      glob: "*"
 
 
 baseCommand: [bash, '-c']
@@ -82,10 +84,9 @@ s:creator:
         - id: http://orcid.org/0000-0002-6486-3898
 
 doc: |
-  Tool to run custom script set as `script` input with arguments from `param`. Based on bedops Dockerfile
-  Default script runs sed command over the input file and exports results to the file with the same name as input's basename
-
-  The temporary solution before the bedmap.cwl will be created
+  Tool to run custom script set as `script`
+  input with arguments from `param`. Based
+  on bedops Dockerfile.
 
 s:about: |
   Custom bash script runner
