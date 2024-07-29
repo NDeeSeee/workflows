@@ -3,10 +3,12 @@ options(warn=-1)
 options("width"=200)
 options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
+suppressMessages(library(knitr))
 suppressMessages(library(dplyr))
 suppressMessages(library(Seurat))
 suppressMessages(library(Signac))
 suppressMessages(library(forcats))
+suppressMessages(library(stringr))
 suppressMessages(library(modules))
 suppressMessages(library(argparse))
 suppressMessages(library(SummarizedExperiment))
@@ -20,7 +22,7 @@ suppressMessages(io <- modules::use(file.path(HERE, "modules/io.R")))
 suppressMessages(qc <- modules::use(file.path(HERE, "modules/qc.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 
-
+## ----
 export_raw_plots <- function(seurat_data, args){
     DefaultAssay(seurat_data) <- "RNA"                            # safety measure
     Idents(seurat_data) <- "new.ident"                            # safety measure
@@ -63,7 +65,7 @@ export_raw_plots <- function(seurat_data, args){
     gc(verbose=FALSE)
 }
 
-
+## ----
 export_processed_plots <- function(seurat_data, de_results, args){
     DefaultAssay(seurat_data) <- "RNA"                                  # safety measure
     Idents(seurat_data) <- "new.ident"                                  # safety measure
@@ -250,7 +252,7 @@ export_processed_plots <- function(seurat_data, de_results, args){
 
 }
 
-
+## ----
 get_genes_to_highlight <- function(de_results, args){
     if (!is.null(args$genes) && length(args$genes) > 0){
         print("Using user provided genes to highlight regardless of the significance score")
@@ -271,7 +273,7 @@ get_genes_to_highlight <- function(de_results, args){
     return (genes_to_highlight)
 }
 
-
+## ----
 get_args <- function(){
     parser <- ArgumentParser(
         description="Single-Cell RNA-Seq Differential Expression Analysis"
@@ -510,14 +512,13 @@ get_args <- function(){
         help="Seed number for random values. Default: 42",
         type="integer", default=42
     )
-    args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
     print(args)
     return (args)
 }
 
-
+## ----
 args <- get_args()
-
 print("Adjusting --test parameter")
 args$test <- switch(
     args$test,
@@ -532,13 +533,14 @@ args$test <- switch(
     "deseq-lrt"           = "lrt"
 )
 print(paste("--test was adjusted to", args$test))
-
 prod$parallel(args)
 
+## ----
 print(paste("Loading Seurat data from", args$query))
 seurat_data <- readRDS(args$query)
 debug$print_info(seurat_data, args)
 
+## ----
 if (!any(c("rnaumap", "atacumap", "wnnumap") %in% names(seurat_data@reductions))){
     print(
         paste(
@@ -549,6 +551,8 @@ if (!any(c("rnaumap", "atacumap", "wnnumap") %in% names(seurat_data@reductions))
     )
     quit(save="no", status=1, runLast=FALSE)
 }
+
+## ----
 if (!("RNA" %in% names(seurat_data@assays))){
     print(
         paste(
@@ -558,6 +562,8 @@ if (!("RNA" %in% names(seurat_data@assays))){
     )
     quit(save="no", status=1, runLast=FALSE)
 }
+
+## ----
 if ( !is.null(args$cluster) && (args$cluster %in% c("column", "both")) && !(args$test %in% c("deseq", "lrt")) ){
     print(
         paste(
@@ -568,6 +574,8 @@ if ( !is.null(args$cluster) && (args$cluster %in% c("column", "both")) && !(args
     )
     quit(save="no", status=1, runLast=FALSE)
 }
+
+## ----
 if (!is.null(args$batchby) && (args$test %in% c("wilcox", "bimod", "t"))){
     print(
         paste(
@@ -578,9 +586,11 @@ if (!is.null(args$batchby) && (args$test %in% c("wilcox", "bimod", "t"))){
     quit(save="no", status=1, runLast=FALSE)
 }
 
+## ----
 print("Setting default assay to RNA")
 DefaultAssay(seurat_data) <- "RNA"
 
+## ----
 excluded_genes <- c()
 if (!is.null(args$exclude)){
     excluded_genes <- grep(
@@ -598,6 +608,7 @@ if (!is.null(args$exclude)){
     )
 }
 
+## ----
 if (!is.null(args$genes) && length(args$genes) > 0){
     print(
         paste(
@@ -611,6 +622,7 @@ if (!is.null(args$genes) && length(args$genes) > 0){
     print(args$genes)
 }
 
+## ----
 if (!is.null(args$metadata)){
     print("Extending Seurat object with the extra metadata fields")
     seurat_data <- io$extend_metadata(
@@ -622,24 +634,29 @@ if (!is.null(args$metadata)){
     debug$print_info(seurat_data, args)
 }
 
+## ----
 if (!is.null(args$barcodes)){
     print("Applying cell filters based on the barcodes of interest")
     seurat_data <- io$extend_metadata_by_barcode(seurat_data, args$barcodes, TRUE)         # sets identities to new.ident
     debug$print_info(seurat_data, args)
 }
 
+## ----
 print("Subsetting Seurat object to include only cells from the tested conditions")
 seurat_data <- io$apply_metadata_filters(seurat_data, args$splitby, c(args$first, args$second))
 debug$print_info(seurat_data, args)
 
+## ----
 export_raw_plots(seurat_data, args)                                                        # will include only cells from --first and --second
 
+## ----
 if(!is.null(args$groupby) && !is.null(args$subset)){
     print("Subsetting Seurat object to include only selected groups of cells")
     seurat_data <- io$apply_metadata_filters(seurat_data, args$groupby, args$subset)
     debug$print_info(seurat_data, args)
 }
 
+## ----
 if (!all(table(seurat_data@meta.data[[args$splitby]]) > 0)){                               # check if we accidentally removed cells we want to compare
     print(
         paste(
@@ -651,36 +668,38 @@ if (!all(table(seurat_data@meta.data[[args$splitby]]) > 0)){                    
     quit(save="no", status=1, runLast=FALSE)
 }
 
+## ----
 print("Normalizing RNA counts after all filters applied")
 seurat_data <- NormalizeData(seurat_data, verbose=FALSE)                                   # just in case rerun normalize as we use data slot in FindMarkers function
 
+## ----
 de_results <- analyses$rna_de_analyze(seurat_data, args, excluded_genes)
 print(head(de_results$de_genes))
 
+## ----
 export_processed_plots(seurat_data, de_results, args)
 
-print("Exporting differentially expressed genes")
+## ----
 io$export_data(
     de_results$de_genes,                                                                    # not filtered na-removed differentially expressed genes
     paste(args$output, "_de_genes.tsv", sep="")
 )
 
+## ----
 if (!is.null(de_results$bulk)){                                                             # looks like we run pseudobulk analysis
-    print("Exporting not filtered normalized pseudobulk read counts in GCT format")
     io$export_gct(                                                                          # will be used by GSEA
         counts_mat=SummarizedExperiment::assay(de_results$bulk$counts_data),
         row_metadata=NULL,                                                                  # should be NULL, because de_results$row_metadata is filtered by padj
         col_metadata=de_results$bulk$column_metadata,                                       # includes samples as row names
         location=paste(args$output, "_bulk_counts.gct", sep="")
     )
-    print("Exporting CLS phenotype data")
     io$export_cls(
         categories=de_results$bulk$column_metadata[, args$splitby],                         # to have the same samples order as in GCT file
         paste(args$output, "_bulk_phntps.cls", sep="")
     )
 }
 
-print("Exporting filtered normalized cell read counts to GCT format")
+## ----
 io$export_gct(                                                                              # will be used by Morpheus
     counts_mat=de_results$cell$counts_mat,
     row_metadata=de_results$cell$row_metadata,                                              # includes genes as row names

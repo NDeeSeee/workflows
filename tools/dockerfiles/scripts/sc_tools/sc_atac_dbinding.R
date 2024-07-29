@@ -3,10 +3,12 @@ options(warn=-1)
 options("width"=200)
 options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
+suppressMessages(library(knitr))
 suppressMessages(library(dplyr))
 suppressMessages(library(Seurat))
 suppressMessages(library(Signac))
 # suppressMessages(library(forcats))
+suppressMessages(library(stringr))
 suppressMessages(library(modules))
 suppressMessages(library(argparse))
 suppressMessages(library(rtracklayer))
@@ -19,7 +21,7 @@ suppressMessages(graphics <- modules::use(file.path(HERE, "modules/graphics.R"))
 suppressMessages(io <- modules::use(file.path(HERE, "modules/io.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 
-
+## ----
 prepare_fragments_and_peaks <- function(seurat_data, seqinfo_data, args){               # only MACS2 results will be saved to the --output. All other files are in --tmpdir
     print(paste("Splitting ATAC fragments into two BED files by", args$splitby))        # we should always have only two groups because we prefiltered our Seurat object
     SplitFragments(                                                                     # will place BED files into args$tmpdir
@@ -145,6 +147,7 @@ prepare_fragments_and_peaks <- function(seurat_data, seqinfo_data, args){       
     return (tmp_locations)
 }
 
+## ----
 export_raw_plots <- function(seurat_data, args){
     DefaultAssay(seurat_data) <- "ATAC"                           # safety measure
     Idents(seurat_data) <- "new.ident"                            # safety measure
@@ -185,6 +188,7 @@ export_raw_plots <- function(seurat_data, args){
     gc(verbose=FALSE)
 }
 
+## ----
 export_browser_tracks <- function(db_results, seqinfo_data, args){
     print(
         paste(
@@ -243,6 +247,7 @@ export_browser_tracks <- function(db_results, seqinfo_data, args){
     )
 }
 
+## ----
 export_processed_plots <- function(seurat_data, db_results, args){
     DefaultAssay(seurat_data) <- "ATAC"                                 # safety measure
     Idents(seurat_data) <- "new.ident"                                  # safety measure
@@ -276,6 +281,7 @@ export_processed_plots <- function(seurat_data, db_results, args){
     )
 }
 
+## ----
 get_args <- function(){
     parser <- ArgumentParser(
         description="Single-Cell ATAC-Seq Differential Accessibility Analysis"
@@ -513,14 +519,13 @@ get_args <- function(){
         help="Seed number for random values. Default: 42",
         type="integer", default=42
     )
-    args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
     print(args)
     return (args)
 }
 
-
+## ----
 args <- get_args()
-
 print("Adjusting --test parameter")
 args$test <- switch(
     args$test,
@@ -531,13 +536,14 @@ args$test <- switch(
     "manorm2"             = "manorm2"
 )
 print(paste("--test was adjusted to", args$test))
-
 prod$parallel(args)
 
+## ----
 print(paste("Loading Seurat data from", args$query))
 seurat_data <- readRDS(args$query)
 debug$print_info(seurat_data, args)
 
+## ----
 if (!any(c("rnaumap", "atacumap", "wnnumap") %in% names(seurat_data@reductions))){
     print(
         paste(
@@ -549,6 +555,7 @@ if (!any(c("rnaumap", "atacumap", "wnnumap") %in% names(seurat_data@reductions))
     quit(save="no", status=1, runLast=FALSE)
 }
 
+## ----
 if (!("ATAC" %in% names(seurat_data@assays))){
     print(
         paste(
@@ -559,6 +566,7 @@ if (!("ATAC" %in% names(seurat_data@assays))){
     quit(save="no", status=1, runLast=FALSE)
 }
 
+## ----
 print("Setting default assay to ATAC")
 DefaultAssay(seurat_data) <- "ATAC"
 
@@ -568,10 +576,12 @@ if (is.null(seqinfo_data)){
     quit(save="no", status=1, runLast=FALSE)
 }
 
+## ----
 print(paste("Loading ATAC fragments data from", args$fragments))
 seurat_data <- io$replace_fragments(args$fragments, seurat_data)
 debug$print_info(seurat_data, args)
 
+## ----
 if (!is.null(args$metadata)){
     print("Extending Seurat object with the extra metadata fields")
     seurat_data <- io$extend_metadata(
@@ -583,24 +593,29 @@ if (!is.null(args$metadata)){
     debug$print_info(seurat_data, args)
 }
 
+## ----
 if (!is.null(args$barcodes)){
     print("Applying cell filters based on the barcodes of interest")
     seurat_data <- io$extend_metadata_by_barcode(seurat_data, args$barcodes, TRUE)         # sets identities to new.ident
     debug$print_info(seurat_data, args)
 }
 
+## ----
 print("Subsetting Seurat object to include only cells from the tested conditions")
 seurat_data <- io$apply_metadata_filters(seurat_data, args$splitby, c(args$first, args$second))
 debug$print_info(seurat_data, args)
 
+## ----
 export_raw_plots(seurat_data, args)                                                        # will include only cells from --first and --second
 
+## ----
 if(!is.null(args$groupby) && !is.null(args$subset)){
     print("Subsetting Seurat object to include only selected groups of cells")
     seurat_data <- io$apply_metadata_filters(seurat_data, args$groupby, args$subset)
     debug$print_info(seurat_data, args)
 }
 
+## ----
 if (!all(table(seurat_data@meta.data[[args$splitby]]) > 0)){                               # check if we accidentally removed cells we want to compare
     print(
         paste(
@@ -612,6 +627,7 @@ if (!all(table(seurat_data@meta.data[[args$splitby]]) > 0)){                    
     quit(save="no", status=1, runLast=FALSE)
 }
 
+## ----
 if (args$test != "manorm2"){                                                               # needed only for FindMarkers (not for MAnorm2)
     print("Normalizing ATAC counts after all filters applied")
     seurat_data <- Signac::RunTFIDF(                                                       # might be redundant as it may not depend on the number of cells
@@ -622,22 +638,27 @@ if (args$test != "manorm2"){                                                    
     )
 }
 
+## ----
 args$tmp_locations <- prepare_fragments_and_peaks(                                         # will create ATAC fragments and Tn5 cut sites BED files
     seurat_data=seurat_data,                                                               # for --first and --second groups of cells. If --test was
     seqinfo_data=seqinfo_data,                                                             # set to manorm2, will call peaks from Tn5 cut sites.
     args=args
 )
 
+## ----
 db_results <- analyses$atac_dbinding_analyze(seurat_data, args)
 print(head(db_results$db_sites))
 
-print("Exporting not filtered differentially bound sites")
+## ----
 io$export_data(
     db_results$db_sites,                                                                      # not filtered na-removed differentially bound sites
     paste(args$output, "_db_sites.tsv", sep="")
 )
+
+## ----
 export_processed_plots(seurat_data, db_results, args)
 
+## ----
 export_browser_tracks(                                                                           # exporting fragments coverage into bigWigs for visualization purposes
     db_results=db_results,
     seqinfo_data=seqinfo_data,

@@ -3,8 +3,10 @@ options(warn=-1)
 options("width"=200)
 options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
+suppressMessages(library(knitr))
 suppressMessages(library(Seurat))
 suppressMessages(library(Signac))
+suppressMessages(library(stringr))
 suppressMessages(library(modules))
 suppressMessages(library(argparse))
 
@@ -21,7 +23,7 @@ suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 # https://github.com/dynverse/ti_slingshot/blob/master/package/R/ti_slingshot.R
 # https://github.com/KirstLab/asc_seurat/blob/main/R/adapted_slingshot.R
 
-
+## ----
 export_all_plots <- function(seurat_data, args){
     SeuratObject::DefaultAssay(seurat_data) <- "RNA"                            # safety measure
     SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
@@ -329,7 +331,7 @@ export_all_plots <- function(seurat_data, args){
     SeuratObject::Idents(seurat_data) <- "new.ident"                                            # safety measure
 }
 
-
+## ----
 get_args <- function(){
     parser <- ArgumentParser(description="Single-Cell RNA-Seq Trajectory Analysis")
     parser$add_argument(
@@ -469,25 +471,26 @@ get_args <- function(){
         help="Seed number for random values. Default: 42",
         type="integer", default=42
     )
-    args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
     print(args)
     return (args)
 }
 
+## ----
 args <- get_args()
-
 if (!is.null(args$dimensions)){
     print("Adjusting --dimensions parameter")
     args$dimensions <- c(1:args$dimensions)
     print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
 }
-
 prod$parallel(args)
 
+## ----
 print(paste("Loading Seurat data from", args$query))
 seurat_data <- readRDS(args$query)
 debug$print_info(seurat_data, args)
 
+## ----
 if (!("RNA" %in% names(seurat_data@assays))){
     print(
         paste(
@@ -498,6 +501,7 @@ if (!("RNA" %in% names(seurat_data@assays))){
     quit(save="no", status=1, runLast=FALSE)
 }
 
+## ----
 if (!(args$reduction %in% names(seurat_data@reductions))){
     print(
         paste(
@@ -508,18 +512,21 @@ if (!(args$reduction %in% names(seurat_data@reductions))){
     quit(save="no", status=1, runLast=FALSE)
 }
 
+## ----
 if (!is.null(args$barcodes)){
     print("Applying cell filters based on the barcodes of interest")
     seurat_data <- io$extend_metadata_by_barcode(seurat_data, args$barcodes, TRUE)              # sets identities to new.ident
     debug$print_info(seurat_data, args)
 }
 
+## ----
 print("Setting default assay to RNA")
 DefaultAssay(seurat_data) <- "RNA"
 
 print("Normalizing RNA counts")
 seurat_data <- NormalizeData(seurat_data, verbose=FALSE)                                        # just in case rerun normalize, because we will show gene expression
 
+## ----
 if (!is.null(args$genes)){
     print(
         paste(
@@ -532,18 +539,20 @@ if (!is.null(args$genes)){
     print(args$genes)
 }
 
+## ----
 print("Running RNA trajectory analysis")
 seurat_data <- analyses$add_trajectory(seurat_data, args)      # adds ptime_"reduction" column to metadata and misc object into trajectories list
 debug$print_info(seurat_data, args)
 
+## ----
 export_all_plots(seurat_data, args)
 
+## ----
 if(args$cbbuild){
     print(paste("Moving", args$reduction, "reduction on top"))
     reduc_names <- names(seurat_data@reductions)
     ordered_reduc_names <- c(args$reduction, reduc_names[reduc_names!=args$reduction])
     seurat_data@reductions <- seurat_data@reductions[ordered_reduc_names]
-    debug$print_info(seurat_data, args)
 
     print("Attemting to identify label field")
     if (grepl("^custom_", args$source, ignore.case=TRUE)){
@@ -557,7 +566,6 @@ if(args$cbbuild){
     print(paste("Label field", label_field))
 
     if (all(c("RNA", "ATAC") %in% names(seurat_data@assays))){
-        print("Exporting RNA and ATAC assays to UCSC Cellbrowser jointly")
         ucsc$export_cellbrowser(
             seurat_data=seurat_data,
             assay="RNA",
@@ -580,7 +588,6 @@ if(args$cbbuild){
             rootname=paste(args$output, "_cellbrowser/atac", sep="")
         )
     } else {
-        print("Exporting RNA assay to UCSC Cellbrowser")
         ucsc$export_cellbrowser(
             seurat_data=seurat_data,
             assay="RNA",
@@ -593,16 +600,17 @@ if(args$cbbuild){
     }
 }
 
+## ----
 DefaultAssay(seurat_data) <- "RNA"                                                         # better to stick to RNA assay by default https://www.biostars.org/p/395951/#395954 
-print("Exporting results to RDS file")
 io$export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
+
+## ----
 if(args$h5seurat){
-    print("Exporting results to h5seurat file")
     io$export_h5seurat(seurat_data, paste(args$output, "_data.h5seurat", sep=""))
 }
 
+## ----
 if(args$h5ad){
-    print("Exporting RNA counts to h5ad file")
     io$export_h5ad(
         data=seurat_data,
         location=paste(args$output, "_counts.h5ad", sep=""),
@@ -611,8 +619,8 @@ if(args$h5ad){
     )
 }
 
+## ----
 if(args$loupe){
-    print("Exporting RNA counts to Loupe file")
     ucsc$export_loupe(
         seurat_data=seurat_data,
         assay="RNA",

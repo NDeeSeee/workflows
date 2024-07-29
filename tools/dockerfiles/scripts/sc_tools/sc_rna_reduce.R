@@ -3,8 +3,10 @@ options(warn=-1)
 options("width"=200)
 options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
+suppressMessages(library(knitr))
 suppressMessages(library(Seurat))
 suppressMessages(library(Signac))
+suppressMessages(library(stringr))
 suppressMessages(library(modules))
 suppressMessages(library(argparse))
 
@@ -18,7 +20,7 @@ suppressMessages(qc <- modules::use(file.path(HERE, "modules/qc.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
-
+## ----
 export_all_dimensionality_plots <- function(seurat_data, args) {
     Idents(seurat_data) <- "new.ident"                                                                                         # safety measure
     selected_features=c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi", "S.Score", "G2M.Score")
@@ -267,7 +269,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     } 
 }
 
-
+## ----
 get_args <- function(){
     parser <- ArgumentParser(description="Single-Cell RNA-Seq Dimensionality Reduction Analysis")
     parser$add_argument(
@@ -549,30 +551,32 @@ get_args <- function(){
         help="Seed number for random values. Default: 42",
         type="integer", default=42
     )
-    args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
     print(args)
     return (args)
 }
 
+## ----
 args <- get_args()
-
 if (args$dimensions != 0){                       # we extend it to array only when we don't want to auto-estimate it
     print("Adjusting --dimensions parameter")
     args$dimensions <- c(1:args$dimensions)
     print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
 }
-
 prod$parallel(args)
 
+## ----
 print(paste("Loading Seurat data from", args$query))
 seurat_data <- readRDS(args$query)
 print("Setting default assay to RNA")
 DefaultAssay(seurat_data) <- "RNA"
 debug$print_info(seurat_data, args)
 
+## ----
 print(paste("Loading cell cycle data from", args$cellcycle))
 cell_cycle_data <- io$load_cell_cycle_data(seurat_data, args$cellcycle)
 
+## ----
 if (!is.null(args$metadata)){
     print("Extending Seurat object with the extra metadata fields")
     seurat_data <- io$extend_metadata(
@@ -584,12 +588,14 @@ if (!is.null(args$metadata)){
     debug$print_info(seurat_data, args)
 }
 
+## ----
 if (!is.null(args$barcodes)){
     print("Applying cell filters based on the barcodes of interest")
     seurat_data <- io$extend_metadata_by_barcode(seurat_data, args$barcodes, TRUE)    # sets identities to new.ident
 }
 debug$print_info(seurat_data, args)
 
+## ----
 if (!is.null(args$regressgenes)){
     excluded_genes <- grep(                                # might return empty list if nothing found
         args$regressgenes,
@@ -616,11 +622,13 @@ if (!is.null(args$regressgenes)){
     }
 }
 
+## ----
 print("Running RNA analysis")
 seurat_data <- analyses$rna_analyze(seurat_data, args, cell_cycle_data)   # adds "pca" and "rnaumap" reductions
 seurat_data <- filter$collapse_fragments_list(seurat_data)                # collapse repetitive fragments if ATAC assay was present in the Seurat object and was splitted
 debug$print_info(seurat_data, args)
 
+## ----
 print("Quantifying QC metrics")
 seurat_data <- qc$quartile_qc_metrics(
     seurat_data=seurat_data,
@@ -629,24 +637,25 @@ seurat_data <- qc$quartile_qc_metrics(
 )
 debug$print_info(seurat_data, args)
 
+## ----
 export_all_dimensionality_plots(
     seurat_data=seurat_data,
     args=args
 )
 
+## ----
 if ("qcpca" %in% names(seurat_data@reductions)){                          # we only needed it for elbow and qc correlation plots
     print("Removing qcpca reduction")
     seurat_data[["qcpca"]] <- NULL
     debug$print_info(seurat_data, args)
 }
 
+## ----
 if(args$cbbuild){
-    print("Exporting RNA assay to UCSC Cellbrowser")
     print("Reordering reductions to have rnaumap on the first place")                      # will be shown first in UCSC Cellbrowser
     reduc_names <- names(seurat_data@reductions)
     ordered_reduc_names <- c("rnaumap", reduc_names[reduc_names!="rnaumap"])               # rnaumap will be added by this time
     seurat_data@reductions <- seurat_data@reductions[ordered_reduc_names]
-    debug$print_info(seurat_data, args)
     ucsc$export_cellbrowser(
         seurat_data=seurat_data,
         assay="RNA",
@@ -657,16 +666,17 @@ if(args$cbbuild){
     )
 }
 
+## ----
 DefaultAssay(seurat_data) <- "RNA"                                                         # better to stick to RNA assay by default https://www.biostars.org/p/395951/#395954 
-print("Exporting results to RDS file")
 io$export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
+
+## ----
 if(args$h5seurat){
-    print("Exporting results to h5seurat file")
     io$export_h5seurat(seurat_data, paste(args$output, "_data.h5seurat", sep=""))
 }
 
+## ----
 if(args$h5ad){
-    print("Exporting RNA counts to h5ad file")
     io$export_h5ad(
         data=seurat_data,
         location=paste(args$output, "_counts.h5ad", sep=""),
@@ -675,8 +685,8 @@ if(args$h5ad){
     )
 }
 
+## ----
 if(args$loupe){
-    print("Exporting RNA counts to Loupe file")
     ucsc$export_loupe(
         seurat_data=seurat_data,
         assay="RNA",
@@ -684,8 +694,8 @@ if(args$loupe){
     )
 }
 
+## ----
 if(args$scope){
-    print("Exporting results to SCope compatible loom file")
     io$export_scope_loom(                                                                  # we save only counts slot from the RNA assay 
         seurat_data,
         paste(args$output, "_data.loom", sep="")

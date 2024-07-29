@@ -2,15 +2,15 @@
 # Dockerfile
 #
 # Software:         set of R scripts for single-cell data analysis
-# Software Version: v0.0.39
+# Software Version: v0.0.40
 # Description:      Dockerized version of the set of R scripts for
 #                   single-cell data analysis
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         set of R scripts for single-cell data analysis
 # Base Image:       satijalab/seurat:latest
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.39 -f sc-tools-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.39
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.39 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.40 -f sc-tools-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.40
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.40 /bin/bash
 ##########################################################################################################
 #
 # Notes:
@@ -36,6 +36,11 @@
 #     sc_vdj_profile.R --help && \
 #     sc_cb_utils_atac_search.R --help && \
 #     sc_cb_utils_split_mex.R --help
+#
+# v0.0.40 -- based on biowardrobe2/sc-tools:v0.0.39
+# - Added sc_report_wrapper.R script to export HTML report
+# - Updated all the scripts to be runnable through the
+#   sc_report_wrapper.R wrapper
 #
 # v0.0.39 -- based on biowardrobe2/sc-tools:v0.0.38_as_base
 # - Install Nebulosa from the GitHub because of this bug 
@@ -434,6 +439,7 @@ RUN apt-get update && \
     chmod +x /usr/local/bin/sc_tn5_cut_sites.sh && \
     chmod +x /usr/local/bin/sc_cb_utils_atac_search.R && \
     chmod +x /usr/local/bin/sc_cb_utils_split_mex.R && \
+    chmod +x /usr/local/bin/sc_report_wrapper.R && \
 ### Downloading blacklist regions files
     wget https://raw.githubusercontent.com/Boyle-Lab/Blacklist/61a04d2c5e49341d76735d485c61f0d1177d08a8/lists/hg38-blacklist.v2.bed.gz && \
     wget https://raw.githubusercontent.com/Boyle-Lab/Blacklist/61a04d2c5e49341d76735d485c61f0d1177d08a8/lists/hg19-blacklist.v2.bed.gz && \

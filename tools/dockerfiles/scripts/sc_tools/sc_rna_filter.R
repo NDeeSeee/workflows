@@ -3,8 +3,10 @@ options(warn=-1)
 options("width"=200)
 options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
+suppressMessages(library(knitr))
 suppressMessages(library(dplyr))
 suppressMessages(library(Seurat))
+suppressMessages(library(stringr))
 suppressMessages(library(modules))
 suppressMessages(library(argparse))
 
@@ -17,7 +19,7 @@ suppressMessages(qc <- modules::use(file.path(HERE, "modules/qc.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
-
+## ----
 export_all_qc_plots <- function(seurat_data, suffix, args){
     Idents(seurat_data) <- "new.ident"                                                                # safety measure
     selected_features <- c("nCount_RNA", "nFeature_RNA", "mito_percentage", "log10_gene_per_log10_umi")
@@ -347,6 +349,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args){
     }
 }
 
+## ----
 get_args <- function(){
     parser <- ArgumentParser(description="Single-Cell RNA-Seq Filtering Analysis")
     parser$add_argument(
@@ -561,27 +564,29 @@ get_args <- function(){
         help="Seed number for random values. Default: 42",
         type="integer", default=42
     )
-    args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
     print(args)
     return (args)
 }
 
-
+## ----
 args <- get_args()
 prod$parallel(args)
 
+## ----
 print(paste("Loading datasets identities from", args$identity))
 cell_identity_data <- io$load_cell_identity_data(args$identity)                         # identities are always prepended with letters to keep the order
 
-print("Exporting datasets metadata file")                                 # can be later used as a template of a file to extend Seurat metadata
 io$export_data(
     cell_identity_data[, "library_id", drop=FALSE],                                     # we need only the first column with the prepended letters
     paste(args$output, "_meta.tsv", sep="")
 )
 
+## ----
 print(paste("Loading datasets grouping from", args$grouping))
 grouping_data <- io$load_grouping_data(args$grouping, cell_identity_data)
 
+## ----
 print("Loading feature-barcode matrices from:")
 for (location in args$mex){print(location)}
 
@@ -592,6 +597,7 @@ seurat_data <- io$load_10x_rna_data(                                            
 )
 debug$print_info(seurat_data, args)
 
+## ----
 seurat_data <- qc$estimate_doublets(                                                    # we want to search for doublets before we apply any filters
     seurat_data=seurat_data,
     assay="RNA",
@@ -601,6 +607,7 @@ seurat_data <- qc$estimate_doublets(                                            
 )
 debug$print_info(seurat_data, args)
 
+## ----
 idents_before_filtering <- sort(unique(as.vector(as.character(Idents(seurat_data)))))    # A->Z sorted identities
 if (!is.null(args$barcodes)){
     print("Applying cell filters based on the barcodes of interest")
@@ -609,6 +616,7 @@ if (!is.null(args$barcodes)){
 debug$print_info(seurat_data, args)
 idents_after_filtering <- sort(unique(as.vector(as.character(Idents(seurat_data)))))     # A->Z sorted identities
 
+## ----
 print("Adjusting input parameters")
 for (key in names(args)){
     if (key %in% c("mingenes", "maxgenes", "minumis", "minnovelty", "maxmt")){           # we convert maxmt to vector as well, because we want to use it in the update_qc_thresholds function
@@ -648,10 +656,12 @@ for (key in names(args)){
 print("Adjusted parameters")
 print(args)
 
+## ----
 print("Adding QC metrics for not filtered datasets")
 seurat_data <- qc$add_rna_qc_metrics(seurat_data, args)
 debug$print_info(seurat_data, args)
 
+## ----
 args <- qc$update_qc_thresholds(
     seurat_data=seurat_data,
     args=args,
@@ -664,16 +674,19 @@ print("Filtering thresholds adjusted based on the MAD values")
 args$maxmt <- max(args$maxmt)                                      # need to convert it back to a single value (take max when it was autoestimated)
 print(args)
 
+## ----
 export_all_qc_plots(
     seurat_data=seurat_data,
     suffix="raw",
     args=args
 )
 
+## ----
 print("Applying filters based on QC metrics")
 seurat_data <- filter$apply_rna_qc_filters(seurat_data, args)                              # cleans up all reductions
 debug$print_info(seurat_data, args)
 
+## ----
 if (!is.null(args$removedoublets) && args$removedoublets){
     print("Filtering by estimated doublets")
     seurat_data <- filter$remove_doublets(
@@ -683,12 +696,14 @@ if (!is.null(args$removedoublets) && args$removedoublets){
     debug$print_info(seurat_data, args)
 }
 
+## ----
 export_all_qc_plots(                                                                       # after all filters have been applied
     seurat_data=seurat_data,
     suffix="fltr",
     args=args
 )
 
+## ----
 print("Adding genes vs RNA reads per cell as gene_rnaumi dimensionality reduction")
 seurat_data@reductions[["gene_rnaumi"]] <- CreateDimReducObject(
     embeddings=as.matrix(
@@ -700,8 +715,8 @@ seurat_data@reductions[["gene_rnaumi"]] <- CreateDimReducObject(
     assay="RNA"
 )
 
+## ----
 if(args$cbbuild){
-    print("Exporting filtering results to UCSC Cellbrowser")
     ucsc$export_cellbrowser(
         seurat_data=seurat_data,
         assay="RNA",
@@ -712,16 +727,17 @@ if(args$cbbuild){
     )
 }
 
+## ----
 DefaultAssay(seurat_data) <- "RNA"                                                         # better to stick to RNA assay by default https://www.biostars.org/p/395951/#395954 
-print("Exporting results to RDS file")
 io$export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
+
+## ----
 if(args$h5seurat){
-    print("Exporting results to h5seurat file")
     io$export_h5seurat(seurat_data, paste(args$output, "_data.h5seurat", sep=""))
 }
 
+## ----
 if(args$h5ad){
-    print("Exporting RNA counts to h5ad file")
     io$export_h5ad(
         data=seurat_data,
         location=paste(args$output, "_counts.h5ad", sep=""),
@@ -730,8 +746,8 @@ if(args$h5ad){
     )
 }
 
+## ----
 if(args$loupe){
-    print("Exporting RNA counts to Loupe file")
     ucsc$export_loupe(
         seurat_data=seurat_data,
         assay="RNA",

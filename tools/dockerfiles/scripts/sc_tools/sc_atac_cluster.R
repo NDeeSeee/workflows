@@ -3,9 +3,11 @@ options(warn=-1)
 options("width"=200)
 options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
+suppressMessages(library(knitr))
 suppressMessages(library(dplyr))
 suppressMessages(library(Seurat))
 suppressMessages(library(Signac))
+suppressMessages(library(stringr))
 suppressMessages(library(modules))
 suppressMessages(library(argparse))
 suppressMessages(library(GenomicRanges))
@@ -18,7 +20,7 @@ suppressMessages(io <- modules::use(file.path(HERE, "modules/io.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
-
+## ----
 export_all_qc_plots <- function(seurat_data, args){
 
     for (i in 1:length(args$resolution)){
@@ -116,7 +118,7 @@ export_all_qc_plots <- function(seurat_data, args){
     }
 }
 
-
+## ----
 export_all_clustering_plots <- function(seurat_data, args){
     Idents(seurat_data) <- "new.ident"                                                               # safety measure
     datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
@@ -310,7 +312,7 @@ export_all_clustering_plots <- function(seurat_data, args){
     gc(verbose=FALSE)
 }
 
-
+## ----
 export_all_coverage_plots <- function(seurat_data, args) {
     DefaultAssay(seurat_data) <- "ATAC"                                          # safety measure
     Idents(seurat_data) <- "new.ident"                                           # safety measure
@@ -356,7 +358,7 @@ export_all_coverage_plots <- function(seurat_data, args) {
     }
 }
 
-
+## ----
 get_args <- function(){
     parser <- ArgumentParser(description="Single-Cell ATAC-Seq Cluster Analysis")
     parser$add_argument(
@@ -545,26 +547,29 @@ get_args <- function(){
         help="Seed number for random values. Default: 42",
         type="integer", default=42
     )
-    args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
     print(args)
     return (args)
 }
 
+## ----
 args <- get_args()
 prod$parallel(args)
 
+## ----
 print(paste("Loading Seurat data from", args$query))
 seurat_data <- readRDS(args$query)
-
 print("Setting default assay to ATAC")
 DefaultAssay(seurat_data) <- "ATAC"
 debug$print_info(seurat_data, args)
 
+## ----
 if (!all(c("atac_lsi", "atacumap") %in% names(seurat_data@reductions))){
     print("Loaded Seurat object doesn't have 'atac_lsi' and/or 'atacumap' reduction(s). Exiting.")
     quit(save="no", status=1, runLast=FALSE)
 }
 
+## ----
 print("Adjusting --dimensions parameter")
 if (!is.null(seurat_data@misc$atac_reduce$first_lsi_removed) && seurat_data@misc$atac_reduce$first_lsi_removed){
     args$dimensions <- c(                                                                    # first LSI component has been already removed
@@ -577,12 +582,14 @@ if (!is.null(seurat_data@misc$atac_reduce$first_lsi_removed) && seurat_data@misc
 }
 print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
 
+## ----
 if (!is.null(args$fragments)){
     print(paste("Loading ATAC fragments data from", args$fragments))
     seurat_data <- io$replace_fragments(args$fragments, seurat_data)
     debug$print_info(seurat_data, args)
 }
 
+## ----
 print(paste("Clustering ATAC data using", paste(args$dimensions, collapse=", "), "dimensions"))
 seurat_data <- analyses$add_clusters(
     seurat_data=seurat_data,
@@ -593,16 +600,19 @@ seurat_data <- analyses$add_clusters(
 )
 debug$print_info(seurat_data, args)
 
+## ----
 export_all_qc_plots(
     seurat_data=seurat_data,
     args=args
 )
 
+## ----
 export_all_clustering_plots(
     seurat_data=seurat_data,
     args=args
 )
 
+## ----
 if (!is.null(args$genes)){
     print("Adjusting genes of interest to include only those that are present in the loaded Seurat object")
     args$genes <- unique(args$genes)
@@ -615,6 +625,7 @@ if (!is.null(args$genes)){
     }
 }
 
+## ----
 if (!is.null(args$genes) && !is.null(args$fragments)){
     if ("RNA" %in% names(seurat_data@assays)){
         print("Normalizing counts in RNA assay to show average gene expression alongside the coverage plots")
@@ -628,6 +639,7 @@ if (!is.null(args$genes) && !is.null(args$fragments)){
     )
 }
 
+## ----
 all_markers <- NULL
 if (args$diffpeaks){
     print("Identifying differentially accessible peaks between each pair of clusters for all resolutions")
@@ -647,8 +659,8 @@ if (args$diffpeaks){
     }
 }
 
+## ----
 if(args$cbbuild){
-    print("Exporting ATAC assay to UCSC Cellbrowser")
     if(!is.null(all_markers)){
         all_markers <- all_markers %>%
                        dplyr::filter(.$resolution==args$resolution[1]) %>%          # won't fail even if resolution is not present
@@ -658,7 +670,6 @@ if(args$cbbuild){
     reduc_names <- names(seurat_data@reductions)
     ordered_reduc_names <- c("atacumap", reduc_names[reduc_names!="atacumap"])      # we checked before that atacumap is present
     seurat_data@reductions <- seurat_data@reductions[ordered_reduc_names]
-    debug$print_info(seurat_data, args)
     ucsc$export_cellbrowser(
         seurat_data=seurat_data,
         assay="ATAC",
@@ -671,16 +682,17 @@ if(args$cbbuild){
     )
 }
 
+## ----
 DefaultAssay(seurat_data) <- "ATAC"
-print("Exporting results to RDS file")
 io$export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
+
+## ----
 if(args$h5seurat){
-    print("Exporting results to h5seurat file")
     io$export_h5seurat(seurat_data, paste(args$output, "_data.h5seurat", sep=""))
 }
 
+## ----
 if(args$h5ad){
-    print("Exporting ATAC counts to h5ad file")
     io$export_h5ad(
         data=seurat_data,
         location=paste(args$output, "_counts.h5ad", sep=""),

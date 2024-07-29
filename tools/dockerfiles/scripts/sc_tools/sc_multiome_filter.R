@@ -3,9 +3,11 @@ options(warn=-1)
 options("width"=200)
 options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
+suppressMessages(library(knitr))
 suppressMessages(library(dplyr))
 suppressMessages(library(Seurat))
 suppressMessages(library(Signac))
+suppressMessages(library(stringr))
 suppressMessages(library(modules))
 suppressMessages(library(argparse))
 suppressMessages(library(rtracklayer))
@@ -21,7 +23,7 @@ suppressMessages(qc <- modules::use(file.path(HERE, "modules/qc.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
-
+## ----
 export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
     Idents(seurat_data) <- "new.ident"                                                                # safety measure
     peak_type <- ifelse(macs2_peaks, "- MACS2", "- 10x")
@@ -636,6 +638,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
     }
 }
 
+## ----
 get_args <- function(){
     parser <- ArgumentParser(description="Single-Cell Multiome ATAC-Seq and RNA-Seq Filtering Analysis")
     parser$add_argument(
@@ -977,36 +980,40 @@ get_args <- function(){
         help="Seed number for random values. Default: 42",
         type="integer", default=42
     )
-    args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
     print(args)
     return (args)
 }
 
-
+## ----
 args <- get_args()
 prod$parallel(args)
 
+## ----
 print(paste("Loading datasets identities from", args$identity))
 cell_identity_data <- io$load_cell_identity_data(args$identity)                          # identities are always prepended with letters to keep the order
-
-print("Exporting an example of datasets metadata file")                                  # can be later used as a template of a file to extend Seurat metadata
 io$export_data(
     cell_identity_data[, "library_id", drop=FALSE],                                      # we need only the first column with the prepended letters
     paste(args$output, "_meta.tsv", sep="")
 )
 
+## ----
 print(paste("Loading datasets grouping from", args$grouping))
 grouping_data <- io$load_grouping_data(args$grouping, cell_identity_data)
 
+## ----
 print(paste("Loading genomic blacklist regions from", args$blacklist))
 blacklist_data <- io$load_blacklist_data(args$blacklist)
 
+## ----
 print(paste("Loading chromosome length information from", args$seqinfo))
 seqinfo_data <- io$load_seqinfo_data(args$seqinfo)
 
+## ----
 print(paste("Loading genome annotation data from", args$annotations))
 annotation_data <- io$load_annotation_data(args$annotations)
 
+## ----
 print(paste("Loading gene/peak-barcode matrices from", args$mex))
 print(paste("Loading ATAC fragments from", args$fragments))
 seurat_data <- io$load_10x_multiome_data(                                                # identities are set to the "new.ident" column
@@ -1018,6 +1025,7 @@ seurat_data <- io$load_10x_multiome_data(                                       
 )
 debug$print_info(seurat_data, args)
 
+## ----
 seurat_data <- qc$estimate_doublets(                                                    # we want to search for doublets before we applied any filters
     seurat_data=seurat_data,
     assay="RNA",
@@ -1025,6 +1033,8 @@ seurat_data <- qc$estimate_doublets(                                            
     dbl_rate=args$rnadbr,
     dbl_rate_sd=args$rnadbrsd
 )
+
+## ----
 seurat_data <- qc$estimate_doublets(                                                    # we want to search for doublets before we applied any filters
     seurat_data=seurat_data,
     assay="ATAC",
@@ -1034,6 +1044,7 @@ seurat_data <- qc$estimate_doublets(                                            
 )
 debug$print_info(seurat_data, args)
 
+## ----
 idents_before_filtering <- sort(unique(as.vector(as.character(Idents(seurat_data)))))    # A->Z sorted identities
 if (!is.null(args$barcodes)){
     print("Applying cell filters based on the barcodes of interest")
@@ -1042,6 +1053,7 @@ if (!is.null(args$barcodes)){
 debug$print_info(seurat_data, args)
 idents_after_filtering <- sort(unique(as.vector(as.character(Idents(seurat_data)))))     # A->Z sorted identities
 
+## ----
 print("Adjusting input parameters")
 for (key in names(args)){
     if (key %in% c("mingenes", "maxgenes", "minumis", "minnovelty", "minfragments", "maxnuclsignal", "mintssenrich", "maxblacklist", "maxmt")){
@@ -1081,14 +1093,20 @@ for (key in names(args)){
 print("Adjusted parameters")
 print(args)
 
+## ----
 print("Adding RNA QC metrics for not filtered datasets")
 seurat_data <- qc$add_rna_qc_metrics(seurat_data, args)
+
+## ----
 print("Adding ATAC QC metrics for not filtered datasets")
 seurat_data <- qc$add_atac_qc_metrics(seurat_data, args)
+
+## ----
 print("Adding peak QC metrics for peaks called by Cell Ranger ARC")
 seurat_data <- qc$add_peak_qc_metrics(seurat_data, blacklist_data, args)
 debug$print_info(seurat_data, args)
 
+## ----
 args <- qc$update_qc_thresholds(
     seurat_data=seurat_data,
     args=args,
@@ -1097,6 +1115,8 @@ args <- qc$update_qc_thresholds(
     qc_coef=c(-2.5, -2.5, 5, 2),
     remove_rna_doublets=TRUE
 )
+
+## ----
 args <- qc$update_qc_thresholds(
     seurat_data=seurat_data,
     args=args,
@@ -1109,6 +1129,7 @@ print("Filtering thresholds adjusted based on the MAD values")
 args$maxmt <- max(args$maxmt)                                      # need to convert it back to a single value (take max when it was autoestimated)
 print(args)
 
+## ----
 export_all_qc_plots(
     seurat_data=seurat_data,
     suffix="raw",
@@ -1116,13 +1137,17 @@ export_all_qc_plots(
     macs2_peaks=FALSE
 )
 
+## ----
 print("Applying filters based on RNA QC metrics")
 seurat_data <- filter$apply_rna_qc_filters(seurat_data, args)                            # cleans up all reductions
 debug$print_info(seurat_data, args)
+
+## ----
 print("Applying filters based on ATAC QC metrics")
 seurat_data <- filter$apply_atac_qc_filters(seurat_data, args)                           # cleans up all reductions
 debug$print_info(seurat_data, args)
 
+## ----
 if (
     !is.null(args$removedoublets) &&
     ( args$removedoublets %in% c("union", "onlyrna", "onlyatac", "intersect") )
@@ -1135,6 +1160,7 @@ if (
     debug$print_info(seurat_data, args)
 }
 
+## ----
 if (!is.null(args$callby)){
     print("Forced to replace Cell Ranger ARC peaks with MACS2 peaks")
     seurat_data <- analyses$call_macs2_peaks(
@@ -1160,14 +1186,20 @@ if (!is.null(args$callby)){
     debug$print_info(seurat_data, args)
 }
 
+## ----
 print("Applying filters based on peaks QC metrics")
 seurat_data <- filter$apply_peak_qc_filters(seurat_data, args)                           # cleans up all reductions
+
+## ----
 print("Updating ATAC QC metrics after all filtering thresholds applied")
 seurat_data <- qc$add_atac_qc_metrics(seurat_data, args)                                 # recalculate ATAC QC metrics
+
+## ----
 print("Updating peak QC metrics after all filtering thresholds applied")
 seurat_data <- qc$add_peak_qc_metrics(seurat_data, blacklist_data, args)                 # recalculate peak QC metrics
 debug$print_info(seurat_data, args)
 
+## ----
 export_all_qc_plots(                                                                     # after all filters have been applied
     seurat_data=seurat_data,
     suffix="fltr",
@@ -1175,6 +1207,7 @@ export_all_qc_plots(                                                            
     macs2_peaks=!is.null(args$callby)                                                    # can be both from 10x or MACS2
 )
 
+## ----
 print("Adding genes vs RNA reads per cell as gene_rnaumi dimensionality reduction")
 seurat_data@reductions[["gene_rnaumi"]] <- CreateDimReducObject(
     embeddings=as.matrix(
@@ -1186,6 +1219,7 @@ seurat_data@reductions[["gene_rnaumi"]] <- CreateDimReducObject(
     assay="RNA"
 )
 
+## ----
 print("Adding RNA reads vs ATAC fragments in peaks per cell as rnaumi_atacfrgm dimensionality reduction")
 seurat_data@reductions[["rnaumi_atacfrgm"]] <- CreateDimReducObject(
     embeddings=as.matrix(
@@ -1197,6 +1231,7 @@ seurat_data@reductions[["rnaumi_atacfrgm"]] <- CreateDimReducObject(
     assay="RNA"
 )
 
+## ----
 print("Adding TSS enrichment score vs ATAC fragments in peaks per cell as tss_atacfrgm dimensionality reduction")
 seurat_data@reductions[["tss_atacfrgm"]] <- CreateDimReducObject(
     embeddings=as.matrix(
@@ -1208,8 +1243,8 @@ seurat_data@reductions[["tss_atacfrgm"]] <- CreateDimReducObject(
     assay="ATAC"
 )
 
+## ----
 if(args$cbbuild){
-    print("Exporting filtering results to UCSC Cellbrowser")
     ucsc$export_cellbrowser(
         seurat_data=seurat_data,
         assay="RNA",
@@ -1230,23 +1265,23 @@ if(args$cbbuild){
     )
 }
 
+## ----
 DefaultAssay(seurat_data) <- "RNA"                                       # better to stick to RNA assay by default https://www.biostars.org/p/395951/#395954 
-print("Exporting results to RDS file")
 io$export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
+
+## ----
 if(args$h5seurat){
-    print("Exporting results to h5seurat file")
     io$export_h5seurat(seurat_data, paste(args$output, "_data.h5seurat", sep=""))
 }
 
+## ----
 if(args$h5ad){
-    print("Exporting RNA counts to h5ad file")
     io$export_h5ad(
         data=seurat_data,
         location=paste(args$output, "_rna_counts.h5ad", sep=""),
         assay="RNA",
         slot="counts"
     )
-    print("Exporting ATAC counts to h5ad file")
     io$export_h5ad(
         data=seurat_data,
         location=paste(args$output, "_atac_counts.h5ad", sep=""),
@@ -1255,8 +1290,8 @@ if(args$h5ad){
     )
 }
 
+## ----
 if(args$loupe){
-    print("Exporting RNA counts to Loupe file")
     ucsc$export_loupe(
         seurat_data=seurat_data,
         assay="RNA",
