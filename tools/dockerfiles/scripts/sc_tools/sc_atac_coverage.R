@@ -3,10 +3,12 @@ options(warn=-1)
 options("width"=200)
 options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
+suppressMessages(library(knitr))
 suppressMessages(library(dplyr))
 suppressMessages(library(tidyr))
 suppressMessages(library(Seurat))
 suppressMessages(library(Signac))
+suppressMessages(library(stringr))
 suppressMessages(library(modules))
 suppressMessages(library(argparse))
 suppressMessages(library(rtracklayer))
@@ -17,7 +19,7 @@ suppressMessages(debug <- modules::use(file.path(HERE, "modules/debug.R")))
 suppressMessages(io <- modules::use(file.path(HERE, "modules/io.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 
-
+## ----
 get_args <- function(){
     parser <- ArgumentParser(description="Single-Cell ATAC-Seq Genome Coverage")
     parser$add_argument(
@@ -116,26 +118,30 @@ get_args <- function(){
         help="Seed number for random values. Default: 42",
         type="integer", default=42
     )
-    args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
     print(args)
     return (args)
 }
 
+## ----
 args <- get_args()
 prod$parallel(args)
 
+## ----
 print(paste("Loading Seurat data from", args$query))
 seurat_data <- readRDS(args$query)
 print("Setting default assay to ATAC")
 DefaultAssay(seurat_data) <- "ATAC"
 debug$print_info(seurat_data, args)
 
+## ----
 seqinfo_data <- seurat_data[["ATAC"]]@seqinfo
 if (is.null(seqinfo_data)){
     print("Loaded Seurat object doesn't include seqinfo data. Exiting.")
     quit(save="no", status=1, runLast=FALSE)
 }
 
+## ----
 if (!is.null(args$metadata)){
     print("Extending Seurat object with the extra metadata fields")
     seurat_data <- io$extend_metadata(
@@ -147,12 +153,14 @@ if (!is.null(args$metadata)){
     debug$print_info(seurat_data, args)
 }
 
+## ----
 if (!is.null(args$barcodes)){
     print("Applying cell filters based on the barcodes of interest")
     seurat_data <- io$extend_metadata_by_barcode(seurat_data, args$barcodes, TRUE)            # sets identities to new.ident
 }
 debug$print_info(seurat_data, args)
 
+## ----
 if (!all(args$splitby %in% colnames(seurat_data@meta.data))){
     print(
         paste(
@@ -163,10 +171,12 @@ if (!all(args$splitby %in% colnames(seurat_data@meta.data))){
     quit(save="no", status=1, runLast=FALSE)
 }
 
+## ----
 print(paste("Loading ATAC fragments data from", args$fragments))
 seurat_data <- io$replace_fragments(args$fragments, seurat_data)
 debug$print_info(seurat_data, args)
 
+## ----
 peaks_location <- paste0(args$output, "_peaks.bigBed")
 print(paste("Exporting peaks data to", peaks_location))
 peaks_data <- seurat_data[["ATAC"]]@ranges
@@ -175,6 +185,7 @@ seqinfo(peaks_data) <- seqinfo_data
 peaks_data$score <- 0
 export.bb(peaks_data, peaks_location)
 
+## ----
 print(
     paste(
         "Spliting cells into groups by", paste(args$splitby, collapse=", "),
@@ -186,6 +197,7 @@ seurat_data@meta.data <- seurat_data@meta.data %>%
                          mutate(splitby=tolower(gsub("#|%|&| ", "_", .$splitby)))
 debug$print_info(seurat_data, args)
 
+## ----
 SplitFragments(
     seurat_data,
     assay="ATAC",
@@ -194,6 +206,7 @@ SplitFragments(
     verbose=args$verbose
 )
 
+## ----
 groups <- unique(as.vector(as.character(seurat_data@meta.data$splitby)))
 for (i in 1:length(groups)){
     fragments_cov_location <- paste0(args$output, "_", groups[i], "_frg_cov.bigWig")

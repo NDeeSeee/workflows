@@ -2,6 +2,7 @@ import("grid", attach=FALSE)
 import("dplyr", attach=FALSE)
 import("purrr", attach=FALSE)
 import("tidyr", attach=FALSE)
+import("knitr", attach=FALSE)
 import("scales", attach=FALSE)
 import("Seurat", attach=FALSE)
 import("Signac", attach=FALSE)
@@ -179,6 +180,15 @@ clonotype_quant_plot <- function(data, rootname, clone_by, chains, group_by, x_l
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(combined_plots)
+            }
+
             base::print(base::paste("Exporting clonotype quant plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -224,6 +234,15 @@ clonotype_abundance_plot <- function(data, rootname, clone_by, chains, group_by,
                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
                 base::suppressMessages(base::print(combined_plots))
                 grDevices::dev.off()
+            }
+
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(combined_plots)
             }
 
             base::print(base::paste("Exporting clonotype abundance plot to ", rootname, ".(png/pdf)", sep=""))
@@ -285,6 +304,15 @@ clonotype_alluvial_plot <- function(data, rootname, clone_by, chains, group_by, 
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(combined_plots)
+            }
+
             base::print(base::paste("Exporting clonotype alluvial plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -327,6 +355,15 @@ clonotype_homeostasis_plot <- function(data, rootname, clone_by, chains, group_b
                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
                 base::suppressMessages(base::print(combined_plots))
                 grDevices::dev.off()
+            }
+
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(combined_plots)
             }
 
             base::print(base::paste("Exporting clonotype homeostasis plot to ", rootname, ".(png/pdf)", sep=""))
@@ -416,6 +453,15 @@ clonotype_overlap_plot <- function(data, rootname, clone_by, chains, group_by, x
                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
                 base::suppressMessages(base::print(combined_plots))
                 grDevices::dev.off()
+            }
+
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(combined_plots)
             }
 
             base::print(base::paste("Exporting clonotype overlap plot to ", rootname, ".(png/pdf)", sep=""))
@@ -551,6 +597,15 @@ clonotype_diversity_plot <- function(data, rootname, clone_by, chains, group_by,
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(combined_plots)
+            }
+
             base::print(base::paste("Exporting clonotype diversity plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -639,6 +694,15 @@ clonotype_feature_plot <- function(data, rootname, clone_by, chains, group_by, x
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(combined_plots)
+            }
+
             base::print(base::paste("Exporting clonotype feature plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -690,6 +754,25 @@ clonotype_chord_plot <- function(data, rootname, clone_by, group_by, plot_title,
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                circlize::chordDiagram(
+                    chord_data,
+                    self.link=TRUE,
+                    directional=TRUE,
+                    direction.type="arrows",
+                    link.arr.type="big.arrow",
+                    annotationTrack=c("name", "grid"),
+                    grid.col=selected_colors
+                )
+                graphics::title(main=plot_title, adj=0, line=-0.5)
+                circlize::circos.clear()
+            }
+
             base::print(base::paste("Exporting chord diagram to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -720,6 +803,15 @@ geom_bar_plot <- function(data, rootname, x_axis, color_by, x_label, y_label, le
                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
                 base::suppressMessages(base::print(plot))
                 grDevices::dev.off()
+            }
+
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
             }
 
             base::print(base::paste("Exporting geom bar plot to ", rootname, ".(png/pdf)", sep=""))
@@ -857,6 +949,15 @@ geom_density_plot <- function(data, rootname, x_axis, group_by, split_by, x_labe
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
+            }
+
             base::print(base::paste("Exporting geom density plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -982,6 +1083,15 @@ geom_point_plot <- function(
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
+            }
+
             base::print(base::paste("Exporting geom point plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -1031,6 +1141,15 @@ feature_scatter_plot <- function(data, rootname, x_axis, y_axis, x_label, y_labe
                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
                 base::suppressMessages(base::print(combined_plots))
                 grDevices::dev.off()
+            }
+
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(combined_plots)
             }
 
             base::print(base::paste("Exporting feature scatter plot to ", rootname, ".(png/pdf)", sep=""))
@@ -1182,6 +1301,15 @@ vln_plot <- function(
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(combined_plots)
+            }
+
             base::print(base::paste("Exporting violin plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -1303,6 +1431,15 @@ dim_plot <- function(data, rootname, reduction, plot_title, legend_title, plot_s
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
+            }
+
             # if (!is.null(htmlwidget) && htmlwidget) {               # in case one day we decide to save html widgets
             #     htmlwidgets::saveWidget(
             #         Seurat::HoverLocator(
@@ -1378,6 +1515,15 @@ trajectory_plot <- function(                                # all feature relate
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
+            }
+
             base::print(base::paste("Exporting trajectory plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -1430,6 +1576,15 @@ trajectory_expression <- function(
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(combined_plots)
+            }
+
             base::print(base::paste("Exporting expression along pseudotime plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -1477,6 +1632,15 @@ trajectory_hist <- function(
                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
                 base::suppressMessages(base::print(plot))
                 grDevices::dev.off()
+            }
+
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
             }
 
             base::print(base::paste("Exporting trajectory histogram to ", rootname, ".(png/pdf)", sep=""))
@@ -1534,6 +1698,15 @@ trajectory_graph <- function(                               # all feature relate
                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
                 base::suppressMessages(base::print(plot))
                 grDevices::dev.off()
+            }
+
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
             }
 
             base::print(base::paste("Exporting trajectory graph to ", rootname, ".(png/pdf)", sep=""))
@@ -1595,6 +1768,15 @@ dendro_plot <- function(                                    # all feature relate
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
+            }
+
             base::print(base::paste("Exporting dendrogram to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -1629,6 +1811,15 @@ topology_plot <- function(                                    # all feature rela
                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
                 base::suppressMessages(base::print(plot))
                 grDevices::dev.off()
+            }
+
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
             }
 
             base::print(base::paste("Exporting topology plot to ", rootname, ".(png/pdf)", sep=""))
@@ -1684,6 +1875,15 @@ trajectory_heatmap <- function(                                    # changing th
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
+            }
+
             base::print(base::paste("Exporting trajectory heatmap to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -1736,6 +1936,15 @@ elbow_plot <- function(data, rootname, plot_title, reduction="pca", ndims=NULL, 
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
+            }
+
             base::print(base::paste("Exporting elbow plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -1785,6 +1994,15 @@ silhouette_plot <- function(data, rootname, plot_title, legend_title, group_by, 
                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
                 base::suppressMessages(base::print(plot))
                 grDevices::dev.off()
+            }
+
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
             }
 
             base::print(base::paste("Exporting silhouette plot to ", rootname, ".(png/pdf)", sep=""))
@@ -1884,7 +2102,18 @@ composition_plot <- function(data, rootname, plot_title, legend_title, x_label, 
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
+            }
+
             base::print(base::paste("Exporting composition plot to ", rootname, ".(png/pdf)", sep=""))
+            base::print("Composition plot data")
+            base::print(base::as.data.frame(counts_data))                                               # counts data used for the plot
         },
         error = function(e){
             base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
@@ -1940,6 +2169,15 @@ corr_plot <- function(data, reduction, qc_columns, qc_labels, plot_title, rootna
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(combined_plots)
+            }
+
             base::print(base::paste("Exporting correlation plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -1986,6 +2224,15 @@ tss_plot <- function(data, rootname, plot_title, split_by, plot_subtitle=NULL, g
                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
                 base::suppressMessages(base::print(combined_plots))
                 grDevices::dev.off()
+            }
+
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(combined_plots)
             }
 
             base::print(base::paste("Exporting TSS Enrichment plot to ", rootname, ".(png/pdf)", sep=""))
@@ -2037,6 +2284,15 @@ fragments_hist <- function(data, rootname, plot_title, split_by, plot_subtitle=N
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(combined_plots)
+            }
+
             base::print(base::paste("Exporting ATAC fragments length histogram to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -2081,6 +2337,15 @@ pca_plot <- function(pca_data, pcs, rootname, plot_title, legend_title, plot_sub
                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
                 base::suppressMessages(base::print(plot))
                 grDevices::dev.off()
+            }
+
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
             }
 
             base::print(base::paste("Exporting PCA plot to ", rootname, ".(png/pdf)", sep=""))
@@ -2146,6 +2411,15 @@ dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, clu
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
+            }
+
             base::print(base::paste("Exporting dot plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -2198,6 +2472,15 @@ expression_density_plot <- function(data, features, rootname, reduction, plot_ti
                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
                 base::suppressMessages(base::print(combined_plots))
                 grDevices::dev.off()
+            }
+
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(combined_plots)
             }
 
             base::print(base::paste("Exporting expression density plot to ", rootname, ".(png/pdf)", sep=""))
@@ -2320,6 +2603,15 @@ feature_plot <- function(data, features, labels, rootname, reduction, plot_title
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(combined_plots)
+            }
+
             base::print(base::paste("Exporting feature plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -2362,6 +2654,15 @@ dim_heatmap <- function(data, rootname, plot_title, x_label, y_label, reduction=
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(combined_plots)
+            }
+
             base::print(base::paste("Exporting dimensionality reduction heatmap to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -2398,6 +2699,15 @@ dim_loadings_plot <- function(data, rootname, plot_title, x_label, y_label, redu
                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
                 base::suppressMessages(base::print(combined_plots))
                 grDevices::dev.off()
+            }
+
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(combined_plots)
             }
 
             base::print(base::paste("Exporting dimensionality reduction loadings plot to ", rootname, ".(png/pdf)", sep=""))
@@ -2468,6 +2778,15 @@ coverage_plot <- function(data, assay, region, group_by, plot_title, rootname, p
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
+            }
+
             base::print(base::paste("Exporting genome coverage plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -2513,6 +2832,15 @@ volcano_plot <- function(data, rootname, x_axis, y_axis, x_cutoff, y_cutoff, x_l
                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
                 base::suppressMessages(base::print(plot))
                 grDevices::dev.off()
+            }
+
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
             }
 
             base::print(base::paste("Export volcano plot to ", rootname, ".(png/pdf)", sep=""))
@@ -2583,6 +2911,15 @@ feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", s
                 grDevices::dev.off()
             }
 
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
+            }
+
             base::print(base::paste("Exporting feature expression heatmap to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
@@ -2630,6 +2967,15 @@ daseq_permutations <- function(data, rootname, plot_title, x_label, y_label, y_i
                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
                 base::suppressMessages(base::print(plot))
                 grDevices::dev.off()
+            }
+
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
             }
 
             base::print(base::paste("Exporting DA permutations plot to ", rootname, ".(png/pdf)", sep=""))

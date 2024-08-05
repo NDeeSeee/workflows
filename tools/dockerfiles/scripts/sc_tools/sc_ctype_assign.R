@@ -3,9 +3,11 @@ options(warn=-1)
 options("width"=200)
 options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
+suppressMessages(library(knitr))
 suppressMessages(library(dplyr))
 suppressMessages(library(Seurat))
 suppressMessages(library(Signac))
+suppressMessages(library(stringr))
 suppressMessages(library(modules))
 suppressMessages(library(forcats))
 suppressMessages(library(argparse))
@@ -20,7 +22,7 @@ suppressMessages(io <- modules::use(file.path(HERE, "modules/io.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
-
+## ----
 export_all_qc_plots <- function(seurat_data, args){
     Idents(seurat_data) <- args$target                                # othervise it will be split by dataset in vln_plot
 
@@ -286,7 +288,7 @@ export_all_qc_plots <- function(seurat_data, args){
     )
 }
 
-
+## ----
 export_all_clustering_plots <- function(seurat_data, args){
     Idents(seurat_data) <- "new.ident"                                                               # safety measure
     datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
@@ -604,7 +606,7 @@ export_all_clustering_plots <- function(seurat_data, args){
     gc(verbose=FALSE)
 }
 
-
+## ----
 export_all_coverage_plots <- function(seurat_data, args) {
     SeuratObject::DefaultAssay(seurat_data) <- "ATAC"                                          # safety measure
     SeuratObject::Idents(seurat_data) <- "new.ident"                                           # safety measure
@@ -647,7 +649,7 @@ export_all_coverage_plots <- function(seurat_data, args) {
     }
 }
 
-
+## ----
 export_all_expression_plots <- function(seurat_data, args) {
     SeuratObject::DefaultAssay(seurat_data) <- "RNA"                            # safety measure
     SeuratObject::Idents(seurat_data) <- args$target
@@ -722,7 +724,7 @@ export_all_expression_plots <- function(seurat_data, args) {
     SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
 }
 
-
+## ----
 export_heatmaps <- function(seurat_data, markers, args){
     DefaultAssay(seurat_data) <- "RNA"                            # safety measure
     Idents(seurat_data) <- "new.ident"                            # safety measure
@@ -793,7 +795,7 @@ export_heatmaps <- function(seurat_data, markers, args){
     }
 }
 
-
+## ----
 get_args <- function(){
     parser <- ArgumentParser(description="Single-Cell Manual Cell Type Assignment")
     parser$add_argument(
@@ -1058,19 +1060,21 @@ get_args <- function(){
         help="Seed number for random values. Default: 42",
         type="integer", default=42
     )
-    args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
     print(args)
     return (args)
 }
 
-
+## ----
 args <- get_args()
 prod$parallel(args)
 
+## ----
 print(paste("Loading Seurat data from", args$query))
 seurat_data <- readRDS(args$query)
 debug$print_info(seurat_data, args)
 
+## ----
 if (!any(c("RNA", "ATAC") %in% names(seurat_data@assays))){
     print(
         paste(
@@ -1082,6 +1086,7 @@ if (!any(c("RNA", "ATAC") %in% names(seurat_data@assays))){
     quit(save="no", status=1, runLast=FALSE)
 }
 
+## ----
 if (!is.null(args$reduction) && !(args$reduction %in% names(seurat_data@reductions))){
     print(
         paste(
@@ -1093,6 +1098,7 @@ if (!is.null(args$reduction) && !(args$reduction %in% names(seurat_data@reductio
     quit(save="no", status=1, runLast=FALSE)
 }
 
+## ----
 if (is.null(args$reduction)){
     print(
         paste(
@@ -1122,6 +1128,7 @@ if (is.null(args$reduction)){
     }
 }
 
+## ----
 if ("Phase" %in% colnames(seurat_data@meta.data)){                                 # safety measure to have the proper order on the plots
     seurat_data@meta.data[["Phase"]] <- factor(
         seurat_data@meta.data[["Phase"]],
@@ -1129,6 +1136,7 @@ if ("Phase" %in% colnames(seurat_data@meta.data)){                              
     )
 }
 
+## ----
 seurat_data <- io$extend_metadata(
     seurat_data=seurat_data,
     location=args$celltypes,
@@ -1139,22 +1147,26 @@ seurat_data <- io$extend_metadata(
 )
 debug$print_info(seurat_data, args)
 
+## ----
 if ( (!is.null(args$fragments)) && ("ATAC" %in% names(seurat_data@assays)) ){
     print(paste("Loading ATAC fragments data from", args$fragments))
     seurat_data <- io$replace_fragments(args$fragments, seurat_data)                                             # will change the default assay to ATAC
     debug$print_info(seurat_data, args)
 }
 
+## ----
 export_all_qc_plots(
     seurat_data=seurat_data,
     args=args
 )
 
+## ----
 export_all_clustering_plots(
     seurat_data=seurat_data,
     args=args
 )
 
+## ----
 if (!is.null(args$genes)){
     print("Adjusting genes of interest to include only those that are present in the loaded Seurat object")
     args$genes <- unique(args$genes)
@@ -1174,6 +1186,7 @@ if (!is.null(args$genes)){
     }
 }
 
+## ----
 all_rna_markers <- NULL
 if ( ("RNA" %in% names(seurat_data@assays)) && (!is.null(args$genes) || args$diffgenes) ){                       # we check genes or diffgenes so we don't normalize it without reason
     print("Normalizing counts in RNA assay before evaluating genes expression or identifying putative gene markers")
@@ -1210,6 +1223,7 @@ if ( ("RNA" %in% names(seurat_data@assays)) && (!is.null(args$genes) || args$dif
     }
 }
 
+## ----
 all_atac_markers <- NULL
 if ("ATAC" %in% names(seurat_data@assays)){                                                                      # no reason to check for genes and fragments or diffpeaks, because we only change the assay
     DefaultAssay(seurat_data) <- "ATAC"                                                                          # safety measure
@@ -1240,6 +1254,7 @@ if ("ATAC" %in% names(seurat_data@assays)){                                     
     }
 }
 
+## ----
 if(args$cbbuild){
     print(
         paste(
@@ -1250,10 +1265,8 @@ if(args$cbbuild){
     reduc_names <- names(seurat_data@reductions)
     ordered_reduc_names <- c(args$reduction, reduc_names[reduc_names!=args$reduction])     # we checked before that args$reduction is present
     seurat_data@reductions <- seurat_data@reductions[ordered_reduc_names]
-    debug$print_info(seurat_data, args)
 
     if (all(c("RNA", "ATAC") %in% names(seurat_data@assays))){
-        print("Exporting RNA and ATAC assays to UCSC Cellbrowser jointly")
         ucsc$export_cellbrowser(
             seurat_data=seurat_data,
             assay="RNA",
@@ -1277,7 +1290,6 @@ if(args$cbbuild){
             rootname=paste(args$output, "_cellbrowser/atac", sep="")
         )
     } else if ("RNA" %in% names(seurat_data@assays)){
-        print("Exporting RNA assay to UCSC Cellbrowser")
         ucsc$export_cellbrowser(
             seurat_data=seurat_data,
             assay="RNA",
@@ -1289,7 +1301,6 @@ if(args$cbbuild){
             rootname=paste(args$output, "_cellbrowser", sep="")
         )
     } else {
-        print("Exporting ATAC assay to UCSC Cellbrowser")
         ucsc$export_cellbrowser(
             seurat_data=seurat_data,
             assay="ATAC",
@@ -1303,15 +1314,16 @@ if(args$cbbuild){
     }
 }
 
-print("Exporting results to RDS file")
+## ----
 io$export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
+
+## ----
 if(args$h5seurat){
-    print("Exporting results to h5seurat file")
     io$export_h5seurat(seurat_data, paste(args$output, "_data.h5seurat", sep=""))
 }
 
+## ----
 if(args$h5ad && ("RNA" %in% names(seurat_data@assays))){
-    print("Exporting RNA counts to h5ad file")
     io$export_h5ad(
         data=seurat_data,
         location=paste(args$output, "_rna_counts.h5ad", sep=""),
@@ -1319,8 +1331,9 @@ if(args$h5ad && ("RNA" %in% names(seurat_data@assays))){
         slot="counts"
     )
 }
+
+## ----
 if(args$h5ad && ("ATAC" %in% names(seurat_data@assays))){
-    print("Exporting ATAC counts to h5ad file")
     io$export_h5ad(
         data=seurat_data,
         location=paste(args$output, "_atac_counts.h5ad", sep=""),
@@ -1329,8 +1342,8 @@ if(args$h5ad && ("ATAC" %in% names(seurat_data@assays))){
     )
 }
 
+## ----
 if(args$loupe && ("RNA" %in% names(seurat_data@assays))){
-    print("Exporting RNA counts to Loupe file")
     ucsc$export_loupe(
         seurat_data=seurat_data,
         assay="RNA",
@@ -1339,8 +1352,8 @@ if(args$loupe && ("RNA" %in% names(seurat_data@assays))){
     )
 }
 
+## ----
 if(args$scope && ("RNA" %in% names(seurat_data@assays))){
-    print("Exporting results to SCope compatible loom file")
     io$export_scope_loom(                                                                  # we save only counts slot from the RNA assay 
         seurat_data,
         paste(args$output, "_data.loom", sep="")

@@ -3,9 +3,11 @@ options(warn=-1)
 options("width"=200)
 options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
+suppressMessages(library(knitr))
 suppressMessages(library(dplyr))
 suppressMessages(library(Seurat))
 suppressMessages(library(Signac))
+suppressMessages(library(stringr))
 suppressMessages(library(modules))
 suppressMessages(library(argparse))
 suppressMessages(library(rtracklayer))
@@ -21,7 +23,7 @@ suppressMessages(qc <- modules::use(file.path(HERE, "modules/qc.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
-
+## ----
 export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
     DefaultAssay(seurat_data) <- "ATAC"
     Idents(seurat_data) <- "new.ident"                                                                # safety measure
@@ -315,6 +317,7 @@ export_all_qc_plots <- function(seurat_data, suffix, args, macs2_peaks=FALSE){
     }
 }
 
+## ----
 get_args <- function(){
     parser <- ArgumentParser(description="Single-Cell ATAC-Seq Filtering Analysis")
     parser$add_argument(
@@ -557,36 +560,41 @@ get_args <- function(){
         help="Seed number for random values. Default: 42",
         type="integer", default=42
     )
-    args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
     print(args)
     return (args)
 }
 
-
+## ----
 args <- get_args()
 prod$parallel(args)
 
+## ----
 print(paste("Loading datasets identities from", args$identity))
 cell_identity_data <- io$load_cell_identity_data(args$identity)                          # identities are always prepended with letters to keep the order
 
-print("Exporting an example of datasets metadata file")                                  # can be later used as a template of a file to extend Seurat metadata
 io$export_data(
     cell_identity_data[, "library_id", drop=FALSE],                                      # we need only the first column with the prepended letters
     paste(args$output, "_meta.tsv", sep="")
 )
 
+## ----
 print(paste("Loading datasets grouping from", args$grouping))
 grouping_data <- io$load_grouping_data(args$grouping, cell_identity_data)
 
+## ----
 print(paste("Loading genomic blacklist regions from", args$blacklist))
 blacklist_data <- io$load_blacklist_data(args$blacklist)
 
+## ----
 print(paste("Loading chromosome length information from", args$seqinfo))
 seqinfo_data <- io$load_seqinfo_data(args$seqinfo)
 
+## ----
 print(paste("Loading genome annotation data from", args$annotations))
 annotation_data <- io$load_annotation_data(args$annotations)
 
+## ----
 print(paste("Loading peak-barcode matrices from", args$mex))
 print(paste("Loading ATAC fragments from", args$fragments))
 
@@ -612,6 +620,7 @@ if(file.exists(file.path(args$mex, "features.tsv.gz"))){
 }
 debug$print_info(seurat_data, args)
 
+## ----
 seurat_data <- qc$estimate_doublets(                                                    # we want to search for doublets before we applied any filters
     seurat_data=seurat_data,
     assay="ATAC",
@@ -621,6 +630,7 @@ seurat_data <- qc$estimate_doublets(                                            
 )
 debug$print_info(seurat_data, args)
 
+## ----
 idents_before_filtering <- sort(unique(as.vector(as.character(Idents(seurat_data)))))    # A->Z sorted identities
 if (!is.null(args$barcodes)){
     print("Applying cell filters based on the barcodes of interest")
@@ -629,6 +639,7 @@ if (!is.null(args$barcodes)){
 debug$print_info(seurat_data, args)
 idents_after_filtering <- sort(unique(as.vector(as.character(Idents(seurat_data)))))     # A->Z sorted identities
 
+## ----
 print("Adjusting input parameters")
 for (key in names(args)){
     if (key %in% c("minfragments", "maxnuclsignal", "mintssenrich", "maxblacklist")){
@@ -668,12 +679,16 @@ for (key in names(args)){
 print("Adjusted parameters")
 print(args)
 
+## ----
 print("Adding ATAC QC metrics for not filtered datasets")
 seurat_data <- qc$add_atac_qc_metrics(seurat_data, args)
+
+## ----
 print("Adding peak QC metrics for peaks called by Cell Ranger ATAC or ARC")
 seurat_data <- qc$add_peak_qc_metrics(seurat_data, blacklist_data, args)
 debug$print_info(seurat_data, args)
 
+## ----
 args <- qc$update_qc_thresholds(
     seurat_data=seurat_data,
     args=args,
@@ -685,6 +700,7 @@ args <- qc$update_qc_thresholds(
 print("Filtering thresholds adjusted based on the MAD values")
 print(args)
 
+## ----
 export_all_qc_plots(
     seurat_data=seurat_data,
     suffix="raw",
@@ -692,10 +708,12 @@ export_all_qc_plots(
     macs2_peaks=FALSE
 )
 
+## ----
 print("Applying filters based on ATAC QC metrics")
 seurat_data <- filter$apply_atac_qc_filters(seurat_data, args)                           # cleans up all reductions
 debug$print_info(seurat_data, args)
 
+## ----
 if (!is.null(args$removedoublets) && args$removedoublets){
     print("Filtering by estimated doublets")
     seurat_data <- filter$remove_doublets(
@@ -705,6 +723,7 @@ if (!is.null(args$removedoublets) && args$removedoublets){
     debug$print_info(seurat_data, args)
 }
 
+## ----
 if (!is.null(args$callby)){
     print("Forced to replace Cell Ranger ARC peaks with MACS2 peaks")
     seurat_data <- analyses$call_macs2_peaks(
@@ -730,14 +749,20 @@ if (!is.null(args$callby)){
     debug$print_info(seurat_data, args)
 }
 
+## ----
 print("Applying filters based on peaks QC metrics")
 seurat_data <- filter$apply_peak_qc_filters(seurat_data, args)                           # cleans up all reductions
+
+## ----
 print("Updating ATAC QC metrics after all filtering thresholds applied")
 seurat_data <- qc$add_atac_qc_metrics(seurat_data, args)                                 # recalculate ATAC QC metrics
+
+## ----
 print("Updating peak QC metrics after all filtering thresholds applied")
 seurat_data <- qc$add_peak_qc_metrics(seurat_data, blacklist_data, args)                 # recalculate peak QC metrics
 debug$print_info(seurat_data, args)
 
+## ----
 export_all_qc_plots(                                                                     # after all filters have been applied
     seurat_data=seurat_data,
     suffix="fltr",
@@ -745,6 +770,7 @@ export_all_qc_plots(                                                            
     macs2_peaks=!is.null(args$callby)                                                    # can be both from 10x or MACS2
 )
 
+## ----
 print("Adding TSS enrichment score vs ATAC fragments in peaks per cell as tss_atacfrgm dimensionality reduction")
 seurat_data@reductions[["tss_atacfrgm"]] <- CreateDimReducObject(
     embeddings=as.matrix(
@@ -756,8 +782,8 @@ seurat_data@reductions[["tss_atacfrgm"]] <- CreateDimReducObject(
     assay="ATAC"
 )
 
+## ----
 if(args$cbbuild){
-    print("Exporting filtering results to UCSC Cellbrowser")
     ucsc$export_cellbrowser(
         seurat_data=seurat_data,
         assay="ATAC",
@@ -768,15 +794,16 @@ if(args$cbbuild){
     )
 }
 
-print("Exporting results to RDS file")
+## ----
 io$export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
+
+## ----
 if(args$h5seurat){
-    print("Exporting results to h5seurat file")
     io$export_h5seurat(seurat_data, paste(args$output, "_data.h5seurat", sep=""))
 }
 
+## ----
 if(args$h5ad){
-    print("Exporting ATAC counts to h5ad file")
     io$export_h5ad(
         data=seurat_data,
         location=paste(args$output, "_counts.h5ad", sep=""),

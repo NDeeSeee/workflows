@@ -3,8 +3,10 @@ options(warn=-1)
 options("width"=200)
 options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
+suppressMessages(library(knitr))
 suppressMessages(library(Seurat))
 suppressMessages(library(Signac))
+suppressMessages(library(stringr))
 suppressMessages(library(modules))
 suppressMessages(library(argparse))
 
@@ -19,7 +21,7 @@ suppressMessages(qc <- modules::use(file.path(HERE, "modules/qc.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 
-
+## ----
 export_plots <- function(seurat_data, da_cells, da_thresholds, args) {
     Idents(seurat_data) <- "new.ident"                                                                       # safety measure
 
@@ -104,7 +106,7 @@ export_plots <- function(seurat_data, da_cells, da_thresholds, args) {
     }
 }
 
-
+## ----
 get_args <- function(){
     parser <- ArgumentParser(description="Single-Cell Differential Abundance Analysis")
     parser$add_argument(
@@ -265,26 +267,26 @@ get_args <- function(){
         help="Seed number for random values. Default: 42",
         type="integer", default=42
     )
-    args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
     print(args)
     return (args)
 }
 
+## ----
 args <- get_args()
-
 print("Adjusting --dimensions parameter")
 args$dimensions <- c(1:args$dimensions)
 print(paste("--dimensions was adjusted to", paste(args$dimensions, collapse=", ")))
-
 if(!is.null(args$ranges)){
     args$ranges <- sort(args$ranges, decreasing=TRUE)   # for consistency with other parts of the program
 }
-
 prod$parallel(args)
 
+## ----
 print(paste("Loading Seurat data from", args$query))
 seurat_data <- readRDS(args$query)
 
+## ----
 if (!(args$reduction %in% names(seurat_data@reductions))){
     print(
         paste(
@@ -295,6 +297,7 @@ if (!(args$reduction %in% names(seurat_data@reductions))){
     quit(save="no", status=1, runLast=FALSE)
 }
 
+## ----
 if (!("RNA" %in% names(seurat_data@assays))){
     print(
         paste(
@@ -305,6 +308,7 @@ if (!("RNA" %in% names(seurat_data@assays))){
     quit(save="no", status=1, runLast=FALSE)
 }
 
+## ----
 if (!any(c("rnaumap", "atacumap", "wnnumap") %in% names(seurat_data@reductions))){
     print(
         paste(
@@ -320,6 +324,7 @@ print("Setting default assay to RNA")
 DefaultAssay(seurat_data) <- "RNA"
 debug$print_info(seurat_data, args)
 
+## ----
 if (!is.null(args$metadata)){
     print("Extending Seurat object with the extra metadata fields")
     seurat_data <- io$extend_metadata(
@@ -331,10 +336,12 @@ if (!is.null(args$metadata)){
     debug$print_info(seurat_data, args)
 }
 
+## ----
 print("Filtering Seurat object to include only selected groups of cells")
 seurat_data <- io$apply_metadata_filters(seurat_data, args$splitby, c(args$first, args$second))
 debug$print_info(seurat_data, args)
 
+## ----
 print(
     paste0(
         "Running ", args$second, " vs ", args$first, " differential abundance ",
@@ -353,15 +360,15 @@ print(
         )
     )
 )
-
 da_results <- analyses$da_analyze(seurat_data, args)                         # will add new metadata column with DA predictions
-
 seurat_data <- da_results$seurat_data                                        # for easy access
 da_cells <- da_results$da_cells
 da_thresholds <- da_results$thresholds                                       # thresholds identified by DASeq by permutation test
 rm(da_results)                                                               # remove unused data
 gc(verbose=FALSE)
+debug$print_info(seurat_data, args)
 
+## ----
 # need to adjust args$ranges (if they were provided) the same way as DASeq does it internally
 if(!is.null(args$ranges)){
     if(da_thresholds[1] > args$ranges[1]){
@@ -374,11 +381,12 @@ if(!is.null(args$ranges)){
     }
 }
 
+## ----
 export_plots(seurat_data, da_cells, da_thresholds, args)
 
+## ----
 if(args$cbbuild){
     if (all(c("RNA", "ATAC") %in% names(seurat_data@assays))){
-        print("Exporting RNA and ATAC assays to UCSC Cellbrowser jointly")
         ucsc$export_cellbrowser(
             seurat_data=seurat_data,
             assay="RNA",
@@ -398,7 +406,6 @@ if(args$cbbuild){
             rootname=paste(args$output, "_cellbrowser/atac", sep=""),
         )
     } else {
-        print("Exporting RNA assay to UCSC Cellbrowser")
         ucsc$export_cellbrowser(
             seurat_data=seurat_data,
             assay="RNA",
@@ -410,15 +417,16 @@ if(args$cbbuild){
     }
 }
 
-print("Exporting results to RDS file")
+## ----
 io$export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
+
+## ----
 if(args$h5seurat){
-    print("Exporting results to h5seurat file")
     io$export_h5seurat(seurat_data, paste(args$output, "_data.h5seurat", sep=""))
 }
 
+## ----
 if(args$h5ad){
-    print("Exporting RNA counts to h5ad file")
     io$export_h5ad(
         data=seurat_data,
         location=paste(args$output, "_counts.h5ad", sep=""),
@@ -427,8 +435,8 @@ if(args$h5ad){
     )
 }
 
+## ----
 if(args$loupe){
-    print("Exporting RNA counts to Loupe file")
     ucsc$export_loupe(
         seurat_data=seurat_data,
         assay="RNA",

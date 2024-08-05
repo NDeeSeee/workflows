@@ -3,7 +3,9 @@ options(warn=-1)
 options("width"=200)
 options(error=function(){traceback(3); quit(save="no", status=1, runLast=FALSE)})
 
+suppressMessages(library(knitr))
 suppressMessages(library(Seurat))
+suppressMessages(library(stringr))
 suppressMessages(library(modules))
 suppressMessages(library(argparse))
 suppressMessages(library(tidyverse))
@@ -22,7 +24,7 @@ suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
 # https://www.sc-best-practices.org/air_repertoire/ir_profiling.html#raw-data
 # https://www.sciencedirect.com/science/article/pii/S0958166920301051
 
-
+## ----
 export_all_plots <- function(seurat_data, args){
     Idents(seurat_data) <- "new.ident"                                                               # safety measure
     datasets_count <- length(unique(as.vector(as.character(seurat_data@meta.data$new.ident))))
@@ -603,7 +605,7 @@ export_all_plots <- function(seurat_data, args){
     gc(verbose=FALSE)
 }
 
-
+## ----
 get_args <- function(){
     parser <- ArgumentParser(description="Single-Cell Immune Profiling Analysis")
     parser$add_argument(
@@ -770,19 +772,21 @@ get_args <- function(){
         help="Seed number for random values. Default: 42",
         type="integer", default=42
     )
-    args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
     print(args)
     return (args)
 }
 
-
+## ----
 args <- get_args()
 prod$parallel(args)
 
+## ----
 print(paste("Loading Seurat data from", args$query))
 seurat_data <- readRDS(args$query)
 debug$print_info(seurat_data, args)
 
+## ----
 if (!("RNA" %in% names(seurat_data@assays))){
     print(
         paste(
@@ -793,6 +797,7 @@ if (!("RNA" %in% names(seurat_data@assays))){
     quit(save="no", status=1, runLast=FALSE)
 }
 
+## ----
 if (!("rnaumap" %in% names(seurat_data@reductions))){
     print(
         paste(
@@ -803,6 +808,7 @@ if (!("rnaumap" %in% names(seurat_data@reductions))){
     quit(save="no", status=1, runLast=FALSE)
 }
 
+## ----
 if (!is.null(args$metadata)){
     print("Extending Seurat object with the extra metadata fields")
     seurat_data <- io$extend_metadata(
@@ -814,12 +820,14 @@ if (!is.null(args$metadata)){
     debug$print_info(seurat_data, args)
 }
 
+## ----
 if (!is.null(args$barcodes)){
     print("Applying cell filters based on the barcodes of interest")
     seurat_data <- io$extend_metadata_by_barcode(seurat_data, args$barcodes, TRUE)         # sets identities to new.ident
     debug$print_info(seurat_data, args)
 }
 
+## ----
 print("Setting default assay to RNA")
 DefaultAssay(seurat_data) <- "RNA"
 
@@ -827,23 +835,24 @@ print("Extending Seurat data with congtigs annotations")
 seurat_data <- io$load_10x_vdj_data(seurat_data, args)
 debug$print_info(seurat_data, args)
 
+## ----
 export_all_plots(
     seurat_data=seurat_data,
     args=args
 )
 
+## ----
 io$export_clonotypes(
     data=seurat_data,
     location=paste0(args$output, "_clonotypes.tsv")
 )
 
+## ----
 if(args$cbbuild){
-    print("Exporting RNA assay to UCSC Cellbrowser")
     print("Reordering reductions to have rnaumap on the first place")                      # will be shown first in UCSC Cellbrowser
     reduc_names <- names(seurat_data@reductions)
     ordered_reduc_names <- c("rnaumap", reduc_names[reduc_names!="rnaumap"])               # we checked before that rnaumap is present
     seurat_data@reductions <- seurat_data@reductions[ordered_reduc_names]
-    debug$print_info(seurat_data, args)
     ucsc$export_cellbrowser(
         seurat_data=seurat_data,
         assay="RNA",
@@ -854,16 +863,17 @@ if(args$cbbuild){
     )
 }
 
+## ----
 DefaultAssay(seurat_data) <- "RNA"                                                         # better to stick to RNA assay by default https://www.biostars.org/p/395951/#395954 
-print("Exporting results to RDS file")
 io$export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
+
+## ----
 if(args$h5seurat){
-    print("Exporting results to h5seurat file")
     io$export_h5seurat(seurat_data, paste(args$output, "_data.h5seurat", sep=""))
 }
 
+## ----
 if(args$h5ad){
-    print("Exporting RNA counts to h5ad file")
     io$export_h5ad(
         data=seurat_data,
         location=paste(args$output, "_counts.h5ad", sep=""),
@@ -872,8 +882,8 @@ if(args$h5ad){
     )
 }
 
+## ----
 if(args$loupe){
-    print("Exporting RNA counts to Loupe file")
     ucsc$export_loupe(
         seurat_data=seurat_data,
         assay="RNA",
@@ -881,8 +891,8 @@ if(args$loupe){
     )
 }
 
+## ----
 if(args$scope){
-    print("Exporting results to SCope compatible loom file")
     io$export_scope_loom(                                                                  # we save only counts slot from the RNA assay 
         seurat_data,
         paste(args$output, "_data.loom", sep="")
