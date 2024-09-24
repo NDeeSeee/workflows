@@ -485,6 +485,7 @@ generate_contrasts <- function(dds) {
     group_by(specificity_group) %>% 
     distinct(contrast, .keep_all = TRUE) %>% 
     arrange(specificity_group) %>%
+    ungroup() %>%
     mutate(contrast_number = row_number()) %>%
     select(contrast_number, everything())
   
