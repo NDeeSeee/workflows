@@ -1032,6 +1032,16 @@ get_args <- function(){
         action="store_true"
     )
     parser$add_argument(
+        "--azimuth",
+        help=paste(
+            "Save Seurat object with the assigned cell types as",
+            "model for the reference mapping in Azimuth. Both",
+            "RDS and annoy index files will be created.",
+            "Default: false"
+        ),
+        action="store_true"
+    )
+    parser$add_argument(
         "--cbbuild",
         help="Export results to UCSC Cell Browser. Default: false",
         action="store_true"
@@ -1325,7 +1335,18 @@ if(args$cbbuild){
 }
 
 ## ----
-io$export_rds(seurat_data, paste(args$output, "_data.rds", sep=""))
+io$export_rds(seurat_data, paste0(args$output, "_data.rds"))
+
+## ----
+if(args$azimuth && (args$reduction %in% c("rnaumap", "wnnumap"))){           # we support only rnaumap and wnnumap reductions because
+    io$export_azimuth(                                                       # we know that pca and spca correspond to them
+        data=seurat_data,
+        reference_umap=args$reduction,
+        reference_pca=ifelse(args$reduction == "rnaumap", "pca", "spca"),    # spca is what we created from the WNN results
+        reference_columns=args$target,
+        location=paste0(args$output, "_ref_data.rds")                        # location should have an extension, because we replace it with annoy to save a graph
+    )
+}
 
 ## ----
 if(args$h5seurat){

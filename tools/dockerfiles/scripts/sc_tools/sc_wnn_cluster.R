@@ -1232,7 +1232,7 @@ print(
 seurat_data <- analyses$add_wnn_clusters(                       # will add 'wnnumap' reduction
     seurat_data=seurat_data,
     graph_name="wsnn",                                          # will be used in all the plot generating functions
-    reductions=list("pca", "atac_lsi"),
+    reductions=list("pca", "atac_lsi"),                         # we need pca to be the first because we run RunSPCA based on the assay selected from it
     dimensions=list(args$rnadimensions, args$atacdimensions),   # should be the same order as reductions
     args=args
 )

@@ -60,6 +60,20 @@
 #   to Seurat 5 base image.
 # - Added sc_rna_load_rhapsody.R to load RDS files
 #   produced by the BD Rhapsody Sequence Analysis Pipeline
+# - Installed ggdensity package for showing rug plots
+#   in the geom_point_plot
+# - Updated sc_ctype_assign.R to export results into
+#   the Azimuth reference model. PCA now always has
+#   at least 50 dimensions, and WNN integration
+#   creates SPCA reduction with minimum 50 dimensions
+#   too. Both of them are needed for Azimuth reference
+#   mapping. When processing ATAC assay, we backup RNA
+#   related assays completely, otherwise some data is
+#   lost and we can't use them for Azimuth reference
+#   creation on the later steps. Similarly, we backup
+#   ATAC related reductions, when processing RNA data,
+#   however we don't actually use ATAC reference mapping
+#   yet.
 #
 # v0.0.40 -- based on biowardrobe2/sc-tools:v0.0.39
 # - Added sc_report_wrapper.R script to export HTML report
@@ -438,6 +452,7 @@ RUN apt-get update && \
     R -e 'install.packages("intrinsicDimension")' && \
     R -e 'install.packages("ggnewscale")' && \
     R -e 'install.packages("patchwork")' && \
+    R -e 'install.packages("ggdensity")' && \
     R -e 'devtools::install_github("satijalab/seurat-data", upgrade = "never", ref = "b198ed523b1fd773c09356d30d9dfcebd62f22cf")' && \
     R -e 'devtools::install_github("michael-kotliar/azimuth", upgrade = "never", ref = "v0.4.6mod")' && \
     wget ${LOUPER_URL} && \
