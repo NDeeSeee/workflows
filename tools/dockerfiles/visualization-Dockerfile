@@ -2,15 +2,18 @@
 # Dockerfile
 #
 # Software:         Visualization Plugins
-# Software Version: v0.0.8
+# Software Version: v0.0.9
 # Description:      Visualization Plugins
 # Website:          https://github.com/Barski-lab/visualization_plugins.git
 # Provides:         Visualization Plugins
 # Base Image:       ubuntu:20.04
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/visualization:v0.0.8 -f visualization-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/visualization:v0.0.8
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/visualization:v0.0.8 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/visualization:v0.0.9 -f visualization-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/visualization:v0.0.9
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/visualization:v0.0.9 /bin/bash
 #################################################################
+#
+# v0.0.9
+# - Updated ma_plot.sh to the latest (able to use it in the CWL for both multiple and single html files)
 #
 # v0.0.8
 # - Updated volcano_plot to the latest
@@ -44,14 +47,14 @@
 ### Base Image
 FROM ubuntu:20.04
 LABEL maintainer="misha.kotliar@gmail.com"
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 
 
 ################## BEGIN INSTALLATION ######################
 
 WORKDIR /opt/volcano_plot
 
-ENV VP_COMMIT "SDAP-1056-pval-update"
+ENV VP_COMMIT="SDAP-1056-pval-update"
 
 COPY ./volcano_plot/ /opt/volcano_plot
 COPY ./scripts/volcano_plot.sh /usr/local/bin/volcano_plot.sh
