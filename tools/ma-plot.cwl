@@ -1,69 +1,66 @@
+# ma-plot.cwl
 cwlVersion: v1.0
 class: CommandLineTool
 
-
-hints:
-- class: DockerRequirement
-  dockerPull: biowardrobe2/visualization:v0.0.8
-
+requirements:
+  - class: InlineJavascriptRequirement
+  - class: DockerRequirement
+    dockerPull: biowardrobe2/visualization:v0.0.9
 
 inputs:
-
   diff_expr_file:
     type: File
-    inputBinding:
-      position: 5
-    doc: |
-      TSV file holding data for the plot
+    doc: "TSV file holding data for the plot"
 
   x_axis_column:
     type: string
-    inputBinding:
-      position: 6
-    doc: |
-      Name of column in file for the plots x-axis (ex: "baseMean")
+    doc: "Name of column in file for the plot's x-axis (e.g., 'baseMean')"
 
   y_axis_column:
     type: string
-    inputBinding:
-      position: 7
-    doc: |
-      Name of column in file for the plots y-axis (ex: "log2FoldChange")
+    doc: "Name of column in file for the plot's y-axis (e.g., 'log2FoldChange')"
 
   label_column:
     type: string
-    inputBinding:
-      position: 8
-    doc: |
-      Name of column in file for each data points 'name' (ex: "GeneId")
+    doc: "Name of column in file for each data point's 'name' (e.g., 'GeneId')"
 
+  output_filename:
+    type: string?
+    default: "index.html"
+    doc: "Desired output HTML filename."
 
 outputs:
-
   html_data:
     type: Directory
     outputBinding:
-      glob: "./volcano_plot/MD-MA_plot"
-    doc: |
-      Directory html data for MA-plot
+      glob: "volcano_plot/MD-MA_plot_*/html_data"
+    doc: "Directory containing HTML data for MA-plot."
 
   html_file:
     type: File
     outputBinding:
-      glob: "./volcano_plot/MD-MA_plot/html_data/index.html"
-    doc: |
-      HTML index file for MA-plot
-
+      glob: "volcano_plot/MD-MA_plot_*/html_data/*.html"
+    doc: "HTML output file for MA-plot."
 
 baseCommand: ["ma_plot.sh"]
 
+arguments:
+  - valueFrom: "$(inputs.diff_expr_file.path)"
+    position: 1
+  - valueFrom: "$(inputs.x_axis_column)"
+    position: 2
+  - valueFrom: "$(inputs.y_axis_column)"
+    position: 3
+  - valueFrom: "$(inputs.label_column)"
+    position: 4
+  - valueFrom: "$(inputs.output_filename)"
+    position: 5
 
 $namespaces:
   s: http://schema.org/
 
 $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
-
 
 label: "MA-plot"
 s:name: "MA-plot"
@@ -106,4 +103,4 @@ s:creator:
 doc: |
   MA-plot
 
-  Builds ma-plot from the DESeq output
+  Builds MA-plot from the DESeq output
