@@ -7,27 +7,43 @@ requirements:
   - class: DockerRequirement
     dockerPull: biowardrobe2/visualization:v0.0.9
 
+
 inputs:
   diff_expr_file:
     type: File
     doc: "TSV file holding data for the plot"
+    inputBinding:
+      prefix: "--input"
+      position: 1
 
   x_axis_column:
     type: string
     doc: "Name of column in file for the plot's x-axis (e.g., 'baseMean')"
+    inputBinding:
+      prefix: "--x"
+      position: 2
 
   y_axis_column:
     type: string
     doc: "Name of column in file for the plot's y-axis (e.g., 'log2FoldChange')"
+    inputBinding:
+      prefix: "--y"
+      position: 3
 
   label_column:
     type: string
     doc: "Name of column in file for each data point's 'name' (e.g., 'GeneId')"
+    inputBinding:
+      prefix: "--label"
+      position: 4
 
   output_filename:
     type: string?
     default: "index.html"
     doc: "Desired output HTML filename."
+    inputBinding:
+      prefix: "--output"
+      position: 5
 
 outputs:
   html_data:
@@ -44,17 +60,17 @@ outputs:
 
 baseCommand: ["ma_plot.sh"]
 
-arguments:
-  - valueFrom: "$(inputs.diff_expr_file.path)"
-    position: 1
-  - valueFrom: "$(inputs.x_axis_column)"
-    position: 2
-  - valueFrom: "$(inputs.y_axis_column)"
-    position: 3
-  - valueFrom: "$(inputs.label_column)"
-    position: 4
-  - valueFrom: "$(inputs.output_filename)"
-    position: 5
+#arguments:
+#  - valueFrom: "$(inputs.diff_expr_file.path)"
+#    position: 1
+#  - valueFrom: "$(inputs.x_axis_column)"
+#    position: 2
+#  - valueFrom: "$(inputs.y_axis_column)"
+#    position: 3
+#  - valueFrom: "$(inputs.label_column)"
+#    position: 4
+#  - valueFrom: "$(inputs.output_filename)"
+#    position: 5
 
 $namespaces:
   s: http://schema.org/

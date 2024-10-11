@@ -20,11 +20,12 @@ error_exit() {
 # Function to print debugging information
 print_debug_info() {
     echo "=== ma_plot.sh Debugging Information ==="
-    echo "Argument 1 (diff_expr_file.path): $DIFF_EXPR_FILE"
-    echo "Argument 2 (x_axis_column): $X_AXIS_COLUMN"
-    echo "Argument 3 (y_axis_column): $Y_AXIS_COLUMN"
-    echo "Argument 4 (label_column): $LABEL_COLUMN"
-    echo "Argument 5 (output_filename): $OUTPUT_FILENAME"
+    echo "diff_expr_file: $DIFF_EXPR_FILE"
+    echo "x_axis_column: $X_AXIS_COLUMN"
+    echo "y_axis_column: $Y_AXIS_COLUMN"
+    echo "label_column: $LABEL_COLUMN"
+    echo "output_filename: $OUTPUT_FILENAME"
+    echo "contrast_index: $CONTRAST_INDEX"
     echo "========================================="
 }
 
@@ -55,18 +56,63 @@ check_file_exists() {
 # Argument Parsing      #
 #########################
 
-# Ensure exactly 5 arguments are provided
-if [[ $# -ne 5 ]]; then
-    error_exit "Expected 5 arguments, but got $#.
-Usage: ma_plot.sh <diff_expr_file> <x_axis_column> <y_axis_column> <label_column> <output_filename>"
+# Initialize variables
+DIFF_EXPR_FILE=""
+X_AXIS_COLUMN=""
+Y_AXIS_COLUMN=""
+LABEL_COLUMN=""
+OUTPUT_FILENAME="index.html"  # Default value
+CONTRAST_INDEX=""  # Optional
+
+# Parse command-line arguments using getopts
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        --input)
+            DIFF_EXPR_FILE="$2"
+            shift 2
+            ;;
+        --x)
+            X_AXIS_COLUMN="$2"
+            shift 2
+            ;;
+        --y)
+            Y_AXIS_COLUMN="$2"
+            shift 2
+            ;;
+        --label)
+            LABEL_COLUMN="$2"
+            shift 2
+            ;;
+        --output)
+            OUTPUT_FILENAME="$2"
+            shift 2
+            ;;
+        --contrast)
+            CONTRAST_INDEX="$2"
+            shift 2
+            ;;
+        *)
+            error_exit "Unknown option: $1"
+            ;;
+    esac
+done
+
+# Check required arguments
+if [[ -z "$DIFF_EXPR_FILE" ]]; then
+    error_exit "Missing required argument: --input <diff_expr_file>"
 fi
 
-# Assign arguments to variables
-DIFF_EXPR_FILE="$1"
-X_AXIS_COLUMN="$2"
-Y_AXIS_COLUMN="$3"
-LABEL_COLUMN="$4"
-OUTPUT_FILENAME="$5"
+if [[ -z "$X_AXIS_COLUMN" ]]; then
+    error_exit "Missing required argument: --x <x_axis_column>"
+fi
+
+if [[ -z "$Y_AXIS_COLUMN" ]]; then
+    error_exit "Missing required argument: --y <y_axis_column>"
+fi
+
+if [[ -z "$LABEL_COLUMN" ]]; then
+    error_exit "Missing required argument: --label <label_column>"
+fi
 
 # Print debugging information
 print_debug_info
