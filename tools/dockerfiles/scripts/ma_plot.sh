@@ -25,7 +25,6 @@ print_debug_info() {
     echo "y_axis_column: $Y_AXIS_COLUMN"
     echo "label_column: $LABEL_COLUMN"
     echo "output_filename: $OUTPUT_FILENAME"
-    echo "contrast_index: $CONTRAST_INDEX"
     echo "========================================="
 }
 
@@ -62,7 +61,6 @@ X_AXIS_COLUMN=""
 Y_AXIS_COLUMN=""
 LABEL_COLUMN=""
 OUTPUT_FILENAME="index.html"  # Default value
-CONTRAST_INDEX=""  # Optional
 
 # Parse command-line arguments using getopts
 while [[ "$#" -gt 0 ]]; do
@@ -85,10 +83,6 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         --output)
             OUTPUT_FILENAME="$2"
-            shift 2
-            ;;
-        --contrast)
-            CONTRAST_INDEX="$2"
             shift 2
             ;;
         *)

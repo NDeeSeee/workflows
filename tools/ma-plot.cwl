@@ -7,7 +7,6 @@ requirements:
   - class: DockerRequirement
     dockerPull: biowardrobe2/visualization:v0.0.9
 
-
 inputs:
   diff_expr_file:
     type: File
@@ -46,31 +45,29 @@ inputs:
       position: 5
 
 outputs:
+
   html_data:
     type: Directory
     outputBinding:
-      glob: "volcano_plot/MD-MA_plot_*/html_data"
-    doc: "Directory containing HTML data for MA-plot."
+      glob: |
+        ${
+          var output_basename = (inputs.output_filename || "index.html").replace(/\.html$/, '');
+          return "volcano_plot/MD-MA_plot_" + output_basename;
+        }
+    doc: "Directory containing MA-plot and related files."
+
 
   html_file:
     type: File
     outputBinding:
-      glob: "volcano_plot/MD-MA_plot_*/html_data/*.html"
+      glob: |
+        ${
+          var output_basename = (inputs.output_filename || "index.html").replace(/\.html$/, '');
+          return "volcano_plot/MD-MA_plot_" + output_basename + "/html_data/" + inputs.output_filename;
+        }
     doc: "HTML output file for MA-plot."
 
 baseCommand: ["ma_plot.sh"]
-
-#arguments:
-#  - valueFrom: "$(inputs.diff_expr_file.path)"
-#    position: 1
-#  - valueFrom: "$(inputs.x_axis_column)"
-#    position: 2
-#  - valueFrom: "$(inputs.y_axis_column)"
-#    position: 3
-#  - valueFrom: "$(inputs.label_column)"
-#    position: 4
-#  - valueFrom: "$(inputs.output_filename)"
-#    position: 5
 
 $namespaces:
   s: http://schema.org/
