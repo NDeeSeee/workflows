@@ -634,9 +634,12 @@ write.table(
   quote = FALSE
 )
 
+print(paste("Export contrasts to", contrasts_filename, sep = " "))
+
+print(paste("Exporting R file to", paste(args$output, "_contrasts.rds", sep = ""), sep = " "))
+
 saveRDS(all_contrasts, file = paste(args$output, "_contrasts.rds", sep = ""))
 
-print(paste("Export contrasts to", contrasts_filename, sep = " "))
 
 lrt_report_filename <- paste(args$output, "_lrt_result.md", sep = "")
 summary(dsq_lrt_res)
