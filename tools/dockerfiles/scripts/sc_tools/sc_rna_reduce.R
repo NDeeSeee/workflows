@@ -28,9 +28,8 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
 
     graphics$elbow_plot(
         data=seurat_data,
-        ndims=50,
         x_intercept=max(args$dimensions),                  # need to take the max because dimensions was already adjusted to array of values
-        reduction="qcpca",                                 # when integrating with Harmony, this will be the PCA that we run before intergration
+        reduction="pca",                                   # this PCA is always after intergration
         plot_title="Elbow plot",
         theme=args$theme,
         rootname=paste(args$output, "elbow", sep="_"),
@@ -38,7 +37,7 @@ export_all_dimensionality_plots <- function(seurat_data, args) {
     )
     graphics$corr_plot(
         data=seurat_data,
-        reduction="qcpca",                                 # when integrating with Harmony, this will be the PCA that we run before intergration
+        reduction="pca",                                   # this PCA is always after intergration
         highlight_dims=args$dimensions,
         qc_columns=selected_features,
         qc_labels=selected_labels,
@@ -642,13 +641,6 @@ export_all_dimensionality_plots(
     seurat_data=seurat_data,
     args=args
 )
-
-## ----
-if ("qcpca" %in% names(seurat_data@reductions)){                          # we only needed it for elbow and qc correlation plots
-    print("Removing qcpca reduction")
-    seurat_data[["qcpca"]] <- NULL
-    debug$print_info(seurat_data, args)
-}
 
 ## ----
 if(args$cbbuild){

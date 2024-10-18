@@ -18,6 +18,7 @@ import("cluster", attach=FALSE)
 import("reshape2", attach=FALSE)
 import("dittoSeq", attach=FALSE)
 import("Nebulosa", attach=FALSE)
+import("ggdensity", attach=FALSE)
 import("patchwork", attach=FALSE)
 import("ggnewscale", attach=FALSE)
 import("tidyselect", attach=FALSE)
@@ -1025,6 +1026,11 @@ geom_point_plot <- function(
                                      color_limits,
                         limits=color_limits
                     ) +
+                    ggdensity::geom_hdr_rug(
+                        fill="sienna3",
+                        length=grid::unit(0.02, "npc"),
+                        show.legend=FALSE
+                    ) +
                     ggplot2::xlab(x_label) +
                     ggplot2::ylab(y_label) +
                     ggplot2::guides(color=ggplot2::guide_colourbar(legend_title)) +
@@ -1910,12 +1916,12 @@ trajectory_heatmap <- function(                                    # changing th
     )
 }
 
-elbow_plot <- function(data, rootname, plot_title, reduction="pca", ndims=NULL, x_intercept=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+elbow_plot <- function(data, rootname, plot_title, reduction="pca", x_intercept=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             plot <- Seurat::ElbowPlot(
                         data,
-                        ndims=ndims,
+                        ndims=length(data@reductions[[reduction]]),          # use all available dimensionality
                         reduction=reduction
                     ) +
                     get_theme(theme) +

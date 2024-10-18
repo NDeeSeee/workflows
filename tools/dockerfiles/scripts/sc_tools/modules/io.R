@@ -3,6 +3,7 @@ import("dplyr", attach=FALSE)
 import("purrr", attach=FALSE)
 import("Seurat", attach=FALSE)
 import("Signac", attach=FALSE)
+import("Azimuth", attach=FALSE)
 import("tibble", attach=FALSE)
 import("sceasy", attach=FALSE)
 import("forcats", attach=FALSE)
@@ -20,6 +21,7 @@ export(
     "export_markers",
     "export_clonotypes",
     "export_rds",
+    "export_azimuth",
     "export_gct",
     "export_cls",
     "load_cell_identity_data",
@@ -280,6 +282,73 @@ export_rds <- function(data, location){
         },
         error = function(e){
             base::print(base::paste("Failed to export data as RDS to", location, sep=" "))
+        }
+    )
+}
+
+export_azimuth <- function(data, reference_umap, reference_pca, reference_columns, location){
+    base::tryCatch(
+        expr = {
+            ref_assay <- methods::slot(
+                data@reductions[[reference_pca]],
+                name="assay.used"
+            )
+            ndims <- length(data@reductions[[reference_pca]])
+            if (ndims < 50){                                                                # based on the Azimuth's tutorial
+                base::stop(
+                    base::paste(
+                        "Dimensionality of the", reference_pca,
+                        "reduction is less than 50"
+                    )
+                )
+            }
+            base::print(
+                base::paste(
+                    "Creating azimuth reference using", ref_assay, "assay.",
+                    "Select", ndims, "dimensions from the", reference_pca, "reduction.",
+                    "Projection UMAP is set to", reference_umap, "reduction.",
+                    "Keep only", base::paste(reference_columns, collapse=", "),
+                    "metadata columns."
+                )
+            )
+            data <- SeuratObject::RenameCells(                                              # need to rename the cells so barcodes in the reference never
+                data,                                                                       # overlap with the barcodes in the query even if made ref from
+                new.names=base::paste0("azi", SeuratObject::Cells(data))                    # query (see https://github.com/satijalab/azimuth/issues/138)
+            )
+            data@misc <- list()                                                             # no reason to keep it in the reference as it may include gene markers
+            data@neighbors <- list()                                                        # no reason to keep any neighbors as only refdr.annoy.neighbors needed
+            data <- Azimuth::AzimuthReference(                                              # creates an item in @tools named "Azimuth::AzimuthReference"
+                object=data,                                                                # instead of just "AzimuthReference", because we run our
+                refUMAP=reference_umap,                                                     # custom version of Azimuth package due to the bug
+                refDR=reference_pca,
+                refAssay=ref_assay,
+                dims=1:ndims,
+                plotref=reference_umap,
+                metadata=reference_columns
+            )
+            if ("Azimuth::AzimuthReference" %in% names(data@tools)){                        # need to have "AzimuthReference" to work with the RunAzimuth function
+                data@tools$AzimuthReference <- data@tools[["Azimuth::AzimuthReference"]]    # see https://github.com/satijalab/azimuth/issues/155
+                data@tools[["Azimuth::AzimuthReference"]] <- NULL
+            }
+            base::saveRDS(data, location)
+            Seurat::SaveAnnoyIndex(                                                         # there is no way to serialize annoy structure data inside RDS file
+                data[["refdr.annoy.neighbors"]],
+                base::ifelse(
+                    base::grepl("\\.[^.]+$", location),                                     # checks if extension was specified
+                    base::gsub("\\.[^.]+$", ".annoy", location),                            # replaces any file extension with .annoy
+                    base::paste0(location, ".annoy")                                        # adds .annoy extension
+                )
+            )
+            base::rm(data)                                                                  # just in case
+            base::print(base::paste("Exporting azimuth reference data to", location))
+        },
+        error = function(e){
+            base::print(
+                base::paste(
+                    "Failed to export azimuth reference",
+                    "data to", location, "due to", e
+                )
+            )
         }
     )
 }

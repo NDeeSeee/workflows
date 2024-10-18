@@ -550,7 +550,8 @@ rna_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
         "gene_rnaumi",
         "rnaumi_atacfrgm",
         "tss_atacfrgm",
-        "refumap"
+        "refumap",
+        "spca"
     )
     if (is.null(cell_cycle_data)){                                              # we are not planning to run cell cycle score assignment, so we want to keep "ccpca"
         reduction_names <- append(reduction_names, "ccpca")
@@ -574,6 +575,16 @@ rna_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
             backup_misc[[misc_name]] <- seurat_data@misc[[misc_name]]
         }
     }
+    backup_assays <- c()                                                         # we backup ATAC assay just in case, because splitting may impact on it
+    assay_names <- c(
+        "ATAC"
+    )
+    for (assay_name in assay_names){
+        if (assay_name %in% names(seurat_data@assays)){
+            base::print(base::paste("Backing up assay", assay_name))
+            backup_assays[[assay_name]] <- seurat_data@assays[[assay_name]]
+        }
+    }
     seurat_data <- rna_preprocess(seurat_data, args, cell_cycle_data)           # sets "rna_integrated" as a default assay for integrated data, and either "RNA" or "SCT" for not integrated data
     if (length(backup_reductions) > 0){                                         # restoring backed up reductions
         for (reduction_name in names(backup_reductions)){
@@ -585,6 +596,12 @@ rna_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
         for (misc_name in names(backup_misc)){
             base::print(base::paste("Restoring miscellaneous", misc_name, "from backup"))
             seurat_data@misc[[misc_name]] <- backup_misc[[misc_name]]
+        }
+    }
+    if (length(backup_assays) > 0){                                              # restoring backed up assays
+        for (assay_name in names(backup_assays)){
+            base::print(base::paste("Restoring assay", assay_name, "from backup"))
+            seurat_data@assays[[assay_name]] <- backup_assays[[assay_name]]
         }
     }
     if (!is.null(cell_cycle_data) && all(c("S.Score", "G2M.Score", "CC.Difference", "Phase") %in% base::colnames(seurat_data@meta.data))){
@@ -606,7 +623,7 @@ rna_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
                 seurat_data <- Seurat::RunPCA(            # PCA will be run on the default assay, which can be one of "rna_integrated", "RNA", or "SCT"
                     seurat_data,
                     reduction.name="ccpca",               # add "ccpca" reduction that can be used for cell cycle evaluation
-                    npcs=50,
+                    npcs=50,                              # we keep here the default value of 50 similarly to what was used in the Seurat tutorial
                     features=cell_cycle_data$gene_id,     # these features will be overlaped with the features from the scale.data slot
                     verbose=FALSE,                        # which means they can be either highly variable genes or integration features if we use rna_integrated assay
                     approx=FALSE                          # to avoid warning message
@@ -622,34 +639,17 @@ rna_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
             }
         )
     }
+
+    pca_dimensionality <- max(50, max(args$dimensions))   # need to take the max(args$dimensions) because dimensions was already adjusted to an array of values, also not smaller than 50
     base::print(
         base::paste(
             "Performing PCA reduction on", SeuratObject::DefaultAssay(seurat_data),
-            "assay using 50 principal components for Elbow and QC correlation plots, and",
-            base::ifelse(
-                (length(args$dimensions) == 1 && args$dimensions == 0),
-                "auto-estimated number of",
-                max(args$dimensions)
-            ),
-            "principal components for UMAP projection"
+            "assay using", pca_dimensionality, "principal components"
         )
     )
-    seurat_data <- Seurat::RunPCA(                # add "qcpca" reduction to be used in elbow and QC correlation plots
+    seurat_data <- Seurat::RunPCA(             # add "pca" reduction to be used in UMAP and Harmony integration
         seurat_data,
-        npcs=50,
-        reduction.name="qcpca",
-        verbose=FALSE
-    )
-    if (length(args$dimensions) == 1 && args$dimensions == 0){         # need to check the length because a number in R is the same as vector of length 1
-        base::print("Estimating datasets dimensionality")
-        estimated_dimensionality <- get_dimensionality(seurat_data, "qcpca")
-        base::print(base::paste("Estimated dimensionality:", estimated_dimensionality))
-        args$dimensions <- c(1:estimated_dimensionality)
-        base::assign("args", args, envir=base::parent.frame())    # to make the updated args available in the env where rna_analyze was called (a.k.a. passed by reference)
-    }
-    seurat_data <- Seurat::RunPCA(                # add "pca" reduction to be used in UMAP and Harmony integration
-        seurat_data,
-        npcs=max(args$dimensions),                # need to take the max because dimensions was already adjusted to array of values
+        npcs=pca_dimensionality,
         reduction.name="pca",
         verbose=FALSE
     )
@@ -665,21 +665,28 @@ rna_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
             base::print(
                 base::paste(
                     "Running datasets integration with harmony using",
-                    SeuratObject::DefaultAssay(seurat_data), "assay.",
-                    "Integrating over", base::paste(args$ntgrby, collapse=", "),
-                    "covariates. Dimensions used:", base::paste(args$dimensions, collapse=", ")
+                    SeuratObject::DefaultAssay(seurat_data), "assay and",
+                    pca_dimensionality, "dimensions. Integrating over",
+                    base::paste(args$ntgrby, collapse=", "), "covariates."
                 )
             )
-            seurat_data <- harmony::RunHarmony(
+            seurat_data <- harmony::RunHarmony(                        # we always integrate with all available dimensionality
                 object=seurat_data,
                 group.by.vars=args$ntgrby,
                 reduction="pca",
                 reduction.save="pca",                                  # overwriting old pca reduction
-                dims.use=args$dimensions,                              # only selected components will be used
+                dims.use=1:pca_dimensionality,                         # need to set it as array
                 assay.use=SeuratObject::DefaultAssay(seurat_data),     # can be both RNA or SCT depending on --norm parameter
                 verbose=FALSE
             )
         }
+    }
+    if (length(args$dimensions) == 1 && args$dimensions == 0){         # need to check the length because a number in R is the same as vector of length 1
+        base::print("Estimating datasets dimensionality for UMAP")
+        estimated_dimensionality <- get_dimensionality(seurat_data, "pca")
+        base::print(base::paste("Estimated dimensionality:", estimated_dimensionality))
+        args$dimensions <- c(1:estimated_dimensionality)
+        base::assign("args", args, envir=base::parent.frame())    # to make the updated args available in the env where rna_analyze was called (a.k.a. passed by reference)
     }
     base::print(
         base::paste(
@@ -699,6 +706,7 @@ rna_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
             n.neighbors=base::ifelse(is.null(args$uneighbors), 30, args$uneighbors),
             metric=base::ifelse(is.null(args$umetric), "cosine", args$umetric),
             umap.method=base::ifelse(is.null(args$umethod), "uwot", args$umethod),
+            return.model=TRUE,
             verbose=FALSE
         )
     )
@@ -972,6 +980,20 @@ add_wnn_clusters <- function(seurat_data, graph_name, reductions, dimensions, ar
         weighted.nn.name="weighted.nn",
         verbose=FALSE
     )
+
+    seurat_data <- Seurat::RunSPCA(                                            # we need it for Azimuth, so rna based assay should be used
+        seurat_data,
+        assay=methods::slot(                                                   # we assume that the first reduction is pca based on rna data
+            seurat_data@reductions[[reductions[[1]]]],
+            name="assay.used"
+        ),
+        features=NULL,                                                         # NULL, because we want to use the variable features from the assay
+        npcs=length(seurat_data@reductions[[reductions[[1]]]]),                # we want to take all available dimensions from the pca reduction (will never be less than 50)
+        graph=graph_name,                                                      # "wsnn"
+        reduction.name="spca",                                                 # this is the default value, but we want to set it explicitely
+        verbose=TRUE
+    )
+
     seurat_data <- Seurat::RunUMAP(
         seurat_data,
         nn.name="weighted.nn",
@@ -982,6 +1004,7 @@ add_wnn_clusters <- function(seurat_data, graph_name, reductions, dimensions, ar
         n.neighbors=base::ifelse(is.null(args$uneighbors), 30, args$uneighbors),
         metric=base::ifelse(is.null(args$umetric), "cosine", args$umetric),
         umap.method=base::ifelse(is.null(args$umethod), "uwot", args$umethod),
+        return.model=TRUE,
         verbose=FALSE
     )
     seurat_data <- Seurat::FindClusters(
@@ -1235,7 +1258,8 @@ atac_analyze <- function(seurat_data, args){
         "gene_rnaumi",
         "rnaumi_atacfrgm",
         "tss_atacfrgm",
-        "refumap"
+        "refumap",
+        "spca"
     )
     for (reduction_name in reduction_names){
         if (reduction_name %in% names(seurat_data@reductions)){
@@ -1256,6 +1280,18 @@ atac_analyze <- function(seurat_data, args){
             backup_misc[[misc_name]] <- seurat_data@misc[[misc_name]]
         }
     }
+    backup_assays <- c()                                                         # spliting seurat object creates multiple models in the RNA related assays and removes variable genes
+    assay_names <- c(                                                            # we can't use multiple models when exporting results as Azimuth reference
+        "RNA",
+        "SCT",
+        "rna_integrated"
+    )
+    for (assay_name in assay_names){
+        if (assay_name %in% names(seurat_data@assays)){
+            base::print(base::paste("Backing up assay", assay_name))
+            backup_assays[[assay_name]] <- seurat_data@assays[[assay_name]]
+        }
+    }
     seurat_data <- atac_preprocess(seurat_data, args)                            # adds "atac_lsi" reduction
     if (length(backup_reductions) > 0){                                          # restoring backed up reductions
         for (reduction_name in names(backup_reductions)){
@@ -1267,6 +1303,12 @@ atac_analyze <- function(seurat_data, args){
         for (misc_name in names(backup_misc)){
             base::print(base::paste("Restoring miscellaneous", misc_name, "from backup"))
             seurat_data@misc[[misc_name]] <- backup_misc[[misc_name]]
+        }
+    }
+    if (length(backup_assays) > 0){                                              # restoring backed up assays
+        for (assay_name in names(backup_assays)){
+            base::print(base::paste("Restoring assay", assay_name, "from backup"))
+            seurat_data@assays[[assay_name]] <- backup_assays[[assay_name]]
         }
     }
     datasets_count <- length(base::unique(base::as.vector(as.character(seurat_data@meta.data$new.ident))))
@@ -1283,6 +1325,7 @@ atac_analyze <- function(seurat_data, args){
         n.neighbors=base::ifelse(is.null(args$uneighbors), 30, args$uneighbors),
         metric=base::ifelse(is.null(args$umetric), "cosine", args$umetric),
         umap.method=base::ifelse(is.null(args$umethod), "uwot", args$umethod),
+        return.model=TRUE,                                         # we might not actually need it for ATAC, because our Azimuth doesn't support ATAC yet 
         verbose=FALSE
     )
     seurat_data@misc$atac_reduce <- list(
