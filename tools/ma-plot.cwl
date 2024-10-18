@@ -1,69 +1,79 @@
+# ma-plot.cwl
 cwlVersion: v1.0
 class: CommandLineTool
 
-
-hints:
-- class: DockerRequirement
-  dockerPull: biowardrobe2/visualization:v0.0.8
-
+requirements:
+  - class: InlineJavascriptRequirement
+  - class: DockerRequirement
+    dockerPull: biowardrobe2/visualization:v0.0.9
 
 inputs:
-
   diff_expr_file:
     type: File
+    doc: "TSV file holding data for the plot"
     inputBinding:
-      position: 5
-    doc: |
-      TSV file holding data for the plot
+      prefix: "--input"
+      position: 1
 
   x_axis_column:
     type: string
+    doc: "Name of column in file for the plot's x-axis (e.g., 'baseMean')"
     inputBinding:
-      position: 6
-    doc: |
-      Name of column in file for the plots x-axis (ex: "baseMean")
+      prefix: "--x"
+      position: 2
 
   y_axis_column:
     type: string
+    doc: "Name of column in file for the plot's y-axis (e.g., 'log2FoldChange')"
     inputBinding:
-      position: 7
-    doc: |
-      Name of column in file for the plots y-axis (ex: "log2FoldChange")
+      prefix: "--y"
+      position: 3
 
   label_column:
     type: string
+    doc: "Name of column in file for each data point's 'name' (e.g., 'GeneId')"
     inputBinding:
-      position: 8
-    doc: |
-      Name of column in file for each data points 'name' (ex: "GeneId")
+      prefix: "--label"
+      position: 4
 
+  output_filename:
+    type: string?
+    default: "index.html"
+    doc: "Desired output HTML filename."
+    inputBinding:
+      prefix: "--output"
+      position: 5
 
 outputs:
 
   html_data:
     type: Directory
     outputBinding:
-      glob: "./volcano_plot/MD-MA_plot"
-    doc: |
-      Directory html data for MA-plot
+      glob: |
+        ${
+          var output_basename = (inputs.output_filename || "index.html").replace(/\.html$/, '');
+          return "volcano_plot/MD-MA_plot_" + output_basename;
+        }
+    doc: "Directory containing MA-plot and related files."
+
 
   html_file:
     type: File
     outputBinding:
-      glob: "./volcano_plot/MD-MA_plot/html_data/index.html"
-    doc: |
-      HTML index file for MA-plot
-
+      glob: |
+        ${
+          var output_basename = (inputs.output_filename || "index.html").replace(/\.html$/, '');
+          return "volcano_plot/MD-MA_plot_" + output_basename + "/html_data/" + inputs.output_filename;
+        }
+    doc: "HTML output file for MA-plot."
 
 baseCommand: ["ma_plot.sh"]
-
 
 $namespaces:
   s: http://schema.org/
 
 $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
-
 
 label: "MA-plot"
 s:name: "MA-plot"
@@ -106,4 +116,4 @@ s:creator:
 doc: |
   MA-plot
 
-  Builds ma-plot from the DESeq output
+  Builds MA-plot from the DESeq output
