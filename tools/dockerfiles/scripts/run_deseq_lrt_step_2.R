@@ -1081,6 +1081,9 @@ rownames(metadata_df) <- trimws(rownames(metadata_df))
 colnames(read_counts_data_df) <- gsub("[^[:alnum:]_]", "", colnames(read_counts_data_df))
 rownames(metadata_df) <- gsub("[^[:alnum:]_]", "", rownames(metadata_df))
 
+colnames(read_counts_data_df) <- sub("_+$", "", colnames(read_counts_data_df))
+colnames(metadata_df) <- sub("_+$", "", colnames(metadata_df))
+
 # Convert the comma-separated string into a vector of integers
 contrast_vector <- as.integer(unlist(strsplit(args$contrast_indices, ",")))
 
@@ -1101,9 +1104,6 @@ run_deseq2_analysis(
   design_formula = args$design_formula,
   contrast_vector = contrast_vector,
   output = args$output,
-  fdr = args$fdr,
-  use_lfc_thresh = args$use_lfc_thresh,
-  lfcthreshold = args$lfcthreshold,
   batchfile = args$batchfile,
   batchcorrection = args$batchcorrection,
   threads = args$threads

@@ -485,6 +485,8 @@ generate_contrasts <- function(dds) {
     group_by(specificity_group) %>% 
     distinct(contrast, .keep_all = TRUE) %>% 
     arrange(specificity_group) %>%
+    ungroup() %>%
+    ungroup() %>%
     mutate(contrast_number = row_number()) %>%
     select(contrast_number, everything())
   
@@ -631,6 +633,8 @@ write.table(
   col.names = TRUE,
   quote = FALSE
 )
+
+saveRDS(all_contrasts, file = paste(args$output, "_contrasts.rds", sep = ""))
 
 print(paste("Export contrasts to", contrasts_filename, sep = " "))
 
