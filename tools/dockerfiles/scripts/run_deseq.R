@@ -328,7 +328,7 @@ generate_md <- function(batchcorrection, batchfile, deseq_results, output_file) 
         summary_df,
         format = "html",
         escape = FALSE,
-        align = c("l", "c", "c")  # Center the Gene Count and % of Total columns
+        align = c("l", "c", "c") # Center the Gene Count and % of Total columns
       ) %>%
         kableExtra::kable_styling(
           bootstrap_options = c("striped", "hover", "condensed"),
@@ -692,6 +692,7 @@ assert_args <- function(args) {
   }
 
   if (length(args$treated) == 1 || length(args$untreated) == 1) {
+    print("Only one file in the group. Please provide at least two files for comparison")
     args$batchfile <- NULL # reset batchfile to NULL. We don't need it for DESeq even if it was provided
   }
 
@@ -704,11 +705,19 @@ assert_args <- function(args) {
       header = FALSE,
       stringsAsFactors = FALSE
     )
+    print(batch_metadata)
+    print("Check batch metadata file 1.")
     rownames(batch_metadata) <- gsub("'|\"| ", "_", rownames(batch_metadata))
+    print(batch_metadata)
+    print("Check batch metadata file 2.")
     if (all(is.element(c(args$ualias, args$talias), rownames(batch_metadata)))) {
       args$batchfile <- batch_metadata # dataframe
     } else {
       cat("\nMissing values in batch metadata file. Skipping multi-factor analysis\n")
+      print(args$ualias)
+      print(args$talias)
+      print(rownames(batch_metadata))
+      print("Check batch metadata file 3.")
       args$batchfile <- NULL
     }
   }
@@ -940,26 +949,24 @@ if (length(args$treated) > 1 && length(args$untreated) > 1) {
   if (!is.null(args$batchfile)) {
     if (args$batchcorrection == "combatseq") {
       design <- ~conditions
-      print(paste(
-        "Batch-correction of",
-        args$batchfile,
-        "using ComBat-Seq"
-      ))
-      counts_data <- sva::ComBat_seq(
-        as.matrix(counts_data),
-        covar_mod = model.matrix(design, data = colData),
-        batch = metadata[[args$batchfile]],
+      print("Batch-correction of using ComBat-Seq")
+      print("Column Data:")
+      print(column_data)
+      print("Count Data:")
+      print(head(countData))
+      print("Batchfile:")
+      print(args$batchfile)
+      countData <- sva::ComBat_seq(
+        as.matrix(countData),
+        covar_mod = model.matrix(design, data = column_data),
+        batch = args$batchfile$batch,
         # columns from counts data are alread ordered by rownames from metadata
         group = NULL
       )
     } else {
       if (args$batchcorrection == "limmaremovebatcheffect") {
-        print(paste(
-          "Including",
-          args$batchfile,
-          "as part of the design-formula"
-        ))
-        design <- ~ conditions + batch # We use simple +, because batch is not biologically interesting for us.
+        print("Including batch as part of the design-formula")
+        design <- ~conditions + batch # We use simple +, because batch is not biologically interesting for us.
       }
     }
   } else {
@@ -978,7 +985,7 @@ if (length(args$treated) > 1 && length(args$untreated) > 1) {
   # for norm count file. Batch correction doens't influence it
   normCounts <- counts(dsq, normalized = TRUE)
   rownames(normCounts) <- toupper(collected_isoforms[, c("GeneId")])
-  
+
   # Determine altHypothesis and lfcThreshold based on the flag
   altHypothesis <- if (args$regulation == "up") {
     "greater"
@@ -987,7 +994,7 @@ if (length(args$treated) > 1 && length(args$untreated) > 1) {
   } else {
     "greaterAbs"
   }
-  
+
   lfcThreshold <- if (args$use_lfc_thresh) args$lfcthreshold else 0
 
   # Perform DESeq2 results analysis
@@ -1091,21 +1098,21 @@ print(paste("Export DESeq report to ", collected_isoforms_filename,
 print("Exporting all normalized read counts to GCT format")
 
 row_metadata <- collected_isoforms %>%
-                dplyr::mutate_at("GeneId", toupper) %>%
-                dplyr::distinct(GeneId, .keep_all=TRUE) %>%                      # to prevent from failing when input files are not grouped by GeneId
-                remove_rownames() %>%
-                column_to_rownames("GeneId") %>%                                 # fails if GeneId is not unique (when run with not grouped by gene data)
-                dplyr::select(log2FoldChange, pvalue, padj)  %>%                 # we are interested only in these three columns
-                arrange(desc(log2FoldChange))
+  dplyr::mutate_at("GeneId", toupper) %>%
+  dplyr::distinct(GeneId, .keep_all = TRUE) %>% # to prevent from failing when input files are not grouped by GeneId
+  remove_rownames() %>%
+  column_to_rownames("GeneId") %>% # fails if GeneId is not unique (when run with not grouped by gene data)
+  dplyr::select(log2FoldChange, pvalue, padj) %>% # we are interested only in these three columns
+  arrange(desc(log2FoldChange))
 
 col_metadata <- column_data %>%
   mutate_at(colnames(.), as.vector)
 
 export_gct(
-    counts_mat=normCounts,
-    row_metadata=row_metadata,                                   # includes features as row names
-    col_metadata=col_metadata,                                   # includes samples as row names
-    location=paste(args$output, "_counts_all.gct", sep="")
+  counts_mat = normCounts,
+  row_metadata = row_metadata, # includes features as row names
+  col_metadata = col_metadata, # includes samples as row names
+  location = paste(args$output, "_counts_all.gct", sep = "")
 )
 
 # get size of matrix before filtering
@@ -1162,10 +1169,10 @@ if (!is.null(args$cluster)) {
 
 print("Exporting filtered normalized read counts to GCT format")
 export_gct(
-    counts_mat=normCounts,
-    row_metadata=row_metadata,                                        # includes features as row names
-    col_metadata=col_metadata,                                        # includes samples as row names
-    location=paste(args$output, "_counts_filtered.gct", sep="")
+  counts_mat = normCounts,
+  row_metadata = row_metadata, # includes features as row names
+  col_metadata = col_metadata, # includes samples as row names
+  location = paste(args$output, "_counts_filtered.gct", sep = "")
 )
 
 
