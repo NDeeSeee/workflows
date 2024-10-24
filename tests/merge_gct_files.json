@@ -1,0 +1,21 @@
+{
+  "gct_files": [
+    {
+      "class": "File",
+      "path": "/Users/biocode/Documents/GitHub/CCHMC/BarskiiLab/workflows/tests/data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/deseq_output_contrast_1_counts_filtered.gct"
+    },
+    {
+      "class": "File",
+      "path": "/Users/biocode/Documents/GitHub/CCHMC/BarskiiLab/workflows/tests/data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/deseq_output_contrast_2_counts_filtered.gct"
+    },
+    {
+      "class": "File",
+      "path": "/Users/biocode/Documents/GitHub/CCHMC/BarskiiLab/workflows/tests/data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/deseq_output_contrast_3_counts_filtered.gct"
+    },
+    {
+      "class": "File",
+      "path": "/Users/biocode/Documents/GitHub/CCHMC/BarskiiLab/workflows/tests/data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/deseq_output_contrast_12_counts_filtered.gct"
+    }
+  ],
+  "output_filename": "merged_counts.gct"
+}
