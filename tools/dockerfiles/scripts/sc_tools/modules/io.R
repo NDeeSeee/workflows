@@ -7,6 +7,7 @@ import("Azimuth", attach=FALSE)
 import("tibble", attach=FALSE)
 import("sceasy", attach=FALSE)
 import("forcats", attach=FALSE)
+import("GSEABase", attach=FALSE)
 import("SeuratDisk", attach=FALSE)
 import("SCopeLoomR", attach=FALSE)
 import("rtracklayer", attach=FALSE)
@@ -37,6 +38,7 @@ export(
     "load_10x_vdj_data",
     "load_10x_atac_data",
     "load_seqinfo_data",
+    "load_geneset_data",
     "export_h5seurat",
     "export_h5ad",
     "export_scope_loom",
@@ -726,6 +728,39 @@ load_seqinfo_data <- function(location) {
     )
     base::print(base::paste("Chromosome length data is successfully loaded from ", location))
     return (seqinfo_data)
+}
+
+load_geneset_data <- function(location){
+    geneset_list <- GSEABase::getGmt(location)                       # returns GeneSetCollection object that can be used as list
+    geneset_data <- data.frame(
+        name=base::character(), 
+        value=base::I(list()), 
+        stringsAsFactors=FALSE
+    )
+    for (i in 1:length(geneset_list)){
+        geneset_data <- geneset_data %>%
+                        tibble::add_row(
+                            name=names(geneset_list)[i],
+                            value=list(                              # we can't store a vector here
+                                base::as.vector(
+                                    as.character(
+                                        GSEABase::geneIds(
+                                            geneset_list[[i]]
+                                        )
+                                    )
+                                )
+                            )
+                        )
+    }
+    geneset_data <- geneset_data %>% tibble::deframe()               # converts dataframe to a list using first colunms for names, second - for values
+    base::print(
+        base::paste(
+            "Geneset data is successfully loaded from ",
+            location
+        )
+    )
+    base::rm(geneset_list)
+    return (geneset_data)
 }
 
 load_annotation_data <- function(location) {

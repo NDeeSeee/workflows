@@ -499,6 +499,10 @@ export_cellbrowser <- function(
             meta_fields <- base::append(meta_fields, pseudotime_fields)
             meta_fields_names <- base::append(meta_fields_names, pseudotime_fields_names)
 
+            if ("prediction_cell_type" %in% base::colnames(seurat_data@meta.data)){
+                color_data <- get_color_data(seurat_data, "prediction_cell_type", color_data, palette_colors)
+            }
+
             collected_markers <- NULL                                                                     # we collect markers only for clustering, custom, and "prediction_cell_type" fields
             collected_top_features <- c()                                                                 # of the current assay
             updated_metadata_fields <- c()                                                                # to keep track of what metadata fields have been already updated

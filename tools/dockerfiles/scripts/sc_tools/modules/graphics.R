@@ -1977,14 +1977,17 @@ elbow_plot <- function(data, rootname, plot_title, reduction="pca", x_intercept=
     )
 }
 
-silhouette_plot <- function(data, rootname, plot_title, legend_title, group_by, dims, downsample=300, reduction="pca", plot_subtitle=NULL, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+silhouette_plot <- function(data, rootname, plot_title, legend_title, group_by, dims=NULL, downsample=300, reduction="pca", plot_subtitle=NULL, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             SeuratObject::Idents(data) <- group_by
             data <- base::subset(data, downsample=downsample)
+            if (is.null(dims)){
+                dims <- 1:length(data[[reduction]])                                      # use all dimensions if not provided
+            }
             silhouette_data <- cluster::silhouette(
                 as.numeric(data@meta.data[, group_by]),
-                dist=stats::dist(SeuratObject::Embeddings(data[[reduction]])[, dims])      # we always run PCA with 50 PC, so it's safe to subset based on dims
+                dist=stats::dist(SeuratObject::Embeddings(data[[reduction]])[, dims])
             )
             data@meta.data$silhouette_score <- silhouette_data[, 3]
             mean_silhouette_score <- base::mean(data@meta.data$silhouette_score)
@@ -2578,7 +2581,7 @@ feature_plot <- function(data, features, labels, rootname, reduction, plot_title
             # when gradient_colors includes more than 2 colors the plot
             # is rescaled in a way that removes negative values.
             # gradient_colors is used only when user provided both
-            # color_scales and color_limits
+            # color_scales and color_limits and split_by is NULL
             plots <- Seurat::FeaturePlot(
                         data,
                         features=features_corrected,
@@ -2613,14 +2616,32 @@ feature_plot <- function(data, features, labels, rootname, reduction, plot_title
                                       limits=c(min_feature_value, max_feature_value)
                                   )
                 }
-                if (!is.null(color_limits) && !is.null(color_scales)){         # overwriting color limits and scales if both are provided
+                if (!is.null(color_limits) && !is.null(color_scales) && is.null(split_by)){  # overwriting color limits and scales if both are provided. Works only if split_by is NULL
+                    current_color_scales <- color_scales
+                    current_color_limits <- color_limits
+                    current_color_breaks <- ggplot2::waiver()
+
+                    if (is.list(color_scales)) {
+                        current_color_scales <- color_scales[[i]]
+                    }
+                    if (is.list(color_limits)) {
+                        current_color_limits <- color_limits[[i]]
+                    }
+                    if (!is.null(color_breaks)) {
+                        if (is.list(color_breaks)){
+                            current_color_breaks <- color_breaks[[i]]
+                        } else {
+                            current_color_breaks <- color_breaks
+                        }
+                    }
+
                     plots[[i]] <- plots[[i]] +
                                   ggplot2::scale_colour_gradientn(
-                                      colors=gradient_colors,                  # colors can be redefined only when color_limits and color_scales are set
-                                      values=scales::rescale(color_scales),
+                                      colors=gradient_colors,                            # colors can be redefined only when color_limits and color_scales are set
+                                      values=scales::rescale(current_color_scales),
                                       na.value="lightgrey",
-                                      limits=color_limits,
-                                      breaks=if(!is.null(color_breaks)) color_breaks else ggplot2::waiver()
+                                      limits=current_color_limits,
+                                      breaks=current_color_breaks
                                   )
                 }
                 return (plots[[i]])

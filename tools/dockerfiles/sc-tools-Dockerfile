@@ -74,6 +74,10 @@
 #   ATAC related reductions, when processing RNA data,
 #   however we don't actually use ATAC reference mapping
 #   yet.
+# - Updated sc_ctype_assign.R, sc_rna_cluster.R,
+#   sc_wnn_cluster.R, and sc_rna_azimuth.R scripts to
+#   calculate module scores for the --genesets GMT file.
+#   GSEABase is used for loading data from GMT file.
 #
 # v0.0.40 -- based on biowardrobe2/sc-tools:v0.0.39
 # - Added sc_report_wrapper.R script to export HTML report
@@ -427,7 +431,7 @@ RUN apt-get update && \
                                  'batchelor', 'DESeq2', 'Rsamtools', 'rtracklayer', \
                                  'glmGamPoi', 'limma', 'EnhancedVolcano', 'LoomExperiment', \
                                  'hopach', 'Glimma', 'dittoSeq', 'cmapR', 'ComplexHeatmap', 'scDblFinder', \
-                                 'slingshot', 'traviz', 'DropletUtils'))" && \
+                                 'slingshot', 'traviz', 'DropletUtils', 'GSEABase'))" && \
     R -e 'install.packages("fastmatch")' && \
     R -e 'install.packages("RcppRoll")' && \
     R -e 'devtools::install_github("stuart-lab/signac@1.11.0", upgrade = "never")' && \

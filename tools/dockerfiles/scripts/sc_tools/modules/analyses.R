@@ -38,6 +38,7 @@ export(
     "add_trajectory",
     "get_vars_to_regress",
     "get_cell_cycle_scores",
+    "get_module_scores",
     "get_min_ident_size",
     "get_fraction",
     "get_markers_by_res",
@@ -149,6 +150,45 @@ get_cell_cycle_scores <- function(seurat_data, assay, cell_cycle_data){       # 
     )
     seurat_data[["CC.Difference"]] <- seurat_data[["S.Score"]] - seurat_data[["G2M.Score"]]   # for softer cell cycle removal (https://satijalab.org/seurat/articles/cell_cycle_vignette.html)
     return (seurat_data)
+}
+
+get_module_scores <- function(seurat_data, assay, features, slot="data", prefix="score_"){
+    base::tryCatch(
+        expr = {
+            base::print("Calculating module scores for the following features")
+            base::print(features)
+            seurat_data <- Seurat::AddModuleScore(
+                seurat_data,
+                assay=assay,
+                slot=slot,
+                features=features,
+                name=prefix
+            )
+            score_fields <- tibble::tibble(                             # we need to have them sorted by number N from score_N (not apphanetically)
+                                scores=base::grep(
+                                    base::paste0("^", prefix),
+                                    base::colnames(seurat_data@meta.data),
+                                    value=TRUE,
+                                    ignore.case=TRUE
+                                )
+                            ) %>%
+                            dplyr::mutate(position=stringr::str_extract(scores, "\\d+") %>% as.numeric()) %>%
+                            dplyr::arrange(position) %>%
+                            dplyr::pull(scores)
+            for (i in 1:length(score_fields)){
+                current_field <- score_fields[i]
+                current_name <- base::paste0(prefix, base::tolower(gsub("'|\"|\\s|\\t|#|%|&|-", "_", names(features)[i])))
+                seurat_data@meta.data <- seurat_data@meta.data  %>%
+                                         dplyr::rename(
+                                             !!current_name:=current_field
+                                         )
+            }
+        },
+        error = function(e){
+            base::print(base::paste("Failed to calculate module scores with error - ", e))
+        }
+    )
+    return(seurat_data)
 }
 
 rna_log_single <- function(seurat_data, args, cell_cycle_data=NULL){
@@ -713,7 +753,7 @@ rna_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
     return (seurat_data)
 }
 
-rna_reference_map <- function(seurat_data, reference_dir, args){
+rna_reference_map <- function(seurat_data, reference_dir, args, annotations_order=NULL){
     SeuratObject::DefaultAssay(seurat_data) <- "RNA"                            # safety measure
     SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
     annotated_data <- Azimuth::RunAzimuth(
@@ -724,12 +764,22 @@ rna_reference_map <- function(seurat_data, reference_dir, args){
     )
     seurat_data@meta.data$prediction_confidence_score <- annotated_data@meta.data[[base::paste0("predicted.", args$source, ".score")]]
     seurat_data@meta.data$prediction_mapping_score <- annotated_data@meta.data$mapping.score
-    seurat_data@meta.data$prediction_cell_type <- annotated_data@meta.data[[base::paste0("predicted.", args$source)]]
+    seurat_data@meta.data$prediction_cell_type <- forcats::fct_infreq(          # a factor ordered by frequency
+        annotated_data@meta.data[[base::paste0("predicted.", args$source)]]
+    )
     seurat_data@meta.data$prediction_passed_qc <- base::with(                   # temporary column to mark cells with the low QC scores
         seurat_data@meta.data,
         prediction_confidence_score >= args$minconfscore & prediction_mapping_score >= args$minmapscore
     )
     seurat_data@reductions$refumap <- annotated_data@reductions$ref.umap
+    if(!is.null(annotations_order)){
+        seurat_data@meta.data$prediction_cell_type <- base::droplevels(         # in case we somehow have more levels than unique values
+            base::factor(
+                seurat_data@meta.data$prediction_cell_type,
+                levels=annotations_order
+            )
+        )
+    }
     base::rm(annotated_data)
     base::gc(verbose=FALSE)
     return(seurat_data)
@@ -1001,8 +1051,6 @@ add_wnn_clusters <- function(seurat_data, graph_name, reductions, dimensions, ar
         reduction.key="WNNUMAP_",
         spread=base::ifelse(is.null(args$uspread), 1, args$uspread),
         min.dist=base::ifelse(is.null(args$umindist), 0.3, args$umindist),
-        n.neighbors=base::ifelse(is.null(args$uneighbors), 30, args$uneighbors),
-        metric=base::ifelse(is.null(args$umetric), "cosine", args$umetric),
         umap.method=base::ifelse(is.null(args$umethod), "uwot", args$umethod),
         return.model=TRUE,
         verbose=FALSE
