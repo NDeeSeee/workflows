@@ -8,6 +8,10 @@ suppressMessages({
   library(stringr)
 })
 
+# Explicitly assign the pipe operator from magrittr to ensure consistency
+`%>%` <- magrittr::`%>%`
+`%in%` <- base::`%in%`
+
 # Define command-line arguments using 'argparse'
 parser <- ArgumentParser(description = "Merge multiple GCT files into one with per-contrast metadata.")
 
@@ -69,6 +73,14 @@ for (gct_file in args$input) {
   # Extract log2FoldChange and padj, rename them with contrast name
   rdesc_contrast <- gct_data@rdesc %>%
     select(id, log2FoldChange, padj) %>%
+    mutate(
+      log2FoldChange = round(log2FoldChange, digits = 2),
+      padj = if_else(
+        abs(padj) < 0.001,
+        sprintf("%.1e", padj),
+        sprintf("%.3f", padj)
+      )
+    ) %>%
     rename(
       !!paste0("log2FoldChange_", contrast_name) := log2FoldChange,
       !!paste0("padj_", contrast_name) := padj
