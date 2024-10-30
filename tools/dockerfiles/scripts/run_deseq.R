@@ -1097,6 +1097,7 @@ print(paste("Export DESeq report to ", collected_isoforms_filename,
 
 print("Exporting all normalized read counts to GCT format")
 
+# TODO: should we just use RefSeq as rownames instead of GeneId here to avoid duplicates without losing transcript information?
 row_metadata <- collected_isoforms %>%
   dplyr::mutate_at("GeneId", toupper) %>%
   dplyr::distinct(GeneId, .keep_all = TRUE) %>% # to prevent from failing when input files are not grouped by GeneId

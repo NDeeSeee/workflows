@@ -1,148 +1,29 @@
 {
-  "expression_files": [
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_TCM5HGFP.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d2N_5H_GFP.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d2TEM_5H_GFP.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d4TCM_5H_GFP.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/S1m2_TCM5HAFOS.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_TEM0HGFP.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d2TCM_0H_GFP.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d4N_0H_GFP.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d4TEM_0H_GFP.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_N0HGFP.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_N5HGFP.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_TEM5HAFOS.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d2TCM_5H_AFOS.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d2TCM_5H_GFP.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d4N_5H_AFOS.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d4TEM_5H_AFOS.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_N5HAFOS.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_TEM5HGFP.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d2N_0H_GFP.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d2TEM_0H_GFP.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d4TCM_0H_GFP.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_TCM0HGFP.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d2N_5H_AFOS.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d2TEM_5H_AFOS.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d4TCM_5H_AFOS.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d4N_5H_GFP.isoforms.csv"
-    },
-    {
-      "class": "File",
-      "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/s1m2_d4TEM_5H_GFP.isoforms.csv"
-    }
-  ],
-  "expression_file_names": [
-    "s1m2_TCM5HGFP",
-    "s1m2_d2N_5H_GFP",
-    "s1m2_d2TEM_5H_GFP",
-    "s1m2_d4TCM_5H_GFP",
-    "S1m2_TCM5HAFOS",
-    "s1m2_TEM0HGFP",
-    "s1m2_d2TCM_0H_GFP",
-    "s1m2_d4N_0H_GFP",
-    "s1m2_d4TEM_0H_GFP",
-    "s1m2_N0HGFP",
-    "s1m2_N5HGFP",
-    "s1m2_TEM5HAFOS",
-    "s1m2_d2TCM_5H_AFOS",
-    "s1m2_d2TCM_5H_GFP",
-    "s1m2_d4N_5H_AFOS",
-    "s1m2_d4TEM_5H_AFOS",
-    "s1m2_N5HAFOS",
-    "s1m2_TEM5HGFP",
-    "s1m2_d2N_0H_GFP",
-    "s1m2_d2TEM_0H_GFP",
-    "s1m2_d4TCM_0H_GFP",
-    "s1m2_TCM0HGFP",
-    "s1m2_d2N_5H_AFOS",
-    "s1m2_d2TEM_5H_AFOS",
-    "s1m2_d4TCM_5H_AFOS",
-    "s1m2_d4N_5H_GFP",
-    "s1m2_d4TEM_5H_GFP"
-  ],
-  "metadata_file": {
+  "expression_data_rds": {
     "class": "File",
-    "location": "./data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/AFOS_colData.csv"
+    "path": "/Users/biocode/Documents/GitHub/CCHMC/BarskiiLab/workflows/tests/data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/deseq_expression_data.rds"
   },
-  "design_formula": "~condition*celltype",
-  "contrast_indices": "3,7,10",
+  "contrasts_rds": {
+    "class": "File",
+    "path": "/Users/biocode/Documents/GitHub/CCHMC/BarskiiLab/workflows/tests/data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/deseq_contrasts.rds"
+  },
+  "dsq_wald_rds": {
+    "class": "File",
+    "path": "/Users/biocode/Documents/GitHub/CCHMC/BarskiiLab/workflows/tests/data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/deseq_dsq_wald.rds"
+  },
+  "metadata_rds": {
+    "class": "File",
+    "path": "/Users/biocode/Documents/GitHub/CCHMC/BarskiiLab/workflows/tests/data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/deseq_metadata.rds"
+  },
+  "batch_correction_method_rds": {
+    "class": "File",
+    "path": "/Users/biocode/Documents/GitHub/CCHMC/BarskiiLab/workflows/tests/data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/deseq_batch_correction_method.rds"
+  },
+  "contrast_indices": "2",
+  "fdr": 0.9,
+  "lfcthreshold": 0,
+  "regulation": "both",
+  "output_prefix": "deseq_step_2",
+  "threads": 6,
   "test_mode": true
 }
