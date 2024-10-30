@@ -191,6 +191,16 @@ get_args <- function() {
     default = 0.59
   )
   parser$add_argument(
+    "--use_lfc_thresh",
+    help = paste(
+      "Flag to indicate whether to use lfcthreshold as the null hypothesis value in the results function call.",
+      "If TRUE, lfcthreshold is used in the hypothesis test (i.e., genes are tested against this threshold).",
+      "If FALSE, the null hypothesis is set to 0, and lfcthreshold is used only as a downstream filter.",
+      "Default: FALSE"
+    ),
+    action = "store_true"
+  )
+  parser$add_argument(
     "--regulation",
     help = paste(
       "Direction of differential expression comparison. β is the log2 fold change.",
@@ -203,11 +213,12 @@ get_args <- function() {
     choices = c("both", "up", "down"),
     default = "both"
   )
-  parser$add_argument("-o",
-                      "--output",
-                      help = "Output prefix. Default: deseq",
-                      type = "character",
-                      default = "./deseq"
+  parser$add_argument(
+    "-o",
+    "--output",
+    help = "Output prefix. Default: deseq",
+    type = "character",
+    default = "./deseq"
   )
   parser$add_argument(
     "-p",
@@ -216,10 +227,12 @@ get_args <- function() {
     type = "integer",
     default = 1
   )
-  parser$add_argument("--test_mode",
-                      help = "Run for test, only first 100 rows",
-                      action = "store_true",
-                      default = FALSE)
+  parser$add_argument(
+    "--test_mode",
+    help = "Run for test, only first 100 rows",
+    action = "store_true",
+    default = FALSE
+  )
   args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
   return(args)
 }
@@ -387,11 +400,13 @@ get_contrast_res <- function(contrast_row) {
     "greaterAbs"
   }
 
+  lfcThreshold <- if (args$use_lfc_thresh) args$lfcthreshold else 0
+
   # DESeq2 object is already computed; we can directly extract results
   res <- results(dds,
                  name = contrast_row$contrast,
                  alpha = args$fdr,
-                 lfcThreshold = args$lfcthreshold,
+                 lfcThreshold = lfcThreshold,
                  independentFiltering = TRUE,
                  altHypothesis = altHypothesis)
   return(res)
@@ -837,7 +852,7 @@ for (contrast_index in contrast_vector) {
   # print("Exported normalized counts to GCT format.")
 
   # Generate and export plots (including GCT export)
-  export_contrast_results(res, final_isoforms, contrast_name, dds, normCounts_corrected, args$output, expression_data_df, args)
+  export_contrast_results(res, final_isoforms, contrast_name, dds, normCounts_corrected, args$output, args)
 }
 
 print("DESeq2 analysis complete.")

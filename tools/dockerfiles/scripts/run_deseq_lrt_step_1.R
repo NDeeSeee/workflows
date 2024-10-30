@@ -316,7 +316,8 @@ get_args <- function() {
       "If FALSE, the null hypothesis is set to 0, and lfcthreshold is used only as a downstream filter.",
       "Default: FALSE"
     ),
-    action = "store_true"
+    action = "store_true",
+    default = FALSE
   )
   parser$add_argument(
     "-o",
