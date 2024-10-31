@@ -7,7 +7,7 @@ suppressMessages(library(BiocParallel))
 suppressMessages(library(pheatmap))
 suppressMessages(library(DESeq2))
 suppressMessages(library(tidyverse))
-suppressMessages(library(sva))        # For ComBat_seq
+suppressMessages(library(sva)) # For ComBat_seq
 
 mutate <- dplyr::mutate
 filter <- dplyr::filter
@@ -135,23 +135,20 @@ load_expression_data <- function(filenames,
       print("Test mode is OFF, processing all rows")
     }
 
-    print(paste("Load ", nrow(isoforms), " rows from ", filenames[i], sep = ""))
+    print(paste0("Load ", nrow(isoforms), " rows from ", filenames[i]))
     colnames(isoforms)[colnames(isoforms) == read_colname] <- paste(prefixes[i], read_colname, sep = " ")
     colnames(isoforms)[colnames(isoforms) == rpkm_colname] <- paste(prefixes[i], rpkm_colname, sep = " ")
     if (is.null(collected_isoforms)) {
       collected_isoforms <- isoforms
     } else {
       collected_isoforms <- merge(collected_isoforms,
-                                  isoforms,
-                                  by = intersect_by,
-                                  sort = FALSE)
+        isoforms,
+        by = intersect_by,
+        sort = FALSE
+      )
     }
   }
-  print(paste(
-    "Number of rows common for all loaded files ",
-    nrow(collected_isoforms),
-    sep = ""
-  ))
+  print(paste0("Number of rows common for all loaded files ", nrow(collected_isoforms)))
 
   return(collected_isoforms)
 }
@@ -160,9 +157,11 @@ load_expression_data <- function(filenames,
 assert_args <- function(args) {
   if (length(args$input) != length(args$name)) {
     print("Exiting: --input and --name have different number of values")
-    quit(save = "no",
-         status = 1,
-         runLast = FALSE)
+    quit(
+      save = "no",
+      status = 1,
+      runLast = FALSE
+    )
   }
   tryCatch(
     expr = {
@@ -170,15 +169,12 @@ assert_args <- function(args) {
       design_formula <- as.formula(args$design)
     },
     error = function(e) {
-      print(paste(
-        "Exiting: failed to load --design ",
-        args$design,
-        " as formula",
-        sep = ""
-      ))
-      quit(save = "no",
-           status = 1,
-           runLast = FALSE)
+      print(paste0("Exiting: failed to load --design ", args$design, " as formula"))
+      quit(
+        save = "no",
+        status = 1,
+        runLast = FALSE
+      )
     }
   )
   tryCatch(
@@ -187,15 +183,12 @@ assert_args <- function(args) {
       reduced_formula <- as.formula(args$reduced)
     },
     error = function(e) {
-      print(paste(
-        "Exiting: failed to load --reduced ",
-        args$reduced,
-        " as formula",
-        sep = ""
-      ))
-      quit(save = "no",
-           status = 1,
-           runLast = FALSE)
+      print(paste0("Exiting: failed to load --reduced ", args$reduced, " as formula"))
+      quit(
+        save = "no",
+        status = 1,
+        runLast = FALSE
+      )
     }
   )
   if (args$batchcorrection != "none") {
@@ -367,8 +360,8 @@ generate_lrt_md <- function(deseq_results, full_formula, reduced_formula, output
     # Extract the outliers and low counts from the DESeq results summary
     summary_output <- capture.output(summary(deseq_results))
 
-    outliers <- gsub(".*: ", "", summary_output[6])  # Outliers
-    low_counts <- gsub(".*: ", "", summary_output[7])  # Low counts (independent filtering)
+    outliers <- gsub(".*: ", "", summary_output[6]) # Outliers
+    low_counts <- gsub(".*: ", "", summary_output[7]) # Low counts (independent filtering)
     mean_count <- gsub("[^0-9]", "", summary_output[8])
 
     # Add a summary of significant genes
@@ -378,10 +371,11 @@ generate_lrt_md <- function(deseq_results, full_formula, reduced_formula, output
     )
 
     # Add the information about outliers and low counts
-    lrt_summary <- paste0(lrt_summary,
-                          "**Outliers**<sup>1</sup>: ", outliers, " of genes were detected as outliers and excluded from analysis.\n\n",
-                          "**Low counts**<sup>2</sup>: ", low_counts, " of genes were removed due to low counts (mean <", mean_count, ") and independent filtering.\n\n",
-                          "Arguments of ?DESeq2::results():   \n<sup>1</sup> - see 'cooksCutoff',\n<sup>2</sup> - see 'independentFiltering'\n\n"
+    lrt_summary <- paste0(
+      lrt_summary,
+      "**Outliers**<sup>1</sup>: ", outliers, " of genes were detected as outliers and excluded from analysis.\n\n",
+      "**Low counts**<sup>2</sup>: ", low_counts, " of genes were removed due to low counts (mean <", mean_count, ") and independent filtering.\n\n",
+      "Arguments of ?DESeq2::results():   \n<sup>1</sup> - see 'cooksCutoff',\n<sup>2</sup> - see 'independentFiltering'\n\n"
     )
 
     # Add this summary to the markdown content
@@ -427,12 +421,14 @@ generate_main_effect_contrasts <- function(dds, factors, factor_levels) {
             if (level != ref_level) {
               specificity_group <- paste(other_factor, other_level, sep = "_")
               contrast <- paste(sort(c(level, ref_level)), collapse = "_vs_")
-              contrasts <- append(contrasts, list(list(effect_type = "main",
-                                                       specificity_group = specificity_group,
-                                                       numerator = level,
-                                                       denominator = ref_level,
-                                                       contrast = paste(factor, level, "vs", ref_level, sep = "_"),
-                                                       subset = dds_subset)))
+              contrasts <- append(contrasts, list(list(
+                effect_type = "main",
+                specificity_group = specificity_group,
+                numerator = level,
+                denominator = ref_level,
+                contrast = paste(factor, level, "vs", ref_level, sep = "_"),
+                subset = dds_subset
+              )))
             }
           }
         }
@@ -484,12 +480,14 @@ generate_interaction_effect_contrasts <- function(dds) {
             dds_subset <- dds
             colData(dds_subset)[[factor1]] <- relevel(colData(dds_subset)[[factor1]], ref = ref_level1)
 
-            contrasts <- append(contrasts, list(list(effect_type = "interaction",
-                                                     specificity_group = specificity_group,
-                                                     numerator = numerator,
-                                                     denominator = denominator,
-                                                     contrast = interaction,
-                                                     subset = dds_subset)))
+            contrasts <- append(contrasts, list(list(
+              effect_type = "interaction",
+              specificity_group = specificity_group,
+              numerator = numerator,
+              denominator = denominator,
+              contrast = interaction,
+              subset = dds_subset
+            )))
           }
         }
       }
@@ -504,15 +502,17 @@ generate_interaction_effect_contrasts <- function(dds) {
           denominator <- paste0(factor2, ref_level2)
 
           if (numerator != denominator && specificity_group != paste(factor1, ref_level1, "vs", ref_level1, sep = "_")) {
-            dds_subset <- dds[colData(dds)[[factor1]] == ref_level1,]
+            dds_subset <- dds[colData(dds)[[factor1]] == ref_level1, ]
             colData(dds_subset)[[factor2]] <- relevel(colData(dds_subset)[[factor2]], ref = ref_level2)
 
-            contrasts <- append(contrasts, list(list(effect_type = "interaction",
-                                                     specificity_group = specificity_group,
-                                                     numerator = numerator,
-                                                     denominator = denominator,
-                                                     contrast = interaction,
-                                                     subset = dds_subset)))
+            contrasts <- append(contrasts, list(list(
+              effect_type = "interaction",
+              specificity_group = specificity_group,
+              numerator = numerator,
+              denominator = denominator,
+              contrast = interaction,
+              subset = dds_subset
+            )))
           }
         }
       }
@@ -527,10 +527,11 @@ get_num_significant_genes <- function(contrast) {
   dds_subset <- contrast$subset
   dds_subset <- DESeq(dds_subset, test = "Wald")
   res <- results(dds_subset,
-                 name = contrast$contrast,
-                 alpha = args$fdr,
-                 lfcThreshold = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
-                 independentFiltering = TRUE)
+    name = contrast$contrast,
+    alpha = args$fdr,
+    lfcThreshold = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
+    independentFiltering = TRUE
+  )
   return(sum(res$padj < args$fdr, na.rm = TRUE))
 }
 
@@ -681,7 +682,7 @@ if (args$batchcorrection == "combatseq" && !is.null(args$batch_metadata)) {
   batch_info <- args$batch_metadata[rownames(metadata_df), , drop = FALSE]
   corrected_counts <- apply_combat_seq(read_counts_data_df, batch_info, design, metadata_df)
   countData <- corrected_counts
-  design <- as.formula(args$design)  # Original design without batch
+  design <- as.formula(args$design) # Original design without batch
 } else {
   # For 'limmaremovebatcheffect' and 'none', we proceed without modifying counts
   countData <- read_counts_data_df
@@ -699,9 +700,11 @@ saveRDS(metadata_df, file = metadata_rds_filename)
 print(paste("Updated metadata saved to", metadata_rds_filename))
 
 # Create DESeq2 dataset
-dse <- DESeqDataSetFromMatrix(countData = countData,
-                              colData = metadata_df,
-                              design = design)
+dse <- DESeqDataSetFromMatrix(
+  countData = countData,
+  colData = metadata_df,
+  design = design
+)
 
 print("Run DESeq2 using Wald")
 dsq_wald <- DESeq(
@@ -735,8 +738,9 @@ print("Generate contrasts")
 all_contrasts <- generate_contrasts(dsq_wald)
 
 dsq_lrt_res <- results(dsq_lrt,
-                       alpha = args$fdr,
-                       independentFiltering = TRUE)
+  alpha = args$fdr,
+  independentFiltering = TRUE
+)
 
 print("LRT Results description")
 print(mcols(dsq_lrt_res))
@@ -758,7 +762,7 @@ res_filtered$log2FoldChange[is.na(res_filtered$log2FoldChange)] <- 0
 res_filtered[is.na(res_filtered)] <- 1
 # Export results to TSV file
 expression_data_df <- data.frame(
-  cbind(expression_data_df[,], res_filtered),
+  cbind(expression_data_df[, ], res_filtered),
   check.names = F,
   check.rows = F
 )
@@ -777,13 +781,16 @@ write.table(
 
 print(paste("Export contrasts to", contrasts_filename, sep = " "))
 
-print(paste("Exporting contrasts list to", paste(args$output, "_contrasts.rds", sep = ""), sep = " "))
+print(paste("Exporting contrasts list to", paste0(args$output, "_contrasts.rds"), sep = " "))
 
-saveRDS(all_contrasts, file = paste(args$output, "_contrasts.rds", sep = ""))
+saveRDS(all_contrasts, file = paste0(args$output, "_contrasts.rds"))
 
-# Additional outputs (e.g., LRT markdown report) can be generated as needed
+lrt_report_filename <- paste0(args$output, "_lrt_result.md")
+summary(dsq_lrt_res)
+generate_lrt_md(dsq_lrt_res, args$design, args$reduced, lrt_report_filename)
+print(paste("Export LRT markdown report to", lrt_report_filename, sep = " "))
 
-results_filename <- paste(args$output, "_gene_exp_table.tsv", sep = "")
+results_filename <- paste0(args$output, "_gene_exp_table.tsv")
 write.table(
   expression_data_df,
   file = results_filename,
