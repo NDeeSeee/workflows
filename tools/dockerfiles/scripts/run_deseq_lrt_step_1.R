@@ -18,90 +18,18 @@ select <- dplyr::select
 `%>%` <- magrittr::`%>%`
 `%in%` <- base::`%in%`
 
-################################################################################################
-# v0.0.5 - Adjusted batch correction logic as per user request
-#
-# Changes:
-# - 'combatseq' batch correction is applied in Step 1 if specified.
-# - 'limmaremovebatcheffect' is noted and passed to Step 2 for application.
-# - Batch correction options are handled appropriately.
-# - Necessary information is saved for Step 2.
-#
-################################################################################################
-# v0.0.3 LRT Step 2
-#
-# Changes:
-# - Reads preprocessed data from RDS files.
-# - Accepts `contrast_indices`, `fdr`, `lfcThreshold`, and `regulation` as inputs.
-# - Applies batch correction using `limma::removeBatchEffect` if specified.
-# - Uses `results` function with appropriate parameters.
-#
-##########################################################################################
-# v0.0.4 LRT Step 2
-#
-# Changes:
-# - Adjusted batch correction to be optional.
-# - Batch correction with limma is only applied if specified.
-#
-##########################################################################################
-# v0.0.2 - Modified to save all possible information into RDS files
-#
-# Changes:
-# - Save DESeq2 dataset objects (dds) and LRT results (dsq_lrt_res) into RDS files.
-# - Save expression data (expression_data_df) into an RDS file.
-# - Save metadata (metadata_df) into an RDS file.
-# - Adjust outputs to include these RDS files.
-#
-################################################################################################
-
-################################################################################################
-# v0.0.1
-#
-# Note: at least two biological replicates are required for every compared category.
-#
-# All input CSV/TSV files should have the following header (case-sensitive)
-# <RefseqId,GeneId,Chrom,TxStart,TxEnd,Strand,TotalReads,Rpkm>         - CSV
-# <RefseqId\tGeneId\tChrom\tTxStart\tTxEnd\tStrand\tTotalReads\tRpkm>  - TSV
-#
-# Format of the input files is identified based on file's extension
-# *.csv - CSV
-# *.tsv - TSV
-# Otherwise used CSV by default
-#
-# The output file's rows order corresponds to the rows order of the first CSV/TSV file.
-# Output file is always saved in TSV format
-#
-# Output file includes only intersected rows from all input files. Intersected by
-# RefseqId, GeneId, Chrom, TxStart, TxEnd, Strand
-#
-# Additionally we calculate -LOG10(pval) and -LOG10(padj)
-#
-# Example of CSV metadata file set with --meta
-#
-# ,time,condition
-# DH1,day5,WT
-# DH2,day5,KO
-# DH3,day7,WT
-# DH4,day7,KO
-# DH5,day7,KO
-#
-# where time, condition, day5, day7, WT, KO should be a single words (without spaces)
-# and DH1, DH2, DH3, DH4, DH5 correspond to the --names (spaces are allowed)
-#
-# --contrast should be set based on your metadata file in a form of Factor Numerator Denominator
-# where Factor      - columns name from metadata file
-#       Numerator   - category from metadata file to be used as numerator in fold change calculation
-#       Denominator - category from metadata file to be used as denominator in fold change calculation
-# for example condition WT KO
-# if --contrast is set as a single string "condition WT KO" then is will be splitted by space
-#
-################################################################################################
-
+################################################################################
+# Modifications as per your request:
+# - Removed the separate --batchfile argument.
+# - Batch information is now expected in the 'batch' column of the metadata file.
+# - Added checks to ensure 'batch' column exists when batch correction is specified.
+# - Added checks to ensure 'batch' column is numeric.
+# - Updated warning messages and documentation accordingly.
+################################################################################
 
 READ_COL <- "TotalReads"
 RPKM_COL <- "Rpkm"
 INTERSECT_BY <- c("RefseqId", "GeneId", "Chrom", "TxStart", "TxEnd", "Strand")
-
 
 get_file_type <- function(filename) {
   ext <- tools::file_ext(filename)
@@ -111,7 +39,6 @@ get_file_type <- function(filename) {
   }
   return(separator)
 }
-
 
 load_expression_data <- function(filenames,
                                  prefixes,
@@ -153,7 +80,6 @@ load_expression_data <- function(filenames,
   return(collected_isoforms)
 }
 
-
 assert_args <- function(args) {
   if (length(args$input) != length(args$name)) {
     print("Exiting: --input and --name have different number of values")
@@ -191,25 +117,6 @@ assert_args <- function(args) {
       )
     }
   )
-  if (args$batchcorrection != "none") {
-    if (is.null(args$batchfile)) {
-      stop("Batch correction method specified but --batchfile is not provided.")
-    }
-    if (!file.exists(args$batchfile)) {
-      stop("Batch file provided but not found.")
-    }
-    batch_metadata <- read.table(
-      args$batchfile,
-      sep = get_file_type(args$batchfile),
-      header = FALSE,
-      stringsAsFactors = FALSE,
-      row.names = 1,
-      col.names = c("Sample", "batch")
-    )
-    args$batch_metadata <- batch_metadata
-  } else {
-    args$batch_metadata <- NULL
-  }
   return(args)
 }
 
@@ -226,7 +133,7 @@ apply_combat_seq <- function(count_data, batch_info, design, column_data) {
 }
 
 get_args <- function() {
-  parser <- ArgumentParser(description = "Run DeSeq2 for multi-factor analysis using LRT (likelihood ratio or chi-squared test)")
+  parser <- ArgumentParser(description = "Run DESeq2 for multi-factor analysis using LRT (likelihood ratio or chi-squared test)")
   parser$add_argument(
     "-i",
     "--input",
@@ -253,33 +160,28 @@ get_args <- function() {
   parser$add_argument(
     "-d",
     "--design",
-    help = "Design formula. Should start with ~. See DeSeq2 manual for details",
+    help = "Design formula. Should start with ~, like ~condition+celltype+condition:celltype. See DESeq2 manual for details",
     type = "character",
     required = "True"
   )
   parser$add_argument(
     "-r",
     "--reduced",
-    help = "Reduced formula to compare against with the term(s) of interest removed. Should start with ~. See DeSeq2 manual for details",
+    help = "Reduced formula to compare against with the term(s) of interest removed. Should start with ~. See DESeq2 manual for details",
     type = "character",
     required = "True"
   )
   parser$add_argument(
     "--batchcorrection",
     help = paste(
-      "Specifies the batch correction method to be applied.
-      - 'combatseq' applies ComBat_seq at the beginning of the analysis, removing batch effects from the design formula before differential expression analysis.
-      - 'limmaremovebatcheffect' applies removeBatchEffect from the limma package after differential expression analysis, incorporating batch effects into the model during DE analysis.
-      - Default: none"
+      "Specifies the batch correction method to be applied.",
+      "- 'combatseq' applies ComBat_seq at the beginning of the analysis, removing batch effects from the counts before differential expression analysis.",
+      "- 'limmaremovebatcheffect' applies removeBatchEffect from the limma package after differential expression analysis.",
+      "- Default: none"
     ),
     type = "character",
     choices = c("none", "combatseq", "limmaremovebatcheffect"),
     default = "none"
-  )
-  parser$add_argument(
-    "-bf", "--batchfile",
-    help = "Metadata file for multi-factor analysis. Headerless TSV/CSV file. First column - names from --ualias and --talias, second column - batch group name. Default: None", type =
-      "character"
   )
   parser$add_argument(
     "--fdr",
@@ -336,9 +238,14 @@ get_args <- function() {
   return(args)
 }
 
-generate_lrt_md <- function(deseq_results, full_formula, reduced_formula, output_file, alpha = 0.1) {
+generate_lrt_md <- function(deseq_results, full_formula, reduced_formula, output_file, alpha = 0.1, batch_warning = NULL) {
   # Initialize the markdown content
   md_content <- ""
+
+  # Add batch warning if present
+  if (!is.null(batch_warning)) {
+    md_content <- paste0(md_content, "# **Warning**\n\n", batch_warning, "\n\n---\n\n")
+  }
 
   # Add DESeq LRT results summary based on padj value only
   if (!is.null(deseq_results)) {
@@ -370,7 +277,7 @@ generate_lrt_md <- function(deseq_results, full_formula, reduced_formula, output
       "From this LRT analysis, **", significant_genes, " genes** (out of ", total_genes, " tested) are identified as significant with a padj value < ", alpha, ".\n\n"
     )
 
-    # Add the information about outliers and low counts
+    # Add information about outliers and low counts
     lrt_summary <- paste0(
       lrt_summary,
       "**Outliers**<sup>1</sup>: ", outliers, " of genes were detected as outliers and excluded from analysis.\n\n",
@@ -546,8 +453,6 @@ generate_contrasts <- function(dds) {
   names(factor_levels) <- factors
   print(factor_levels)
 
-  # stop("Stop here")
-
   # Generate main and interaction effect contrasts
   main_contrasts <- generate_main_effect_contrasts(dds, factors, factor_levels)
   interaction_contrasts <- generate_interaction_effect_contrasts(dds)
@@ -627,6 +532,17 @@ reduced_formula <- as.formula(args$reduced)
 print("Load reduced formula")
 print(reduced_formula)
 
+# Process args$name to ensure consistency
+args$name <- tolower(args$name)
+args$name <- gsub(" ", "_", args$name)
+args$name <- gsub("[^[:alnum:]_]", "", args$name)
+
+print("Processed args$name:")
+print(args$name)
+
+print("Processed rownames(metadata_df):")
+print(rownames(metadata_df))
+
 # Load expression data
 expression_data_df <- load_expression_data(args$input, args$name, READ_COL, RPKM_COL, INTERSECT_BY)
 print("Expression data")
@@ -654,6 +570,9 @@ expression_data_df <- expression_data_df %>%
 
 read_counts_data_df <- expression_data_df[read_counts_columns]
 
+print("Processed colnames(read_counts_data_df):")
+print(colnames(read_counts_data_df))
+
 colnames(read_counts_data_df) <- lapply(colnames(read_counts_data_df), function(s) {
   paste(head(unlist(strsplit(s, " ", fixed = TRUE)), -1), collapse = " ")
 })
@@ -663,8 +582,16 @@ print(head(read_counts_data_df))
 # Harmonize sample names
 rownames(metadata_df) <- tolower(rownames(metadata_df))
 colnames(read_counts_data_df) <- tolower(colnames(read_counts_data_df))
+
+# Replace spaces with underscores
+colnames(read_counts_data_df) <- gsub(" ", "_", colnames(read_counts_data_df))
+rownames(metadata_df) <- gsub(" ", "_", rownames(metadata_df))
+
+# Remove leading/trailing whitespace
 colnames(read_counts_data_df) <- trimws(colnames(read_counts_data_df))
 rownames(metadata_df) <- trimws(rownames(metadata_df))
+
+# Remove any non-alphanumeric characters except underscores
 colnames(read_counts_data_df) <- gsub("[^[:alnum:]_]", "", colnames(read_counts_data_df))
 rownames(metadata_df) <- gsub("[^[:alnum:]_]", "", rownames(metadata_df))
 
@@ -676,23 +603,36 @@ read_counts_rds_filename <- paste0(args$output, "_read_counts.rds")
 saveRDS(read_counts_data_df, file = read_counts_rds_filename)
 print(paste("Saved read counts data to", read_counts_rds_filename))
 
+# Initialize batch warning message
+batch_warning <- NULL
+
 # Apply batch correction if specified
-if (args$batchcorrection == "combatseq" && !is.null(args$batch_metadata)) {
-  # Ensure that batch_metadata samples match the read_counts_data_df columns
-  batch_info <- args$batch_metadata[rownames(metadata_df), , drop = FALSE]
-  corrected_counts <- apply_combat_seq(read_counts_data_df, batch_info, design, metadata_df)
-  countData <- corrected_counts
-  design <- as.formula(args$design) # Original design without batch
-} else {
-  # For 'limmaremovebatcheffect' and 'none', we proceed without modifying counts
-  countData <- read_counts_data_df
-  if (args$batchcorrection == "limmaremovebatcheffect" && !is.null(args$batch_metadata)) {
-    # Add batch information to metadata and save for Step 2
-    batch_info <- args$batch_metadata[rownames(metadata_df), , drop = FALSE]
-    metadata_df$batch <- batch_info$batch
-    # Note: Do not include 'batch' in design formula here; will be handled in Step 2
+if (args$batchcorrection != "none") {
+  if ("batch" %in% colnames(metadata_df)) {
+    if (!is.numeric(metadata_df$batch)) {
+      batch_warning <- "You provided batch correction but the 'batch' column in your metadata is not numeric."
+      print(batch_warning)
+    } else {
+      batch_info <- metadata_df["batch"]
+      if (args$batchcorrection == "combatseq") {
+        # Apply ComBat_seq batch correction
+        corrected_counts <- apply_combat_seq(read_counts_data_df, batch_info, design_formula, metadata_df)
+        countData <- corrected_counts
+        design <- as.formula(args$design) # Original design without batch
+      } else if (args$batchcorrection == "limmaremovebatcheffect") {
+        # Proceed without modifying counts; batch correction will be applied in Step 2
+        countData <- read_counts_data_df
+        # Note: Do not include 'batch' in design formula here; will be handled in Step 2
+      }
+    }
+  } else {
+    batch_warning <- "You provided batch correction but there's no 'batch' column in your metadata."
+    print(batch_warning)
+    countData <- read_counts_data_df
   }
-  design <- as.formula(args$design)
+} else {
+  # No batch correction
+  countData <- read_counts_data_df
 }
 
 # Save updated metadata_df (with batch info if applicable)
@@ -703,7 +643,7 @@ print(paste("Updated metadata saved to", metadata_rds_filename))
 dse <- DESeqDataSetFromMatrix(
   countData = countData,
   colData = metadata_df,
-  design = design
+  design = design_formula
 )
 
 print("Run DESeq2 using Wald")
@@ -787,7 +727,7 @@ saveRDS(all_contrasts, file = paste0(args$output, "_contrasts.rds"))
 
 lrt_report_filename <- paste0(args$output, "_lrt_result.md")
 summary(dsq_lrt_res)
-generate_lrt_md(dsq_lrt_res, args$design, args$reduced, lrt_report_filename)
+generate_lrt_md(dsq_lrt_res, args$design, args$reduced, lrt_report_filename, alpha = args$fdr, batch_warning = batch_warning)
 print(paste("Export LRT markdown report to", lrt_report_filename, sep = " "))
 
 results_filename <- paste0(args$output, "_gene_exp_table.tsv")
