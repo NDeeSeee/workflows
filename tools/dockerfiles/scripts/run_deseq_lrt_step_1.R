@@ -18,14 +18,82 @@ select <- dplyr::select
 `%>%` <- magrittr::`%>%`
 `%in%` <- base::`%in%`
 
-################################################################################
-# Modifications as per your request:
-# - Removed the separate --batchfile argument.
-# - Batch information is now expected in the 'batch' column of the metadata file.
-# - Added checks to ensure 'batch' column exists when batch correction is specified.
-# - Added checks to ensure 'batch' column is numeric.
-# - Updated warning messages and documentation accordingly.
-################################################################################
+################################################################################################
+# v0.0.5 - Adjusted batch correction logic as per user request
+#
+# Changes:
+# - 'combatseq' batch correction is applied in Step 1 if specified.
+# - 'limmaremovebatcheffect' is noted and passed to Step 2 for application.
+# - Batch correction options are handled appropriately.
+# - Necessary information is saved for Step 2.
+#
+################################################################################################
+# v0.0.3 LRT Step 2
+#
+# Changes:
+# - Reads preprocessed data from RDS files.
+# - Accepts `contrast_indices`, `fdr`, `lfcThreshold`, and `regulation` as inputs.
+# - Applies batch correction using `limma::removeBatchEffect` if specified.
+# - Uses `results` function with appropriate parameters.
+#
+##########################################################################################
+# v0.0.4 LRT Step 2
+#
+# Changes:
+# - Adjusted batch correction to be optional.
+# - Batch correction with limma is only applied if specified.
+#
+##########################################################################################
+# v0.0.2 - Modified to save all possible information into RDS files
+#
+# Changes:
+# - Save DESeq2 dataset objects (dds) and LRT results (dsq_lrt_res) into RDS files.
+# - Save expression data (expression_data_df) into an RDS file.
+# - Save metadata (metadata_df) into an RDS file.
+# - Adjust outputs to include these RDS files.
+#
+################################################################################################
+# v0.0.1
+#
+# Note: at least two biological replicates are required for every compared category.
+#
+# All input CSV/TSV files should have the following header (case-sensitive)
+# <RefseqId,GeneId,Chrom,TxStart,TxEnd,Strand,TotalReads,Rpkm>         - CSV
+# <RefseqId\tGeneId\tChrom\tTxStart\tTxEnd\tStrand\tTotalReads\tRpkm>  - TSV
+#
+# Format of the input files is identified based on file's extension
+# *.csv - CSV
+# *.tsv - TSV
+# Otherwise used CSV by default
+#
+# The output file's rows order corresponds to the rows order of the first CSV/TSV file.
+# Output file is always saved in TSV format
+#
+# Output file includes only intersected rows from all input files. Intersected by
+# RefseqId, GeneId, Chrom, TxStart, TxEnd, Strand
+#
+# Additionally we calculate -LOG10(pval) and -LOG10(padj)
+#
+# Example of CSV metadata file set with --meta
+#
+# ,time,condition
+# DH1,day5,WT
+# DH2,day5,KO
+# DH3,day7,WT
+# DH4,day7,KO
+# DH5,day7,KO
+#
+# where time, condition, day5, day7, WT, KO should be a single words (without spaces)
+# and DH1, DH2, DH3, DH4, DH5 correspond to the --names (spaces are allowed)
+#
+# --contrast should be set based on your metadata file in a form of Factor Numerator Denominator
+# where Factor      - columns name from metadata file
+#       Numerator   - category from metadata file to be used as numerator in fold change calculation
+#       Denominator - category from metadata file to be used as denominator in fold change calculation
+# for example condition WT KO
+# if --contrast is set as a single string "condition WT KO" then is will be splitted by space
+#
+################################################################################################
 
 READ_COL <- "TotalReads"
 RPKM_COL <- "Rpkm"
