@@ -502,11 +502,11 @@ generate_contrasts <- function(dds) {
 
 # Function to clean sample names
 clean_sample_names <- function(names) {
-  names <- trimws(names)  # Remove leading/trailing whitespace
-  names <- tolower(names)  # Convert to lowercase
-  names <- gsub("\\s+", "_", names)  # Replace spaces with underscores
-  names <- gsub("[^[:alnum:]_]", "", names)  # Remove non-alphanumeric characters except underscores
-  names <- gsub("^_+|_+$", "", names)  # Remove leading/trailing underscores
+  names <- trimws(names) # Remove leading/trailing whitespace
+  names <- tolower(names) # Convert to lowercase
+  names <- gsub("\\s+", "_", names) # Replace spaces with underscores
+  names <- gsub("[^[:alnum:]_]", "", names) # Remove non-alphanumeric characters except underscores
+  names <- gsub("^_+|_+$", "", names) # Remove leading/trailing underscores
   return(names)
 }
 
