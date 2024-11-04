@@ -500,6 +500,16 @@ generate_contrasts <- function(dds) {
   return(contrast_df)
 }
 
+# Function to clean sample names
+clean_sample_names <- function(names) {
+  names <- trimws(names)  # Remove leading/trailing whitespace
+  names <- tolower(names)  # Convert to lowercase
+  names <- gsub("\\s+", "_", names)  # Replace spaces with underscores
+  names <- gsub("[^[:alnum:]_]", "", names)  # Remove non-alphanumeric characters except underscores
+  names <- gsub("^_+|_+$", "", names)  # Remove leading/trailing underscores
+  return(names)
+}
+
 # Parse arguments
 args <- get_args()
 
@@ -532,10 +542,10 @@ reduced_formula <- as.formula(args$reduced)
 print("Load reduced formula")
 print(reduced_formula)
 
-# Process args$name to ensure consistency
-args$name <- tolower(args$name)
-args$name <- gsub(" ", "_", args$name)
-args$name <- gsub("[^[:alnum:]_]", "", args$name)
+# Clean sample names
+args$name <- clean_sample_names(args$name)
+colnames(metadata_df) <- clean_sample_names(colnames(metadata_df))
+rownames(metadata_df) <- clean_sample_names(rownames(metadata_df))
 
 print("Processed args$name:")
 print(args$name)
@@ -570,30 +580,33 @@ expression_data_df <- expression_data_df %>%
 
 read_counts_data_df <- expression_data_df[read_counts_columns]
 
-print("Processed colnames(read_counts_data_df):")
-print(colnames(read_counts_data_df))
-
+# Clean column names of read_counts_data_df
 colnames(read_counts_data_df) <- lapply(colnames(read_counts_data_df), function(s) {
   paste(head(unlist(strsplit(s, " ", fixed = TRUE)), -1), collapse = " ")
 })
+colnames(read_counts_data_df) <- clean_sample_names(colnames(read_counts_data_df))
+
+print("Processed colnames(read_counts_data_df):")
+print(colnames(read_counts_data_df))
+
 print("Read counts data")
 print(head(read_counts_data_df))
 
-# Harmonize sample names
-rownames(metadata_df) <- tolower(rownames(metadata_df))
-colnames(read_counts_data_df) <- tolower(colnames(read_counts_data_df))
+# Check for mismatches in sample names
+samples_in_metadata_not_in_data <- setdiff(rownames(metadata_df), colnames(read_counts_data_df))
+samples_in_data_not_in_metadata <- setdiff(colnames(read_counts_data_df), rownames(metadata_df))
 
-# Replace spaces with underscores
-colnames(read_counts_data_df) <- gsub(" ", "_", colnames(read_counts_data_df))
-rownames(metadata_df) <- gsub(" ", "_", rownames(metadata_df))
+if (length(samples_in_metadata_not_in_data) > 0) {
+  print("Error: The following samples are in the metadata but not in the expression data:")
+  print(samples_in_metadata_not_in_data)
+  stop("Sample names mismatch between metadata and expression data.")
+}
 
-# Remove leading/trailing whitespace
-colnames(read_counts_data_df) <- trimws(colnames(read_counts_data_df))
-rownames(metadata_df) <- trimws(rownames(metadata_df))
-
-# Remove any non-alphanumeric characters except underscores
-colnames(read_counts_data_df) <- gsub("[^[:alnum:]_]", "", colnames(read_counts_data_df))
-rownames(metadata_df) <- gsub("[^[:alnum:]_]", "", rownames(metadata_df))
+if (length(samples_in_data_not_in_metadata) > 0) {
+  print("Error: The following samples are in the expression data but not in the metadata:")
+  print(samples_in_data_not_in_metadata)
+  stop("Sample names mismatch between expression data and metadata.")
+}
 
 # Reorder read counts data based on metadata
 read_counts_data_df <- read_counts_data_df[, rownames(metadata_df)]
