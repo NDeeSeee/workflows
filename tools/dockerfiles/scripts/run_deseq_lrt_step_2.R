@@ -23,7 +23,7 @@ suppressMessages(library(hopach))
 suppressMessages(library(ggplot2))
 suppressMessages(library(ggrepel))
 suppressMessages(library(DESeq2))
-suppressMessages(library(limma))      # For removeBatchEffect
+suppressMessages(library(limma)) # For removeBatchEffect
 suppressMessages(library(cmapR))
 
 mutate <- dplyr::mutate
@@ -294,7 +294,7 @@ if (any(contrast_vector > length(all_contrasts$contrast_number))) {
 log_message("Starting harmonization of sample names...")
 
 # Define READ_COL correctly based on your actual column naming
-READ_COL <- "TotalReads"  # Ensure this matches your read counts column pattern
+READ_COL <- "TotalReads" # Ensure this matches your read counts column pattern
 
 # Extract read counts columns
 read_counts_columns <- grep(
@@ -408,7 +408,8 @@ get_contrast_res <- function(contrast_row) {
                  alpha = args$fdr,
                  lfcThreshold = lfcThreshold,
                  independentFiltering = TRUE,
-                 altHypothesis = altHypothesis)
+                 altHypothesis = altHypothesis
+  )
   return(res)
 }
 
@@ -694,12 +695,12 @@ export_gct_data <- function(normCounts, collected_isoforms, column_data, output_
     expr = {
       # Prepare row metadata
       row_metadata <- collected_isoforms %>%
-        dplyr::mutate(GeneId = toupper(GeneId)) %>%  # Ensure GeneId is uppercase
+        dplyr::mutate(GeneId = toupper(GeneId)) %>% # Ensure GeneId is uppercase
         dplyr::distinct(GeneId, .keep_all = TRUE) %>% # Remove duplicates based on GeneId
         remove_rownames() %>%
-        column_to_rownames("GeneId") %>%             # Set GeneId as rownames
-        dplyr::select(log2FoldChange, pvalue, padj) %>%    # Select relevant columns
-        arrange(desc(log2FoldChange))                      # Arrange by log2FoldChange
+        column_to_rownames("GeneId") %>% # Set GeneId as rownames
+        dplyr::select(log2FoldChange, pvalue, padj) %>% # Select relevant columns
+        arrange(desc(log2FoldChange)) # Arrange by log2FoldChange
 
       # Check for any remaining NAs
       if (any(is.na(rownames(row_metadata)))) {
