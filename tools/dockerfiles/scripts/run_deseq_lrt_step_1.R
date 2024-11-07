@@ -417,10 +417,10 @@ generate_main_effect_contrasts <- function(dds, factors, factor_levels) {
 # Function to dynamically extract the factor and level names from interaction terms
 extract_factors_and_levels <- function(term) {
   parts <- strsplit(term, "\\.")[[1]]
-  factor1 <- sub("([^:]+):.*", "\\1", parts[1])
-  level1 <- sub(".*:([^:]+)$", "\\1", parts[1])
-  factor2 <- sub("([^:]+):.*", "\\1", parts[2])
-  level2 <- sub(".*:([^:]+)$", "\\1", parts[2])
+  factor1 <- sub("[0-9A-Z_]+$", "", parts[1])
+  factor2 <- sub("[0-9A-Z_]+$", "", parts[2])
+  level1  <- sub("^.*?([0-9A-Z_]+$)", "\\1", parts[1])
+  level2  <- sub("^.*?([0-9A-Z_]+$)", "\\1", parts[2])
   list(factor1 = factor1, level1 = level1, factor2 = factor2, level2 = level2)
 }
 
@@ -734,6 +734,9 @@ dsq_wald <- DESeq(
   quiet = FALSE,
   parallel = TRUE
 )
+
+print("Results Names of DESeq Wald:")
+print(resultsNames(dsq_wald))
 
 # Save dsq_wald into RDS file
 dsq_wald_rds_filename <- paste0(args$output, "_dsq_wald.rds")
