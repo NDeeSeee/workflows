@@ -380,13 +380,20 @@ if (!setequal(colnames(dds), colnames(read_counts_data_df))) {
 
 # Apply limma batch correction if specified
 if (batch_correction_method == "limmaremovebatcheffect" && "batch" %in% colnames(metadata_df)) {
-  print("Applying limma::removeBatchEffect for batch correction")
-  normCounts <- counts(dds, normalized = TRUE)
-  batch <- metadata_df$batch
-  design_matrix <- model.matrix(~conditions, data = metadata_df)
-  normCounts_corrected <- removeBatchEffect(normCounts, batch = batch, design = design_matrix)
+  # Case 3: After DESeq2, apply rlog transformation and remove batch effects using limma
+  print("Applying rlog transformation and limma batch effect removal")
+  rlog_transformed <- rlog(dds, blind = FALSE)
+  rlog_counts      <- assay(rlog_transformed)
+
+  # Prepare design matrix without 'batch' for removeBatchEffect
+  design_formula <- as.formula(paste0("~", str_remove(as.character(dds@design)[2], " \\+ batch")))
+
+  design_matrix <- model.matrix(design_formula, data = metadata_df)
+
+  # Apply removeBatchEffect
+  normCounts <- limma::removeBatchEffect(rlog_counts, batch = metadata_df$batch, design = design_matrix)
 } else {
-  normCounts_corrected <- counts(dds, normalized = TRUE)
+  normCounts <- rlog(dds, blind = FALSE)
 }
 
 # Function to get DESeq2 results for a specific contrast
@@ -428,38 +435,6 @@ export_mds_html_plot <- function(norm_counts_data, location) {
     },
     error = function(e) {
       print(paste0("Failed to export MDS plot to ", location, " with error - ", e))
-    }
-  )
-}
-
-# Function to export GCT files
-export_gct <- function(counts_mat,
-                       row_metadata,
-                       col_metadata,
-                       location) {
-  tryCatch(
-    expr = {
-      row_metadata <- row_metadata %>%
-        rownames_to_column("id") %>%
-        mutate_at("id", as.vector)
-      col_metadata <- col_metadata %>%
-        rownames_to_column("id") %>%
-        mutate_at("id", as.vector)
-      gct_data <- new("GCT",
-                      mat = counts_mat[row_metadata$id, col_metadata$id],
-                      # to guarantee the order and number of row/columns
-                      rdesc = row_metadata,
-                      cdesc = col_metadata
-      )
-      cmapR::write_gct(
-        ds = gct_data,
-        ofile = location,
-        appenddim = FALSE
-      )
-      print(paste("Exporting GCT data to", location, sep = " "))
-    },
-    error = function(e) {
-      print(paste("Failed to export GCT data to", location, sep = " "))
     }
   )
 }
@@ -592,86 +567,23 @@ export_ma_plot <- function(data,
   )
 }
 
-# Function to export heatmap
-export_heatmap <- function(mat_data,
-                           column_data,
-                           rootname,
-                           width = 800,
-                           height = 800,
-                           resolution = 72) {
-  tryCatch(
-    expr = {
-      png(
-        filename = paste(rootname, ".png", sep = ""),
-        width = width,
-        height = height,
-        res = resolution
-      )
-      pheatmap(
-        mat = mat_data,
-        main = "Top 30 genes from VST normalized read counts",
-        annotation_col = column_data,
-        cluster_rows = FALSE,
-        show_rownames = TRUE,
-        cluster_cols = FALSE
-      )
-      dev.off()
-
-      pdf(
-        file = paste(rootname, ".pdf", sep = ""),
-        width = round(width / resolution),
-        height = round(height / resolution)
-      )
-      pheatmap(
-        mat = mat_data,
-        main = "Top 30 genes from VST normalized read counts",
-        annotation_col = column_data,
-        cluster_rows = FALSE,
-        show_rownames = TRUE,
-        cluster_cols = FALSE
-      )
-      dev.off()
-
-      cat(paste(
-        "\nExport expression heatmap to ",
-        rootname,
-        ".(png/pdf)",
-        "\n",
-        sep = ""
-      ))
-    },
-    error = function(e) {
-      dev.off()
-      cat(
-        paste(
-          "\nFailed to export expression heatmap to ",
-          rootname,
-          ".(png/pdf)",
-          "\n",
-          sep = ""
-        )
-      )
-    }
-  )
-}
-
-# Function to clean DESeq2 results (handle NA values)
-clean_deseq_results <- function(DESeqRes) {
-  DESeqRes$log2FoldChange[is.na(DESeqRes$log2FoldChange)] <- 0
-  DESeqRes$pvalue[is.na(DESeqRes$pvalue)] <- 1
-  DESeqRes$padj[is.na(DESeqRes$padj)] <- 1
-  return(DESeqRes)
-}
-
 # Function to add metadata columns and create the final results data frame
-add_metadata_to_results <- function(collected_isoforms, DESeqRes, read_count_cols, digits) {
+add_metadata_to_results <- function(collected_isoforms, deseq_result, read_count_cols, digits) {
+
+  deseq_result <- deseq_result %>%
+    as.data.frame() %>%
+    select(baseMean, log2FoldChange, pvalue, padj) %>%
+    # To handle NA values in pvalue and padj
+    mutate(
+      `-LOG10(pval)` = -log10(as.numeric(pvalue)),
+      `-LOG10(padj)` = -log10(as.numeric(padj))
+    )
+
   collected_isoforms <- data.frame(
-    cbind(collected_isoforms[, !colnames(collected_isoforms) %in% read_count_cols], DESeqRes),
+    cbind(collected_isoforms[, !colnames(collected_isoforms) %in% read_count_cols], deseq_result),
     check.names = F,
     check.rows = F
   )
-  collected_isoforms[, "'-LOG10(pval)'"] <- format(-log(as.numeric(collected_isoforms$pvalue), 10), digits = digits)
-  collected_isoforms[, "'-LOG10(padj)'"] <- format(-log(as.numeric(collected_isoforms$padj), 10), digits = digits)
   return(collected_isoforms)
 }
 
@@ -690,11 +602,11 @@ export_deseq_report <- function(collected_isoforms, output_prefix) {
 }
 
 # Function to export normalized counts and filtered counts to GCT format
-export_gct_data <- function(normCounts, collected_isoforms, column_data, output_prefix) {
+export_gct_data <- function(normCounts, annotated_expression_df, column_data, output_prefix) {
   tryCatch(
     expr = {
       # Prepare row metadata
-      row_metadata <- collected_isoforms %>%
+      row_metadata <- annotated_expression_df %>%
         dplyr::mutate(GeneId = toupper(GeneId)) %>% # Ensure GeneId is uppercase
         dplyr::distinct(GeneId, .keep_all = TRUE) %>% # Remove duplicates based on GeneId
         remove_rownames() %>%
@@ -784,27 +696,19 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
 }
 
 # Function to export results (plots, reports, etc.)
-export_contrast_results <- function(res, final_isoforms, contrast_name, dds, normCounts, output, args) {
+export_contrast_results <- function(res, annotated_expression_df, contrast_name, dds, normCounts, output, args) {
   # Generate and export MA plot
   export_ma_plot(res, paste0(output, "_", contrast_name, "_ma_plot"))
 
   # Heatmap for the top 30 most expressed genes
-  vst <- varianceStabilizingTransformation(dds, blind = FALSE)
-  vsd <- assay(vst)
-  rownames(vsd) <- rownames(normCounts)
-  mat <- vsd[order(rowMeans(normCounts), decreasing = TRUE)[1:30],]
-  export_heatmap(mat, as.data.frame(colData(dds)), paste0(output, "_", contrast_name, "_heatmap"))
-
-  # Export the DESeq2 results to a TSV file
-  results_filename <- paste0(output, "_", contrast_name, "_results.tsv")
-  write.table(as.data.frame(res), file = results_filename, sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
-  print(paste("Results for", contrast_name, "exported to", results_filename))
+  rlog_transformed <- rlog(dds, blind = FALSE)
+  rlog_counts      <- assay(rlog_transformed)
 
   # Export MDS plot
-  export_mds_html_plot(normCounts, paste0(output, "_", contrast_name, "_mds_plot.html"))
+  export_mds_html_plot(rlog_counts, paste0(output, "_", contrast_name, "_mds_plot.html"))
 
   # Export GCT data
-  export_gct_data(normCounts, final_isoforms, as.data.frame(colData(dds)), paste0(output, "_", contrast_name))
+  export_gct_data(rlog_counts, annotated_expression_df, as.data.frame(colData(dds)), paste0(output, "_", contrast_name))
 }
 
 # Iterate through each index in contrast_vector and process the corresponding contrast
@@ -819,19 +723,13 @@ for (contrast_index in contrast_vector) {
   print(paste("Processing contrast:", contrast_name))
 
   # Get DESeq2 results for the specific contrast
-  res <- get_contrast_res(contrast_row)
+  deseq_result <- get_contrast_res(contrast_row)
 
   print("DESeq2 results obtained.")
   print("Summary:")
-  print(summary(res))
+  print(summary(deseq_result))
   print("Head:")
-  print(head(res))
-
-  # Clean results
-  DESeqRes <- clean_deseq_results(as.data.frame(res[, c(1, 2, 5, 6)]))
-
-  print("DESeq2 results cleaned.")
-  print(head(DESeqRes))
+  print(head(deseq_result))
 
   expression_data_df <- expression_data_df %>%
     dplyr::mutate_at("GeneId", toupper) %>%
@@ -841,19 +739,16 @@ for (contrast_index in contrast_vector) {
   print(head(expression_data_df))
 
   # Add metadata to results
-  final_isoforms <- add_metadata_to_results(expression_data_df, DESeqRes, read_counts_columns, digits = 4)
+  annotated_expression_df <- add_metadata_to_results(expression_data_df, deseq_result, read_counts_columns, digits = 4)
 
   print("Metadata added to results.")
 
   # Export DESeq2 report
-  export_deseq_report(final_isoforms, paste0(args$output, "_", contrast_name))
+  export_deseq_report(annotated_expression_df, paste0(args$output, "_", contrast_name))
   print("Exported DESeq2 report.")
 
-  # **Removed** the direct call to export_gct_data here
-  # print("Exported normalized counts to GCT format.")
-
   # Generate and export plots (including GCT export)
-  export_contrast_results(res, final_isoforms, contrast_name, dds, normCounts_corrected, args$output, args)
+  export_contrast_results(res, annotated_expression_df, contrast_name, dds, normCounts, args$output, args)
 }
 
 print("DESeq2 analysis complete.")

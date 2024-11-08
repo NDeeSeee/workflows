@@ -7,7 +7,11 @@ suppressMessages(library(BiocParallel))
 suppressMessages(library(pheatmap))
 suppressMessages(library(DESeq2))
 suppressMessages(library(tidyverse))
+suppressMessages(library(Glimma))
+suppressMessages(library(cmapR))
 suppressMessages(library(sva)) # For ComBat_seq
+suppressMessages(library(limma)) # For removeBatchEffect
+
 
 mutate <- dplyr::mutate
 filter <- dplyr::filter
@@ -18,8 +22,7 @@ select <- dplyr::select
 `%>%` <- magrittr::`%>%`
 `%in%` <- base::`%in%`
 
-################################################################################################
-# v0.0.5 - Adjusted batch correction logic as per user request
+###### v0.0.5 ######
 #
 # Changes:
 # - 'combatseq' batch correction is applied in Step 1 if specified.
@@ -27,8 +30,13 @@ select <- dplyr::select
 # - Batch correction options are handled appropriately.
 # - Necessary information is saved for Step 2.
 #
-################################################################################################
-# v0.0.3 LRT Step 2
+###### v0.0.4 ######
+#
+# Changes:
+# - Adjusted batch correction to be optional.
+# - Batch correction with limma is only applied if specified.
+#
+###### v0.0.3 ######
 #
 # Changes:
 # - Reads preprocessed data from RDS files.
@@ -36,15 +44,7 @@ select <- dplyr::select
 # - Applies batch correction using `limma::removeBatchEffect` if specified.
 # - Uses `results` function with appropriate parameters.
 #
-##########################################################################################
-# v0.0.4 LRT Step 2
-#
-# Changes:
-# - Adjusted batch correction to be optional.
-# - Batch correction with limma is only applied if specified.
-#
-##########################################################################################
-# v0.0.2 - Modified to save all possible information into RDS files
+###### v0.0.2 ######
 #
 # Changes:
 # - Save DESeq2 dataset objects (dds) and LRT results (dsq_lrt_res) into RDS files.
@@ -52,8 +52,7 @@ select <- dplyr::select
 # - Save metadata (metadata_df) into an RDS file.
 # - Adjust outputs to include these RDS files.
 #
-################################################################################################
-# v0.0.1
+###### v0.0.1 ######
 #
 # Note: at least two biological replicates are required for every compared category.
 #
@@ -93,7 +92,8 @@ select <- dplyr::select
 # for example condition WT KO
 # if --contrast is set as a single string "condition WT KO" then is will be splitted by space
 #
-################################################################################################
+
+###### run_deseq_lrt_step_1.R ######
 
 READ_COL <- "TotalReads"
 RPKM_COL <- "Rpkm"
@@ -193,7 +193,7 @@ apply_combat_seq <- function(count_data, batch_info, design, column_data) {
   print("Applying ComBat_seq batch correction")
   corrected_counts <- sva::ComBat_seq(
     counts = as.matrix(count_data),
-    batch = batch_info$batch,
+    batch = batch_info,
     group = NULL,
     covar_mod = model.matrix(design, data = column_data)
   )
@@ -578,6 +578,226 @@ clean_sample_names <- function(names) {
   return(names)
 }
 
+# Function to export MDS plot
+export_mds_html_plot <- function(norm_counts_data, location) {
+  tryCatch(
+    expr  = {
+      htmlwidgets::saveWidget(
+        Glimma::glimmaMDS(
+          x      = norm_counts_data,
+          groups = as.data.frame(metadata_df),
+          labels = rownames(metadata_df)
+        ),
+        file = location
+      )
+    },
+    error = function(e) {
+      print(paste0("Failed to export MDS plot to ", location, " with error - ", e))
+    }
+  )
+}
+
+# Function to export normalized counts and filtered counts to GCT format
+export_gct_data <- function(normCounts, collected_isoforms, column_data, output_prefix) {
+  tryCatch(
+    expr  = {
+      # Prepare row metadata
+      row_metadata <- collected_isoforms %>%
+        dplyr::mutate(GeneId = toupper(GeneId)) %>% # Ensure GeneId is uppercase
+        dplyr::distinct(GeneId, .keep_all = TRUE) %>% # Remove duplicates based on GeneId
+        remove_rownames() %>%
+        # TODO: save both RefseqId and GeneId for the annotation here
+        column_to_rownames("GeneId") %>% # Set GeneId as rownames
+        dplyr::select(pvalue, padj) %>% # Select relevant columns
+        arrange(desc(padj)) # Arrange by log2FoldChange
+
+      # Check for any remaining NAs
+      if (any(is.na(rownames(row_metadata)))) {
+        stop("There are still NA GeneIds after processing.")
+      }
+
+      # Prepare column metadata
+      col_metadata <- column_data %>%
+        mutate_at(colnames(.), as.vector)
+
+      # Create GCT object
+      gct_data <- new("GCT",
+                      mat   = normCounts,
+                      rdesc = row_metadata,
+                      cdesc = col_metadata
+      )
+
+      # Write GCT files
+      cmapR::write_gct(
+        ds        = gct_data,
+        ofile     = paste0(output_prefix, "_counts_all.gct"),
+        appenddim = FALSE
+      )
+      print(paste("Exporting GCT data to", paste0(output_prefix, "_counts_all.gct")))
+
+      # Filter rows by padj <= FDR
+      row_metadata_filtered <- row_metadata %>%
+        dplyr::filter(padj <= args$fdr)
+
+      # Check if any genes remain after filtering
+      if (nrow(row_metadata_filtered) == 0) {
+        warning(paste("No genes passed the FDR threshold of", args$fdr, "for", output_prefix))
+      }
+
+      # Subset normCounts to include only the filtered GeneIds
+      filtered_normCounts <- normCounts[rownames(row_metadata_filtered),]
+
+      # Create filtered GCT object
+      gct_data_filtered <- new("GCT",
+                               mat   = filtered_normCounts,
+                               rdesc = row_metadata_filtered,
+                               cdesc = col_metadata
+      )
+
+      # Write filtered GCT file
+      cmapR::write_gct(
+        ds        = gct_data_filtered,
+        ofile     = paste0(output_prefix, "_counts_filtered.gct"),
+        appenddim = FALSE
+      )
+      print(paste("Exporting GCT data to", paste0(output_prefix, "_counts_filtered.gct")))
+    },
+    error = function(e) {
+      print(paste("Failed to export GCT data to", output_prefix, "with error -", e$message))
+    }
+  )
+}
+
+export_charts <- function(res, annotated_expression_df, column_data, normCounts, output, args) {
+  # Generate and export MA plot
+  export_ma_plot(res, paste0(output, "_ma_plot"))
+
+  # Export MDS plot
+  export_mds_html_plot(normCounts, paste0(output, "_mds_plot.html"))
+
+  # Export GCT data
+  export_gct_data(normCounts, annotated_expression_df, column_data, output)
+}
+
+# Function to generate clusters
+get_clustered_data <- function(expression_data, transpose = FALSE) {
+  if (transpose) {
+    print("Transposing expression data")
+    expression_data <- t(expression_data)
+  }
+
+  expression_data <- apply(
+    expression_data,
+    1,
+    FUN = function(x) {
+      scale_min_max(x)
+    }
+  )
+
+  print("Running HOPACH")
+  hopach_results <- hopach(expression_data)
+
+  if (transpose) {
+    print("Transposing expression data")
+    expression_data <- t(expression_data)
+  }
+
+  print("Parsing cluster labels")
+  clusters           <- as.data.frame(hopach_results$clustering$labels)
+  colnames(clusters) <- "label"
+  clusters           <- cbind(clusters, "HCL" = outer(clusters$label, 10^c((nchar(
+    trunc(clusters$label)
+  )[1] - 1):0), function(a, b) {
+    paste0("c", a %/% b %% 10)
+  }))
+  clusters           <- clusters[, c(-1), drop = FALSE]
+
+  return(list(
+    order      = as.vector(hopach_results$clustering$order),
+    expression = expression_data,
+    clusters   = clusters
+  ))
+}
+
+# Function for min-max scaling
+scale_min_max <- function(x,
+                          min_range = -2,
+                          max_range = 2) {
+  min_val  <- min(x)
+  max_val  <- max(x)
+  scaled_x <-
+    (x - min_val) / (max_val - min_val) * (max_range - min_range) + min_range
+  return(scaled_x)
+}
+
+# Function to export MA plot
+export_ma_plot <- function(data,
+                           rootname,
+                           width = 800,
+                           height = 800,
+                           resolution = 72) {
+  tryCatch(
+    expr  = {
+      png(
+        filename = paste(rootname, ".png", sep = ""),
+        width    = width,
+        height   = height,
+        res      = resolution
+      )
+      plotMA(data)
+      dev.off()
+
+      pdf(
+        file   = paste(rootname, ".pdf", sep = ""),
+        width  = round(width / resolution),
+        height = round(height / resolution)
+      )
+      plotMA(data)
+      dev.off()
+
+      cat(paste("\nExport MA-plot to ", rootname, ".(png/pdf)", "\n",
+                sep =
+                  ""
+      ))
+    },
+    error = function(e) {
+      dev.off()
+      cat(paste(
+        "\nFailed to export MA-plot to ",
+        rootname,
+        ".(png/pdf)",
+        "\n",
+        sep = ""
+      ))
+    }
+  )
+}
+
+# Function to cluster data and re-order based on clustering results
+cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
+  if (!is.null(args$cluster)) {
+    if (args$cluster == "column" || args$cluster == "both") {
+      print("Clustering filtered read counts by columns")
+      clustered_data <- get_clustered_data(expression_data = normCounts, transpose = TRUE)
+      col_metadata   <- cbind(col_metadata, clustered_data$clusters) # Add cluster labels
+      col_metadata   <- col_metadata[clustered_data$order,] # Reorder based on clustering results
+      print("Reordered samples")
+      print(col_metadata)
+    }
+    if (args$cluster == "row" || args$cluster == "both") {
+      print("Clustering filtered normalized read counts by rows")
+      clustered_data <- get_clustered_data(expression_data = normCounts, transpose = FALSE)
+      normCounts     <- clustered_data$expression # Adjust for row centering
+      row_metadata   <- cbind(row_metadata, clustered_data$clusters) # Add cluster labels
+      row_metadata   <- row_metadata[clustered_data$order,] # Reorder based on clustering results
+      print("Reordered features")
+      print(head(row_metadata))
+    }
+  }
+  return(list(normCounts = normCounts, col_metadata = col_metadata, row_metadata = row_metadata))
+}
+
+
 # Parse arguments
 args <- get_args()
 
@@ -640,13 +860,13 @@ read_counts_columns <- grep(
 )
 
 # TODO: double-check if we should use GeneId or RefseqId here
-expression_data_df <- expression_data_df %>%
+read_counts_data_df <- expression_data_df %>%
   dplyr::mutate_at("GeneId", toupper) %>%
   dplyr::distinct(GeneId, .keep_all = TRUE) %>% # to prevent from failing when input files are not grouped by GeneId
   remove_rownames() %>%
   column_to_rownames("GeneId")
 
-read_counts_data_df <- expression_data_df[read_counts_columns]
+read_counts_data_df <- read_counts_data_df[read_counts_columns]
 
 # Clean column names of read_counts_data_df
 colnames(read_counts_data_df) <- lapply(colnames(read_counts_data_df), function(s) {
@@ -687,34 +907,48 @@ print(paste("Saved read counts data to", read_counts_rds_filename))
 # Initialize batch warning message
 batch_warning <- NULL
 
-# Apply batch correction if specified
+countData <- read_counts_data_df
+
+# Check for batch correction and handle accordingly
 if (args$batchcorrection != "none") {
   if ("batch" %in% colnames(metadata_df)) {
-    if (!is.numeric(metadata_df$batch)) {
-      batch_warning <- "You provided batch correction but the 'batch' column in your metadata is not numeric."
-      print(batch_warning)
-    } else {
-      batch_info <- metadata_df["batch"]
-      if (args$batchcorrection == "combatseq") {
-        # Apply ComBat_seq batch correction
-        corrected_counts <- apply_combat_seq(read_counts_data_df, batch_info, design_formula, metadata_df)
-        countData <- corrected_counts
-        design <- as.formula(args$design) # Original design without batch
-      } else if (args$batchcorrection == "limmaremovebatcheffect") {
-        # Proceed without modifying counts; batch correction will be applied in Step 2
-        countData <- read_counts_data_df
-        # Note: Do not include 'batch' in design formula here; will be handled in Step 2
-      }
+    # Ensure 'batch' is a factor
+    metadata_df$batch <- as.factor(metadata_df$batch)
+
+    if (args$batchcorrection == "combatseq") {
+      # Case 2: Apply ComBat_seq batch correction to raw counts
+      print("Applying ComBat_seq batch correction")
+      batch_info       <- metadata_df$batch
+      corrected_counts <- apply_combat_seq(countData, batch_info, design_formula, metadata_df)
+      countData        <- corrected_counts
+      # Design formula remains as provided
+    } else if (args$batchcorrection == "limmaremovebatcheffect") {
+      # Case 3: Include 'batch' in the design formula
+      print("Including 'batch' in the design formula for limma batch correction")
+      # Remove '~' from the original design formula string
+      original_design <- substring(args$design, 2)
+      # Create new design formula with 'batch' included
+      design_formula  <- as.formula(paste("~ batch +", original_design))
+      # Note: We do not modify counts at this stage
     }
   } else {
     batch_warning <- "You provided batch correction but there's no 'batch' column in your metadata."
     print(batch_warning)
-    countData <- read_counts_data_df
+    # Proceed without batch correction
+    # countData remains as read_counts_data_df
   }
 } else {
-  # No batch correction
-  countData <- read_counts_data_df
+  # Case 1: No batch correction
+  # countData remains as read_counts_data_df
+  # Design formula remains as provided
+  print("No batch correction provided; proceeding with default settings")
 }
+
+# Save batch correction method for Step 2
+batch_correction_method       <- args$batchcorrection
+batch_correction_rds_filename <- paste0(args$output, "_batch_correction_method.rds")
+saveRDS(batch_correction_method, file = batch_correction_rds_filename)
+print(paste("Saved batch correction method to", batch_correction_rds_filename))
 
 # Save updated metadata_df (with batch info if applicable)
 saveRDS(metadata_df, file = metadata_rds_filename)
@@ -744,6 +978,27 @@ saveRDS(dsq_wald, file = dsq_wald_rds_filename)
 print(paste("Saved DESeq2 Wald object to", dsq_wald_rds_filename))
 print(head(dsq_wald@assays@data$counts))
 
+# Obtain normalized counts for downstream analyses
+if (args$batchcorrection == "limmaremovebatcheffect" && "batch" %in% colnames(metadata_df)) {
+  # Case 3: After DESeq2, apply rlog transformation and remove batch effects using limma
+  print("Applying rlog transformation and limma batch effect removal")
+  rlog_transformed <- rlog(dsq_wald, blind = FALSE)
+  rlog_counts      <- assay(rlog_transformed)
+
+  # Prepare design matrix without 'batch' for removeBatchEffect
+  design_formula <- as.formula(paste0("~", str_remove(as.character(dsq_wald@design)[2], " \\+ batch")))
+
+  design_matrix <- model.matrix(design_formula, data = metadata_df)
+
+  # Apply removeBatchEffect
+  normCounts <- limma::removeBatchEffect(rlog_counts, batch = metadata_df$batch, design = design_matrix)
+} else {
+  # Case 1 and Case 2: Use rlog-transformed counts without additional batch correction
+  print("Applying rlog transformation without additional batch effect removal")
+  rlog_transformed <- rlog(dsq_wald, blind = FALSE)
+  normCounts       <- assay(rlog_transformed)
+}
+
 print("Run DESeq2 using LRT")
 dsq_lrt <- DESeq(
   dse,
@@ -766,6 +1021,7 @@ dsq_lrt_res <- results(dsq_lrt,
   independentFiltering = TRUE
 )
 
+
 print("LRT Results description")
 print(mcols(dsq_lrt_res))
 
@@ -774,24 +1030,13 @@ dsq_lrt_res_rds_filename <- paste0(args$output, "_dsq_lrt_res.rds")
 saveRDS(dsq_lrt_res, file = dsq_lrt_res_rds_filename)
 print(paste("Saved LRT results to", dsq_lrt_res_rds_filename))
 
-# Save batch correction method for Step 2
-batch_correction_method <- args$batchcorrection
-batch_correction_rds_filename <- paste0(args$output, "_batch_correction_method.rds")
-saveRDS(batch_correction_method, file = batch_correction_rds_filename)
-print(paste("Saved batch correction method to", batch_correction_rds_filename))
-
-# Filter DESeq2 output
-res_filtered <- as.data.frame(dsq_lrt_res[, c(2, 5, 6)])
-res_filtered$log2FoldChange[is.na(res_filtered$log2FoldChange)] <- 0
-res_filtered[is.na(res_filtered)] <- 1
 # Export results to TSV file
-expression_data_df <- data.frame(
-  cbind(expression_data_df[, ], res_filtered),
-  check.names = F,
-  check.rows = F
-)
-expression_data_df[, "-LOG10(pval)"] <- -log(as.numeric(expression_data_df$pvalue), 10)
-expression_data_df[, "-LOG10(padj)"] <- -log(as.numeric(expression_data_df$padj), 10)
+annotated_expression_df <- expression_data_df %>%
+  bind_cols(as.data.frame(dsq_lrt_res) %>% select(pvalue, padj)) %>%
+  mutate(
+    `-LOG10(pval)` = -log10(as.numeric(pvalue)),
+    `-LOG10(padj)` = -log10(as.numeric(padj))
+  )
 
 contrasts_filename <- paste(args$output, "_contrasts_table.tsv", sep = "")
 write.table(
@@ -816,7 +1061,7 @@ print(paste("Export LRT markdown report to", lrt_report_filename, sep = " "))
 
 results_filename <- paste0(args$output, "_gene_exp_table.tsv")
 write.table(
-  expression_data_df,
+  annotated_expression_df,
   file = results_filename,
   sep = "\t",
   row.names = FALSE,
@@ -825,3 +1070,5 @@ write.table(
 )
 print(paste("Export results to", results_filename, sep = " "))
 graphics.off()
+
+export_charts(dsq_lrt_res, annotated_expression_df, metadata_df, normCounts, args$output, args)
