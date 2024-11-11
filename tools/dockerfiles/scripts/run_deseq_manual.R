@@ -604,24 +604,37 @@ get_diff_expr_data <- function(expression_data, metadata, args){
                     " (", paste(current_contrast$samples, collapse=", "), ")"
                 )
             )
-            current_deseq_results <- results(
-                deseq_data,
-                contrast=get_contrast(
-                    design_formula=as.formula(args$design),
-                    deseq_data=deseq_data,
-                    metadata=metadata,
-                    contrast_formula=current_contrast$contrast,
-                    selected_samples=current_contrast$samples
-                ),
-                parallel=TRUE,
-                BPPARAM=MulticoreParam(args$cpus)         # add it here as well just in case
+            tryCatch(
+                expr = {
+                    current_deseq_results <- results(
+                        deseq_data,
+                        contrast=get_contrast(
+                            design_formula=as.formula(args$design),
+                            deseq_data=deseq_data,
+                            metadata=metadata,
+                            contrast_formula=current_contrast$contrast,
+                            selected_samples=current_contrast$samples
+                        ),
+                        parallel=TRUE,
+                        BPPARAM=MulticoreParam(args$cpus)         # add it here as well just in case
+                    )
+                    print("Current results description")
+                    print(mcols(current_deseq_results))
+                    print(mcols(current_deseq_results)$description)
+                    deseq_results[[current_contrast$alias]] <- as.data.frame(current_deseq_results) %>%
+                        rownames_to_column(var="feature")
+                    print(head(deseq_results[[current_contrast$alias]]))
+                },
+                error = function(e){
+                    print(
+                        paste("Failed to process the contrast with error - ", e)
+                    )
+                }
             )
-            print("Current results description")
-            print(mcols(current_deseq_results))
-            print(mcols(current_deseq_results)$description)
-            deseq_results[[current_contrast$alias]] <- as.data.frame(current_deseq_results) %>%
-                rownames_to_column(var="feature")
-            print(head(deseq_results[[current_contrast$alias]]))
+        }
+        if (length(deseq_results) == 0){
+            print("Exiting: no results collected")
+            quit(save = "no", status = 1, runLast = FALSE)
         }
         print("Merging results from multiple contrasts")
         deseq_results <- bind_rows(deseq_results, .id="contrast") %>%
