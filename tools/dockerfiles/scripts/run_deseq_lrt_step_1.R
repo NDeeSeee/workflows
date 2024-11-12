@@ -392,17 +392,33 @@ generate_main_effect_contrasts <- function(dds, factors, factor_levels) {
 
           levels <- factor_levels[[factor]]
 
+
+
           for (level in levels) {
             if (level != ref_level) {
               specificity_group <- paste(other_factor, other_level, sep = "_")
-              contrast <- paste(sort(c(level, ref_level)), collapse = "_vs_")
+              contrast <- paste(factor, level, "vs", ref_level, sep = "_")
+
+              dds_subset <- DESeq(dds_subset, test = "Wald")
+
+              contrast_res <- results(dds_subset,
+                name = contrast,
+                alpha = args$fdr,
+                lfcThreshold = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
+                independentFiltering = TRUE
+              )
+
+              significant_genes <- sum(contrast_res$padj < args$fdr, na.rm = TRUE)
+
               contrasts <- append(contrasts, list(list(
                 effect_type = "main",
                 specificity_group = specificity_group,
                 numerator = level,
                 denominator = ref_level,
-                contrast = paste(factor, level, "vs", ref_level, sep = "_"),
-                subset = dds_subset
+                contrast = contrast,
+                subset = dds_subset,
+                contrast_res = contrast_res,
+                significant_genes = significant_genes
               )))
             }
           }
@@ -455,13 +471,26 @@ generate_interaction_effect_contrasts <- function(dds) {
             dds_subset <- dds
             colData(dds_subset)[[factor1]] <- relevel(colData(dds_subset)[[factor1]], ref = ref_level1)
 
+            dds_subset <- DESeq(dds_subset, test = "Wald")
+
+            contrast_res <- results(dds_subset,
+              name = interaction,
+              alpha = args$fdr,
+              lfcThreshold = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
+              independentFiltering = TRUE
+            )
+
+            significant_genes <- sum(contrast_res$padj < args$fdr, na.rm = TRUE)
+
             contrasts <- append(contrasts, list(list(
               effect_type = "interaction",
               specificity_group = specificity_group,
               numerator = numerator,
               denominator = denominator,
               contrast = interaction,
-              subset = dds_subset
+              subset = dds_subset,
+              contrast_res = contrast_res,
+              significant_genes = significant_genes
             )))
           }
         }
@@ -477,8 +506,20 @@ generate_interaction_effect_contrasts <- function(dds) {
           denominator <- paste0(factor2, ref_level2)
 
           if (numerator != denominator && specificity_group != paste(factor1, ref_level1, "vs", ref_level1, sep = "_")) {
-            dds_subset <- dds[colData(dds)[[factor1]] == ref_level1, ]
+            # dds_subset <- dds[colData(dds)[[factor1]] == ref_level1, ]
+            dds_subset <- dds
             colData(dds_subset)[[factor2]] <- relevel(colData(dds_subset)[[factor2]], ref = ref_level2)
+
+            dds_subset <- DESeq(dds_subset, test = "Wald")
+
+            contrast_res <- results(dds_subset,
+              name = interaction,
+              alpha = args$fdr,
+              lfcThreshold = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
+              independentFiltering = TRUE
+            )
+
+            significant_genes <- sum(contrast_res$padj < args$fdr, na.rm = TRUE)
 
             contrasts <- append(contrasts, list(list(
               effect_type = "interaction",
@@ -486,7 +527,9 @@ generate_interaction_effect_contrasts <- function(dds) {
               numerator = numerator,
               denominator = denominator,
               contrast = interaction,
-              subset = dds_subset
+              subset = dds_subset,
+              contrast_res = contrast_res,
+              significant_genes = significant_genes
             )))
           }
         }
@@ -497,19 +540,6 @@ generate_interaction_effect_contrasts <- function(dds) {
   return(contrasts)
 }
 
-# Function to get number of significant genes
-get_num_significant_genes <- function(contrast) {
-  dds_subset <- contrast$subset
-  dds_subset <- DESeq(dds_subset, test = "Wald")
-  res <- results(dds_subset,
-    name = contrast$contrast,
-    alpha = args$fdr,
-    lfcThreshold = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
-    independentFiltering = TRUE
-  )
-  return(sum(res$padj < args$fdr, na.rm = TRUE))
-}
-
 # Main function to generate the dataframe with all possible contrasts
 generate_contrasts <- function(dds) {
   # Extract the design formula and model matrix
@@ -517,14 +547,24 @@ generate_contrasts <- function(dds) {
 
   # Get the levels of each factor in the design
   factors <- all.vars(design_formula)
+  factors <- factors[!str_detect(factors, "batch")]
+  print("Analyzing the following factors:")
+  print(factors)
+
   factor_levels <- lapply(factors, function(f) levels(colData(dds)[[f]]))
   names(factor_levels) <- factors
+  print("Analyzing the following factor levels:")
   print(factor_levels)
 
   # Generate main and interaction effect contrasts
   main_contrasts <- generate_main_effect_contrasts(dds, factors, factor_levels)
   interaction_contrasts <- generate_interaction_effect_contrasts(dds)
   all_contrasts <- c(main_contrasts, interaction_contrasts)
+
+  all_contrasts <- purrr::list_modify(all_contrasts, expression_data_df = expression_data_df)
+
+  print(paste("Exporting contrasts list to", paste0(args$output, "_contrasts.rds"), sep = " "))
+  saveRDS(all_contrasts, file = paste0(args$output, "_contrasts.rds"))
 
   # Create a dataframe to store the contrasts and number of significant genes
   contrast_df <- data.frame(
@@ -533,7 +573,7 @@ generate_contrasts <- function(dds) {
     contrast = character(),
     numerator = character(),
     denominator = character(),
-    num_significant_genes = integer(),
+    significant_genes = integer(),
     stringsAsFactors = FALSE
   )
 
@@ -541,14 +581,14 @@ generate_contrasts <- function(dds) {
   count <- 1
   for (contrast in all_contrasts) {
     print(count)
-    num_significant_genes <- get_num_significant_genes(contrast)
+
     contrast_df <- rbind(contrast_df, data.frame(
       effect = contrast$effect_type,
       contrast = contrast$contrast,
       specificity_group = contrast$specificity_group,
       numerator = contrast$numerator,
       denominator = contrast$denominator,
-      num_significant_genes = num_significant_genes,
+      significant_genes = contrast$significant_genes,
       stringsAsFactors = FALSE
     ))
     count <- count + 1
@@ -562,7 +602,8 @@ generate_contrasts <- function(dds) {
     ungroup() %>%
     ungroup() %>%
     mutate(contrast_number = row_number()) %>%
-    select(contrast_number, everything())
+    select(contrast_number, everything()) %>%
+    arrange(desc(significant_genes))
 
   # Sort the dataframe by the number of significant genes
   return(contrast_df)
@@ -669,9 +710,6 @@ export_gct_data <- function(normCounts, collected_isoforms, column_data, output_
 }
 
 export_charts <- function(res, annotated_expression_df, column_data, normCounts, output, args) {
-  # Generate and export MA plot
-  export_ma_plot(res, paste0(output, "_ma_plot"))
-
   # Export MDS plot
   export_mds_html_plot(normCounts, paste0(output, "_mds_plot.html"))
 
@@ -730,49 +768,6 @@ scale_min_max <- function(x,
   return(scaled_x)
 }
 
-# Function to export MA plot
-export_ma_plot <- function(data,
-                           rootname,
-                           width = 800,
-                           height = 800,
-                           resolution = 72) {
-  tryCatch(
-    expr  = {
-      png(
-        filename = paste(rootname, ".png", sep = ""),
-        width    = width,
-        height   = height,
-        res      = resolution
-      )
-      plotMA(data)
-      dev.off()
-
-      pdf(
-        file   = paste(rootname, ".pdf", sep = ""),
-        width  = round(width / resolution),
-        height = round(height / resolution)
-      )
-      plotMA(data)
-      dev.off()
-
-      cat(paste("\nExport MA-plot to ", rootname, ".(png/pdf)", "\n",
-                sep =
-                  ""
-      ))
-    },
-    error = function(e) {
-      dev.off()
-      cat(paste(
-        "\nFailed to export MA-plot to ",
-        rootname,
-        ".(png/pdf)",
-        "\n",
-        sep = ""
-      ))
-    }
-  )
-}
-
 # Function to cluster data and re-order based on clustering results
 cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
   if (!is.null(args$cluster)) {
@@ -815,11 +810,6 @@ metadata_df <- read.table(
 print(paste("Load metadata from", args$meta, sep = " "))
 print(metadata_df)
 
-# Save metadata_df into RDS file
-metadata_rds_filename <- paste0(args$output, "_metadata.rds")
-saveRDS(metadata_df, file = metadata_rds_filename)
-print(paste("Saved metadata to", metadata_rds_filename))
-
 # Load design formula
 design_formula <- as.formula(args$design)
 print("Load design formula")
@@ -845,11 +835,6 @@ print(rownames(metadata_df))
 expression_data_df <- load_expression_data(args$input, args$name, READ_COL, RPKM_COL, INTERSECT_BY)
 print("Expression data")
 print(head(expression_data_df))
-
-# Save expression_data_df into RDS file
-expression_data_rds_filename <- paste0(args$output, "_expression_data.rds")
-saveRDS(expression_data_df, file = expression_data_rds_filename)
-print(paste("Saved expression data to", expression_data_rds_filename))
 
 # Select all columns with read counts data, reorder them based on the row names from metadata_df
 read_counts_columns <- grep(
@@ -899,11 +884,6 @@ if (length(samples_in_data_not_in_metadata) > 0) {
 # Reorder read counts data based on metadata
 read_counts_data_df <- read_counts_data_df[, rownames(metadata_df)]
 
-# Save read_counts_data_df into RDS file
-read_counts_rds_filename <- paste0(args$output, "_read_counts.rds")
-saveRDS(read_counts_data_df, file = read_counts_rds_filename)
-print(paste("Saved read counts data to", read_counts_rds_filename))
-
 # Initialize batch warning message
 batch_warning <- NULL
 
@@ -944,16 +924,6 @@ if (args$batchcorrection != "none") {
   print("No batch correction provided; proceeding with default settings")
 }
 
-# Save batch correction method for Step 2
-batch_correction_method       <- args$batchcorrection
-batch_correction_rds_filename <- paste0(args$output, "_batch_correction_method.rds")
-saveRDS(batch_correction_method, file = batch_correction_rds_filename)
-print(paste("Saved batch correction method to", batch_correction_rds_filename))
-
-# Save updated metadata_df (with batch info if applicable)
-saveRDS(metadata_df, file = metadata_rds_filename)
-print(paste("Updated metadata saved to", metadata_rds_filename))
-
 # Create DESeq2 dataset
 dse <- DESeqDataSetFromMatrix(
   countData = countData,
@@ -968,15 +938,6 @@ dsq_wald <- DESeq(
   quiet = FALSE,
   parallel = TRUE
 )
-
-print("Results Names of DESeq Wald:")
-print(resultsNames(dsq_wald))
-
-# Save dsq_wald into RDS file
-dsq_wald_rds_filename <- paste0(args$output, "_dsq_wald.rds")
-saveRDS(dsq_wald, file = dsq_wald_rds_filename)
-print(paste("Saved DESeq2 Wald object to", dsq_wald_rds_filename))
-print(head(dsq_wald@assays@data$counts))
 
 # Obtain normalized counts for downstream analyses
 if (args$batchcorrection == "limmaremovebatcheffect" && "batch" %in% colnames(metadata_df)) {
@@ -1008,27 +969,16 @@ dsq_lrt <- DESeq(
   parallel = TRUE
 )
 
-# Save dsq_lrt into RDS file
-dsq_lrt_rds_filename <- paste0(args$output, "_dsq_lrt.rds")
-saveRDS(dsq_lrt, file = dsq_lrt_rds_filename)
-print(paste("Saved DESeq2 LRT object to", dsq_lrt_rds_filename))
-
 print("Generate contrasts")
-all_contrasts <- generate_contrasts(dsq_wald)
+contrast_df <- generate_contrasts(dsq_wald)
 
 dsq_lrt_res <- results(dsq_lrt,
   alpha = args$fdr,
   independentFiltering = TRUE
 )
 
-
 print("LRT Results description")
 print(mcols(dsq_lrt_res))
-
-# Save dsq_lrt_res into RDS file
-dsq_lrt_res_rds_filename <- paste0(args$output, "_dsq_lrt_res.rds")
-saveRDS(dsq_lrt_res, file = dsq_lrt_res_rds_filename)
-print(paste("Saved LRT results to", dsq_lrt_res_rds_filename))
 
 # Export results to TSV file
 annotated_expression_df <- expression_data_df %>%
@@ -1040,19 +990,13 @@ annotated_expression_df <- expression_data_df %>%
 
 contrasts_filename <- paste(args$output, "_contrasts_table.tsv", sep = "")
 write.table(
-  all_contrasts,
+  contrast_df,
   file = contrasts_filename,
   sep = "\t",
   row.names = FALSE,
   col.names = TRUE,
   quote = FALSE
 )
-
-print(paste("Export contrasts to", contrasts_filename, sep = " "))
-
-print(paste("Exporting contrasts list to", paste0(args$output, "_contrasts.rds"), sep = " "))
-
-saveRDS(all_contrasts, file = paste0(args$output, "_contrasts.rds"))
 
 lrt_report_filename <- paste0(args$output, "_lrt_result.md")
 summary(dsq_lrt_res)

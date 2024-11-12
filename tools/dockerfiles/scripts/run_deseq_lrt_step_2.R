@@ -5,7 +5,7 @@ options(
   error = function() {
     traceback(3)
     quit(
-      save = "no",
+      save   = "no",
       status = 1,
       runLast = FALSE
     )
@@ -129,36 +129,15 @@ INTERSECT_BY <- c("RefseqId", "GeneId", "Chrom", "TxStart", "TxEnd", "Strand")
 get_args <- function() {
   parser <- ArgumentParser(description = "Run DESeq2 analysis using contrasts from previous LRT step")
   parser$add_argument(
-    "-e",
-    "--expression_data_rds",
-    help = "RDS file containing the expression data from step 1",
-    type = "character",
-    required = TRUE
-  )
-  parser$add_argument(
-    "-c",
-    "--contrasts_rds",
-    help = "RDS file containing the contrasts list from step 1",
-    type = "character",
-    required = TRUE
-  )
-  parser$add_argument(
-    "-w",
-    "--dsq_wald_rds",
-    help = "RDS file containing the DESeq2 object from the Wald test in step 1",
-    type = "character",
-    required = TRUE
-  )
-  parser$add_argument(
-    "-m",
-    "--metadata_rds",
-    help = "RDS file containing the metadata from step 1",
+    "-dsq",
+    "--dsq_obj_data",
+    help = "RDS file containing contrassts and expression data from step 1",
     type = "character",
     required = TRUE
   )
   parser$add_argument(
     "-bcm",
-    "--batch_correction_method_rds",
+    "--batchcorrection",
     help = "RDS file containing the batch correction method used in step 1",
     type = "character",
     required = TRUE
@@ -229,7 +208,7 @@ get_args <- function() {
   )
   parser$add_argument(
     "--test_mode",
-    help = "Run for test, only first 100 rows",
+    help   = "Run for test, only first 100 rows",
     action = "store_true",
     default = FALSE
   )
@@ -249,36 +228,39 @@ log_message <- function(message) {
 }
 
 # Load RDS files with detailed logging
-log_message(paste("Loading expression data from", args$expression_data_rds))
-expression_data_df <- readRDS(args$expression_data_rds)
-log_message("Expression Data Loaded:")
-print(head(expression_data_df))
-log_message("Structure of Expression Data:")
-glimpse(expression_data_df)
-
-log_message(paste("Loading contrasts from", args$contrasts_rds))
-all_contrasts <- readRDS(args$contrasts_rds)
+log_message(paste("Loading contrasts from", args$dsq_obj_data))
+all_contrasts <- readRDS(args$dsq_obj_data)
 log_message("Contrasts Loaded:")
 print(all_contrasts)
 log_message("Structure of Contrasts:")
 glimpse(all_contrasts)
 
-log_message(paste("Loading DESeq2 object from", args$dsq_wald_rds))
-dds <- readRDS(args$dsq_wald_rds)
+log_message(paste("Loading expression data from", args$dsq_obj_data))
+expression_data_df <- all_contrasts$expression_data_df
+
+all_contrasts <- purrr::list_modify(all_contrasts, expression_data_df = NULL)
+
+log_message("Expression Data Loaded:")
+print(head(expression_data_df))
+log_message("Structure of Expression Data:")
+glimpse(expression_data_df)
+
+log_message(paste("Loading DESeq2 object from Contrasts"))
+dds <- all_contrasts[[1]]$subset
 log_message("DESeq2 Object Loaded:")
 print(dds)
 log_message("Sample Names in DESeq2 Object:")
 print(colnames(dds))
 
-log_message(paste("Loading metadata from", args$metadata_rds))
-metadata_df <- readRDS(args$metadata_rds)
+log_message(paste("Loading metadata from DESeq2 object"))
+metadata_df <- colData(dds)
 log_message("Metadata Loaded:")
 print(head(metadata_df))
 log_message("Structure of Metadata:")
 glimpse(metadata_df)
 
-log_message(paste("Loading batch correction method from", args$batch_correction_method_rds))
-batch_correction_method <- readRDS(args$batch_correction_method_rds)
+log_message(paste("Loading batch correction method from", args$batchcorrection))
+batch_correction_method <- readRDS(args$batchcorrection)
 log_message(paste("Batch correction method used:", batch_correction_method))
 
 # Convert the comma-separated string into a vector of integers
@@ -286,7 +268,7 @@ contrast_vector <- as.integer(unlist(strsplit(args$contrast_indices, ",")))
 log_message(paste("Contrast Indices Parsed:", paste(contrast_vector, collapse = ", ")))
 
 # Ensure that the contrasts indices are valid
-if (any(contrast_vector > length(all_contrasts$contrast_number))) {
+if (any(contrast_vector > length(all_contrasts))) {
   stop("One or more contrast indices are out of bounds.")
 }
 
@@ -383,7 +365,7 @@ if (batch_correction_method == "limmaremovebatcheffect" && "batch" %in% colnames
   # Case 3: After DESeq2, apply rlog transformation and remove batch effects using limma
   print("Applying rlog transformation and limma batch effect removal")
   rlog_transformed <- rlog(dds, blind = FALSE)
-  rlog_counts      <- assay(rlog_transformed)
+  rlog_counts <- assay(rlog_transformed)
 
   # Prepare design matrix without 'batch' for removeBatchEffect
   design_formula <- as.formula(paste0("~", str_remove(as.character(dds@design)[2], " \\+ batch")))
@@ -398,6 +380,13 @@ if (batch_correction_method == "limmaremovebatcheffect" && "batch" %in% colnames
 
 # Function to get DESeq2 results for a specific contrast
 get_contrast_res <- function(contrast_row) {
+  dds_subset <- contrast_row$subset
+
+  # Print contrast details
+  print(paste("DESeq object Subset for Contrast:", contrast_row$contrast))
+  print(dds_subset)
+  print(resultsNames(dds_subset))
+
   # Determine altHypothesis based on regulation
   altHypothesis <- if (args$regulation == "up") {
     "greater"
@@ -410,13 +399,15 @@ get_contrast_res <- function(contrast_row) {
   lfcThreshold <- if (args$use_lfc_thresh) args$lfcthreshold else 0
 
   # DESeq2 object is already computed; we can directly extract results
-  res <- results(dds,
-                 name = contrast_row$contrast,
-                 alpha = args$fdr,
-                 lfcThreshold = lfcThreshold,
+  res <- results(dds_subset,
+                 name                 = contrast_row$contrast,
+                 alpha                = args$fdr,
+                 lfcThreshold         = lfcThreshold,
                  independentFiltering = TRUE,
-                 altHypothesis = altHypothesis
+                 altHypothesis        = altHypothesis
   )
+
+  print("DESeq2 subset results obtained.")
   return(res)
 }
 
@@ -507,7 +498,7 @@ get_clustered_data <- function(expression_data, transpose = FALSE) {
   clusters <- clusters[, c(-1), drop = FALSE]
 
   return(list(
-    order = as.vector(hopach_results$clustering$order),
+    order    = as.vector(hopach_results$clustering$order),
     expression = expression_data,
     clusters = clusters
   ))
@@ -524,52 +515,8 @@ scale_min_max <- function(x,
   return(scaled_x)
 }
 
-# Function to export MA plot
-export_ma_plot <- function(data,
-                           rootname,
-                           width = 800,
-                           height = 800,
-                           resolution = 72) {
-  tryCatch(
-    expr = {
-      png(
-        filename = paste(rootname, ".png", sep = ""),
-        width = width,
-        height = height,
-        res = resolution
-      )
-      plotMA(data)
-      dev.off()
-
-      pdf(
-        file = paste(rootname, ".pdf", sep = ""),
-        width = round(width / resolution),
-        height = round(height / resolution)
-      )
-      plotMA(data)
-      dev.off()
-
-      cat(paste("\nExport MA-plot to ", rootname, ".(png/pdf)", "\n",
-                sep =
-                  ""
-      ))
-    },
-    error = function(e) {
-      dev.off()
-      cat(paste(
-        "\nFailed to export MA-plot to ",
-        rootname,
-        ".(png/pdf)",
-        "\n",
-        sep = ""
-      ))
-    }
-  )
-}
-
 # Function to add metadata columns and create the final results data frame
 add_metadata_to_results <- function(collected_isoforms, deseq_result, read_count_cols, digits) {
-
   deseq_result <- deseq_result %>%
     as.data.frame() %>%
     select(baseMean, log2FoldChange, pvalue, padj) %>%
@@ -592,8 +539,8 @@ export_deseq_report <- function(collected_isoforms, output_prefix) {
   collected_isoforms_filename <- paste0(output_prefix, "_gene_exp_table.tsv")
   write.table(
     collected_isoforms,
-    file = collected_isoforms_filename,
-    sep = "\t",
+    file  = collected_isoforms_filename,
+    sep   = "\t",
     row.names = FALSE,
     col.names = TRUE,
     quote = FALSE
@@ -625,14 +572,14 @@ export_gct_data <- function(normCounts, annotated_expression_df, column_data, ou
 
       # Create GCT object
       gct_data <- new("GCT",
-                      mat = normCounts,
+                      mat   = normCounts,
                       rdesc = row_metadata,
                       cdesc = col_metadata
       )
 
       # Write GCT files
       cmapR::write_gct(
-        ds = gct_data,
+        ds    = gct_data,
         ofile = paste0(output_prefix, "_counts_all.gct"),
         appenddim = FALSE
       )
@@ -652,14 +599,14 @@ export_gct_data <- function(normCounts, annotated_expression_df, column_data, ou
 
       # Create filtered GCT object
       gct_data_filtered <- new("GCT",
-                               mat = filtered_normCounts,
+                               mat   = filtered_normCounts,
                                rdesc = row_metadata_filtered,
                                cdesc = col_metadata
       )
 
       # Write filtered GCT file
       cmapR::write_gct(
-        ds = gct_data_filtered,
+        ds    = gct_data_filtered,
         ofile = paste0(output_prefix, "_counts_filtered.gct"),
         appenddim = FALSE
       )
@@ -697,12 +644,8 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
 
 # Function to export results (plots, reports, etc.)
 export_contrast_results <- function(res, annotated_expression_df, contrast_name, dds, normCounts, output, args) {
-  # Generate and export MA plot
-  export_ma_plot(res, paste0(output, "_", contrast_name, "_ma_plot"))
-
-  # Heatmap for the top 30 most expressed genes
   rlog_transformed <- rlog(dds, blind = FALSE)
-  rlog_counts      <- assay(rlog_transformed)
+  rlog_counts <- assay(rlog_transformed)
 
   # Export MDS plot
   export_mds_html_plot(rlog_counts, paste0(output, "_", contrast_name, "_mds_plot.html"))
@@ -712,18 +655,20 @@ export_contrast_results <- function(res, annotated_expression_df, contrast_name,
 }
 
 # Iterate through each index in contrast_vector and process the corresponding contrast
-for (contrast_index in contrast_vector) {
-  contrast_row <- all_contrasts[all_contrasts$contrast_number == contrast_index,]
-  if (nrow(contrast_row) == 0) {
-    print(paste("Contrast index", contrast_index, "not found in contrasts list. Skipping."))
-    next
-  }
+print("Starting DESeq2 analysis, all_contrasts obj is:")
+print(str(all_contrasts))
 
-  contrast_name <- paste0("contrast_", contrast_index, "_", contrast_row$contrast)
+for (contrast_index in contrast_vector) {
+  contrast_selected <- all_contrasts[[contrast_index]]
+
+  print("Selected contrast structure:")
+  print(contrast_selected)
+
+  contrast_name <- paste0("contrast_", contrast_index, "_", contrast_selected$contrast)
   print(paste("Processing contrast:", contrast_name))
 
   # Get DESeq2 results for the specific contrast
-  deseq_result <- get_contrast_res(contrast_row)
+  deseq_result <- get_contrast_res(contrast_selected)
 
   print("DESeq2 results obtained.")
   print("Summary:")
