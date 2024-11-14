@@ -2,16 +2,17 @@
 options(warn = -1)
 options("width" = 400)
 
-suppressMessages(library(argparse))
-suppressMessages(library(BiocParallel))
-suppressMessages(library(pheatmap))
-suppressMessages(library(DESeq2))
-suppressMessages(library(tidyverse))
-suppressMessages(library(Glimma))
-suppressMessages(library(cmapR))
+suppressMessages(library(argparse)) # For argument parsing
+suppressMessages(library(BiocParallel)) # For parallel processing
+suppressMessages(library(pheatmap)) # For heatmap
+suppressMessages(library(DESeq2)) # For DESeq2
+suppressMessages(library(tidyverse)) # For data manipulation
+suppressMessages(library(Glimma)) # For glimmaMDS
+suppressMessages(library(cmapR)) # For write_gct
 suppressMessages(library(sva)) # For ComBat_seq
 suppressMessages(library(limma)) # For removeBatchEffect
-
+suppressMessages(library(hopach)) # For clustering
+suppressMessages(library(rlang)) # For traceback handling
 
 mutate <- dplyr::mutate
 filter <- dplyr::filter
@@ -281,6 +282,16 @@ get_args <- function() {
     ),
     action = "store_true",
     default = FALSE
+  )
+  parser$add_argument(
+    "--cluster",
+    help    = paste(
+      "Hopach clustering method to be run on normalized read counts for the",
+      "exploratory visualization part of the analysis. Default: do not run",
+      "clustering"
+    ),
+    type    = "character",
+    choices = c("row", "column", "both")
   )
   parser$add_argument(
     "-o",
@@ -713,8 +724,9 @@ export_charts <- function(res, annotated_expression_df, column_data, normCounts,
   # Export MDS plot
   export_mds_html_plot(normCounts, paste0(output, "_mds_plot.html"))
 
+  clustered_data <- cluster_and_reorder(normCounts, column_data, annotated_expression_df, args)
   # Export GCT data
-  export_gct_data(normCounts, annotated_expression_df, column_data, output)
+  export_gct_data(clustered_data$normCounts, clustered_data$row_metadata, clustered_data$col_metadata, output)
 }
 
 # Function to generate clusters
@@ -724,16 +736,17 @@ get_clustered_data <- function(expression_data, transpose = FALSE) {
     expression_data <- t(expression_data)
   }
 
-  expression_data <- apply(
+  # Apply scaling per row and transpose back to original orientation
+  expression_data <- t(apply(
     expression_data,
     1,
     FUN = function(x) {
       scale_min_max(x)
     }
-  )
+  ))
 
   print("Running HOPACH")
-  hopach_results <- hopach(expression_data)
+  hopach_results <- hopach::hopach(expression_data)
 
   if (transpose) {
     print("Transposing expression data")
@@ -791,7 +804,6 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
   }
   return(list(normCounts = normCounts, col_metadata = col_metadata, row_metadata = row_metadata))
 }
-
 
 # Parse arguments
 args <- get_args()

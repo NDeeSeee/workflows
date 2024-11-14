@@ -25,6 +25,8 @@ suppressMessages(library(ggrepel))
 suppressMessages(library(DESeq2))
 suppressMessages(library(limma)) # For removeBatchEffect
 suppressMessages(library(cmapR))
+suppressMessages(library(rlang)) # For traceback handling
+
 
 mutate <- dplyr::mutate
 filter <- dplyr::filter
@@ -191,6 +193,16 @@ get_args <- function() {
     type = "character",
     choices = c("both", "up", "down"),
     default = "both"
+  )
+  parser$add_argument(
+    "--cluster",
+    help    = paste(
+      "Hopach clustering method to be run on normalized read counts for the",
+      "exploratory visualization part of the analysis. Default: do not run",
+      "clustering"
+    ),
+    type    = "character",
+    choices = c("row", "column", "both")
   )
   parser$add_argument(
     "-o",
@@ -618,32 +630,8 @@ export_gct_data <- function(normCounts, annotated_expression_df, column_data, ou
   )
 }
 
-# Function to cluster data and re-order based on clustering results
-cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
-  if (!is.null(args$cluster)) {
-    if (args$cluster == "column" || args$cluster == "both") {
-      print("Clustering filtered read counts by columns")
-      clustered_data <- get_clustered_data(expression_data = normCounts, transpose = TRUE)
-      col_metadata <- cbind(col_metadata, clustered_data$clusters) # Add cluster labels
-      col_metadata <- col_metadata[clustered_data$order,] # Reorder based on clustering results
-      print("Reordered samples")
-      print(col_metadata)
-    }
-    if (args$cluster == "row" || args$cluster == "both") {
-      print("Clustering filtered normalized read counts by rows")
-      clustered_data <- get_clustered_data(expression_data = normCounts, transpose = FALSE)
-      normCounts <- clustered_data$expression # Adjust for row centering
-      row_metadata <- cbind(row_metadata, clustered_data$clusters) # Add cluster labels
-      row_metadata <- row_metadata[clustered_data$order,] # Reorder based on clustering results
-      print("Reordered features")
-      print(head(row_metadata))
-    }
-  }
-  return(list(normCounts = normCounts, col_metadata = col_metadata, row_metadata = row_metadata))
-}
-
 # Function to export results (plots, reports, etc.)
-export_contrast_results <- function(res, annotated_expression_df, contrast_name, dds, normCounts, output, args) {
+export_contrast_results <- function(annotated_expression_df, contrast_name, dds, output, args) {
   rlog_transformed <- rlog(dds, blind = FALSE)
   rlog_counts <- assay(rlog_transformed)
 
@@ -693,7 +681,7 @@ for (contrast_index in contrast_vector) {
   print("Exported DESeq2 report.")
 
   # Generate and export plots (including GCT export)
-  export_contrast_results(res, annotated_expression_df, contrast_name, dds, normCounts, args$output, args)
+  export_contrast_results(annotated_expression_df, contrast_name, dds, args$output, args)
 }
 
 print("DESeq2 analysis complete.")

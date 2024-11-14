@@ -39,6 +39,30 @@ extract_contrast_name <- function(filename) {
   return(paste0("contrast_", match[1, 2]))
 }
 
+# Function to cluster data and re-order based on clustering results
+cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
+  if (!is.null(args$cluster)) {
+    if (args$cluster == "column" || args$cluster == "both") {
+      print("Clustering filtered read counts by columns")
+      clustered_data <- get_clustered_data(expression_data = normCounts, transpose = TRUE)
+      col_metadata   <- cbind(col_metadata, clustered_data$clusters) # Add cluster labels
+      col_metadata   <- col_metadata[clustered_data$order,] # Reorder based on clustering results
+      print("Reordered samples")
+      print(col_metadata)
+    }
+    if (args$cluster == "row" || args$cluster == "both") {
+      print("Clustering filtered normalized read counts by rows")
+      clustered_data <- get_clustered_data(expression_data = normCounts, transpose = FALSE)
+      normCounts     <- clustered_data$expression # Adjust for row centering
+      row_metadata   <- cbind(row_metadata, clustered_data$clusters) # Add cluster labels
+      row_metadata   <- row_metadata[clustered_data$order,] # Reorder based on clustering results
+      print("Reordered features")
+      print(head(row_metadata))
+    }
+  }
+  return(list(normCounts = normCounts, col_metadata = col_metadata, row_metadata = row_metadata))
+}
+
 # Initialize lists to store data
 contrast_rdesc_list <- list()
 gene_id_list <- list()
