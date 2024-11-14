@@ -271,8 +271,7 @@ print(head(metadata_df))
 log_message("Structure of Metadata:")
 glimpse(metadata_df)
 
-log_message(paste("Loading batch correction method from", args$batchcorrection))
-batch_correction_method <- readRDS(args$batchcorrection)
+batch_correction_method <- args$batchcorrection
 log_message(paste("Batch correction method used:", batch_correction_method))
 
 # Convert the comma-separated string into a vector of integers
