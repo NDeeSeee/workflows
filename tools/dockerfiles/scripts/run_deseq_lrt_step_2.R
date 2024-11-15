@@ -1,16 +1,6 @@
 #!/usr/bin/env Rscript
 options(warn = -1)
 options("width" = 300)
-options(
-  error = function() {
-    traceback(3)
-    quit(
-      save   = "no",
-      status = 1,
-      runLast = FALSE
-    )
-  }
-)
 
 suppressMessages(library(argparse))
 suppressMessages(library(BiocParallel))
@@ -27,6 +17,7 @@ suppressMessages(library(limma)) # For removeBatchEffect
 suppressMessages(library(cmapR))
 suppressMessages(library(rlang)) # For traceback handling
 
+options(rlang_backtrace_on_error = "full")
 
 mutate <- dplyr::mutate
 filter <- dplyr::filter
@@ -387,6 +378,7 @@ if (batch_correction_method == "limmaremovebatcheffect" && "batch" %in% colnames
   normCounts <- limma::removeBatchEffect(rlog_counts, batch = metadata_df$batch, design = design_matrix)
 } else {
   normCounts <- rlog(dds, blind = FALSE)
+  normCounts <- assay(normCounts)
 }
 
 # Function to get DESeq2 results for a specific contrast
@@ -482,16 +474,17 @@ get_clustered_data <- function(expression_data, transpose = FALSE) {
     expression_data <- t(expression_data)
   }
 
-  expression_data <- apply(
+  # Apply scaling per row and transpose back to original orientation
+  expression_data <- t(apply(
     expression_data,
     1,
     FUN = function(x) {
       scale_min_max(x)
     }
-  )
+  ))
 
   print("Running HOPACH")
-  hopach_results <- hopach(expression_data)
+  hopach_results <- hopach::hopach(expression_data)
 
   if (transpose) {
     print("Transposing expression data")
@@ -524,6 +517,30 @@ scale_min_max <- function(x,
   scaled_x <-
     (x - min_val) / (max_val - min_val) * (max_range - min_range) + min_range
   return(scaled_x)
+}
+
+# Function to cluster data and re-order based on clustering results
+cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
+  if (!is.null(args$cluster)) {
+    if (args$cluster == "column" || args$cluster == "both") {
+      print("Clustering filtered read counts by columns")
+      clustered_data <- get_clustered_data(expression_data = normCounts, transpose = TRUE)
+      col_metadata   <- cbind(col_metadata, clustered_data$clusters) # Add cluster labels
+      col_metadata   <- col_metadata[clustered_data$order,] # Reorder based on clustering results
+      print("Reordered samples")
+      print(col_metadata)
+    }
+    if (args$cluster == "row" || args$cluster == "both") {
+      print("Clustering filtered normalized read counts by rows")
+      clustered_data <- get_clustered_data(expression_data = normCounts, transpose = FALSE)
+      normCounts     <- clustered_data$expression # Adjust for row centering
+      row_metadata   <- cbind(row_metadata, clustered_data$clusters) # Add cluster labels
+      row_metadata   <- row_metadata[clustered_data$order,] # Reorder based on clustering results
+      print("Reordered features")
+      print(head(row_metadata))
+    }
+  }
+  return(list(normCounts = normCounts, col_metadata = col_metadata, row_metadata = row_metadata))
 }
 
 # Function to add metadata columns and create the final results data frame
@@ -629,21 +646,9 @@ export_gct_data <- function(normCounts, annotated_expression_df, column_data, ou
   )
 }
 
-# Function to export results (plots, reports, etc.)
-export_contrast_results <- function(annotated_expression_df, contrast_name, dds, output, args) {
-  rlog_transformed <- rlog(dds, blind = FALSE)
-  rlog_counts <- assay(rlog_transformed)
-
-  # Export MDS plot
-  export_mds_html_plot(rlog_counts, paste0(output, "_", contrast_name, "_mds_plot.html"))
-
-  # Export GCT data
-  export_gct_data(rlog_counts, annotated_expression_df, as.data.frame(colData(dds)), paste0(output, "_", contrast_name))
-}
-
 # Iterate through each index in contrast_vector and process the corresponding contrast
-print("Starting DESeq2 analysis, all_contrasts obj is:")
-print(str(all_contrasts))
+
+annotated_expression_combined_df <- data.frame()
 
 for (contrast_index in contrast_vector) {
   contrast_selected <- all_contrasts[[contrast_index]]
@@ -680,7 +685,14 @@ for (contrast_index in contrast_vector) {
   print("Exported DESeq2 report.")
 
   # Generate and export plots (including GCT export)
-  export_contrast_results(annotated_expression_df, contrast_name, dds, args$output, args)
+  annotated_expression_combined_df <- bind_rows(annotated_expression_combined_df, annotated_expression_df)
 }
 
+export_mds_html_plot(normCounts, paste0(args$output, "_mds_plot.html"))
+
+clustered_data <- cluster_and_reorder(normCounts, as.data.frame(colData(dds)), annotated_expression_combined_df, args)
+# Export GCT data
+export_gct_data(clustered_data$normCounts, clustered_data$row_metadata, clustered_data$col_metadata, args$output)
+
 print("DESeq2 analysis complete.")
+

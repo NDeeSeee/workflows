@@ -14,6 +14,8 @@ suppressMessages(library(limma)) # For removeBatchEffect
 suppressMessages(library(hopach)) # For clustering
 suppressMessages(library(rlang)) # For traceback handling
 
+options(rlang_backtrace_on_error = "full")
+
 mutate <- dplyr::mutate
 filter <- dplyr::filter
 group_by <- dplyr::group_by
