@@ -193,7 +193,8 @@ get_args <- function() {
       "clustering"
     ),
     type    = "character",
-    choices = c("row", "column", "both")
+    choices = c("row", "column", "both", "none"),
+    default = "none"
   )
   parser$add_argument(
     "-o",
@@ -515,7 +516,7 @@ scale_min_max <- function(x,
 
 # Function to cluster data and re-order based on clustering results
 cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
-  if (!is.null(args$cluster)) {
+  if (args$cluster != "none") { # Only cluster if not "none"
     if (args$cluster == "column" || args$cluster == "both") {
       print("Clustering filtered read counts by columns")
       clustered_data <- get_clustered_data(expression_data = normCounts, transpose = TRUE)
@@ -535,6 +536,8 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
       print("Reordered features")
       print(head(row_metadata))
     }
+  } else {
+    print("Clustering skipped as per 'none' option.")
   }
   return(list(normCounts = normCounts, col_metadata = col_metadata, row_metadata = row_metadata))
 }
