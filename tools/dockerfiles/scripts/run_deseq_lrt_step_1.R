@@ -652,66 +652,52 @@ export_mds_html_plot <- function(norm_counts_data, location) {
 }
 
 # Function to export normalized counts and filtered counts to GCT format
-export_gct_data <- function(normCounts, collected_isoforms, column_data, output_prefix) {
+export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefix) {
   tryCatch(
-    expr  = {
-      # Prepare row metadata
-      row_metadata <- collected_isoforms %>%
-        dplyr::mutate(GeneId = toupper(GeneId)) %>% # Ensure GeneId is uppercase
-        dplyr::distinct(GeneId, .keep_all = TRUE) %>% # Remove duplicates based on GeneId
-        remove_rownames() %>%
-        # TODO: save both RefseqId and GeneId for the annotation here
-        column_to_rownames("GeneId") %>% # Set GeneId as rownames
-        dplyr::select(pvalue, padj) %>% # Select relevant columns
-        arrange(desc(padj)) # Arrange by log2FoldChange
-
-      # Check for any remaining NAs
-      if (any(is.na(rownames(row_metadata)))) {
-        stop("There are still NA GeneIds after processing.")
-      }
-
+    expr = {
+      # Use the provided row_metadata directly
       # Prepare column metadata
-      col_metadata <- column_data %>%
-        mutate_at(colnames(.), as.vector)
+      col_metadata <- col_metadata %>% mutate_all(as.vector)
 
       # Create GCT object
       gct_data <- new("GCT",
                       mat   = normCounts,
                       rdesc = row_metadata,
-                      cdesc = col_metadata
-      )
+                      cdesc = col_metadata)
 
       # Write GCT files
       cmapR::write_gct(
-        ds        = gct_data,
-        ofile     = paste0(output_prefix, "_counts_all.gct"),
+        ds    = gct_data,
+        ofile = paste0(output_prefix, "_counts_all.gct"),
         appenddim = FALSE
       )
       print(paste("Exporting GCT data to", paste0(output_prefix, "_counts_all.gct")))
 
-      # Filter rows by padj <= FDR
-      row_metadata_filtered <- row_metadata %>%
-        dplyr::filter(padj <= args$fdr)
+      # Filter rows by padj <= FDR if padj is available
+      if ('padj' %in% colnames(row_metadata)) {
+        row_metadata_filtered <- row_metadata %>% dplyr::filter(padj <= args$fdr)
+      } else {
+        row_metadata_filtered <- row_metadata
+      }
 
       # Check if any genes remain after filtering
       if (nrow(row_metadata_filtered) == 0) {
         warning(paste("No genes passed the FDR threshold of", args$fdr, "for", output_prefix))
       }
 
-      # Subset normCounts to include only the filtered GeneIds
+      # Subset normCounts to include only the filtered rows
       filtered_normCounts <- normCounts[rownames(row_metadata_filtered),]
 
       # Create filtered GCT object
       gct_data_filtered <- new("GCT",
                                mat   = filtered_normCounts,
                                rdesc = row_metadata_filtered,
-                               cdesc = col_metadata
-      )
+                               cdesc = col_metadata)
 
       # Write filtered GCT file
       cmapR::write_gct(
-        ds        = gct_data_filtered,
-        ofile     = paste0(output_prefix, "_counts_filtered.gct"),
+        ds    = gct_data_filtered,
+        ofile = paste0(output_prefix, "_counts_filtered.gct"),
         appenddim = FALSE
       )
       print(paste("Exporting GCT data to", paste0(output_prefix, "_counts_filtered.gct")))
@@ -738,7 +724,7 @@ get_clustered_data <- function(expression_data, transpose = FALSE) {
     expression_data <- t(expression_data)
   }
 
-  # Apply scaling per row and transpose back to original orientation
+  # Apply scaling per row and maintain the original orientation
   expression_data <- t(apply(
     expression_data,
     1,
@@ -747,28 +733,22 @@ get_clustered_data <- function(expression_data, transpose = FALSE) {
     }
   ))
 
-  print("Running HOPACH")
-  hopach_results <- hopach::hopach(expression_data)
-
   if (transpose) {
-    print("Transposing expression data")
+    print("Transposing expression data back")
     expression_data <- t(expression_data)
   }
 
+  print("Running HOPACH")
+  hopach_results <- hopach::hopach(expression_data, verbose = TRUE)
+
   print("Parsing cluster labels")
-  clusters           <- as.data.frame(hopach_results$clustering$labels)
-  colnames(clusters) <- "label"
-  clusters           <- cbind(clusters, "HCL" = outer(clusters$label, 10^c((nchar(
-    trunc(clusters$label)
-  )[1] - 1):0), function(a, b) {
-    paste0("c", a %/% b %% 10)
-  }))
-  clusters           <- clusters[, c(-1), drop = FALSE]
+  clusters <- data.frame(label = hopach_results$clustering$labels)
+  clusters <- clusters %>% mutate(HCL = paste0("c", label))
 
   return(list(
-    order      = as.vector(hopach_results$clustering$order),
+    order    = as.vector(hopach_results$clustering$order),
     expression = expression_data,
-    clusters   = clusters
+    clusters = clusters
   ))
 }
 
@@ -789,17 +769,19 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
     if (args$cluster == "column" || args$cluster == "both") {
       print("Clustering filtered read counts by columns")
       clustered_data <- get_clustered_data(expression_data = normCounts, transpose = TRUE)
-      col_metadata   <- cbind(col_metadata, clustered_data$clusters) # Add cluster labels
-      col_metadata   <- col_metadata[clustered_data$order,] # Reorder based on clustering results
+      col_metadata <- cbind(col_metadata, clustered_data$clusters)
+      col_metadata <- col_metadata[clustered_data$order,]
+      normCounts   <- normCounts[, clustered_data$order]
       print("Reordered samples")
       print(col_metadata)
     }
     if (args$cluster == "row" || args$cluster == "both") {
       print("Clustering filtered normalized read counts by rows")
       clustered_data <- get_clustered_data(expression_data = normCounts, transpose = FALSE)
-      normCounts     <- clustered_data$expression # Adjust for row centering
-      row_metadata   <- cbind(row_metadata, clustered_data$clusters) # Add cluster labels
-      row_metadata   <- row_metadata[clustered_data$order,] # Reorder based on clustering results
+      normCounts   <- clustered_data$expression
+      row_metadata <- cbind(row_metadata, clustered_data$clusters)
+      row_metadata <- row_metadata[clustered_data$order,]
+      normCounts   <- normCounts[clustered_data$order,]
       print("Reordered features")
       print(head(row_metadata))
     }
