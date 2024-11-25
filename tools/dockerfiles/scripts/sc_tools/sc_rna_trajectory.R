@@ -554,24 +554,13 @@ if(args$cbbuild){
     ordered_reduc_names <- c(args$reduction, reduc_names[reduc_names!=args$reduction])
     seurat_data@reductions <- seurat_data@reductions[ordered_reduc_names]
 
-    print("Attemting to identify label field")
-    if (grepl("^custom_", args$source, ignore.case=TRUE)){
-        label_field <- gsub("custom_", "Custom ", args$source)
-    } else if (grepl("_res\\.", args$source, ignore.case=TRUE)) {
-        split_line <- unlist(strsplit(args$source, split="_res\\."))
-        label_field <- paste("Clustering (", split_line[1], " ", split_line[2], ")", sep="")
-    } else {
-        label_field <- NULL
-    }
-    print(paste("Label field", label_field))
-
     if (all(c("RNA", "ATAC") %in% names(seurat_data@assays))){
         ucsc$export_cellbrowser(
             seurat_data=seurat_data,
             assay="RNA",
             slot="counts",
             short_label="RNA",
-            label_field=label_field,
+            label_field=args$source,
             is_nested=TRUE,
             rootname=paste(args$output, "_cellbrowser/rna", sep="")
         )
@@ -581,7 +570,7 @@ if(args$cbbuild){
             slot="counts",
             short_label="ATAC",
             # markers=all_atac_markers,                                        # can be NULL
-            label_field=label_field,
+            label_field=args$source,
             is_nested=TRUE,
             rootname=paste(args$output, "_cellbrowser/atac", sep="")
         )
@@ -591,7 +580,7 @@ if(args$cbbuild){
             assay="RNA",
             slot="counts",
             short_label="RNA",
-            label_field=label_field,
+            label_field=args$source,
             rootname=paste(args$output, "_cellbrowser", sep="")
         )
     }

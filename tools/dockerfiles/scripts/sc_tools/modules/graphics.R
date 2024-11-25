@@ -60,6 +60,7 @@ export(
     "dim_loadings_plot",
     "silhouette_plot",
     "composition_plot",
+    "composition_box_plot",
     "coverage_plot",
     "volcano_plot",
     "feature_heatmap",
@@ -77,7 +78,9 @@ export(
     "CC_COLORS",
     "NA_COLOR",
     "TRUE_COLOR",
-    "FALSE_COLOR"
+    "FALSE_COLOR",
+    "UP_COLOR",
+    "DOWN_COLOR"
 )
 
 # https://sashamaps.net/docs/resources/20-colors/
@@ -101,9 +104,11 @@ D24_COLORS <- c(
   "#A6761D", "#1B9E77", "#D95F02", "#7570B3", "#E7298A",
   "#66A61E", "#E6AB02", "#A6761D", "#1B9E77"
 )
-NA_COLOR <- "#E1F6FF"
+NA_COLOR <- "#DCDCDC"       # color name is gainsboro
 TRUE_COLOR <- "#00916A"
 FALSE_COLOR <- "#EB6331"
+UP_COLOR <- "#FF0000"
+DOWN_COLOR <- "#0000FF"
 CC_COLORS <- c("#FB1C0D", "#0DE400", "#0D00FF", NA_COLOR)        # we added NA color, because sometimes the cell cycle phase is not being assigned
 
 get_theme <- function(theme){
@@ -1342,7 +1347,17 @@ vln_plot <- function(
     )
 }
 
-dim_plot <- function(data, rootname, reduction, plot_title, legend_title, plot_subtitle=NULL, cells=NULL, split_by=NULL, group_by=NULL, highlight_group=NULL, show_density=FALSE, density_bins=10, ncol=NULL, label=FALSE, label_box=FALSE, label_repel=FALSE, label_color="black", label_size=4, fixed=TRUE, alpha=NULL, palette_colors=NULL, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+dim_plot <- function(
+    data, rootname, reduction, plot_title, legend_title,
+    plot_subtitle=NULL,
+    cells=NULL, split_by=NULL, group_by=NULL,
+    highlight_group=NULL, show_density=FALSE, density_bins=10,
+    ncol=NULL,
+    label=FALSE, label_box=FALSE, label_repel=FALSE, label_color="black", label_size=4,
+    fixed=TRUE, alpha=NULL, pt_size=NULL, palette_colors=NULL,
+    theme="classic", pdf=FALSE,
+    width=1200, height=800, resolution=100
+){
     base::tryCatch(
         expr = {
 
@@ -1362,7 +1377,9 @@ dim_plot <- function(data, rootname, reduction, plot_title, legend_title, plot_s
                 excluded_cells <- data@meta.data %>%                                  # vector of barcodes to be excluded, might be character(0)
                                   dplyr::semi_join(
                                       excluded_groups,
-                                      by=stats::na.omit(c(split_by, group_by))        # will exclude possible NULL from the vector
+                                      by=base::unique(                                # otherwise fails when both split_by and group_by are identical
+                                          stats::na.omit(c(split_by, group_by))       # will exclude possible NULL from the vector
+                                      )
                                   ) %>%
                                   tibble::rownames_to_column(var="barcode") %>%
                                   dplyr::pull(barcode)
@@ -1385,6 +1402,7 @@ dim_plot <- function(data, rootname, reduction, plot_title, legend_title, plot_s
                         cells=cells,
                         split.by=split_by,
                         group.by=group_by,
+                        pt.size=pt_size,
                         label.box=label_box,
                         repel=label_repel,
                         cells.highlight=if(is.null(highlight_cells))         # need to use this trick because ifelse doesn't return NULL, 'Selected' is just a name to display on the plot
@@ -2147,13 +2165,149 @@ composition_plot <- function(data, rootname, plot_title, legend_title, x_label, 
                 base::plot(plot)
             }
 
-            base::print(base::paste("Exporting composition plot to ", rootname, ".(png/pdf)", sep=""))
             base::print("Composition plot data")
             base::print(base::as.data.frame(counts_data))                                               # counts data used for the plot
+            base::print(base::paste("Exporting composition plot to ", rootname, ".(png/pdf)", sep=""))
         },
         error = function(e){
             base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
             base::print(base::paste("Failed to composition plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
+composition_box_plot <- function(
+    data, rootname, plot_title, legend_title,
+    x_label, y_label,
+    split_by, group_by, stats_by,
+    plot_subtitle=NULL,
+    palette_colors=D40_COLORS,
+    theme="classic", pdf=FALSE,
+    width=1200, height=800, resolution=100
+){
+    base::tryCatch(
+        expr = {
+            counts_data <- data@meta.data %>%
+                           dplyr::group_by(
+                               dplyr::across(tidyselect::all_of(stats_by)),
+                               dplyr::across(tidyselect::all_of(split_by)),
+                               dplyr::across(tidyselect::all_of(group_by))
+                           ) %>%
+                           dplyr::summarize(counts=dplyr::n()) %>%
+                           dplyr::ungroup() %>%
+                           dplyr::arrange(dplyr::across(tidyselect::all_of(split_by)))
+            stats_data <- counts_data %>%
+                          dplyr::group_by(
+                              dplyr::across(tidyselect::all_of(split_by))
+                          ) %>%
+                          dplyr::summarise(
+                              p_value = if (length(base::unique(dplyr::cur_data()[[group_by]])) == 2) {
+                                            base::tryCatch(
+                                                expr={
+                                                    stats::wilcox.test(
+                                                        stats::as.formula(base::paste("counts ~", group_by)),
+                                                        data=dplyr::cur_data(),
+                                                        exact=FALSE
+                                                    )$p.value
+                                                },
+                                                error = function(e) NA
+                                            )
+                                        } else if (length(base::unique(dplyr::cur_data()[[group_by]])) > 2) {
+                                            base::tryCatch(
+                                                expr={
+                                                    base::summary(
+                                                        stats::aov(
+                                                            stats::as.formula(base::paste("counts ~", group_by)),
+                                                            data=dplyr::cur_data()
+                                                        )
+                                                    )[[1]]$`Pr(>F)`[1]
+                                                },
+                                                error = function(e) NA
+                                            )
+                                        } else {
+                                            NA
+                                        },
+                              .groups="drop"
+                          ) %>%
+                          dplyr::mutate(
+                              label = base::paste("P =", scales::scientific(p_value, digits=3))
+                          )
+            plot <- counts_data %>%
+                    ggplot2::ggplot(
+                        ggplot2::aes_string(
+                            x=split_by,
+                            y="counts",
+                            color=group_by
+                        )
+                    ) +
+                    ggplot2::stat_boxplot(
+                        width=0.25,
+                        geom="errorbar",
+                        linewidth=0.5,
+                        position=ggplot2::position_dodge(width=0.9)
+                    ) +
+                    ggplot2::geom_boxplot(
+                        width=0.25,
+                        outlier.alpha=0,
+                        linewidth=0.5,
+                        position=ggplot2::position_dodge(width=0.9)
+                    ) +
+                    ggplot2::geom_point(
+                        position=ggplot2::position_dodge(width=0.9),
+                        size=2,
+                        alpha=1,
+                        shape=1
+                    ) +
+                    ggrepel::geom_label_repel(
+                        stats_data,
+                        mapping=ggplot2::aes_string(
+                            x=split_by,
+                            y=-Inf,
+                            label="label"
+                        ),
+                        color="white",
+                        fontface="bold",
+                        fill="darkred",
+                        segment.colour=NA,
+                        direction="y",
+                        size=3,
+                        show.legend=FALSE
+                    ) +
+                    ggplot2::scale_color_manual(values=palette_colors) +
+                    ggplot2::xlab(x_label) +
+                    ggplot2::ylab(y_label) +
+                    get_theme(theme) +
+                    ggplot2::ggtitle(plot_title, subtitle=plot_subtitle) +
+                    ggplot2::guides(color=ggplot2::guide_legend(legend_title)) +
+                    Seurat::RotatedAxis()
+
+            grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
+            base::suppressMessages(base::print(plot))
+            grDevices::dev.off()
+
+            if (!is.null(pdf) && pdf) {
+                grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
+                base::suppressMessages(base::print(plot))
+                grDevices::dev.off()
+            }
+
+            if (knitr::is_html_output()){
+                knitr::opts_chunk$set(
+                    fig.width=round(width/resolution),
+                    fig.height=round(height/resolution),
+                    dpi=resolution
+                )
+                base::plot(plot)
+            }
+
+            base::print("Composition box plot data")
+            print(as.data.frame(counts_data))
+            print(as.data.frame(stats_data))
+            base::print(base::paste("Exporting composition box plot to ", rootname, ".(png/pdf)", sep=""))
+        },
+        error = function(e){
+            base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
+            base::print(base::paste("Failed to export composition box plot to ", rootname, ".(png/pdf) with error - ", e, sep=""))
         }
     )
 }
@@ -2581,7 +2735,10 @@ feature_plot <- function(data, features, labels, rootname, reduction, plot_title
             # when gradient_colors includes more than 2 colors the plot
             # is rescaled in a way that removes negative values.
             # gradient_colors is used only when user provided both
-            # color_scales and color_limits and split_by is NULL
+            # color_scales and color_limits and split_by is NULL for
+            # the features selected not from the metadata columns.
+            # If features are selected from the metadata columns,
+            # split_by can be not NULL.
             plots <- Seurat::FeaturePlot(
                         data,
                         features=features_corrected,
@@ -2616,9 +2773,9 @@ feature_plot <- function(data, features, labels, rootname, reduction, plot_title
                                       limits=c(min_feature_value, max_feature_value)
                                   )
                 }
-                if (!is.null(color_limits) && !is.null(color_scales) && is.null(split_by)){  # overwriting color limits and scales if both are provided. Works only if split_by is NULL
-                    current_color_scales <- color_scales
-                    current_color_limits <- color_limits
+                if (!is.null(color_limits) && !is.null(color_scales) && (is.null(split_by) || from_meta)){    # Overwriting color limits and scales if both are provided.
+                    current_color_scales <- color_scales                                                      # Works only if split_by is NULL or features are selected
+                    current_color_limits <- color_limits                                                      # from the metadata columns.
                     current_color_breaks <- ggplot2::waiver()
 
                     if (is.list(color_scales)) {
@@ -2634,7 +2791,6 @@ feature_plot <- function(data, features, labels, rootname, reduction, plot_title
                             current_color_breaks <- color_breaks
                         }
                     }
-
                     plots[[i]] <- plots[[i]] +
                                   ggplot2::scale_colour_gradientn(
                                       colors=gradient_colors,                            # colors can be redefined only when color_limits and color_scales are set
@@ -2988,12 +3144,12 @@ feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", s
     )
 }
 
-daseq_permutations <- function(data, rootname, plot_title, x_label, y_label, y_intercepts=NULL, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+daseq_permutations <- function(data, rootname, plot_title, x_label, y_label, plot_subtitle=NULL, y_intercepts=NULL, palette_colors=D40_COLORS, theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
 
             plot <- data$rand.plot +
-                    ggplot2::ggtitle(plot_title) +
+                    ggplot2::ggtitle(plot_title, subtitle=plot_subtitle) +
                     ggplot2::xlab(x_label) +
                     ggplot2::ylab(y_label) +
                     get_theme(theme)
@@ -3005,7 +3161,8 @@ daseq_permutations <- function(data, rootname, plot_title, x_label, y_label, y_i
                         ggplot2::geom_hline(
                             intercept_data,
                             mapping=ggplot2::aes(yintercept=y_coordinate),
-                            color=intercept_data$color
+                            color=intercept_data$color,
+                            size=1
                         ) +
                         ggrepel::geom_label_repel(
                             intercept_data,
@@ -3013,7 +3170,7 @@ daseq_permutations <- function(data, rootname, plot_title, x_label, y_label, y_i
                             color=intercept_data$color,
                             fill="white",
                             direction="x",
-                            size=3,
+                            size=4,
                             show.legend=FALSE
                         )
             }

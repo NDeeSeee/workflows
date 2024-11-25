@@ -767,7 +767,7 @@ rna_reference_map <- function(seurat_data, reference_dir, args, annotations_orde
     seurat_data@meta.data$prediction_cell_type <- forcats::fct_infreq(          # a factor ordered by frequency
         annotated_data@meta.data[[base::paste0("predicted.", args$source)]]
     )
-    seurat_data@meta.data$prediction_passed_qc <- base::with(                   # temporary column to mark cells with the low QC scores
+    seurat_data@meta.data$prediction_passed_qc <- base::with(                   # a column to mark cells which passed QC
         seurat_data@meta.data,
         prediction_confidence_score >= args$minconfscore & prediction_mapping_score >= args$minmapscore
     )
@@ -1523,16 +1523,25 @@ get_de_cell_data <- function(seurat_data, args, samples_order=NULL){
 get_de_sample_data <- function(seurat_data, samples_order, args){                                 # splitby and batchby should be concordant with new.ident
     sample_data <- seurat_data@meta.data %>%
                    dplyr::select(
-                       new.ident,
-                       tidyselect::all_of(args$splitby),
+                       new.ident,                                                                 # this column is always present
+                       tidyselect::all_of(args$splitby),                                          # neven NULL
                        tidyselect::any_of(args$batchby)                                           # use any_of(args$batchby) because it can be NULL
                    ) %>%
-                   dplyr::distinct() %>%
+                   dplyr::distinct() %>%                                                          # seems to be redundant because of new.ident, but it's ok to keep it
                    dplyr::mutate(new.ident=base::factor(new.ident, levels=samples_order)) %>%     # setting levels for new.ident from samples_order
                    dplyr::arrange(new.ident) %>%                                                  # sorting by levels defined from samples_order
                    tibble::remove_rownames() %>%
                    tibble::column_to_rownames("new.ident") %>%
                    dplyr::mutate_at(base::colnames(.), base::factor)                              # DEseq prefers factors
+    if (                                                                                          # if new.ident is used as args$splitby and/or args$batchby
+        (args$splitby == "new.ident") ||                                                          # we need to keep it as a column, because outside of this
+        (!is.null(args$batchby) && (args$batchby == "new.ident"))                                 # function we might need to read it by args$splitby and/or args$batchby
+    ){
+        sample_data$new.ident <- base::factor(                                                    # put back the new.ident column
+            base::rownames(sample_data),
+            levels=samples_order
+        )
+    }
     sample_data[[args$splitby]] <- stats::relevel(sample_data[[args$splitby]], args$first)        # relevel to have args$first as a base for DESeq comparison
     base::print(sample_data)
     return (sample_data)
@@ -2214,84 +2223,92 @@ rna_de_analyze <- function(seurat_data, args, excluded_genes=NULL){
 }
 
 da_analyze <- function(seurat_data, args){
-    SeuratObject::DefaultAssay(seurat_data) <- "RNA"                                # safety measure
-    SeuratObject::Idents(seurat_data) <- "new.ident"                                # safety measure
     base::print("Defining experimental design")
+    SeuratObject::Idents(seurat_data) <- "new.ident"
     idents <- base::as.vector(as.character(SeuratObject::Idents(seurat_data)))
     sample_data <- get_de_sample_data(
         seurat_data=seurat_data,
-        samples_order=base::unique(idents),                                               # we don't really care about idents order here
+        samples_order=base::unique(idents),                                                    # we don't really care about idents order here
         args=args
     )
     first_group <- base::as.vector(
         as.character(
-            rownames(sample_data[sample_data[[args$splitby]] == args$first, , drop=FALSE])
+            rownames(
+                sample_data[sample_data[[args$splitby]] == args$first, , drop=FALSE]
+            )
         )
     )
     second_group <- base::as.vector(
         as.character(
-            rownames(sample_data[sample_data[[args$splitby]] == args$second, , drop=FALSE])
+            rownames(
+                sample_data[sample_data[[args$splitby]] == args$second, , drop=FALSE]
+            )
         )
     )
     base::print(
         base::paste(
-            "First group of cells identities:", base::paste(first_group, collapse=", ")
+            "First group of cells identities:",
+            base::paste(first_group, collapse=", ")
         )
     )
     base::print(
         base::paste(
-            "Second group of cells identities:", base::paste(second_group, collapse=", ")
+            "Second group of cells identities:",
+            base::paste(second_group, collapse=", ")
         )
     )
     embeddings <- SeuratObject::Embeddings(
         seurat_data,
-        reduction=args$reduction
+        reduction=args$embeddings
     )
-    embeddings <- embeddings[, args$dimensions]   # subset to specific dimensions
+    embeddings <- embeddings[, args$dimensions]         # subset to specific dimensions
     base::print("Selected embeddings")
     base::print(utils::head(embeddings))
 
+    # DA-seq computes for each cell a score based on the relative
+    # prevalence of cells from both biological states in the cell’s
+    # neighborhood. DA score measures of how much a cell’s neighborhood
+    # is dominated by cells from one of the biological states
     da_cells <- DAseq::getDAcells(
         X=embeddings,
         cell.labels=idents,
         labels.1=first_group,
         labels.2=second_group,
-        pred.thres=args$ranges,                   # if NULL, will be calculated automatically
-        k.vector=args$knn,                        # if NULL, will be calculated based on the cells number
-        n.runs=5,                                 # the same as default value
-        n.rand=5,                                 # instead of default 2
-        do.plot=TRUE                              # will save only rand.plot
+        pred.thres=NULL,                                  # set to NULL to calculate the thresholds automatically
+        k.vector=NULL,                                    # set to NULL to calculate this value based on the cells number
+        n.runs=5,                                         # the same as the default value
+        n.rand=5,                                         # instead of the default 2
+        do.plot=TRUE                                      # will save only the rand.plot
     )
-
-    # DA-seq computes for each cell a score based on the relative prevalence of cells from both biological
-    # states in the cell’s neighborhood. DA score measures of how much a cell’s neighborhood is dominated
-    # by cells from one of the biological states
-    da_sufix <- base::paste0(args$second, "_vs_", args$first)
-    seurat_data[[base::paste("custom", "da_score", da_sufix, sep="_")]] <- da_cells$da.pred
-
-    for (i in 1:length(args$resolution)) {
-        current_resolution <- args$resolution[i]
-        base::print(base::paste("Identifying DA subpopulations using resolution", current_resolution))
-        # DA-seq clusters the cells whose DA measure is above or below a certain threshold
-        da_regions <- DAseq::getDAregion(
-            X=embeddings,
-            da.cells=da_cells,
-            cell.labels=idents,
-            labels.1=first_group,
-            labels.2=second_group,
-            resolution=current_resolution
-        )
-        seurat_data[[base::paste0("da_", da_sufix, "_res.", current_resolution)]] <- da_regions$da.region.label
-        base::print(da_regions$DA.stat)
-        base::rm(da_regions)
+    pred_thresholds <- c(
+        max(unlist(da_cells$rand.pred)),
+        min(unlist(da_cells$rand.pred))
+    )
+    crnt_thresholds <- pred_thresholds
+    if (!is.null(args$ranges)){
+        crnt_thresholds <- args$ranges                    # redefine with the user provided thresholds
     }
+    seurat_data@meta.data$da_score <- da_cells$da.pred    # DA measure for each cell
+    seurat_data@meta.data <- seurat_data@meta.data %>%
+                             dplyr::mutate(
+                                 da_status = dplyr::case_when(
+                                                 da_score >= crnt_thresholds[1] ~ "UP",
+                                                 da_score <= crnt_thresholds[2] ~ "DOWN",
+                                                 .default = "NA"
+                                             )
+                             )
+    seurat_data@meta.data$da_status <- base::factor(                             # to have the proper order on the plots
+        seurat_data@meta.data$da_status,
+        levels=c("NA", "UP", "DOWN")                                             # will always have all three levels regardless of the values
+    )
     base::rm(idents, sample_data, first_group, second_group, embeddings)         # remove unused data
     base::gc(verbose=FALSE)
     return (
         list(
             seurat_data=seurat_data,
             da_cells=da_cells,
-            thresholds=c(max(unlist(da_cells$rand.pred)), min(unlist(da_cells$rand.pred)))
+            pred_thresholds=pred_thresholds,              # predicted by DASeq
+            crnt_thresholds=crnt_thresholds               # what we selected (can be the same as the pred_thresholds)
         )
     )
 }

@@ -362,7 +362,12 @@ export_h5seurat <- function(data, location, overwrite=TRUE){
             base::print(base::paste("Exporting data as h5seurat to", location, sep=" "))
         },
         error = function(e){
-            base::print(base::paste("Failed to export data as h5seurat to", location, sep=" "))
+            base::print(
+                base::paste(
+                    "Failed to export data as h5seurat",
+                    "format to", location, "due to", e
+                )
+            )
         }
     )
 }

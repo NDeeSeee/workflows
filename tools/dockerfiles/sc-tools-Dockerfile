@@ -78,6 +78,8 @@
 #   sc_wnn_cluster.R, and sc_rna_azimuth.R scripts to
 #   calculate module scores for the --genesets GMT file.
 #   GSEABase is used for loading data from GMT file.
+# - Updated sc_rna_da_cells.R to support dim reductions
+#   for rna, atac, and wnn results. Fixed bugs.
 #
 # v0.0.40 -- based on biowardrobe2/sc-tools:v0.0.39
 # - Added sc_report_wrapper.R script to export HTML report
