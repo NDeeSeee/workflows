@@ -47,7 +47,7 @@ export_plots <- function(seurat_data, da_cells, pred_thresholds, crnt_thresholds
         stats_by="new.ident",
         x_label="Cluster",
         y_label="Cell counts",
-        palette_colors=c(graphics$UP_COLOR, graphics$DOWN_COLOR),
+        palette_colors=c(graphics$DOWN_COLOR, graphics$UP_COLOR),
         theme=args$theme,
         rootname=paste(args$output, "cmp_bp_gr_tst_spl_clst", sep="_"),
         pdf=args$pdf
@@ -76,7 +76,7 @@ export_plots <- function(seurat_data, da_cells, pred_thresholds, crnt_thresholds
         show_density=FALSE,
         label=FALSE,
         pt_size=0.5,
-        palette_colors=c(graphics$UP_COLOR, graphics$DOWN_COLOR),                                 # to correspond to the second vs first direction
+        palette_colors=c(graphics$DOWN_COLOR, graphics$UP_COLOR),
         theme=args$theme,
         rootname=paste(args$output, "umap_gr_tst", sep="_"),
         pdf=args$pdf
@@ -204,7 +204,7 @@ export_plots <- function(seurat_data, da_cells, pred_thresholds, crnt_thresholds
         bar_position="dodge",
         x_label="Cluster",
         y_label="Cell counts",
-        palette_colors=c(graphics$UP_COLOR, graphics$DOWN_COLOR),
+        palette_colors=c(graphics$DOWN_COLOR, graphics$UP_COLOR),
         theme=args$theme,
         rootname=paste(args$output, "cmp_gr_tst_spl_clst", sep="_"),
         pdf=args$pdf
@@ -628,7 +628,7 @@ print(
 )
 seurat_data@meta.data[[args$splitby]] <- base::factor(                       # to have the proper order on the plots
     seurat_data@meta.data[[args$splitby]],
-    levels=c(args$second, args$first)
+    levels=c(args$first, args$second)
 )
 da_results <- analyses$da_analyze(seurat_data, args)                         # will add new metadata column with DA predictions
 seurat_data <- da_results$seurat_data                                        # for easy access
