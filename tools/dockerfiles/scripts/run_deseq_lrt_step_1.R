@@ -713,6 +713,8 @@ export_charts <- function(res, annotated_expression_df, column_data, normCounts,
   # Export MDS plot
   export_mds_html_plot(normCounts, paste0(output, "_mds_plot.html"))
 
+  export_mds_html_plot(corrected_counts, paste0(output, "_mds_plot_corrected.html"))
+
   clustered_data <- cluster_and_reorder(normCounts, column_data, annotated_expression_df, args)
   # Export GCT data
   export_gct_data(clustered_data$normCounts, clustered_data$row_metadata, clustered_data$col_metadata, output)
