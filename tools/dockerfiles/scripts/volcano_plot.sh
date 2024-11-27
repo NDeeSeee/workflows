@@ -15,6 +15,7 @@ Y_AXIS_COLUMN=""
 LABEL_COLUMN=""
 OUTPUT_FILENAME="index.html"  # Default value
 
+
 # Parse command-line arguments
 while [[ "$#" -gt 0 ]]; do
     case "$1" in
@@ -65,20 +66,20 @@ cp "$DIFF_EXPR_FILE" ./volcano_plot/
 # Change directory into 'volcano_plot'
 cd volcano_plot
 
-# Run the setVars.sh script from within 'volcano_plot'
-echo "Running setVars.sh with arguments: '$(basename "$DIFF_EXPR_FILE")' '$X_AXIS_COLUMN' '$Y_AXIS_COLUMN' '$LABEL_COLUMN' 'chart' 'sidebar' 'volcano' 'volcano_plot/html_data'"
+# Create a unique output directory based on the output basename
+OUTPUT_BASENAME="${OUTPUT_FILENAME%.html}"
+OUTPUT_DIR="$OUTPUT_BASENAME"
 
-./setVars.sh "$(basename "$DIFF_EXPR_FILE")" "$X_AXIS_COLUMN" "$Y_AXIS_COLUMN" "$LABEL_COLUMN" "chart" "sidebar" "volcano" "volcano_plot/html_data" || { echo "setVars.sh failed"; exit 1; }
+# Run the setVars.sh script from within 'volcano_plot'
+echo "Running setVars.sh with arguments: '$(basename "$DIFF_EXPR_FILE")' '$X_AXIS_COLUMN' '$Y_AXIS_COLUMN' '$LABEL_COLUMN' 'chart' 'sidebar' 'volcano' '$OUTPUT_DIR/html_data' 'OUTPUT_BASENAME"
+
+./setVars.sh "$(basename "$DIFF_EXPR_FILE")" "$X_AXIS_COLUMN" "$Y_AXIS_COLUMN" "$LABEL_COLUMN" "chart" "sidebar" "volcano" "$OUTPUT_DIR/html_data" "$OUTPUT_BASENAME" || { echo "setVars.sh failed"; exit 1; }
 
 # Verify the presence of the generated index.html
 if [[ ! -f "volcano_plot/html_data/index.html" ]]; then
     echo "index.html not found in 'volcano_plot/html_data/'."
     exit 1
 fi
-
-# Create a unique output directory based on the output basename
-OUTPUT_BASENAME="${OUTPUT_FILENAME%.html}"
-OUTPUT_DIR="../volcano_plot/$OUTPUT_BASENAME"
 
 mkdir -p "$OUTPUT_DIR"
 # Copy 'html_data' to the output directory
