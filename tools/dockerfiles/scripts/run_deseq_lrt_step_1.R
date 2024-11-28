@@ -711,9 +711,13 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefi
 
 export_charts <- function(res, annotated_expression_df, column_data, normCounts, output, args) {
   # Export MDS plot
+  print("Exporting MDS plot")
   export_mds_html_plot(normCounts, paste0(output, "_mds_plot.html"))
 
-  export_mds_html_plot(corrected_counts, paste0(output, "_mds_plot_corrected.html"))
+  print("Exporting MDS plot with batch correction")
+  if (!is.null(corrected_counts)) {
+    export_mds_html_plot(corrected_counts, paste0(output, "_mds_plot_corrected.html"))
+  }
 
   clustered_data <- cluster_and_reorder(normCounts, column_data, annotated_expression_df, args)
   # Export GCT data
@@ -882,6 +886,8 @@ if (length(samples_in_data_not_in_metadata) > 0) {
   stop("Sample names mismatch between expression data and metadata.")
 }
 
+corrected_counts <- NULL
+
 # Reorder read counts data based on metadata
 read_counts_data_df <- read_counts_data_df[, rownames(metadata_df)]
 
@@ -953,7 +959,8 @@ if (args$batchcorrection == "limmaremovebatcheffect" && "batch" %in% colnames(me
   design_matrix <- model.matrix(design_formula, data = metadata_df)
 
   # Apply removeBatchEffect
-  normCounts <- limma::removeBatchEffect(rlog_counts, batch = metadata_df$batch, design = design_matrix)
+  corrected_counts <- limma::removeBatchEffect(rlog_counts, batch = metadata_df$batch, design = design_matrix)
+  normCounts       <- corrected_counts
 } else {
   # Case 1 and Case 2: Use rlog-transformed counts without additional batch correction
   print("Applying rlog transformation without additional batch effect removal")
