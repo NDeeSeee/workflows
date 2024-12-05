@@ -80,6 +80,9 @@
 #   GSEABase is used for loading data from GMT file.
 # - Updated sc_rna_da_cells.R to support dim reductions
 #   for rna, atac, and wnn results. Fixed bugs.
+# - Added --barcodes parameter to the sc_ctype_assign.R
+#   Cells not present in the provided barcodes file will
+#   have "NA"
 #
 # v0.0.40 -- based on biowardrobe2/sc-tools:v0.0.39
 # - Added sc_report_wrapper.R script to export HTML report

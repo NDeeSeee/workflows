@@ -499,7 +499,8 @@ extend_metadata <- function(seurat_data, location, seurat_ref_column, meta_ref_c
         sep=get_file_type(location),
         header=TRUE,
         check.names=FALSE,
-        stringsAsFactors=FALSE
+        stringsAsFactors=FALSE,
+        na.strings=NULL                                                                          # to prevent coercing NA string to <NA> value
     )
     base::print(base::paste("Metadata is successfully loaded from", location))
     base::print(metadata)
@@ -667,7 +668,7 @@ extend_metadata_by_barcode <- function(seurat_data, location, filter=FALSE){
                                dplyr::left_join(metadata, by="barcode") %>%               # intersect with loaded extra metadata by "barcode"
                                tibble::remove_rownames() %>%
                                tibble::column_to_rownames("barcode") %>%
-                               replace(is.na(.), "Unknown")                               # in case Seurat object had more barcodes than loaded extra metadata
+                               replace(is.na(.), "NA")                                    # in case Seurat object had more barcodes than loaded extra metadata
         seurat_data <- SeuratObject::AddMetaData(
             seurat_data,
             refactored_metadata[SeuratObject::Cells(seurat_data), , drop=FALSE]           # to guarantee the proper cells order

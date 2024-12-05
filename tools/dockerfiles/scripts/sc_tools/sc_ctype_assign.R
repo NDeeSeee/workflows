@@ -21,6 +21,7 @@ suppressMessages(graphics <- modules::use(file.path(HERE, "modules/graphics.R"))
 suppressMessages(io <- modules::use(file.path(HERE, "modules/io.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
+suppressMessages(logger <- modules::use(file.path(HERE, "modules/logger.R")))
 
 ## ----
 export_all_qc_plots <- function(seurat_data, args){
@@ -896,9 +897,22 @@ get_args <- function(){
         type="character", required="True"
     )
     parser$add_argument(
+        "--barcodes",
+        help=paste(
+            "Path to the TSV/CSV file to optionally extend Seurat object metadata",
+            "by the selected barcodes. First column should be named as 'barcode'.",
+            "Other columns will be added to the Seurat object metadata ovewriting",
+            "the existing ones if those are present.",
+            "Default: no extra metadata is added"
+        ),
+        type="character"
+    )
+    parser$add_argument(
         "--source",
         help=paste(
-            "Column from the metadata of the loaded Seurat object to select clusters from."
+            "Column from the metadata of the loaded Seurat object to",
+            "select clusters from. May be one of the columns added",
+            "with the --barcodes parameter."
         ),
         type="character", required="True"
     )
@@ -916,6 +930,7 @@ get_args <- function(){
         help=paste(
             "Column from the Seurat object metadata to additionally split",
             "every cluster selected with --source into smaller groups.",
+            "May be one of the columns added with the --barcodes parameter.",
             "Default: do not split"
         ),
         type="character"
@@ -1163,6 +1178,10 @@ get_args <- function(){
         type="integer", default=42
     )
     args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
+    logger$setup(
+        paste0(args$output, "_hlog.txt"),
+        header="Single-Cell Manual Cell Type Assignment (sc_ctype_assign.R)"
+    )
     print(args)
     return (args)
 }
@@ -1178,7 +1197,7 @@ debug$print_info(seurat_data, args)
 
 ## ----
 if (!any(c("RNA", "ATAC") %in% names(seurat_data@assays))){
-    print(
+    logger$info(
         paste(
             "Loaded Seurat object includes neither of the required assays:",
             "'RNA' and/or 'ATAC'.",
@@ -1190,7 +1209,7 @@ if (!any(c("RNA", "ATAC") %in% names(seurat_data@assays))){
 
 ## ----
 if (!is.null(args$reduction) && !(args$reduction %in% names(seurat_data@reductions))){
-    print(
+    logger$info(
         paste(
             "Loaded Seurat object doesn't include the",
             "selected", args$reduction, "reduction.",
@@ -1220,7 +1239,7 @@ if (is.null(args$reduction)){
         }
     }
     if (is.null(args$reduction)){
-        print(
+        logger$info(
             paste(
                 "Failed to automatically define the",
                 "--reduction parameter. Exiting."
@@ -1237,6 +1256,17 @@ if ("Phase" %in% colnames(seurat_data@meta.data)){                              
         levels=c("G1", "S", "G2M")
     )
 }
+
+## ----
+if (!is.null(args$barcodes)){                                                      # we run it before extend_metadata we can overwrite --source columns here
+    print("Extending metadata based on the provided barcodes")
+    seurat_data <- io$extend_metadata_by_barcode(                                  # sets identities to new.ident
+        seurat_data,
+        args$barcodes,
+        FALSE                                                                      # we don't filter. all missing cells will have "NA" value
+    )
+}
+debug$print_info(seurat_data, args)
 
 ## ----
 seurat_data <- io$extend_metadata(
