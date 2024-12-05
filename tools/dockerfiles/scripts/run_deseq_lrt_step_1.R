@@ -320,7 +320,8 @@ get_args <- function() {
   return(args)
 }
 
-generate_lrt_md <- function(deseq_results, full_formula, reduced_formula, output_file, alpha = 0.1, batch_warning = NULL) {
+generate_lrt_md <- function(deseq_results, full_formula, reduced_formula, output_file, alpha = args$fdr,
+                            batch_warning = NULL) {
   # Initialize the markdown content
   md_content <- ""
 
@@ -403,10 +404,9 @@ generate_main_effect_contrasts <- function(dds, factors, factor_levels) {
 
         for (ref_level in factor_levels[[factor]]) {
           colData(dds_subset)[[factor]] <- relevel(colData(dds_subset)[[factor]], ref = ref_level)
+          colData(dds_subset)[[other_factor]] <- relevel(colData(dds_subset)[[other_factor]], ref = other_level)
 
           levels <- factor_levels[[factor]]
-
-
 
           for (level in levels) {
             if (level != ref_level) {
