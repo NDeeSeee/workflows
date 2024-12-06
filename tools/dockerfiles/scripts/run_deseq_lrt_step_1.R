@@ -938,6 +938,38 @@ dse <- DESeqDataSetFromMatrix(
   design = design_formula
 )
 
+# Extract the raw counts matrix
+cts <- counts(dse)  # a matrix of counts, rows = genes, columns = samples
+
+# Sum counts per sample (sum columns to get total reads per sample)
+sample_sums <- colSums(cts)
+
+# Create a data frame for plotting
+plot_df <- data.frame(
+  Sample = names(sample_sums),
+  Count  = sample_sums
+)
+
+# Now 'plot_df' has three columns: Sample, Count, and Statistic
+# You can plot them using ggplot2, similar to the previous logic
+
+stat_barchart <- ggplot(plot_df, aes(x = Sample, y = Count, fill = "blue")) +
+  geom_col(position = "dodge") +
+  labs(title = "Total Reads by Sample",
+       x     = "Sample",
+       y     = "Count",
+       fill  = "blue") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Save the plot
+ggsave("alignment_stats_barchart.png",
+       plot   = stat_barchart,
+       dpi    = 400,
+       height = 3,
+       width  = max(10, length(sample_sums) * 0.5),
+       units  = "in")
+
 print("Run DESeq2 using Wald")
 dsq_wald <- DESeq(
   dse,
