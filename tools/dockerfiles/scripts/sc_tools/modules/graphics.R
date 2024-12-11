@@ -1460,6 +1460,18 @@ dim_plot <- function(
                             colour="black",                                 # all contours will be black
                             size=0.1
                         )
+
+                data_ranges <- list(
+                    x=range(SeuratObject::Embeddings(data@reductions[[reduction]])[, 1], na.rm=TRUE),
+                    y=range(SeuratObject::Embeddings(data@reductions[[reduction]])[, 2], na.rm=TRUE)
+                )
+                data_paddings <- list(                                      # adding 5% extra space on each of the sides
+                    x=c(-base::diff(data_ranges$x) * 0.05, base::diff(data_ranges$x) * 0.05),
+                    y=c(-base::diff(data_ranges$y) * 0.05, base::diff(data_ranges$y) * 0.05)
+                )
+                plot <- plot +
+                        ggplot2::scale_x_continuous(limits = data_ranges$x + data_paddings$x) +
+                        ggplot2::scale_y_continuous(limits = data_ranges$y + data_paddings$y)
             }
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
