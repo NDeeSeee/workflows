@@ -582,6 +582,9 @@ get_dimensionality <- function(seurat_data, reduction, k=20){                   
 rna_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
     SeuratObject::DefaultAssay(seurat_data) <- "RNA"                            # safety measure
     SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
+    default_cells_order <- base::as.vector(                                     # to catch a bug when the cells order was somehow changed
+        as.character(base::rownames(seurat_data@meta.data))
+    )
     backup_reductions <- c()                                                    # RNA integration may remove atac related reductions so we need to back them up
     reduction_names <- c(
         "atac_lsi",
@@ -629,6 +632,13 @@ rna_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
     if (length(backup_reductions) > 0){                                         # restoring backed up reductions
         for (reduction_name in names(backup_reductions)){
             base::print(base::paste("Restoring reduction", reduction_name, "from backup"))
+            current_cells_order <- base::as.vector(
+                as.character(base::rownames(backup_reductions[[reduction_name]]))
+            )
+            if (!base::identical(current_cells_order, default_cells_order)){
+                print("Cells order was changed. Exiting.")
+                quit(save="no", status=1, runLast=FALSE)
+            }
             seurat_data[[reduction_name]] <- backup_reductions[[reduction_name]]
         }
     }
@@ -641,6 +651,13 @@ rna_analyze <- function(seurat_data, args, cell_cycle_data=NULL){
     if (length(backup_assays) > 0){                                              # restoring backed up assays
         for (assay_name in names(backup_assays)){
             base::print(base::paste("Restoring assay", assay_name, "from backup"))
+            current_cells_order <- base::as.vector(
+                as.character(base::colnames(backup_assays[[assay_name]]))
+            )
+            if (!base::identical(current_cells_order, default_cells_order)){
+                print("Cells order was changed. Exiting.")
+                quit(save="no", status=1, runLast=FALSE)
+            }
             seurat_data@assays[[assay_name]] <- backup_assays[[assay_name]]
         }
     }
@@ -1297,6 +1314,9 @@ atac_preprocess <- function(seurat_data, args) {
 atac_analyze <- function(seurat_data, args){
     SeuratObject::DefaultAssay(seurat_data) <- "ATAC"                           # safety measure
     SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
+    default_cells_order <- base::as.vector(                                     # to catch a bug when the cells order was somehow changed
+        as.character(base::rownames(seurat_data@meta.data))
+    )
     backup_reductions <- c()                                                    # ATAC integration may remove RNA related reductions so we need to back them up
     reduction_names <- c(
         "ccpca",
@@ -1344,6 +1364,13 @@ atac_analyze <- function(seurat_data, args){
     if (length(backup_reductions) > 0){                                          # restoring backed up reductions
         for (reduction_name in names(backup_reductions)){
             base::print(base::paste("Restoring reduction", reduction_name, "from backup"))
+            current_cells_order <- base::as.vector(
+                as.character(base::rownames(backup_reductions[[reduction_name]]))
+            )
+            if (!base::identical(current_cells_order, default_cells_order)){
+                print("Cells order was changed. Exiting.")
+                quit(save="no", status=1, runLast=FALSE)
+            }
             seurat_data[[reduction_name]] <- backup_reductions[[reduction_name]]
         }
     }
@@ -1356,6 +1383,13 @@ atac_analyze <- function(seurat_data, args){
     if (length(backup_assays) > 0){                                              # restoring backed up assays
         for (assay_name in names(backup_assays)){
             base::print(base::paste("Restoring assay", assay_name, "from backup"))
+            current_cells_order <- base::as.vector(
+                as.character(base::colnames(backup_assays[[assay_name]]))
+            )
+            if (!base::identical(current_cells_order, default_cells_order)){
+                print("Cells order was changed. Exiting.")
+                quit(save="no", status=1, runLast=FALSE)
+            }
             seurat_data@assays[[assay_name]] <- backup_assays[[assay_name]]
         }
     }

@@ -643,10 +643,26 @@ extend_metadata_by_barcode <- function(seurat_data, location, filter=FALSE){
         sep=get_file_type(location),
         header=TRUE,
         check.names=FALSE,
-        stringsAsFactors=FALSE
-    ) %>% dplyr::rename("barcode"=1)                                                      # rename the first column to barcode
+        stringsAsFactors=FALSE,
+        na.strings=NULL                                                                          # to prevent coercing NA string to <NA> value
+    ) %>%
+    dplyr::rename("barcode"=1) %>%
+    dplyr::mutate(barcode_backup=barcode) %>%                                                    # when metadata has only one column with barcodes, we still
+    tibble::remove_rownames() %>%                                                                # want to have barcodes as column so we can use drop_na later
+    tibble::column_to_rownames("barcode")                                                        # we need it as the rownames to be able to select with []
 
-    base::print(base::paste("Barcodes metadata is successfully loaded from ", location))
+    metadata <- metadata[SeuratObject::Cells(seurat_data), , drop=FALSE] %>%                     # guarantees the order, will include  for missing cells
+                tidyr::drop_na(barcode_backup) %>%                                               # removes <NA> without changing the order
+                tibble::rownames_to_column("barcode") %>%                                        # return the barcodes to the column
+                dplyr::select(-c("barcode_backup"))                                              # don't need it anymore
+
+    base::print(
+        base::paste(
+            "Barcodes metadata with", base::nrow(metadata),
+            "cells is successfully loaded from", location
+        )
+    )
+    base::print(utils::head(metadata))
 
     if (filter){
         base::print(base::paste("Filtering Seurat data by loaded barcodes"))
