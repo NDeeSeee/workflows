@@ -66,13 +66,13 @@ for SRA in ${SRA_IDS[@]}; do
     echo $STUDY >> study_ids.tsv
 
     echo "Attempting to prefetch $SRA as TenX type"
-    prefetch --type TenX $SRA > /dev/null 2>&1
+    prefetch --max-size 104857600 --type TenX $SRA > /dev/null 2>&1
     EXIT_CODE=$?
     if [[ $EXIT_CODE -ne 0 ]]
     then
         echo "Failed to prefetch $SRA as TenX type with exit code $EXIT_CODE"
         echo "Attempting to prefetch $SRA as sra type"
-        prefetch --type sra $SRA > /dev/null 2>&1
+        prefetch --max-size 104857600 --type sra $SRA > /dev/null 2>&1
         EXIT_CODE=$?
         if [[ $EXIT_CODE -ne 0 ]]
         then

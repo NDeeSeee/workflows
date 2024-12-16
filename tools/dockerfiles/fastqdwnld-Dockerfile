@@ -1,12 +1,17 @@
 ####################################################################################################################################
 # Software:         sratoolkit, Cell Ranger, E-utilities
-# Software Version: 0.0.4
+# Software Version: 0.0.5
 # Description:      Set of utilities to download SRA data
 # Base Image:       cumulusprod/cellranger:8.0.1
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/fastqdwnld:v0.0.4 -f fastqdwnld-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/fastqdwnld:v0.0.4
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/fastqdwnld:v0.0.4 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/fastqdwnld:v0.0.5 -f fastqdwnld-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/fastqdwnld:v0.0.5
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/fastqdwnld:v0.0.5 /bin/bash
 ####################################################################################################################################
+#
+# 0.0.5
+# - Use biowardrobe2/fastqdwnld:v0.0.4 as a base image
+# - Set --max-size 104857600 parameter to make prefetch
+#   download files up to 100GB.
 #
 # 0.0.4
 # - Update base image from cumulusprod/cellranger:7.0.0
