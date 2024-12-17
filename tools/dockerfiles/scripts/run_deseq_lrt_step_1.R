@@ -653,6 +653,7 @@ export_mds_html_plot <- function(norm_counts_data, location) {
 }
 
 # Function to export normalized counts and filtered counts to GCT format
+# TODO: this function should also return levels of HOPACH clustering in the row annotation
 export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefix) {
   tryCatch(
     expr = {
@@ -714,11 +715,12 @@ export_charts <- function(res, annotated_expression_df, column_data, normCounts,
   print("Exporting MDS plot")
   export_mds_html_plot(normCounts, paste0(output, "_mds_plot.html"))
 
-  print("Exporting MDS plot with batch correction")
   if (!is.null(corrected_counts)) {
+    print("Exporting MDS plot with batch correction")
     export_mds_html_plot(corrected_counts, paste0(output, "_mds_plot_corrected.html"))
   }
 
+  # TODO: here fix clustering function it doesn't work now
   clustered_data <- cluster_and_reorder(normCounts, column_data, annotated_expression_df, args)
   # Export GCT data
   export_gct_data(clustered_data$normCounts, clustered_data$row_metadata, clustered_data$col_metadata, output)
@@ -953,12 +955,11 @@ plot_df <- data.frame(
 # Now 'plot_df' has three columns: Sample, Count, and Statistic
 # You can plot them using ggplot2, similar to the previous logic
 
-stat_barchart <- ggplot(plot_df, aes(x = Sample, y = Count, fill = "blue")) +
-  geom_col(position = "dodge") +
+stat_barchart <- ggplot(plot_df, aes(x = Sample, y = Count)) +
+  geom_col(position = "dodge", fill = "royalblue") +
   labs(title = "Total Reads by Sample",
        x     = "Sample",
-       y     = "Count",
-       fill  = "blue") +
+       y = "Count") +
   theme_classic() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
@@ -1012,7 +1013,8 @@ dsq_lrt <- DESeq(
 print("Generate contrasts")
 contrast_df <- generate_contrasts(dsq_wald)
 
-dsq_lrt_res <- results(dsq_lrt,
+dsq_lrt_res <- results(
+  dsq_lrt,
   alpha = args$fdr,
   independentFiltering = TRUE
 )

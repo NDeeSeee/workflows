@@ -542,39 +542,45 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
   return(list(normCounts = normCounts, col_metadata = col_metadata, row_metadata = row_metadata))
 }
 
+# TODO: the following funcion should be updated to handle the any contrast data with modifiee LFC and padj column
+#  names into appropriate contrast like contrast_1_LFC and so on and the filtering should be then based on either of
+#  them
+
 # Function to add metadata columns and create the final results data frame
-add_metadata_to_results <- function(collected_isoforms, deseq_result, read_count_cols, digits) {
+add_metadata_to_results <- function(expression_data_df, deseq_result, read_count_cols, digits) {
   deseq_result <- deseq_result %>%
     as.data.frame() %>%
     select(baseMean, log2FoldChange, pvalue, padj) %>%
     # To handle NA values in pvalue and padj
-    mutate(
-      `-LOG10(pval)` = -log10(as.numeric(pvalue)),
-      `-LOG10(padj)` = -log10(as.numeric(padj))
-    )
+    # mutate(
+    #   `-LOG10(pval)` = -log10(as.numeric(pvalue)),
+    #   `-LOG10(padj)` = -log10(as.numeric(padj))
+    # )
 
-  collected_isoforms <- data.frame(
-    cbind(collected_isoforms[, !colnames(collected_isoforms) %in% read_count_cols], deseq_result),
+    expression_data_df <- data.frame(
+    cbind(expression_data_df[, !colnames(expression_data_df) %in% read_count_cols], deseq_result),
     check.names = F,
     check.rows = F
   )
-  return(collected_isoforms)
+  return(expression_data_df)
 }
 
 # Function to export DESeq2 report
-export_deseq_report <- function(collected_isoforms, output_prefix) {
-  collected_isoforms_filename <- paste0(output_prefix, "_gene_exp_table.tsv")
+export_deseq_report <- function(expression_data_df, output_prefix) {
+  expression_data_df_filename <- paste0(output_prefix, "_gene_exp_table.tsv")
   write.table(
-    collected_isoforms,
-    file  = collected_isoforms_filename,
+    expression_data_df,
+    file = expression_data_df_filename,
     sep   = "\t",
     row.names = FALSE,
     col.names = TRUE,
     quote = FALSE
   )
-  print(paste("Export DESeq report to", collected_isoforms_filename))
+  print(paste("Export DESeq report to", expression_data_df_filename))
 }
 
+# TODO: here filtering should be based on either of LFC or padj column for ANY of the contrast (like contrast_1_padj
+#  <= fdr | contrast_2_padj <= fdr, etc.)
 # Function to export normalized counts and filtered counts to GCT format
 export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefix) {
   tryCatch(
@@ -682,7 +688,10 @@ row_metadata <- annotated_expression_combined_df %>%
   remove_rownames() %>%
   column_to_rownames("GeneId")
 
+# TODO: here normCounts should be the filtered data
 clustered_data <- cluster_and_reorder(normCounts, as.data.frame(colData(dds)), row_metadata, args)
+
+# TODO: here normCounts should be the entire data
 # Export GCT data
 export_gct_data(clustered_data$normCounts, clustered_data$row_metadata, clustered_data$col_metadata, args$output)
 
