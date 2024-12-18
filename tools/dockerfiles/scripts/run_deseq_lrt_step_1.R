@@ -287,12 +287,12 @@ get_args <- function() {
   )
   parser$add_argument(
     "--cluster",
-    help    = paste(
+    help = paste(
       "Hopach clustering method to be run on normalized read counts for the",
       "exploratory visualization part of the analysis. Default: do not run",
       "clustering"
     ),
-    type    = "character",
+    type = "character",
     choices = c("row", "column", "both", "none"),
     default = "none"
   )
@@ -449,8 +449,8 @@ extract_factors_and_levels <- function(term) {
   parts <- strsplit(term, "\\.")[[1]]
   factor1 <- sub("[0-9A-Z_]+$", "", parts[1])
   factor2 <- sub("[0-9A-Z_]+$", "", parts[2])
-  level1  <- sub("^.*?([0-9A-Z_]+$)", "\\1", parts[1])
-  level2  <- sub("^.*?([0-9A-Z_]+$)", "\\1", parts[2])
+  level1 <- sub("^.*?([0-9A-Z_]+$)", "\\1", parts[1])
+  level2 <- sub("^.*?([0-9A-Z_]+$)", "\\1", parts[2])
   list(factor1 = factor1, level1 = level1, factor2 = factor2, level2 = level2)
 }
 
@@ -636,7 +636,7 @@ clean_sample_names <- function(names) {
 # Function to export MDS plot
 export_mds_html_plot <- function(norm_counts_data, location) {
   tryCatch(
-    expr  = {
+    expr = {
       htmlwidgets::saveWidget(
         Glimma::glimmaMDS(
           x      = norm_counts_data,
@@ -654,62 +654,49 @@ export_mds_html_plot <- function(norm_counts_data, location) {
 
 # Function to export normalized counts and filtered counts to GCT format
 # TODO: this function should also return levels of HOPACH clustering in the row annotation
+# Updated export_gct_data function:
+# 1. Write full GCT file without clustering.
+# 2. Filter rows by padj.
+# 3. Cluster only the filtered subset.
+# 4. Write filtered (and clustered) GCT file.
+
 export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefix) {
-  tryCatch(
-    expr = {
-      # Use the provided row_metadata directly
-      # Prepare column metadata
-      col_metadata <- col_metadata %>% mutate_all(as.vector)
+  tryCatch({
+    col_metadata <- col_metadata %>% mutate_all(as.vector)
+    gct_data     <- new("GCT", mat = normCounts, rdesc = row_metadata, cdesc = col_metadata)
+    cmapR::write_gct(ds = gct_data, ofile = paste0(output_prefix, "_counts_all.gct"), appenddim = FALSE)
+    print(paste("Exporting GCT data to", paste0(output_prefix, "_counts_all.gct")))
 
-      # Create GCT object
-      gct_data <- new("GCT",
-                      mat   = normCounts,
-                      rdesc = row_metadata,
-                      cdesc = col_metadata)
-
-      # Write GCT files
-      cmapR::write_gct(
-        ds    = gct_data,
-        ofile = paste0(output_prefix, "_counts_all.gct"),
-        appenddim = FALSE
-      )
-      print(paste("Exporting GCT data to", paste0(output_prefix, "_counts_all.gct")))
-
-      # Filter rows by padj <= FDR if padj is available
-      if ('padj' %in% colnames(row_metadata)) {
-        row_metadata_filtered <- row_metadata %>% dplyr::filter(padj <= args$fdr)
-      } else {
-        row_metadata_filtered <- row_metadata
-      }
-
-      # Check if any genes remain after filtering
-      if (nrow(row_metadata_filtered) == 0) {
-        warning(paste("No genes passed the FDR threshold of", args$fdr, "for", output_prefix))
-      }
-
-      # Subset normCounts to include only the filtered rows
-      filtered_normCounts <- normCounts[rownames(row_metadata_filtered),]
-
-      # Create filtered GCT object
-      gct_data_filtered <- new("GCT",
-                               mat   = filtered_normCounts,
-                               rdesc = row_metadata_filtered,
-                               cdesc = col_metadata)
-
-      # Write filtered GCT file
-      cmapR::write_gct(
-        ds    = gct_data_filtered,
-        ofile = paste0(output_prefix, "_counts_filtered.gct"),
-        appenddim = FALSE
-      )
-      print(paste("Exporting GCT data to", paste0(output_prefix, "_counts_filtered.gct")))
-    },
-    error = function(e) {
-      print(paste("Failed to export GCT data to", output_prefix, "with error -", e$message))
+    # Filter by padj if available
+    if ('padj' %in% colnames(row_metadata)) {
+      row_metadata_filtered <- row_metadata %>% filter(padj <= args$fdr)
+    } else {
+      row_metadata_filtered <- row_metadata
     }
-  )
+
+    if (nrow(row_metadata_filtered) == 0) {
+      warning(paste("No genes passed the FDR threshold of", args$fdr))
+    }
+
+    filtered_normCounts <- normCounts[rownames(row_metadata_filtered), , drop = FALSE]
+
+    # Now cluster the filtered data
+    clustered_data <- cluster_and_reorder(filtered_normCounts, col_metadata, row_metadata_filtered, args)
+
+    gct_data_filtered <- new("GCT",
+                             mat   = clustered_data$normCounts,
+                             rdesc = clustered_data$row_metadata,
+                             cdesc = clustered_data$col_metadata)
+
+    cmapR::write_gct(ds = gct_data_filtered, ofile = paste0(output_prefix, "_counts_filtered.gct"), appenddim = FALSE)
+    print(paste("Exporting GCT data to", paste0(output_prefix, "_counts_filtered.gct")))
+
+  }, error = function(e) {
+    print(paste("Failed to export GCT data to", output_prefix, "with error -", e$message))
+  })
 }
 
+# Removed clustering from here. Just export MDS and call export_gct_data().
 export_charts <- function(res, annotated_expression_df, column_data, normCounts, output, args) {
   # Export MDS plot
   print("Exporting MDS plot")
@@ -720,85 +707,74 @@ export_charts <- function(res, annotated_expression_df, column_data, normCounts,
     export_mds_html_plot(corrected_counts, paste0(output, "_mds_plot_corrected.html"))
   }
 
-  # TODO: here fix clustering function it doesn't work now
-  clustered_data <- cluster_and_reorder(normCounts, column_data, annotated_expression_df, args)
-  # Export GCT data
-  export_gct_data(clustered_data$normCounts, clustered_data$row_metadata, clustered_data$col_metadata, output)
+  # Now just call export_gct_data directly without clustering here.
+  export_gct_data(normCounts, annotated_expression_df, column_data, output)
 }
 
 # Function to generate clusters
 get_clustered_data <- function(expression_data, transpose = FALSE) {
   if (transpose) {
-    print("Transposing expression data")
     expression_data <- t(expression_data)
   }
 
-  # Apply scaling per row and maintain the original orientation
-  expression_data <- t(apply(
-    expression_data,
-    1,
-    FUN = function(x) {
-      scale_min_max(x)
-    }
-  ))
+  expression_data <- t(apply(expression_data, 1, scale_min_max))
 
   if (transpose) {
-    print("Transposing expression data back")
     expression_data <- t(expression_data)
   }
 
-  print("Running HOPACH")
   hopach_results <- hopach::hopach(expression_data, verbose = TRUE)
 
-  print("Parsing cluster labels")
-  clusters <- data.frame(label = hopach_results$clustering$labels)
-  clusters <- clusters %>% mutate(HCL = paste0("c", label))
+  # Reorder cluster assignments according to hopach_results$clustering$order
+  ordered_idx        <- hopach_results$clustering$order
+  # Clusters in the original order
+  clusters           <- data.frame(label            = hopach_results$clustering$labels[ordered_idx],
+                                   HCL              = paste0("c", hopach_results$clustering$labels[ordered_idx]),
+                                   stringsAsFactors = FALSE)
+  rownames(clusters) <- rownames(expression_data)[ordered_idx]
 
   return(list(
-    order    = as.vector(hopach_results$clustering$order),
+    order = ordered_idx,
     expression = expression_data,
     clusters = clusters
   ))
 }
 
-# Function for min-max scaling
 scale_min_max <- function(x,
                           min_range = -2,
                           max_range = 2) {
-  min_val  <- min(x)
-  max_val  <- max(x)
-  scaled_x <-
-    (x - min_val) / (max_val - min_val) * (max_range - min_range) + min_range
-  return(scaled_x)
+  min_val <- min(x)
+  max_val <- max(x)
+  (x - min_val) / (max_val - min_val) * (max_range - min_range) + min_range
 }
 
-# Function to cluster data and re-order based on clustering results
 cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
-  if (args$cluster != "none") { # Only cluster if not "none"
+  # Reordering happens AFTER clustering
+  if (args$cluster != "none") {
+    # Column clustering if requested
     if (args$cluster == "column" || args$cluster == "both") {
-      print("Clustering filtered read counts by columns")
-      clustered_data <- get_clustered_data(expression_data = normCounts, transpose = TRUE)
-      col_metadata <- cbind(col_metadata, clustered_data$clusters)
-      col_metadata <- col_metadata[clustered_data$order,]
-      normCounts   <- normCounts[, clustered_data$order]
-      print("Reordered samples")
-      print(col_metadata)
+      clustered_data_cols <- get_clustered_data(normCounts, transpose = TRUE)
+      # Reorder samples
+      normCounts          <- normCounts[, clustered_data_cols$order]
+      col_metadata        <- col_metadata[clustered_data_cols$order, , drop = FALSE]
+      # After reordering, cbind cluster info
+      col_metadata        <- cbind(col_metadata, clustered_data_cols$clusters)
     }
+    # Row clustering if requested
     if (args$cluster == "row" || args$cluster == "both") {
-      print("Clustering filtered normalized read counts by rows")
-      clustered_data <- get_clustered_data(expression_data = normCounts, transpose = FALSE)
-      normCounts   <- clustered_data$expression
-      row_metadata <- cbind(row_metadata, clustered_data$clusters)
-      row_metadata <- row_metadata[clustered_data$order,]
-      normCounts   <- normCounts[clustered_data$order,]
-      print("Reordered features")
-      print(head(row_metadata))
+      clustered_data_rows <- get_clustered_data(normCounts, transpose = FALSE)
+      # Reorder rows
+      normCounts          <- clustered_data_rows$expression[clustered_data_rows$order,]
+      row_metadata        <- row_metadata[clustered_data_rows$order, , drop = FALSE]
+      # After reordering rows, add cluster annotations
+      row_metadata        <- cbind(row_metadata, clustered_data_rows$clusters)
     }
   } else {
-    print("Clustering skipped as per 'none' option.")
+    # No clustering
   }
   return(list(normCounts = normCounts, col_metadata = col_metadata, row_metadata = row_metadata))
 }
+
 
 # Parse arguments
 args <- get_args()
@@ -907,9 +883,9 @@ if (args$batchcorrection != "none") {
     if (args$batchcorrection == "combatseq") {
       # Case 2: Apply ComBat_seq batch correction to raw counts
       print("Applying ComBat_seq batch correction")
-      batch_info       <- metadata_df$batch
+      batch_info <- metadata_df$batch
       corrected_counts <- apply_combat_seq(countData, batch_info, design_formula, metadata_df)
-      countData        <- corrected_counts
+      countData  <- corrected_counts
       # Design formula remains as provided
     } else if (args$batchcorrection == "limmaremovebatcheffect") {
       # Case 3: Include 'batch' in the design formula
@@ -917,7 +893,7 @@ if (args$batchcorrection != "none") {
       # Remove '~' from the original design formula string
       original_design <- substring(args$design, 2)
       # Create new design formula with 'batch' included
-      design_formula  <- as.formula(paste("~ batch +", original_design))
+      design_formula <- as.formula(paste("~ batch +", original_design))
       # Note: We do not modify counts at this stage
     }
   } else {
@@ -941,7 +917,7 @@ dse <- DESeqDataSetFromMatrix(
 )
 
 # Extract the raw counts matrix
-cts <- counts(dse)  # a matrix of counts, rows = genes, columns = samples
+cts <- counts(dse) # a matrix of counts, rows = genes, columns = samples
 
 # Sum counts per sample (sum columns to get total reads per sample)
 sample_sums <- colSums(cts)
@@ -957,9 +933,11 @@ plot_df <- data.frame(
 
 stat_barchart <- ggplot(plot_df, aes(x = Sample, y = Count)) +
   geom_col(position = "dodge", fill = "royalblue") +
-  labs(title = "Total Reads by Sample",
-       x     = "Sample",
-       y = "Count") +
+  labs(
+    title = "Total Reads by Sample",
+    x     = "Sample",
+    y     = "Count"
+  ) +
   theme_classic() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
@@ -969,7 +947,8 @@ ggsave("alignment_stats_barchart.png",
        dpi    = 400,
        height = 3,
        width  = max(10, length(sample_sums) * 0.5),
-       units  = "in")
+       units  = "in"
+)
 
 print("Run DESeq2 using Wald")
 dsq_wald <- DESeq(
@@ -984,7 +963,7 @@ if (args$batchcorrection == "limmaremovebatcheffect" && "batch" %in% colnames(me
   # Case 3: After DESeq2, apply rlog transformation and remove batch effects using limma
   print("Applying rlog transformation and limma batch effect removal")
   rlog_transformed <- rlog(dsq_wald, blind = FALSE)
-  rlog_counts      <- assay(rlog_transformed)
+  rlog_counts <- assay(rlog_transformed)
 
   # Prepare design matrix without 'batch' for removeBatchEffect
   design_formula <- as.formula(paste0("~", str_remove(as.character(dsq_wald@design)[2], " \\+ batch")))
@@ -993,12 +972,12 @@ if (args$batchcorrection == "limmaremovebatcheffect" && "batch" %in% colnames(me
 
   # Apply removeBatchEffect
   corrected_counts <- limma::removeBatchEffect(rlog_counts, batch = metadata_df$batch, design = design_matrix)
-  normCounts       <- corrected_counts
+  normCounts <- corrected_counts
 } else {
   # Case 1 and Case 2: Use rlog-transformed counts without additional batch correction
   print("Applying rlog transformation without additional batch effect removal")
   rlog_transformed <- rlog(dsq_wald, blind = FALSE)
-  normCounts       <- assay(rlog_transformed)
+  normCounts <- assay(rlog_transformed)
 }
 
 print("Run DESeq2 using LRT")
@@ -1056,5 +1035,14 @@ write.table(
 )
 print(paste("Export results to", results_filename, sep = " "))
 graphics.off()
+
+sample_order <- colnames(dds)
+
+annotated_expression_df <- annotated_expression_df %>%
+  select(-one_of(sample_order)) %>% # remove all sample columns
+  distinct(GeneId, .keep_all = TRUE) %>%
+  remove_rownames() %>%
+  column_to_rownames("GeneId")
+
 
 export_charts(dsq_lrt_res, annotated_expression_df, metadata_df, normCounts, args$output, args)

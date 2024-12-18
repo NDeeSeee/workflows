@@ -187,12 +187,12 @@ get_args <- function() {
   )
   parser$add_argument(
     "--cluster",
-    help    = paste(
+    help = paste(
       "Hopach clustering method to be run on normalized read counts for the",
       "exploratory visualization part of the analysis. Default: do not run",
       "clustering"
     ),
-    type    = "character",
+    type = "character",
     choices = c("row", "column", "both", "none"),
     default = "none"
   )
@@ -212,7 +212,7 @@ get_args <- function() {
   )
   parser$add_argument(
     "--test_mode",
-    help   = "Run for test, only first 100 rows",
+    help = "Run for test, only first 100 rows",
     action = "store_true",
     default = FALSE
   )
@@ -471,36 +471,22 @@ export_cls <- function(categories, location) {
 # Function to generate clusters
 get_clustered_data <- function(expression_data, transpose = FALSE) {
   if (transpose) {
-    print("Transposing expression data")
     expression_data <- t(expression_data)
   }
-
-  # Apply scaling per row without changing dimensions
-  expression_data <- t(apply(
-    expression_data,
-    1,
-    FUN = function(x) {
-      scale_min_max(x)
-    }
-  ))
-
+  expression_data <- t(apply(expression_data, 1, scale_min_max))
   if (transpose) {
-    print("Transposing expression data back")
     expression_data <- t(expression_data)
   }
 
-  print("Running HOPACH")
   hopach_results <- hopach::hopach(expression_data, verbose = TRUE)
 
-  print("Parsing cluster labels")
-  clusters <- data.frame(label = hopach_results$clustering$labels)
-  clusters <- clusters %>% mutate(HCL = paste0("c", label))
+  ordered_idx        <- hopach_results$clustering$order
+  clusters           <- data.frame(label            = hopach_results$clustering$labels[ordered_idx],
+                                   HCL              = paste0("c", hopach_results$clustering$labels[ordered_idx]),
+                                   stringsAsFactors = FALSE)
+  rownames(clusters) <- rownames(expression_data)[ordered_idx]
 
-  return(list(
-    order = hopach_results$clustering$order,
-    expression = expression_data,
-    clusters = clusters
-  ))
+  return(list(order = ordered_idx, expression = expression_data, clusters = clusters))
 }
 
 # Function for min-max scaling
@@ -516,28 +502,20 @@ scale_min_max <- function(x,
 
 # Function to cluster data and re-order based on clustering results
 cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
-  if (args$cluster != "none") { # Only cluster if not "none"
+  if (args$cluster != "none") {
     if (args$cluster == "column" || args$cluster == "both") {
-      print("Clustering filtered read counts by columns")
-      clustered_data <- get_clustered_data(expression_data = normCounts, transpose = TRUE)
-      col_metadata <- cbind(col_metadata, clustered_data$clusters)
-      col_metadata <- col_metadata[clustered_data$order,]
-      normCounts   <- normCounts[, clustered_data$order]
-      print("Reordered samples")
-      print(col_metadata)
+      clustered_data_cols <- get_clustered_data(normCounts, transpose = TRUE)
+      normCounts          <- normCounts[, clustered_data_cols$order, drop = FALSE]
+      col_metadata        <- col_metadata[clustered_data_cols$order, , drop = FALSE]
+      col_metadata        <- cbind(col_metadata, clustered_data_cols$clusters)
     }
+
     if (args$cluster == "row" || args$cluster == "both") {
-      print("Clustering filtered normalized read counts by rows")
-      clustered_data <- get_clustered_data(expression_data = normCounts, transpose = FALSE)
-      normCounts   <- clustered_data$expression
-      row_metadata <- cbind(row_metadata, clustered_data$clusters)
-      row_metadata <- row_metadata[clustered_data$order,]
-      normCounts   <- normCounts[clustered_data$order,]
-      print("Reordered features")
-      print(head(row_metadata))
+      clustered_data_rows <- get_clustered_data(normCounts, transpose = FALSE)
+      normCounts          <- clustered_data_rows$expression[clustered_data_rows$order, , drop = FALSE]
+      row_metadata        <- row_metadata[clustered_data_rows$order, , drop = FALSE]
+      row_metadata        <- cbind(row_metadata, clustered_data_rows$clusters)
     }
-  } else {
-    print("Clustering skipped as per 'none' option.")
   }
   return(list(normCounts = normCounts, col_metadata = col_metadata, row_metadata = row_metadata))
 }
@@ -547,22 +525,23 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
 #  them
 
 # Function to add metadata columns and create the final results data frame
-add_metadata_to_results <- function(expression_data_df, deseq_result, read_count_cols, digits) {
-  deseq_result <- deseq_result %>%
-    as.data.frame() %>%
+# Updated function: add contrast-specific metadata to results
+add_metadata_to_results <- function(expression_data_df, deseq_result, read_count_cols, contrast_index) {
+  res_df <- as.data.frame(deseq_result) %>%
     select(baseMean, log2FoldChange, pvalue, padj) %>%
-    # To handle NA values in pvalue and padj
-    # mutate(
-    #   `-LOG10(pval)` = -log10(as.numeric(pvalue)),
-    #   `-LOG10(padj)` = -log10(as.numeric(padj))
-    # )
+    rename(
+      !!paste0("contrast_", contrast_index, "_LFC")    := log2FoldChange,
+      !!paste0("contrast_", contrast_index, "_pvalue") := pvalue,
+      !!paste0("contrast_", contrast_index, "_FDR")    := padj
+    )
 
-    expression_data_df <- data.frame(
-    cbind(expression_data_df[, !colnames(expression_data_df) %in% read_count_cols], deseq_result),
-    check.names = F,
-    check.rows = F
+  # Merge with the main expression data
+  expression_data_merged <- data.frame(
+    cbind(expression_data_df[, !colnames(expression_data_df) %in% read_count_cols], res_df),
+    check.names = FALSE,
+    check.rows  = FALSE
   )
-  return(expression_data_df)
+  return(expression_data_merged)
 }
 
 # Function to export DESeq2 report
@@ -571,7 +550,7 @@ export_deseq_report <- function(expression_data_df, output_prefix) {
   write.table(
     expression_data_df,
     file = expression_data_df_filename,
-    sep   = "\t",
+    sep = "\t",
     row.names = FALSE,
     col.names = TRUE,
     quote = FALSE
@@ -582,64 +561,45 @@ export_deseq_report <- function(expression_data_df, output_prefix) {
 # TODO: here filtering should be based on either of LFC or padj column for ANY of the contrast (like contrast_1_padj
 #  <= fdr | contrast_2_padj <= fdr, etc.)
 # Function to export normalized counts and filtered counts to GCT format
+# Updated GCT export: filter if ANY FDR column meets the threshold
 export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefix) {
-  tryCatch(
-    expr = {
-      # Use the provided row_metadata directly
-      # Prepare column metadata
-      col_metadata <- col_metadata %>% mutate_all(as.vector)
+  tryCatch({
+    col_metadata <- col_metadata %>% mutate_all(as.vector)
+    gct_data     <- new("GCT", mat = normCounts, rdesc = row_metadata, cdesc = col_metadata)
+    cmapR::write_gct(ds = gct_data, ofile = paste0(output_prefix, "_counts_all.gct"), appenddim = FALSE)
+    print(paste("Exported GCT (all) to", paste0(output_prefix, "_counts_all.gct")))
 
-      # Create GCT object
-      gct_data <- new("GCT",
-                      mat   = normCounts,
-                      rdesc = row_metadata,
-                      cdesc = col_metadata)
-
-      # Write GCT files
-      cmapR::write_gct(
-        ds = gct_data,
-        ofile = paste0(output_prefix, "_counts_all.gct"),
-        appenddim = FALSE
-      )
-      print(paste("Exporting GCT data to", paste0(output_prefix, "_counts_all.gct")))
-
-      # Filter rows by padj <= FDR if padj is available
-      if ('padj' %in% colnames(row_metadata)) {
-        row_metadata_filtered <- row_metadata %>% dplyr::filter(padj <= args$fdr)
-      } else {
-        row_metadata_filtered <- row_metadata
-      }
-
-      # Check if any genes remain after filtering
-      if (nrow(row_metadata_filtered) == 0) {
-        warning(paste("No genes passed the FDR threshold of", args$fdr, "for", output_prefix))
-      }
-
-      # Subset normCounts to include only the filtered rows
-      filtered_normCounts <- normCounts[rownames(row_metadata_filtered),]
-
-      # Create filtered GCT object
-      gct_data_filtered <- new("GCT",
-                               mat   = filtered_normCounts,
-                               rdesc = row_metadata_filtered,
-                               cdesc = col_metadata)
-
-      # Write filtered GCT file
-      cmapR::write_gct(
-        ds = gct_data_filtered,
-        ofile = paste0(output_prefix, "_counts_filtered.gct"),
-        appenddim = FALSE
-      )
-      print(paste("Exporting GCT data to", paste0(output_prefix, "_counts_filtered.gct")))
-    },
-    error = function(e) {
-      print(paste("Failed to export GCT data to", output_prefix, "with error -", e$message))
+    # Filter rows by any FDR column
+    fdr_cols <- grep("_FDR$", colnames(row_metadata), value = TRUE)
+    if (length(fdr_cols) == 0) {
+      warning("No FDR columns found. No filtering performed for counts_filtered.gct.")
+      row_metadata_filtered <- row_metadata
+    } else {
+      row_metadata_filtered <- row_metadata %>% filter(if_any(all_of(fdr_cols), ~. <= args$fdr))
     }
-  )
+
+    if (nrow(row_metadata_filtered) == 0) {
+      warning(paste("No genes passed the FDR threshold of", args$fdr))
+    }
+
+    filtered_normCounts <- normCounts[rownames(row_metadata_filtered), , drop = FALSE]
+
+    # Cluster filtered data
+    clustered_data <- cluster_and_reorder(filtered_normCounts, col_metadata, row_metadata_filtered, args)
+
+    gct_data_filtered <- new("GCT",
+                             mat   = clustered_data$normCounts,
+                             rdesc = clustered_data$row_metadata,
+                             cdesc = clustered_data$col_metadata)
+    cmapR::write_gct(ds = gct_data_filtered, ofile = paste0(output_prefix, "_counts_filtered.gct"), appenddim = FALSE)
+    print(paste("Exported GCT (filtered) to", paste0(output_prefix, "_counts_filtered.gct")))
+  }, error = function(e) {
+    print(paste("Failed to export GCT data:", e$message))
+  })
 }
 
 # Iterate through each index in contrast_vector and process the corresponding contrast
-annotated_expression_combined_df <- data.frame()
+annotated_expression_combined_df <- NULL
 
 for (contrast_index in contrast_vector) {
   contrast_selected <- all_contrasts[[contrast_index]]
@@ -663,37 +623,81 @@ for (contrast_index in contrast_vector) {
     dplyr::mutate_at("GeneId", toupper) %>%
     dplyr::distinct(GeneId, .keep_all = TRUE)
 
-  print("Expression data cleaned.")
+  print("Expression data cleaned:")
   print(head(expression_data_df))
 
   # Add metadata to results
-  annotated_expression_df <- add_metadata_to_results(expression_data_df, deseq_result, read_counts_columns, digits = 4)
+  annotated_expression_df <- add_metadata_to_results(
+    expression_data_df = expression_data_df,
+    deseq_result       = deseq_result,
+    read_count_cols    = read_counts_columns,
+    contrast_index     = contrast_index
+  )
 
-  print("Metadata added to results.")
+  # Remove " Rpkm" from all column names
+  colnames(annotated_expression_df) <- gsub(" Rpkm", "", colnames(annotated_expression_df))
+
+  print("Metadata added to results:")
+  print(head(annotated_expression_df))
 
   # Export DESeq2 report
   export_deseq_report(annotated_expression_df, paste0(args$output, "_", contrast_name))
   print("Exported DESeq2 report.")
 
-  # Generate and export plots (including GCT export)
-  annotated_expression_combined_df <- bind_rows(annotated_expression_combined_df, annotated_expression_df)
+  # Merge into combined annotation
+  # If it's the first iteration, just assign directly
+  if (is.null(annotated_expression_combined_df) || nrow(annotated_expression_combined_df) == 0) {
+    annotated_expression_combined_df <- annotated_expression_df
+  } else {
+    annotated_expression_combined_df <- annotated_expression_combined_df %>%
+      full_join(annotated_expression_df)
+  }
 }
 
 export_mds_html_plot(normCounts, paste0(args$output, "_mds_plot.html"))
+print("Exported MDS plot.")
+
+annotated_expression_combined_df <- annotated_expression_combined_df[, !duplicated(names
+                                                                                   (annotated_expression_combined_df))]
+
+# Specify the desired order of some key columns
+annotation_cols <- c("GeneId", "RefseqId", "Chrom", "TxStart", "TxEnd", "Strand", "baseMean")
+
+# Get the current sample order from the DESeq object
+sample_order <- colnames(dds)
+
+# Extract contrast columns: any column name that starts with 'contrast_'
+contrast_cols <- grep("^contrast_\\d+_", colnames(annotated_expression_combined_df), value = TRUE)
+
+print("Annotation contrast columns:")
+print(contrast_cols)
+
+# Now create the final order:
+# 1. Annotation columns (in the specified order, if they exist)
+# 2. The sample columns (in the exact order they appear in the DESeq object)
+# 3. All contrast-related columns
+final_cols <- c(
+  intersect(annotation_cols, colnames(annotated_expression_combined_df)),
+  intersect(sample_order, colnames(annotated_expression_combined_df)),
+  intersect(contrast_cols, colnames(annotated_expression_combined_df))
+)
+
+print("Final column order:")
+print(final_cols)
+
+# Reorder the columns of the data frame
+annotated_expression_combined_df <- annotated_expression_combined_df[, final_cols, drop = FALSE]
 
 # After the loop, ensure that 'row_metadata' is correctly set
+# Remove sample columns from row metadata
 row_metadata <- annotated_expression_combined_df %>%
-  dplyr::select(GeneId, log2FoldChange, pvalue, padj) %>%
-  dplyr::distinct(GeneId, .keep_all = TRUE) %>%
+  select(-one_of(sample_order)) %>% # remove all sample columns
+  distinct(GeneId, .keep_all = TRUE) %>%
   remove_rownames() %>%
   column_to_rownames("GeneId")
 
-# TODO: here normCounts should be the filtered data
-clustered_data <- cluster_and_reorder(normCounts, as.data.frame(colData(dds)), row_metadata, args)
-
 # TODO: here normCounts should be the entire data
 # Export GCT data
-export_gct_data(clustered_data$normCounts, clustered_data$row_metadata, clustered_data$col_metadata, args$output)
+export_gct_data(normCounts, row_metadata, as.data.frame(colData(dds)), args$output)
 
 print("DESeq2 analysis complete.")
-
