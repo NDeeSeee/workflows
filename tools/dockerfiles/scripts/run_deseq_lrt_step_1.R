@@ -193,6 +193,9 @@ assert_args <- function(args) {
 
 # Function to apply batch correction using ComBat_seq
 apply_combat_seq <- function(count_data, batch_info, design, column_data) {
+
+  start_time <- proc.time()
+
   print("Applying ComBat_seq batch correction")
   corrected_counts <- sva::ComBat_seq(
     counts = as.matrix(count_data),
@@ -200,6 +203,12 @@ apply_combat_seq <- function(count_data, batch_info, design, column_data) {
     group = NULL,
     covar_mod = model.matrix(design, data = column_data)
   )
+
+  end_time <- proc.time() - start_time
+
+  print("Total time of apply_combat_seq execution: ")
+  print(end_time) # This shows user, system, and elapsed times
+
   return(corrected_counts)
 }
 
@@ -312,7 +321,7 @@ get_args <- function() {
   )
   parser$add_argument(
     "--test_mode",
-    help = "Run for test, only first 500 rows",
+    help = "Run for test, only first 500 rows, clustering minimised",
     action = "store_true",
     default = FALSE
   )
@@ -390,6 +399,9 @@ generate_lrt_md <- function(deseq_results, full_formula, reduced_formula, output
 
 # Function to generate main effect contrasts with different reference levels
 generate_main_effect_contrasts <- function(dds, factors, factor_levels) {
+
+  start_time <- proc.time()
+
   contrasts <- list()
 
   for (factor in factors) {
@@ -441,6 +453,11 @@ generate_main_effect_contrasts <- function(dds, factors, factor_levels) {
     }
   }
 
+  end_time <- proc.time() - start_time
+
+  print("Total time of generate_main_effect_contrasts function execution: ")
+  print(end_time)
+
   return(contrasts)
 }
 
@@ -456,6 +473,9 @@ extract_factors_and_levels <- function(term) {
 
 # Function to generate interaction effect contrasts
 generate_interaction_effect_contrasts <- function(dds) {
+
+  start_time <- proc.time()
+
   contrasts <- list()
   interaction_names <- resultsNames(dds)
 
@@ -551,11 +571,19 @@ generate_interaction_effect_contrasts <- function(dds) {
     }
   }
 
+  end_time <- proc.time() - start_time
+
+  print("Total time of generate_interaction_effect_contrasts function execution: ")
+  print(end_time)
+
   return(contrasts)
 }
 
 # Main function to generate the dataframe with all possible contrasts
 generate_contrasts <- function(dds) {
+
+  start_time <- proc.time()
+
   # Extract the design formula and model matrix
   design_formula <- design(dds)
 
@@ -619,6 +647,11 @@ generate_contrasts <- function(dds) {
     select(contrast_number, everything()) %>%
     arrange(desc(significant_genes))
 
+  end_time <- proc.time() - start_time
+
+  print("Total time of generate_contrasts function execution: ")
+  print(end_time)
+
   # Sort the dataframe by the number of significant genes
   return(contrast_df)
 }
@@ -662,27 +695,94 @@ export_mds_html_plot <- function(norm_counts_data, location) {
 
 export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefix) {
   tryCatch({
+    # Ensure col_metadata columns are vectors
     col_metadata <- col_metadata %>% mutate_all(as.vector)
-    gct_data     <- new("GCT", mat = normCounts, rdesc = row_metadata, cdesc = col_metadata)
+
+    # Create and export the initial GCT file
+    gct_data <- new("GCT", mat = normCounts, rdesc = row_metadata, cdesc = col_metadata)
     cmapR::write_gct(ds = gct_data, ofile = paste0(output_prefix, "_counts_all.gct"), appenddim = FALSE)
     print(paste("Exporting GCT data to", paste0(output_prefix, "_counts_all.gct")))
 
     # Filter by padj if available
     if ('padj' %in% colnames(row_metadata)) {
       row_metadata_filtered <- row_metadata %>% filter(padj <= args$fdr)
+      print("=== After Filtering by padj ===")
+      print(paste("Number of rows in row_metadata_filtered:", nrow(row_metadata_filtered)))
+      print("Sample row names in row_metadata_filtered:")
+      print(head(rownames(row_metadata_filtered)))
     } else {
       row_metadata_filtered <- row_metadata
+      print("=== No Filtering by padj ===")
+      print(paste("Number of rows in row_metadata_filtered:", nrow(row_metadata_filtered)))
     }
 
+    # Check if any rows pass the filter
     if (nrow(row_metadata_filtered) == 0) {
       warning(paste("No genes passed the FDR threshold of", args$fdr))
+      # Optionally, skip exporting filtered GCT
+      return(NULL)
     }
 
-    filtered_normCounts <- normCounts[rownames(row_metadata_filtered), , drop = FALSE]
+    # **New Debug Statements Before Subsetting**
+    print("=== Debugging before subsetting ===")
+    print("Checking if all row names in row_metadata_filtered are present in normCounts:")
+    all_present <- all(rownames(row_metadata_filtered) %in% rownames(normCounts))
+    print(paste("All row names present:", all_present))
+
+    if (!all_present) {
+      missing_rows <- setdiff(rownames(row_metadata_filtered), rownames(normCounts))
+      print(paste("Number of missing row names:", length(missing_rows)))
+      print("Examples of missing row names:")
+      print(head(missing_rows))
+    }
+
+    # Proceed to subset only the matching row names
+    # This prevents the "subscript out of bounds" error
+    common_rows         <- intersect(rownames(row_metadata_filtered), rownames(normCounts))
+    filtered_normCounts <- normCounts[common_rows, , drop = FALSE]
+    print(paste("Number of rows after subsetting:", nrow(filtered_normCounts)))
+
+    # **Existing Debug Statements Inside export_gct_data**
+    print("=== Debugging inside export_gct_data ===")
+    print("Dimensions of normCounts:")
+    print(dim(normCounts))
+    print("Dimensions of row_metadata:")
+    print(dim(row_metadata))
+    print("Columns of row_metadata:")
+    print(colnames(row_metadata))
+    print("A few row names of row_metadata:")
+    print(head(rownames(row_metadata)))
+
+    if ("padj" %in% colnames(row_metadata)) {
+      print("padj column found. Summary of padj:")
+      print(summary(row_metadata$padj))
+    } else {
+      print("padj column not found in row_metadata.")
+    }
 
     # Now cluster the filtered data
     clustered_data <- cluster_and_reorder(filtered_normCounts, col_metadata, row_metadata_filtered, args)
 
+    # After clustering:
+    print("Dimensions of row_metadata_filtered:")
+    print(dim(row_metadata_filtered))
+    print("A few row names of row_metadata_filtered:")
+    print(head(rownames(row_metadata_filtered)))
+
+    # Check intersection with normCounts rows:
+    matching_rows <- intersect(rownames(normCounts), rownames(row_metadata_filtered))
+    print("Number of matching row names between normCounts and row_metadata_filtered:")
+    print(length(matching_rows))
+
+    non_matching_rows <- setdiff(rownames(row_metadata_filtered), rownames(normCounts))
+    print("Number of row names in row_metadata_filtered not found in normCounts:")
+    print(length(non_matching_rows))
+    if (length(non_matching_rows) > 0) {
+      print("Examples of non-matching row names:")
+      print(head(non_matching_rows))
+    }
+
+    # Create and export the filtered GCT file
     gct_data_filtered <- new("GCT",
                              mat   = clustered_data$normCounts,
                              rdesc = clustered_data$row_metadata,
@@ -712,40 +812,96 @@ export_charts <- function(res, annotated_expression_df, column_data, normCounts,
 }
 
 # Function to generate clusters
-get_clustered_data <- function(expression_data, transpose = FALSE) {
+get_clustered_data <- function(expression_data, transpose = FALSE, k = 15, kmax = 9) {
+
+  start_time <- proc.time()
+
   if (transpose) {
+    print("Transposing expression data")
     expression_data <- t(expression_data)
   }
 
+  # Apply scaling per row
   expression_data <- t(apply(expression_data, 1, scale_min_max))
 
   if (transpose) {
+    print("Transposing expression data back")
     expression_data <- t(expression_data)
   }
 
-  hopach_results <- hopach::hopach(expression_data, verbose = TRUE)
+  print(paste0("Running HOPACH for ", nrow(expression_data), "  features"))
+  hopach_results <- hopach::hopach(expression_data,
+                                   verbose = TRUE,
+                                   K       = k,
+                                   kmax    = kmax,
+                                   khigh   = kmax
+  )
 
-  # Reorder cluster assignments according to hopach_results$clustering$order
-  ordered_idx        <- hopach_results$clustering$order
-  # Clusters in the original order
-  clusters           <- data.frame(label            = hopach_results$clustering$labels[ordered_idx],
-                                   HCL              = paste0("c", hopach_results$clustering$labels[ordered_idx]),
-                                   stringsAsFactors = FALSE)
-  rownames(clusters) <- rownames(expression_data)[ordered_idx]
+  print("Parsing cluster labels")
+  # hopach_results$clustering$labels gives final cluster labels as integers
+  # hopach returns them as numeric without the "c" prefix, so we add "c" ourselves or just rely on numeric.
+  # Actually hopach by default returns numeric labels (1,11,12...). We'll add "c" prefix ourselves for consistency.
+
+  # Final labels (no prefix 'c' in hopach by default)
+  final_labels      <- hopach_results$clustering$labels[hopach_results$clustering$order]
+  # Convert to character
+  final_labels_char <- as.character(final_labels)
+
+  # Add "c" prefix if desired (optional)
+  # final_labels_char <- paste0("c", final_labels_char)
+
+  # Each digit in the label corresponds to a level.
+  # Determine max number of levels
+  max_levels <- max(nchar(final_labels_char))
+
+  # Create a data frame for clusters
+  clusters           <- data.frame(Label = final_labels_char, stringsAsFactors = FALSE)
+  rownames(clusters) <- rownames(expression_data)[hopach_results$clustering$order]
+
+  # Split labels into levels
+  # For each label, we split into characters and assign to new columns
+  level_data <- do.call(rbind, lapply(clusters$Label, function(lbl) {
+    # Split into individual characters
+    chars <- unlist(strsplit(lbl, split = ""))
+    # If shorter than max_levels, pad with NA
+    if (length(chars) < max_levels) {
+      chars <- c(chars, rep(NA, max_levels - length(chars)))
+    }
+    return(chars)
+  }))
+
+  # Name the columns
+  colnames(level_data) <- paste0("Cluster_Level_", seq_len(max_levels))
+
+  # Combine into clusters
+  clusters <- cbind(clusters, level_data)
+
+  # Optionally remove the original 'Label' column if not needed
+  # Or rename it to something else
+  clusters$HCL   <- paste0("c", clusters$Label)
+  clusters$Label <- NULL
+
+  end_time <- proc.time() - start_time
+
+  print("Total time of get_clustered_data function execution: ")
+  print(end_time)
 
   return(list(
-    order = ordered_idx,
+    order = hopach_results$clustering$order,
     expression = expression_data,
     clusters = clusters
   ))
 }
 
+# Function for min-max scaling
 scale_min_max <- function(x,
                           min_range = -2,
                           max_range = 2) {
   min_val <- min(x)
   max_val <- max(x)
+  scaled_x <-
   (x - min_val) / (max_val - min_val) * (max_range - min_range) + min_range
+  return(scaled_x)
 }
 
 cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
@@ -762,9 +918,15 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
     }
     # Row clustering if requested
     if (args$cluster == "row" || args$cluster == "both") {
-      clustered_data_rows <- get_clustered_data(normCounts, transpose = FALSE)
-      # Reorder rows
-      normCounts          <- clustered_data_rows$expression[clustered_data_rows$order,]
+      if (args$test_mode) {
+        k    <- 2
+        kmax <- 2
+      } else {
+        k    <- 15
+        kmax <- 9
+      }
+      clustered_data_rows <- get_clustered_data(normCounts, transpose = FALSE, k = k, kmax = kmax)
+      normCounts          <- clustered_data_rows$expression[clustered_data_rows$order, , drop = FALSE]
       row_metadata        <- row_metadata[clustered_data_rows$order, , drop = FALSE]
       # After reordering rows, add cluster annotations
       row_metadata        <- cbind(row_metadata, clustered_data_rows$clusters)
@@ -1036,13 +1198,19 @@ write.table(
 print(paste("Export results to", results_filename, sep = " "))
 graphics.off()
 
-sample_order <- colnames(dds)
+sample_order <- colnames(dse)
+
+colnames(annotated_expression_df) <- gsub(" Rpkm", "", colnames(annotated_expression_df))
+
+annotated_expression_df <- annotated_expression_df %>%
+  select(-one_of(sample_order)) # remove all sample columns
+
+colnames(annotated_expression_df) <- gsub(" TotalReads", "", colnames(annotated_expression_df))
 
 annotated_expression_df <- annotated_expression_df %>%
   select(-one_of(sample_order)) %>% # remove all sample columns
   distinct(GeneId, .keep_all = TRUE) %>%
   remove_rownames() %>%
   column_to_rownames("GeneId")
-
 
 export_charts(dsq_lrt_res, annotated_expression_df, metadata_df, normCounts, args$output, args)

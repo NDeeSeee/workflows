@@ -212,7 +212,7 @@ get_args <- function() {
   )
   parser$add_argument(
     "--test_mode",
-    help = "Run for test, only first 100 rows",
+    help = "Run for test, only first 500 rows, clustering minimised",
     action = "store_true",
     default = FALSE
   )
@@ -469,24 +469,85 @@ export_cls <- function(categories, location) {
 }
 
 # Function to generate clusters
-get_clustered_data <- function(expression_data, transpose = FALSE) {
+get_clustered_data <- function(expression_data, transpose = FALSE, k = 15, kmax = 9) {
+
+  start_time <- proc.time()
+
   if (transpose) {
+    print("Transposing expression data")
     expression_data <- t(expression_data)
   }
+
+  # Apply scaling per row
   expression_data <- t(apply(expression_data, 1, scale_min_max))
+
   if (transpose) {
+    print("Transposing expression data back")
     expression_data <- t(expression_data)
   }
 
-  hopach_results <- hopach::hopach(expression_data, verbose = TRUE)
+  print(paste0("Running HOPACH for ", nrow(expression_data), "  features"))
+  hopach_results <- hopach::hopach(expression_data,
+                                   verbose = TRUE,
+                                   K       = k,
+                                   kmax    = kmax,
+                                   khigh   = kmax
+  )
 
-  ordered_idx        <- hopach_results$clustering$order
-  clusters           <- data.frame(label            = hopach_results$clustering$labels[ordered_idx],
-                                   HCL              = paste0("c", hopach_results$clustering$labels[ordered_idx]),
-                                   stringsAsFactors = FALSE)
-  rownames(clusters) <- rownames(expression_data)[ordered_idx]
+  print("Parsing cluster labels")
+  # hopach_results$clustering$labels gives final cluster labels as integers
+  # hopach returns them as numeric without the "c" prefix, so we add "c" ourselves or just rely on numeric.
+  # Actually hopach by default returns numeric labels (1,11,12...). We'll add "c" prefix ourselves for consistency.
 
-  return(list(order = ordered_idx, expression = expression_data, clusters = clusters))
+  # Final labels (no prefix 'c' in hopach by default)
+  final_labels      <- hopach_results$clustering$labels[hopach_results$clustering$order]
+  # Convert to character
+  final_labels_char <- as.character(final_labels)
+
+  # Add "c" prefix if desired (optional)
+  # final_labels_char <- paste0("c", final_labels_char)
+
+  # Each digit in the label corresponds to a level.
+  # Determine max number of levels
+  max_levels <- max(nchar(final_labels_char))
+
+  # Create a data frame for clusters
+  clusters           <- data.frame(Label = final_labels_char, stringsAsFactors = FALSE)
+  rownames(clusters) <- rownames(expression_data)[hopach_results$clustering$order]
+
+  # Split labels into levels
+  # For each label, we split into characters and assign to new columns
+  level_data <- do.call(rbind, lapply(clusters$Label, function(lbl) {
+    # Split into individual characters
+    chars <- unlist(strsplit(lbl, split = ""))
+    # If shorter than max_levels, pad with NA
+    if (length(chars) < max_levels) {
+      chars <- c(chars, rep(NA, max_levels - length(chars)))
+    }
+    return(chars)
+  }))
+
+  # Name the columns
+  colnames(level_data) <- paste0("Cluster_Level_", seq_len(max_levels))
+
+  # Combine into clusters
+  clusters <- cbind(clusters, level_data)
+
+  # Optionally remove the original 'Label' column if not needed
+  # Or rename it to something else
+  clusters$HCL   <- paste0("c", clusters$Label)
+  clusters$Label <- NULL
+
+  end_time <- proc.time() - start_time
+
+  print("Total time of get_clustered_data function execution: ")
+  print(end_time)
+
+  return(list(
+    order      = hopach_results$clustering$order,
+    expression = expression_data,
+    clusters   = clusters
+  ))
 }
 
 # Function for min-max scaling
@@ -502,6 +563,9 @@ scale_min_max <- function(x,
 
 # Function to cluster data and re-order based on clustering results
 cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
+
+  start_time <- proc.time()
+
   if (args$cluster != "none") {
     if (args$cluster == "column" || args$cluster == "both") {
       clustered_data_cols <- get_clustered_data(normCounts, transpose = TRUE)
@@ -511,12 +575,25 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
     }
 
     if (args$cluster == "row" || args$cluster == "both") {
-      clustered_data_rows <- get_clustered_data(normCounts, transpose = FALSE)
+      if (args$test_mode) {
+        k    <- 2
+        kmax <- 2
+      } else {
+        k    <- 15
+        kmax <- 9
+      }
+      clustered_data_rows <- get_clustered_data(normCounts, transpose = FALSE, k = k, kmax = kmax)
       normCounts          <- clustered_data_rows$expression[clustered_data_rows$order, , drop = FALSE]
       row_metadata        <- row_metadata[clustered_data_rows$order, , drop = FALSE]
       row_metadata        <- cbind(row_metadata, clustered_data_rows$clusters)
     }
   }
+
+  end_time <- proc.time() - start_time
+
+  print("Total time of execution: ")
+  print(end_time) # Th
+
   return(list(normCounts = normCounts, col_metadata = col_metadata, row_metadata = row_metadata))
 }
 
