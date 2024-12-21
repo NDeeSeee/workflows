@@ -912,7 +912,9 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
     # Column clustering if requested
     if (args$cluster == "column" || args$cluster == "both") {
       clustered_data_cols <- get_clustered_data(normCounts, transpose = TRUE)
-      normCounts <- normCounts[, clustered_data_cols$order, drop = FALSE]
+      # TODO: should we use drop T or F here? (it fails with F, but works with T), I'm not quite sure if is it
+      #  correct way
+      normCounts <- normCounts[, clustered_data_cols$order]
       col_metadata        <- col_metadata[clustered_data_cols$order, , drop = FALSE]
       # After reordering, cbind cluster info
       col_metadata        <- cbind(col_metadata, clustered_data_cols$clusters)
