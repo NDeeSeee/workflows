@@ -567,13 +567,15 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
   start_time <- proc.time()
 
   if (args$cluster != "none") {
+    # Column clustering if requested
     if (args$cluster == "column" || args$cluster == "both") {
       clustered_data_cols <- get_clustered_data(normCounts, transpose = TRUE)
       normCounts          <- normCounts[, clustered_data_cols$order, drop = FALSE]
       col_metadata        <- col_metadata[clustered_data_cols$order, , drop = FALSE]
+      # After reordering, cbind cluster info
       col_metadata        <- cbind(col_metadata, clustered_data_cols$clusters)
     }
-
+    # Row clustering if requested
     if (args$cluster == "row" || args$cluster == "both") {
       if (args$test_mode) {
         k    <- 2
@@ -585,14 +587,24 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
       clustered_data_rows <- get_clustered_data(normCounts, transpose = FALSE, k = k, kmax = kmax)
       normCounts          <- clustered_data_rows$expression[clustered_data_rows$order, , drop = FALSE]
       row_metadata        <- row_metadata[clustered_data_rows$order, , drop = FALSE]
+      # After reordering rows, add cluster annotations
       row_metadata        <- cbind(row_metadata, clustered_data_rows$clusters)
     }
+  } else {
+    # No clustering
   }
 
   end_time <- proc.time() - start_time
 
-  print("Total time of execution: ")
-  print(end_time) # Th
+  print("Total time of execution cluster_and_reorder function: ")
+  print(end_time)
+
+  print("Clustered data:")
+  print(head(normCounts))
+  print("Row metadata:")
+  print(head(row_metadata))
+  print("Column metadata:")
+  print(head(col_metadata))
 
   return(list(normCounts = normCounts, col_metadata = col_metadata, row_metadata = row_metadata))
 }
@@ -603,14 +615,17 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
 
 # Function to add metadata columns and create the final results data frame
 # Updated function: add contrast-specific metadata to results
-add_metadata_to_results <- function(expression_data_df, deseq_result, read_count_cols, contrast_index) {
+add_metadata_to_results <- function(expression_data_df, deseq_result, read_count_cols, contrast_name) {
   res_df <- as.data.frame(deseq_result) %>%
     select(baseMean, log2FoldChange, pvalue, padj) %>%
     rename(
-      !!paste0("contrast_", contrast_index, "_LFC")    := log2FoldChange,
-      !!paste0("contrast_", contrast_index, "_pvalue") := pvalue,
-      !!paste0("contrast_", contrast_index, "_FDR")    := padj
+      !!paste0(contrast_name, "_LFC")    := log2FoldChange,
+      !!paste0(contrast_name, "_pvalue") := pvalue,
+      !!paste0(contrast_name, "_FDR")    := padj
     )
+
+  print("DESeq2 results data frame:")
+  print(head(res_df))
 
   # Merge with the main expression data
   expression_data_merged <- data.frame(
@@ -708,7 +723,7 @@ for (contrast_index in contrast_vector) {
     expression_data_df = expression_data_df,
     deseq_result       = deseq_result,
     read_count_cols    = read_counts_columns,
-    contrast_index     = contrast_index
+    contrast_name = paste0(contrast_selected$contrast, "_", contrast_selected$specificity_group)
   )
 
   # Remove " Rpkm" from all column names
@@ -744,7 +759,7 @@ annotation_cols <- c("GeneId", "RefseqId", "Chrom", "TxStart", "TxEnd", "Strand"
 sample_order <- colnames(dds)
 
 # Extract contrast columns: any column name that starts with 'contrast_'
-contrast_cols <- grep("^contrast_\\d+_", colnames(annotated_expression_combined_df), value = TRUE)
+contrast_cols <- grep("vs", colnames(annotated_expression_combined_df), value = TRUE)
 
 print("Annotation contrast columns:")
 print(contrast_cols)

@@ -905,13 +905,14 @@ scale_min_max <- function(x,
 }
 
 cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
-  # Reordering happens AFTER clustering
+
+  start_time <- proc.time()
+
   if (args$cluster != "none") {
     # Column clustering if requested
     if (args$cluster == "column" || args$cluster == "both") {
       clustered_data_cols <- get_clustered_data(normCounts, transpose = TRUE)
-      # Reorder samples
-      normCounts          <- normCounts[, clustered_data_cols$order]
+      normCounts <- normCounts[, clustered_data_cols$order, drop = FALSE]
       col_metadata        <- col_metadata[clustered_data_cols$order, , drop = FALSE]
       # After reordering, cbind cluster info
       col_metadata        <- cbind(col_metadata, clustered_data_cols$clusters)
@@ -934,6 +935,19 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
   } else {
     # No clustering
   }
+
+  end_time <- proc.time() - start_time
+
+  print("Total time of execution cluster_and_reorder function: ")
+  print(end_time)
+
+  print("Clustered data:")
+  print(head(normCounts))
+  print("Row metadata:")
+  print(head(row_metadata))
+  print("Column metadata:")
+  print(head(col_metadata))
+
   return(list(normCounts = normCounts, col_metadata = col_metadata, row_metadata = row_metadata))
 }
 
