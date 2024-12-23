@@ -306,6 +306,18 @@ get_args <- function() {
     default = "none"
   )
   parser$add_argument(
+    "--k",
+    help    = "Number of levels (depth) for Hopach clustering: min - 1, max - 15. Default: 3.",
+    type    = "integer",
+    default = 3
+  )
+  parser$add_argument(
+    "--kmax",
+    help    = "Maximum number of clusters at each level for Hopach clustering: min - 2, max - 9. Default: 5.",
+    type    = "integer",
+    default = 5
+  )
+  parser$add_argument(
     "-o",
     "--output",
     help = "Output prefix for generated files",
@@ -716,6 +728,23 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefi
       print(paste("Number of rows in row_metadata_filtered:", nrow(row_metadata_filtered)))
     }
 
+    # Convert to uppercase and trim whitespace
+    row_metadata_filtered <- row_metadata_filtered %>%
+      mutate(GeneId = toupper(trimws(GeneId)))  # Adjust column name if necessary
+    rownames(normCounts)  <- toupper(trimws(rownames(normCounts)))
+
+    # Check for duplicates in normCounts
+    if (any(duplicated(rownames(normCounts)))) {
+      print("Duplicate gene IDs found in normCounts. Removing duplicates.")
+      normCounts <- normCounts[!duplicated(rownames(normCounts)),]
+    }
+
+    # Check for duplicates in row_metadata_filtered
+    if (any(duplicated(rownames(row_metadata_filtered)))) {
+      print("Duplicate gene IDs found in row_metadata_filtered. Removing duplicates.")
+      row_metadata_filtered <- row_metadata_filtered[!duplicated(rownames(row_metadata_filtered)),]
+    }
+
     # Check if any rows pass the filter
     if (nrow(row_metadata_filtered) == 0) {
       warning(paste("No genes passed the FDR threshold of", args$fdr))
@@ -738,8 +767,9 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefi
 
     # Proceed to subset only the matching row names
     # This prevents the "subscript out of bounds" error
-    common_rows         <- intersect(rownames(row_metadata_filtered), rownames(normCounts))
+    common_rows           <- intersect(rownames(row_metadata_filtered), rownames(normCounts))
     filtered_normCounts <- normCounts[common_rows, , drop = FALSE]
+    row_metadata_filtered <- row_metadata_filtered[common_rows, , drop = FALSE]  # This line ensures consistency
     print(paste("Number of rows after subsetting:", nrow(filtered_normCounts)))
 
     # **Existing Debug Statements Inside export_gct_data**
@@ -812,7 +842,7 @@ export_charts <- function(res, annotated_expression_df, column_data, normCounts,
 }
 
 # Function to generate clusters
-get_clustered_data <- function(expression_data, transpose = FALSE, k = 15, kmax = 9) {
+get_clustered_data <- function(expression_data, transpose = FALSE, k = 3, kmax = 5) {
 
   start_time <- proc.time()
 
@@ -925,8 +955,8 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
         k    <- 2
         kmax <- 2
       } else {
-        k    <- 15
-        kmax <- 9
+        k    <- args$k
+        kmax <- args$kmax
       }
       clustered_data_rows <- get_clustered_data(normCounts, transpose = FALSE, k = k, kmax = kmax)
       normCounts          <- clustered_data_rows$expression[clustered_data_rows$order, , drop = FALSE]

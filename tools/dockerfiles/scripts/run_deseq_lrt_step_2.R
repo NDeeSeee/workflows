@@ -197,6 +197,18 @@ get_args <- function() {
     default = "none"
   )
   parser$add_argument(
+    "--k",
+    help    = "Number of levels (depth) for Hopach clustering: min - 1, max - 15. Default: 3.",
+    type    = "integer",
+    default = 3
+  )
+  parser$add_argument(
+    "--kmax",
+    help    = "Maximum number of clusters at each level for Hopach clustering: min - 2, max - 9. Default: 5.",
+    type    = "integer",
+    default = 5
+  )
+  parser$add_argument(
     "-o",
     "--output",
     help = "Output prefix. Default: deseq",
@@ -469,7 +481,7 @@ export_cls <- function(categories, location) {
 }
 
 # Function to generate clusters
-get_clustered_data <- function(expression_data, transpose = FALSE, k = 15, kmax = 9) {
+get_clustered_data <- function(expression_data, transpose = FALSE, k = 3, kmax = 5) {
 
   start_time <- proc.time()
 
