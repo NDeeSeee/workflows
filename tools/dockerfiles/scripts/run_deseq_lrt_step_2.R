@@ -593,8 +593,8 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
         k    <- 2
         kmax <- 2
       } else {
-        k    <- 15
-        kmax <- 9
+        k    <- args$k
+        kmax <- args$kmax
       }
       clustered_data_rows <- get_clustered_data(normCounts, transpose = FALSE, k = k, kmax = kmax)
       normCounts          <- clustered_data_rows$expression[clustered_data_rows$order, , drop = FALSE]

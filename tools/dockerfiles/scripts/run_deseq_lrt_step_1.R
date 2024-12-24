@@ -729,9 +729,8 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefi
     }
 
     # Convert to uppercase and trim whitespace
-    row_metadata_filtered <- row_metadata_filtered %>%
-      mutate(GeneId = toupper(trimws(GeneId)))  # Adjust column name if necessary
-    rownames(normCounts)  <- toupper(trimws(rownames(normCounts)))
+    rownames(row_metadata_filtered) <- toupper(trimws(rownames(row_metadata_filtered)))
+    rownames(normCounts)            <- toupper(trimws(rownames(normCounts)))
 
     # Check for duplicates in normCounts
     if (any(duplicated(rownames(normCounts)))) {
