@@ -192,15 +192,14 @@ assert_args <- function(args) {
 }
 
 # Function to apply batch correction using ComBat_seq
-apply_combat_seq <- function(count_data, batch_info, design, column_data) {
+apply_combat_seq <- function(count_data, design, column_data) {
 
   start_time <- proc.time()
 
   print("Applying ComBat_seq batch correction")
   corrected_counts <- sva::ComBat_seq(
     counts = as.matrix(count_data),
-    batch = batch_info,
-    group = NULL,
+    batch = column_data$batch,
     covar_mod = model.matrix(design, data = column_data)
   )
 
@@ -1090,8 +1089,7 @@ if (args$batchcorrection != "none") {
     if (args$batchcorrection == "combatseq") {
       # Case 2: Apply ComBat_seq batch correction to raw counts
       print("Applying ComBat_seq batch correction")
-      batch_info <- metadata_df$batch
-      corrected_counts <- apply_combat_seq(countData, batch_info, design_formula, metadata_df)
+      corrected_counts <- apply_combat_seq(countData, design_formula, metadata_df)
       countData  <- corrected_counts
       # Design formula remains as provided
     } else if (args$batchcorrection == "limmaremovebatcheffect") {

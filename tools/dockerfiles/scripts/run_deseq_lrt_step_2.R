@@ -247,6 +247,7 @@ log_message <- function(message) {
 log_message(paste("Loading contrasts from", args$dsq_obj_data))
 all_contrasts <- readRDS(args$dsq_obj_data)
 log_message("Contrasts Loaded:")
+print(str(all_contrasts, max.level = 0))
 print(all_contrasts)
 log_message("Structure of Contrasts:")
 glimpse(all_contrasts)
@@ -666,12 +667,12 @@ export_deseq_report <- function(expression_data_df, output_prefix) {
 #  <= fdr | contrast_2_padj <= fdr, etc.)
 # Function to export normalized counts and filtered counts to GCT format
 # Updated GCT export: filter if ANY FDR column meets the threshold
-export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefix) {
+export_gct_data <- function(normCounts, row_metadata, col_metadata) {
   tryCatch({
     col_metadata <- col_metadata %>% mutate_all(as.vector)
     gct_data     <- new("GCT", mat = normCounts, rdesc = row_metadata, cdesc = col_metadata)
-    cmapR::write_gct(ds = gct_data, ofile = paste0(output_prefix, "_counts_all.gct"), appenddim = FALSE)
-    print(paste("Exported GCT (all) to", paste0(output_prefix, "_counts_all.gct")))
+    cmapR::write_gct(ds = gct_data, ofile = "counts_all.gct", appenddim = FALSE)
+    print(paste("Exported GCT (all) to", "counts_all.gct"))
 
     # Filter rows by any FDR column
     fdr_cols <- grep("_FDR$", colnames(row_metadata), value = TRUE)
@@ -695,8 +696,8 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefi
                              mat   = clustered_data$normCounts,
                              rdesc = clustered_data$row_metadata,
                              cdesc = clustered_data$col_metadata)
-    cmapR::write_gct(ds = gct_data_filtered, ofile = paste0(output_prefix, "_counts_filtered.gct"), appenddim = FALSE)
-    print(paste("Exported GCT (filtered) to", paste0(output_prefix, "_counts_filtered.gct")))
+    cmapR::write_gct(ds = gct_data_filtered, ofile = "counts_filtered.gct", appenddim = FALSE)
+    print(paste("Exported GCT (filtered) to", "counts_filtered.gct"))
   }, error = function(e) {
     print(paste("Failed to export GCT data:", e$message))
   })
@@ -705,13 +706,17 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefi
 # Iterate through each index in contrast_vector and process the corresponding contrast
 annotated_expression_combined_df <- NULL
 
+print("Starting DESeq2 analysis for contrast_vector:")
+print(contrast_vector)
+
 for (contrast_index in contrast_vector) {
   contrast_selected <- all_contrasts[[contrast_index]]
 
   print("Selected contrast structure:")
   print(contrast_selected)
 
-  contrast_name <- paste0("contrast_", contrast_index, "_", contrast_selected$contrast)
+  contrast_name <- paste0("contrast_", contrast_index, "_", contrast_selected$contrast, "_",
+                          contrast_selected$specificity_group)
   print(paste("Processing contrast:", contrast_name))
 
   # Get DESeq2 results for the specific contrast
@@ -745,7 +750,7 @@ for (contrast_index in contrast_vector) {
   print(head(annotated_expression_df))
 
   # Export DESeq2 report
-  export_deseq_report(annotated_expression_df, paste0(args$output, "_", contrast_name))
+  export_deseq_report(annotated_expression_df, contrast_name)
   print("Exported DESeq2 report.")
 
   # Merge into combined annotation
@@ -758,7 +763,7 @@ for (contrast_index in contrast_vector) {
   }
 }
 
-export_mds_html_plot(normCounts, paste0(args$output, "_mds_plot.html"))
+export_mds_html_plot(normCounts, "mds_plot.html")
 print("Exported MDS plot.")
 
 annotated_expression_combined_df <- annotated_expression_combined_df[, !duplicated(names
@@ -802,6 +807,6 @@ row_metadata <- annotated_expression_combined_df %>%
 
 # TODO: here normCounts should be the entire data
 # Export GCT data
-export_gct_data(normCounts, row_metadata, as.data.frame(colData(dds)), args$output)
+export_gct_data(normCounts, row_metadata, as.data.frame(colData(dds)))
 
 print("DESeq2 analysis complete.")
