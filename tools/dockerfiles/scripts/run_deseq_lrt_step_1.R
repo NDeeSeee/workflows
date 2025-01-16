@@ -614,6 +614,9 @@ generate_contrasts <- function(dds) {
   interaction_contrasts <- generate_interaction_effect_contrasts(dds)
   all_contrasts <- c(main_contrasts, interaction_contrasts)
 
+  print("Head of all_contrasts:")
+  print(head(all_contrasts))
+
   all_contrasts <- purrr::list_modify(all_contrasts, expression_data_df = expression_data_df)
 
   print(paste("Exporting contrasts list to", paste0(args$output, "_contrasts.rds"), sep = " "))
@@ -828,11 +831,27 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefi
 export_charts <- function(res, annotated_expression_df, column_data, normCounts, output, args) {
   # Export MDS plot
   print("Exporting MDS plot")
-  export_mds_html_plot(normCounts, paste0(output, "_mds_plot.html"))
+  # In case we have original counts, we need to use them for MDS plot
+  # It means that we have some sort of batch-correction function applied
+  if (exists("original_counts")) {
 
-  if (!is.null(corrected_counts)) {
+    dse <- DESeqDataSetFromMatrix(
+      countData = original_counts,
+      colData   = metadata_df,
+      design    = design_formula
+    )
+
+    rlog_original_counts <- assay(rlog(dse, blind = FALSE))
+
+    export_mds_html_plot(rlog_original_counts, paste0(output, "_mds_plot.html"))
+
     print("Exporting MDS plot with batch correction")
-    export_mds_html_plot(corrected_counts, paste0(output, "_mds_plot_corrected.html"))
+
+    # normCounts is supposed to be batch-corrected here and rlog-normalised
+    export_mds_html_plot(normCounts, paste0(output, "_mds_plot_corrected.html"))
+
+  } else {
+    export_mds_html_plot(normCounts, paste0(output, "_mds_plot.html"))
   }
 
   # Now just call export_gct_data directly without clustering here.
@@ -1089,6 +1108,7 @@ if (args$batchcorrection != "none") {
     if (args$batchcorrection == "combatseq") {
       # Case 2: Apply ComBat_seq batch correction to raw counts
       print("Applying ComBat_seq batch correction")
+      original_counts <- countData
       corrected_counts <- apply_combat_seq(countData, design_formula, metadata_df)
       countData  <- corrected_counts
       # Design formula remains as provided
@@ -1167,6 +1187,9 @@ dsq_wald <- DESeq(
 if (args$batchcorrection == "limmaremovebatcheffect" && "batch" %in% colnames(metadata_df)) {
   # Case 3: After DESeq2, apply rlog transformation and remove batch effects using limma
   print("Applying rlog transformation and limma batch effect removal")
+
+  original_counts <- countData
+
   rlog_transformed <- rlog(dsq_wald, blind = FALSE)
   rlog_counts <- assay(rlog_transformed)
 
@@ -1174,7 +1197,6 @@ if (args$batchcorrection == "limmaremovebatcheffect" && "batch" %in% colnames(me
   design_formula <- as.formula(paste0("~", str_remove(as.character(dsq_wald@design)[2], " \\+ batch")))
 
   design_matrix <- model.matrix(design_formula, data = metadata_df)
-
   # Apply removeBatchEffect
   corrected_counts <- limma::removeBatchEffect(rlog_counts, batch = metadata_df$batch, design = design_matrix)
   normCounts <- corrected_counts

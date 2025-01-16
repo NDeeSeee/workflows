@@ -15,6 +15,7 @@ suppressMessages(library(ggrepel))
 suppressMessages(library(DESeq2))
 suppressMessages(library(limma)) # For removeBatchEffect
 suppressMessages(library(cmapR))
+suppressMessages(library(data.table))
 suppressMessages(library(rlang)) # For traceback handling
 
 options(rlang_backtrace_on_error = "full")
@@ -126,6 +127,13 @@ get_args <- function() {
     "--dsq_obj_data",
     help = "RDS file containing contrassts and expression data from step 1",
     type = "character",
+    required = TRUE
+  )
+  parser$add_argument(
+    "-cd",
+    "--contrast_df",
+    help     = "TSV file containing contrasts data",
+    type     = "character",
     required = TRUE
   )
   parser$add_argument(
@@ -243,6 +251,11 @@ log_message <- function(message) {
   cat(paste0("[", Sys.time(), "] ", message, "\n"))
 }
 
+
+# Load contrasts ta
+contrast_df <- data.table::fread(args$contrast_df)
+
+
 # Load RDS files with detailed logging
 log_message(paste("Loading contrasts from", args$dsq_obj_data))
 all_contrasts <- readRDS(args$dsq_obj_data)
@@ -251,6 +264,15 @@ print(str(all_contrasts, max.level = 0))
 print(all_contrasts)
 log_message("Structure of Contrasts:")
 glimpse(all_contrasts)
+
+
+contrasts_values <- sapply(all_contrasts, function(x) x$contrast)
+print("Contrasts:")
+print(contrasts_values)
+spec_group_values <- sapply(all_contrasts, function(x) x$specificity_group)
+print("Specificity Groups:")
+print(spec_group_values)
+
 
 log_message(paste("Loading expression data from", args$dsq_obj_data))
 expression_data_df <- all_contrasts$expression_data_df
@@ -388,11 +410,11 @@ if (batch_correction_method == "limmaremovebatcheffect" && "batch" %in% colnames
 
   design_matrix <- model.matrix(design_formula, data = metadata_df)
 
-  # Apply removeBatchEffect
+  # Apply removeBatchEffect on rlog normalized counts
   normCounts <- limma::removeBatchEffect(rlog_counts, batch = metadata_df$batch, design = design_matrix)
 } else {
-  normCounts <- rlog(dds, blind = FALSE)
-  normCounts <- assay(normCounts)
+  # If no batch correction is needed, just perform rlog
+  normCounts <- assay(rlog(dds, blind = FALSE))
 }
 
 # Function to get DESeq2 results for a specific contrast
@@ -710,6 +732,12 @@ print("Starting DESeq2 analysis for contrast_vector:")
 print(contrast_vector)
 
 for (contrast_index in contrast_vector) {
+
+  contrast_df_subset <- filter(contrast_df, contrast_number == contrast_index)
+
+  contrast_index <- which(contrasts_values == contrast_df_subset$contrast & spec_group_values ==
+    contrast_df_subset$specificity_group)
+  
   contrast_selected <- all_contrasts[[contrast_index]]
 
   print("Selected contrast structure:")
