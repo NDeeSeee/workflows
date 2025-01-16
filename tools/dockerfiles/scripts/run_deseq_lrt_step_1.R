@@ -843,6 +843,8 @@ export_charts <- function(res, annotated_expression_df, column_data, normCounts,
 
     rlog_original_counts <- assay(rlog(dse, blind = FALSE))
 
+    print("Exporting MDS plot with original counts")
+
     export_mds_html_plot(rlog_original_counts, paste0(output, "_mds_plot.html"))
 
     print("Exporting MDS plot with batch correction")
