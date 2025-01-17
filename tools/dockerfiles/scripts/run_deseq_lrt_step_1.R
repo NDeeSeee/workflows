@@ -412,51 +412,129 @@ generate_lrt_md <- function(deseq_results, full_formula, reduced_formula, output
 generate_main_effect_contrasts <- function(dds, factors, factor_levels) {
 
   start_time <- proc.time()
+  contrasts  <- list()
 
-  contrasts <- list()
+  # Helper function to rebuild a DESeqDataSet from scratch
+  rebuild_dds <- function(dds, factor_ref_list) {
+    # 1) Convert colData to a plain data.frame so we can manipulate it
+    colData_df <- as.data.frame(colData(dds))
 
-  for (factor in factors) {
-    other_factors <- setdiff(factors, factor)
+    # 2) Re-level factors as specified in factor_ref_list, e.g.
+    #    factor_ref_list might be list(grouped_ref = c("grouped" = "0H_GFP_N"))
+    for (f_name in names(factor_ref_list)) {
+      # factor_ref_list[[f_name]] is the new reference level for factor f_name
+      ref_level <- factor_ref_list[[f_name]]
+      colData_df[[f_name]] <- relevel(as.factor(colData_df[[f_name]]), ref = ref_level)
+    }
 
-    for (other_factor in other_factors) {
-      other_levels <- factor_levels[[other_factor]]
+    # 3) Build a new DESeqDataSet
+    dds_new <- DESeqDataSetFromMatrix(
+      countData = counts(dds),
+      colData   = colData_df,
+      design    = design(dds)
+    )
+    return(dds_new)
+  }
 
-      for (other_level in other_levels) {
-        # dds_subset <- dds[colData(dds)[[other_factor]] == other_level, ]
-        dds_subset <- dds
+  # 1) SINGLE-FACTOR scenario
+  #    (e.g. ~ grouped with multiple levels)
+  if (length(factors) == 1) {
+    factor <- factors[[1]]
+    all_levels <- factor_levels[[factor]]
 
-        for (ref_level in factor_levels[[factor]]) {
-          colData(dds_subset)[[factor]] <- relevel(colData(dds_subset)[[factor]], ref = ref_level)
-          colData(dds_subset)[[other_factor]] <- relevel(colData(dds_subset)[[other_factor]], ref = other_level)
+    # For each level, define it as reference, compare to others
+    for (ref_level in all_levels) {
 
-          levels <- factor_levels[[factor]]
+      # Build a new copy where 'ref_level' is the reference
+      dds_temp <- rebuild_dds(
+        dds,
+        factor_ref_list = setNames(list(ref_level), factor)
+      )
 
-          for (level in levels) {
-            if (level != ref_level) {
-              specificity_group <- paste(other_factor, other_level, sep = "_")
-              contrast <- paste(factor, level, "vs", ref_level, sep = "_")
+      # Run DESeq once for that new reference
+      dds_temp <- DESeq(dds_temp, test = "Wald")
 
-              dds_subset <- DESeq(dds_subset, test = "Wald")
+      # Compare each *other* level to ref_level
+      for (lvl in all_levels) {
+        if (lvl != ref_level) {
+          contrast_name <- paste(factor, lvl, "vs", ref_level, sep = "_")
 
-              contrast_res <- results(dds_subset,
-                name = contrast,
-                alpha = args$fdr,
-                lfcThreshold = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
-                independentFiltering = TRUE
+          # results() using name = "factor_lvl_vs_ref" style
+          contrast_res <- results(
+            dds_temp,
+            name                = contrast_name,
+            alpha               = args$fdr,
+            lfcThreshold        = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
+            independentFiltering = TRUE
+          )
+
+          sig_genes <- sum(contrast_res$padj < args$fdr, na.rm = TRUE)
+
+          contrasts <- append(contrasts, list(list(
+            effect_type       = "main",
+            specificity_group = factor,
+            numerator         = lvl,
+            denominator       = ref_level,
+            contrast          = contrast_name,
+            subset            = dds_temp,
+            contrast_res      = contrast_res,
+            significant_genes = sig_genes
+          )))
+        }
+      }
+    }
+
+    # 2) MULTI-FACTOR scenario
+  } else {
+    for (factor in factors) {
+      other_factors <- setdiff(factors, factor)
+
+      for (other_factor in other_factors) {
+        other_levels <- factor_levels[[other_factor]]
+
+        for (other_level in other_levels) {
+
+          for (ref_level in factor_levels[[factor]]) {
+
+            # Build a new copy where factor=ref_level and other_factor=other_level
+            dds_temp <- rebuild_dds(
+              dds,
+              factor_ref_list = c(
+                setNames(list(ref_level), factor),
+                setNames(list(other_level), other_factor)
               )
+            )
 
-              significant_genes <- sum(contrast_res$padj < args$fdr, na.rm = TRUE)
+            # Run DESeq with these new references
+            dds_temp <- DESeq(dds_temp, test = "Wald")
 
-              contrasts <- append(contrasts, list(list(
-                effect_type = "main",
-                specificity_group = specificity_group,
-                numerator = level,
-                denominator = ref_level,
-                contrast = contrast,
-                subset = dds_subset,
-                contrast_res = contrast_res,
-                significant_genes = significant_genes
-              )))
+            # For each non-ref level of 'factor'
+            for (lvl in factor_levels[[factor]]) {
+              if (lvl != ref_level) {
+                specificity_group <- paste(other_factor, other_level, sep = "_")
+                contrast_name     <- paste(factor, lvl, "vs", ref_level, sep = "_")
+
+                contrast_res <- results(
+                  dds_temp,
+                  name                = contrast_name,
+                  alpha               = args$fdr,
+                  lfcThreshold        = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
+                  independentFiltering = TRUE
+                )
+
+                sig_genes <- sum(contrast_res$padj < args$fdr, na.rm = TRUE)
+
+                contrasts <- append(contrasts, list(list(
+                  effect_type       = "main",
+                  specificity_group = specificity_group,
+                  numerator         = lvl,
+                  denominator       = ref_level,
+                  contrast          = contrast_name,
+                  subset            = dds_temp,
+                  contrast_res      = contrast_res,
+                  significant_genes = sig_genes
+                )))
+              }
             }
           }
         }
@@ -465,8 +543,7 @@ generate_main_effect_contrasts <- function(dds, factors, factor_levels) {
   }
 
   end_time <- proc.time() - start_time
-
-  print("Total time of generate_main_effect_contrasts function execution: ")
+  message("Total time of generate_main_effect_contrasts function execution: ")
   print(end_time)
 
   return(contrasts)
