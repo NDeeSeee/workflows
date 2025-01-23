@@ -331,6 +331,12 @@ get_args <- function() {
     default = 1
   )
   parser$add_argument(
+    "--lrt_only_mode",
+    help    = "Run LRT only, no contrasts",
+    action  = "store_true",
+    default = FALSE
+  )
+  parser$add_argument(
     "--test_mode",
     help = "Run for test, only first 500 rows, clustering minimised",
     action = "store_true",
@@ -1295,8 +1301,22 @@ dsq_lrt <- DESeq(
   parallel = TRUE
 )
 
-print("Generate contrasts")
-contrast_df <- generate_contrasts(dsq_wald)
+if (!lrt_only_mode) {
+  print("Generate contrasts")
+
+  contrast_df <- generate_contrasts(dsq_wald)
+
+  contrasts_filename <- paste(args$output, "_contrasts_table.tsv", sep = "")
+  write.table(
+    contrast_df,
+    file      = contrasts_filename,
+    sep       = "\t",
+    row.names = FALSE,
+    col.names = TRUE,
+    quote     = FALSE
+  )
+}
+
 
 dsq_lrt_res <- results(
   dsq_lrt,
@@ -1314,16 +1334,6 @@ annotated_expression_df <- expression_data_df %>%
     `-LOG10(pval)` = -log10(as.numeric(pvalue)),
     `-LOG10(padj)` = -log10(as.numeric(padj))
   )
-
-contrasts_filename <- paste(args$output, "_contrasts_table.tsv", sep = "")
-write.table(
-  contrast_df,
-  file = contrasts_filename,
-  sep = "\t",
-  row.names = FALSE,
-  col.names = TRUE,
-  quote = FALSE
-)
 
 lrt_report_filename <- paste0(args$output, "_lrt_result.md")
 summary(dsq_lrt_res)
