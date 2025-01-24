@@ -1301,7 +1301,7 @@ dsq_lrt <- DESeq(
   parallel = TRUE
 )
 
-if (!lrt_only_mode) {
+if (!args$lrt_only_mode) {
   print("Generate contrasts")
 
   contrast_df <- generate_contrasts(dsq_wald)
