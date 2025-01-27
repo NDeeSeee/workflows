@@ -2,15 +2,15 @@
 # Dockerfile
 #
 # Software:         set of R scripts for single-cell data analysis
-# Software Version: v0.0.41
+# Software Version: v0.0.42
 # Description:      Dockerized version of the set of R scripts for
 #                   single-cell data analysis
 # Website:          https://github.com/Barski-lab/workflows
 # Provides:         set of R scripts for single-cell data analysis
 # Base Image:       satijalab/seurat:latest
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.41 -f sc-tools-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.41
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.41 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/sc-tools:v0.0.42 -f sc-tools-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/sc-tools:v0.0.42
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/sc-tools:v0.0.42 /bin/bash
 ##########################################################################################################
 #
 # Notes:
@@ -39,6 +39,18 @@
 #     sc_rna_azimuth.R --help && \
 #     sc_rna_load_rhapsody.R --help
 #
+# v0.0.42 -- based on biowardrobe2/sc-tools:v0.0.41
+# - Updated sc_atac_dbinding.R and sc_atac_coverage.R
+#   scripts to normalize bigWig files properly (using
+#   the same approach as in the CoveragePlot function
+#   from Signac)
+# - Removed first_tn5ct.bigWig and second_tn5ct.bigWig
+#   outputs from sc_atac_dbinding.R (they are redundant).
+#   Also, renamed pct.1 and pct.2 columns to have the
+#   names from --first and --second parameters.
+#   The gene_name column (the nearest gene) is also
+#   removed from the output file. The nearest gene
+#   should be asigned by iaintersect tool.
 # v0.0.41 -- based on biowardrobe2/sc-tools:v0.0.40
 # - Updated UCSC Cellbrowser to 1.2.8.
 # - Save gene and peak markers in the same rds file

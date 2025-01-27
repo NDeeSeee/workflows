@@ -43,7 +43,6 @@ export(
     "export_h5ad",
     "export_scope_loom",
     "export_fragments_coverage",
-    "export_coverage",
     "load_cell_cycle_data",
     "load_annotation_data",
     "replace_fragments"
@@ -120,13 +119,13 @@ load_cell_cycle_data <- function(seurat_data, location){
     )
 }
 
-export_fragments_coverage <- function(fragments_data, location){
+export_fragments_coverage <- function(fragments_data, location, scaling_coef=1){
     base::tryCatch(
         expr = {
             coverage_data <- methods::as(
                 base::lapply(
                     GenomicRanges::coverage(fragments_data),
-                    function(x) signif(10^6 * x/length(fragments_data), 3)               # scale to RPM mapped
+                    function(x) signif(x * scaling_coef, 3)
                 ),
                 "SimpleRleList"
             )
@@ -135,18 +134,6 @@ export_fragments_coverage <- function(fragments_data, location){
         },
         error = function(e){
             base::print(base::paste("Failed to export ATAC fragments coverage data to", location, "due to", e))
-        }
-    )
-}
-
-export_coverage <- function(coverage_data, location){
-    base::tryCatch(
-        expr = {
-            rtracklayer::export.bw(coverage_data, location)
-            base::print(base::paste("Exporting coverage data to", location, sep=" "))
-        },
-        error = function(e){
-            base::print(base::paste("Failed to export coverage data to", location, "due to", e))
         }
     )
 }

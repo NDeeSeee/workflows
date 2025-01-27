@@ -1876,6 +1876,10 @@ atac_dbinding_analyze <- function(seurat_data, args){
                     ) %>%
                     dplyr::select(                                 # to have a proper coliumns order
                         c("chr", "start", "end", "log2FoldChange", "pct.1", "pct.2", "pvalue", "padj")
+                    ) %>%
+                    dplyr::rename(                                 # because that's how we defined our ident.1 and ident.2
+                        !!base::paste("pct", args$second, sep="_"):="pct.1",
+                        !!base::paste("pct", args$first, sep="_"):="pct.2"
                     )
         SeuratObject::Idents(seurat_data) <- "new.ident"
         base::print(
@@ -1886,27 +1890,6 @@ atac_dbinding_analyze <- function(seurat_data, args){
         )
         results$db_sites <- db_sites                                                    # not filtered differentialy bound sites
     }
-
-    base::print("Adding closest genes for differentially bound sites")
-    results$db_sites <- results$db_sites %>%
-                        tidyr::unite(
-                            query_region,                                               # we will left join by this column
-                            chr:start:end,
-                            remove=FALSE,
-                            sep="-"
-                        ) %>%
-                        dplyr::left_join(
-                            Signac::ClosestFeature(                                     # will add query_region and gene_name columns
-                                seurat_data,
-                                regions=GenomicRanges::makeGRangesFromDataFrame(
-                                    results$db_sites,
-                                    seqinfo=seurat_data[["ATAC"]]@seqinfo               # need to have seqinfo in Seurat object
-                                )
-                            ) %>% dplyr::select(c("query_region", "gene_name")),
-                            by="query_region"
-                        ) %>%
-                        dplyr::select(-c("query_region")) %>%
-                        dplyr::relocate(gene_name, .after=last_col())                   # move gene_name to the end
 
     return (results)
 }
