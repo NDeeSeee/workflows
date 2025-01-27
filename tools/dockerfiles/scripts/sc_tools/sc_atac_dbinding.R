@@ -42,7 +42,18 @@ prepare_fragments_and_peaks <- function(seurat_data, seqinfo_data, args){       
             paste0(args$output, "_seurat_peaks.bigBed")
         )
     }
+
+    mapped_counts <- AverageCounts(                                                     # named vector with the args$first and args$second names
+        seurat_data, assay="ATAC", group.by=args$splitby, verbose=FALSE                 # average nCount_ATAC per group multiplied on the number
+    ) * CellsPerGroup(                                                                  # of cells per group gives approximately mapped reads number 
+        seurat_data, group.by=args$splitby                                              # may include NA, because CellsPerGroup returns NA group
+    )
+
     tmp_locations <- list(
+        scaling_coefficients=list(                                                      # for easy access in a proper order
+            first=10^6/mapped_counts[args$first],                                       # per million mapped reads
+            second=10^6/mapped_counts[args$second]
+        ),
         fragments=list(
             first=paste0(                                                               # BED file with ATAC fragments for cells from --first group
                 args$tmpdir, "/",
@@ -61,10 +72,6 @@ prepare_fragments_and_peaks <- function(seurat_data, seqinfo_data, args){       
             cut_sites=list(                                                             # doesn't include strand information, should be treated as single-read
                 first=paste0(args$tmpdir, "/", "first_tn5ct.bed"),                      # BED file with Tn5 cut sites for cells from --first group
                 second=paste0(args$tmpdir, "/", "second_tn5ct.bed")                     # BED file with Tn5 cut sites for cells from --second group
-            ),
-            cut_sites_coverage=list(                                                    # made of *_treat_pileup.bdg output from MACS2
-                first=paste0(basename(args$output), "_", "first_tn5ct.bigWig"),         # bigWig file with Tn5 cut sites coverage for cells from --first group
-                second=paste0(basename(args$output), "_", "second_tn5ct.bigWig")        # bigWig file with Tn5 cut sites coverage for cells from --second group
             ),
             peaks_xls=list(                                                             # output from MACS2, will be also used as output from the tool
                 first=paste0(basename(args$output), "_", "first_peaks.xls"),
@@ -90,7 +97,8 @@ prepare_fragments_and_peaks <- function(seurat_data, seqinfo_data, args){       
         print("Generating coverage from the loaded ATAC fragments data")
         io$export_fragments_coverage(
             fragments_data=fragments_data,
-            location=tmp_locations$fragments_coverage[[i]]
+            location=tmp_locations$fragments_coverage[[i]],
+            scaling_coef=tmp_locations$scaling_coefficients[[i]]
         )
         if (args$test == "manorm2"){
             print("Extracting 1bp length Tn5 cut sites from the loaded ATAC fragments data")
@@ -115,28 +123,18 @@ prepare_fragments_and_peaks <- function(seurat_data, seqinfo_data, args){       
             Signac::CallPeaks(                                                                 # we don't need to keep output as a variable
                 object=tmp_locations$macs2$cut_sites[[i]],
                 outdir=dirname(args$output),                                                   # we save output files directly to the output folder
-                name=paste0(basename(args$output), "_", c("first", "second")[i]),        # all the names will have prefix with group name
+                name=paste0(basename(args$output), "_", c("first", "second")[i]),              # all the names will have prefix with group name
                 extsize=50,                                                                    # will be always called with --nomodel, so --shift
                 shift=-25,                                                                     # and --extsize make difference
                 effective.genome.size=args$genome,                                             # looks like it's ok to use character instead of an integer
                 additional.args=paste(
                     "-q", args$qvalue,
                     "--keep-dup all",                                                          # our fragments are already deduplicated
-                    "-B --SPMR",                                                               # to save signal per million reads as bedgraph file
                     "--seed", args$seed,                                                       # just in case
                     "--tempdir", args$tmpdir
                 ),
                 cleanup=FALSE,                                                                 # we want to keep outputs after running the script
                 verbose=FALSE
-            )
-            print("Generating coverage from the reported by MACS2 pileup data")
-            io$export_coverage(
-                coverage_data=rtracklayer::import(
-                    paste0(basename(args$output), "_", c("first", "second")[i], "_treat_pileup.bdg"),
-                    format="bedGraph",
-                    genome=seqinfo_data
-                ),
-                location=tmp_locations$macs2$cut_sites_coverage[[i]]
             )
         } else if (!is.null(tmp_locations$macs2)) {
             tmp_locations$macs2 <- NULL                           # no need to have macs2 slot if we are not going to use it
@@ -202,8 +200,7 @@ export_browser_tracks <- function(db_results, seqinfo_data, args){
                 dplyr::mutate(
                     "name"=paste0(
                         "padj=", format(padj, digits=3, trim=TRUE),
-                        ";log2FC=", format(log2FoldChange, digits=3, trim=TRUE),
-                        ";gene=", gene_name
+                        ";log2FC=", format(log2FoldChange, digits=3, trim=TRUE)
                     )
                 ) %>%
                 dplyr::mutate("score"=0) %>%                                     # need it because export.bb fails without score
