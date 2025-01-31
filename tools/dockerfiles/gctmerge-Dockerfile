@@ -1,0 +1,33 @@
+# Use the Bioconductor base image for the appropriate release
+FROM bioconductor/bioconductor_docker:RELEASE_3_19
+
+# Install additional system dependencies and update GPG keys
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ubuntu-keyring \
+        ca-certificates \
+        gnupg2 \
+        dirmngr \
+    && apt-key update && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libprotobuf-dev \
+        protobuf-compiler \
+        libfftw3-dev \
+        libgsl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install CRAN packages: 'argparse' and 'tidyverse'
+RUN R -e "install.packages(c('argparse', 'tidyverse'), repos='https://cloud.r-project.org/')"
+
+# Install Bioconductor package 'cmapR'
+RUN R -e "BiocManager::install('cmapR', ask = FALSE, update = TRUE)"
+
+# Set working directory
+WORKDIR /usr/src/app
+
+# Copy the R script into the container
+COPY ./scripts/merge_gct_files.R /usr/src/app/
+
+# Ensure the script has execute permissions (optional)
+RUN chmod +x /usr/src/app/merge_gct_files.R

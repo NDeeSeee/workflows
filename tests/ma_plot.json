@@ -1,0 +1,10 @@
+{
+  "diff_expr_file": {
+    "class": "File",
+    "path": "/Users/biocode/Documents/GitHub/CCHMC/BarskiiLab/workflows/tests/data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/deseq_report.tsv"
+  },
+  "x_axis_column": "baseMean",
+  "y_axis_column": "log2FoldChange",
+  "label_column": "GeneId",
+  "output_filename": "contrast_1.html"
+}

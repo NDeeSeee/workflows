@@ -2,14 +2,60 @@
 options(warn = -1)
 options("width" = 400)
 
-suppressMessages(library(argparse))
-suppressMessages(library(BiocParallel))
-suppressMessages(library(pheatmap))
-suppressMessages(library(DESeq2))
-suppressMessages(library(tidyverse))
+suppressMessages(library(argparse)) # For argument parsing
+suppressMessages(library(BiocParallel)) # For parallel processing
+suppressMessages(library(pheatmap)) # For heatmap
+suppressMessages(library(DESeq2)) # For DESeq2
+suppressMessages(library(tidyverse)) # For data manipulation
+suppressMessages(library(Glimma)) # For glimmaMDS
+suppressMessages(library(cmapR)) # For write_gct
+suppressMessages(library(sva)) # For ComBat_seq
+suppressMessages(library(limma)) # For removeBatchEffect
+suppressMessages(library(hopach)) # For clustering
+suppressMessages(library(rlang)) # For traceback handling
 
-################################################################################################
-# v0.0.1
+options(rlang_backtrace_on_error = "full")
+
+mutate <- dplyr::mutate
+filter <- dplyr::filter
+group_by <- dplyr::group_by
+slice <- dplyr::slice
+rename <- dplyr::rename
+select <- dplyr::select
+`%>%` <- magrittr::`%>%`
+`%in%` <- base::`%in%`
+
+###### v0.0.5 ######
+#
+# Changes:
+# - 'combatseq' batch correction is applied in Step 1 if specified.
+# - 'limmaremovebatcheffect' is noted and passed to Step 2 for application.
+# - Batch correction options are handled appropriately.
+# - Necessary information is saved for Step 2.
+#
+###### v0.0.4 ######
+#
+# Changes:
+# - Adjusted batch correction to be optional.
+# - Batch correction with limma is only applied if specified.
+#
+###### v0.0.3 ######
+#
+# Changes:
+# - Reads preprocessed data from RDS files.
+# - Accepts `contrast_indices`, `fdr`, `lfcThreshold`, and `regulation` as inputs.
+# - Applies batch correction using `limma::removeBatchEffect` if specified.
+# - Uses `results` function with appropriate parameters.
+#
+###### v0.0.2 ######
+#
+# Changes:
+# - Save DESeq2 dataset objects (dds) and LRT results (dsq_lrt_res) into RDS files.
+# - Save expression data (expression_data_df) into an RDS file.
+# - Save metadata (metadata_df) into an RDS file.
+# - Adjust outputs to include these RDS files.
+#
+###### v0.0.1 ######
 #
 # Note: at least two biological replicates are required for every compared category.
 #
@@ -49,13 +95,12 @@ suppressMessages(library(tidyverse))
 # for example condition WT KO
 # if --contrast is set as a single string "condition WT KO" then is will be splitted by space
 #
-################################################################################################
 
+###### run_deseq_lrt_step_1.R ######
 
 READ_COL <- "TotalReads"
 RPKM_COL <- "Rpkm"
 INTERSECT_BY <- c("RefseqId", "GeneId", "Chrom", "TxStart", "TxEnd", "Strand")
-
 
 get_file_type <- function(filename) {
   ext <- tools::file_ext(filename)
@@ -65,7 +110,6 @@ get_file_type <- function(filename) {
   }
   return(separator)
 }
-
 
 load_expression_data <- function(filenames,
                                  prefixes,
@@ -82,41 +126,39 @@ load_expression_data <- function(filenames,
     )
     # FOR TEST ONLY TO REDUCE NUMBER OF ROWS AND SPEED UP TESTING
     if (!is.null(args$test_mode) && args$test_mode) {
-    print("Test mode is ON, each sample will be limited to 100 rows")
-    isoforms <- isoforms %>%
-      dplyr::slice_head(n = 100)
+      print("Test mode is ON, each sample will be limited to 500 rows")
+      isoforms <- isoforms %>%
+        dplyr::slice_head(n = 500)
     } else {
       print("Test mode is OFF, processing all rows")
     }
 
-    print(paste("Load ", nrow(isoforms), " rows from ", filenames[i], sep = ""))
+    print(paste0("Load ", nrow(isoforms), " rows from ", filenames[i]))
     colnames(isoforms)[colnames(isoforms) == read_colname] <- paste(prefixes[i], read_colname, sep = " ")
     colnames(isoforms)[colnames(isoforms) == rpkm_colname] <- paste(prefixes[i], rpkm_colname, sep = " ")
     if (is.null(collected_isoforms)) {
       collected_isoforms <- isoforms
     } else {
       collected_isoforms <- merge(collected_isoforms,
-                                  isoforms,
-                                  by = intersect_by,
-                                  sort = FALSE)
+        isoforms,
+        by = intersect_by,
+        sort = FALSE
+      )
     }
   }
-  print(paste(
-    "Number of rows common for all loaded files ",
-    nrow(collected_isoforms),
-    sep = ""
-  ))
+  print(paste0("Number of rows common for all loaded files ", nrow(collected_isoforms)))
 
   return(collected_isoforms)
 }
 
-
 assert_args <- function(args) {
   if (length(args$input) != length(args$name)) {
     print("Exiting: --input and --name have different number of values")
-    quit(save = "no",
-         status = 1,
-         runLast = FALSE)
+    quit(
+      save = "no",
+      status = 1,
+      runLast = FALSE
+    )
   }
   tryCatch(
     expr = {
@@ -124,15 +166,12 @@ assert_args <- function(args) {
       design_formula <- as.formula(args$design)
     },
     error = function(e) {
-      print(paste(
-        "Exiting: failed to load --design ",
-        args$design,
-        " as formula",
-        sep = ""
-      ))
-      quit(save = "no",
-           status = 1,
-           runLast = FALSE)
+      print(paste0("Exiting: failed to load --design ", args$design, " as formula"))
+      quit(
+        save = "no",
+        status = 1,
+        runLast = FALSE
+      )
     }
   )
   tryCatch(
@@ -141,23 +180,39 @@ assert_args <- function(args) {
       reduced_formula <- as.formula(args$reduced)
     },
     error = function(e) {
-      print(paste(
-        "Exiting: failed to load --reduced ",
-        args$reduced,
-        " as formula",
-        sep = ""
-      ))
-      quit(save = "no",
-           status = 1,
-           runLast = FALSE)
+      print(paste0("Exiting: failed to load --reduced ", args$reduced, " as formula"))
+      quit(
+        save = "no",
+        status = 1,
+        runLast = FALSE
+      )
     }
   )
   return(args)
 }
 
+# Function to apply batch correction using ComBat_seq
+apply_combat_seq <- function(count_data, design, column_data) {
+
+  start_time <- proc.time()
+
+  print("Applying ComBat_seq batch correction")
+  corrected_counts <- sva::ComBat_seq(
+    counts = as.matrix(count_data),
+    batch = column_data$batch,
+    covar_mod = model.matrix(design, data = column_data)
+  )
+
+  end_time <- proc.time() - start_time
+
+  print("Total time of apply_combat_seq execution: ")
+  print(end_time) # This shows user, system, and elapsed times
+
+  return(corrected_counts)
+}
 
 get_args <- function() {
-  parser <- ArgumentParser(description = "Run DeSeq2 for multi-factor analysis using LRT (likelihood ratio or chi-squared test)")
+  parser <- ArgumentParser(description = "Run DESeq2 for multi-factor analysis using LRT (likelihood ratio or chi-squared test)")
   parser$add_argument(
     "-i",
     "--input",
@@ -174,24 +229,38 @@ get_args <- function() {
     required = "True",
     nargs = "+"
   )
-  parser$add_argument("-m",
-                      "--meta",
-                      help = "Metadata file to describe relation between samples, where first column corresponds to --name, formatted as CSV/TSV",
-                      type = "character",
-                      required = "True")
+  parser$add_argument(
+    "-m",
+    "--meta",
+    help = "Metadata file to describe relation between samples, where first column corresponds to --name, formatted as CSV/TSV",
+    type = "character",
+    required = "True"
+  )
   parser$add_argument(
     "-d",
     "--design",
-    help = "Design formula. Should start with ~. See DeSeq2 manual for details",
+    help = "Design formula. Should start with ~, like ~condition+celltype+condition:celltype. See DESeq2 manual for details",
     type = "character",
     required = "True"
   )
   parser$add_argument(
     "-r",
     "--reduced",
-    help = "Reduced formula to compare against with the term(s) of interest removed. Should start with ~. See DeSeq2 manual for details",
+    help = "Reduced formula to compare against with the term(s) of interest removed. Should start with ~. See DESeq2 manual for details",
     type = "character",
     required = "True"
+  )
+  parser$add_argument(
+    "--batchcorrection",
+    help = paste(
+      "Specifies the batch correction method to be applied.",
+      "- 'combatseq' applies ComBat_seq at the beginning of the analysis, removing batch effects from the counts before differential expression analysis.",
+      "- 'limmaremovebatcheffect' applies removeBatchEffect from the limma package after differential expression analysis.",
+      "- Default: none"
+    ),
+    type = "character",
+    choices = c("none", "combatseq", "limmaremovebatcheffect"),
+    default = "none"
   )
   parser$add_argument(
     "--fdr",
@@ -221,13 +290,39 @@ get_args <- function() {
       "If FALSE, the null hypothesis is set to 0, and lfcthreshold is used only as a downstream filter.",
       "Default: FALSE"
     ),
-    action = "store_true"
+    action = "store_true",
+    default = FALSE
   )
-  parser$add_argument("-o",
-                      "--output",
-                      help = "Output prefix for generated files",
-                      type = "character",
-                      default = "./deseq")
+  parser$add_argument(
+    "--cluster",
+    help = paste(
+      "Hopach clustering method to be run on normalized read counts for the",
+      "exploratory visualization part of the analysis. Default: do not run",
+      "clustering"
+    ),
+    type = "character",
+    choices = c("row", "column", "both", "none"),
+    default = "none"
+  )
+  parser$add_argument(
+    "--k",
+    help    = "Number of levels (depth) for Hopach clustering: min - 1, max - 15. Default: 3.",
+    type    = "integer",
+    default = 3
+  )
+  parser$add_argument(
+    "--kmax",
+    help    = "Maximum number of clusters at each level for Hopach clustering: min - 2, max - 9. Default: 5.",
+    type    = "integer",
+    default = 5
+  )
+  parser$add_argument(
+    "-o",
+    "--output",
+    help = "Output prefix for generated files",
+    type = "character",
+    default = "./deseq"
+  )
   parser$add_argument(
     "-p",
     "--threads",
@@ -235,17 +330,31 @@ get_args <- function() {
     type = "integer",
     default = 1
   )
-  parser$add_argument("--test_mode",
-                      help = "Run for test, only first 100 rows",
-                      action = "store_true",
-                      default = FALSE)
+  parser$add_argument(
+    "--lrt_only_mode",
+    help    = "Run LRT only, no contrasts",
+    action  = "store_true",
+    default = FALSE
+  )
+  parser$add_argument(
+    "--test_mode",
+    help = "Run for test, only first 500 rows, clustering minimised",
+    action = "store_true",
+    default = FALSE
+  )
   args <- assert_args(parser$parse_args(commandArgs(trailingOnly = TRUE)))
   return(args)
 }
 
-generate_lrt_md <- function(deseq_results, full_formula, reduced_formula, output_file, alpha = 0.1) {
+generate_lrt_md <- function(deseq_results, full_formula, reduced_formula, output_file, alpha = args$fdr,
+                            batch_warning = NULL) {
   # Initialize the markdown content
   md_content <- ""
+
+  # Add batch warning if present
+  if (!is.null(batch_warning)) {
+    md_content <- paste0(md_content, "# **Warning**\n\n", batch_warning, "\n\n---\n\n")
+  }
 
   # Add DESeq LRT results summary based on padj value only
   if (!is.null(deseq_results)) {
@@ -267,8 +376,8 @@ generate_lrt_md <- function(deseq_results, full_formula, reduced_formula, output
     # Extract the outliers and low counts from the DESeq results summary
     summary_output <- capture.output(summary(deseq_results))
 
-    outliers <- gsub(".*: ", "", summary_output[6])  # Outliers
-    low_counts <- gsub(".*: ", "", summary_output[7])  # Low counts (independent filtering)
+    outliers <- gsub(".*: ", "", summary_output[6]) # Outliers
+    low_counts <- gsub(".*: ", "", summary_output[7]) # Low counts (independent filtering)
     mean_count <- gsub("[^0-9]", "", summary_output[8])
 
     # Add a summary of significant genes
@@ -277,10 +386,11 @@ generate_lrt_md <- function(deseq_results, full_formula, reduced_formula, output
       "From this LRT analysis, **", significant_genes, " genes** (out of ", total_genes, " tested) are identified as significant with a padj value < ", alpha, ".\n\n"
     )
 
-    # Add the information about outliers and low counts
-    lrt_summary <- paste0(lrt_summary,
+    # Add information about outliers and low counts
+    lrt_summary <- paste0(
+      lrt_summary,
       "**Outliers**<sup>1</sup>: ", outliers, " of genes were detected as outliers and excluded from analysis.\n\n",
-      "**Low counts**<sup>2</sup>: ", low_counts, " of genes were removed due to low counts (mean <", mean_count,  ") and independent filtering.\n\n",
+      "**Low counts**<sup>2</sup>: ", low_counts, " of genes were removed due to low counts (mean <", mean_count, ") and independent filtering.\n\n",
       "Arguments of ?DESeq2::results():   \n<sup>1</sup> - see 'cooksCutoff',\n<sup>2</sup> - see 'independentFiltering'\n\n"
     )
 
@@ -306,40 +416,142 @@ generate_lrt_md <- function(deseq_results, full_formula, reduced_formula, output
 
 # Function to generate main effect contrasts with different reference levels
 generate_main_effect_contrasts <- function(dds, factors, factor_levels) {
-  contrasts <- list()
-  
-  for (factor in factors) {
-    other_factors <- setdiff(factors, factor)
-    
-    for (other_factor in other_factors) {
-      other_levels <- factor_levels[[other_factor]]
-      
-      for (other_level in other_levels) {
-        # dds_subset <- dds[colData(dds)[[other_factor]] == other_level, ]
-        dds_subset <- dds
-        
-        for (ref_level in factor_levels[[factor]]) {
-          colData(dds_subset)[[factor]] <- relevel(colData(dds_subset)[[factor]], ref = ref_level)
-          
-          levels <- factor_levels[[factor]]
-          
-          for (level in levels) {
-            if (level != ref_level) {
-              specificity_group <- paste(other_factor, other_level, sep = "_")
-              contrast <- paste(sort(c(level, ref_level)), collapse = "_vs_")
-              contrasts <- append(contrasts, list(list(effect_type = "main", 
-                                                       specificity_group = specificity_group, 
-                                                       numerator = level, 
-                                                       denominator = ref_level,
-                                                       contrast = paste(factor, level, "vs", ref_level, sep = "_"),
-                                                       subset = dds_subset)))
+
+  start_time <- proc.time()
+  contrasts  <- list()
+
+  # Helper function to rebuild a DESeqDataSet from scratch
+  rebuild_dds <- function(dds, factor_ref_list) {
+    # 1) Convert colData to a plain data.frame so we can manipulate it
+    colData_df <- as.data.frame(colData(dds))
+
+    # 2) Re-level factors as specified in factor_ref_list, e.g.
+    #    factor_ref_list might be list(grouped_ref = c("grouped" = "0H_GFP_N"))
+    for (f_name in names(factor_ref_list)) {
+      # factor_ref_list[[f_name]] is the new reference level for factor f_name
+      ref_level <- factor_ref_list[[f_name]]
+      colData_df[[f_name]] <- relevel(as.factor(colData_df[[f_name]]), ref = ref_level)
+    }
+
+    # 3) Build a new DESeqDataSet
+    dds_new <- DESeqDataSetFromMatrix(
+      countData = counts(dds),
+      colData   = colData_df,
+      design    = design(dds)
+    )
+    return(dds_new)
+  }
+
+  # 1) SINGLE-FACTOR scenario
+  #    (e.g. ~ grouped with multiple levels)
+  if (length(factors) == 1) {
+    factor <- factors[[1]]
+    all_levels <- factor_levels[[factor]]
+
+    # For each level, define it as reference, compare to others
+    for (ref_level in all_levels) {
+
+      # Build a new copy where 'ref_level' is the reference
+      dds_temp <- rebuild_dds(
+        dds,
+        factor_ref_list = setNames(list(ref_level), factor)
+      )
+
+      # Run DESeq once for that new reference
+      dds_temp <- DESeq(dds_temp, test = "Wald")
+
+      # Compare each *other* level to ref_level
+      for (lvl in all_levels) {
+        if (lvl != ref_level) {
+          contrast_name <- paste(factor, lvl, "vs", ref_level, sep = "_")
+
+          # results() using name = "factor_lvl_vs_ref" style
+          contrast_res <- results(
+            dds_temp,
+            name                = contrast_name,
+            alpha               = args$fdr,
+            lfcThreshold        = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
+            independentFiltering = TRUE
+          )
+
+          sig_genes <- sum(contrast_res$padj < args$fdr, na.rm = TRUE)
+
+          contrasts <- append(contrasts, list(list(
+            effect_type       = "main",
+            specificity_group = factor,
+            numerator         = lvl,
+            denominator       = ref_level,
+            contrast          = contrast_name,
+            subset            = dds_temp,
+            contrast_res      = contrast_res,
+            significant_genes = sig_genes
+          )))
+        }
+      }
+    }
+
+    # 2) MULTI-FACTOR scenario
+  } else {
+    for (factor in factors) {
+      other_factors <- setdiff(factors, factor)
+
+      for (other_factor in other_factors) {
+        other_levels <- factor_levels[[other_factor]]
+
+        for (other_level in other_levels) {
+
+          for (ref_level in factor_levels[[factor]]) {
+
+            # Build a new copy where factor=ref_level and other_factor=other_level
+            dds_temp <- rebuild_dds(
+              dds,
+              factor_ref_list = c(
+                setNames(list(ref_level), factor),
+                setNames(list(other_level), other_factor)
+              )
+            )
+
+            # Run DESeq with these new references
+            dds_temp <- DESeq(dds_temp, test = "Wald")
+
+            # For each non-ref level of 'factor'
+            for (lvl in factor_levels[[factor]]) {
+              if (lvl != ref_level) {
+                specificity_group <- paste(other_factor, other_level, sep = "_")
+                contrast_name     <- paste(factor, lvl, "vs", ref_level, sep = "_")
+
+                contrast_res <- results(
+                  dds_temp,
+                  name                = contrast_name,
+                  alpha               = args$fdr,
+                  lfcThreshold        = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
+                  independentFiltering = TRUE
+                )
+
+                sig_genes <- sum(contrast_res$padj < args$fdr, na.rm = TRUE)
+
+                contrasts <- append(contrasts, list(list(
+                  effect_type       = "main",
+                  specificity_group = specificity_group,
+                  numerator         = lvl,
+                  denominator       = ref_level,
+                  contrast          = contrast_name,
+                  subset            = dds_temp,
+                  contrast_res      = contrast_res,
+                  significant_genes = sig_genes
+                )))
+              }
             }
           }
         }
       }
     }
   }
-  
+
+  end_time <- proc.time() - start_time
+  message("Total time of generate_main_effect_contrasts function execution: ")
+  print(end_time)
+
   return(contrasts)
 }
 
@@ -355,22 +567,25 @@ extract_factors_and_levels <- function(term) {
 
 # Function to generate interaction effect contrasts
 generate_interaction_effect_contrasts <- function(dds) {
+
+  start_time <- proc.time()
+
   contrasts <- list()
   interaction_names <- resultsNames(dds)
-  
+
   # Identify interaction terms in the results names
   interaction_terms <- grep("\\.", interaction_names, value = TRUE)
-  
+
   for (interaction in interaction_terms) {
     factors_levels <- extract_factors_and_levels(interaction)
     factor1 <- factors_levels$factor1
     level1 <- factors_levels$level1
     factor2 <- factors_levels$factor2
     level2 <- factors_levels$level2
-    
+
     levels1 <- levels(colData(dds)[[factor1]])
     levels2 <- levels(colData(dds)[[factor2]])
-    
+
     # Generate contrasts for factor1 vs factor2
     for (ref_level1 in levels1) {
       for (ref_level2 in levels2) {
@@ -378,23 +593,38 @@ generate_interaction_effect_contrasts <- function(dds) {
           specificity_group <- paste(factor2, level2, "vs", ref_level2, sep = "_")
           numerator <- paste0(factor1, level1)
           denominator <- paste0(factor1, ref_level1)
-          
+
           if (numerator != denominator && specificity_group != paste(factor2, ref_level2, "vs", ref_level2, sep = "_")) {
             # dds_subset <- dds[colData(dds)[[factor2]] == ref_level2, ]
             dds_subset <- dds
             colData(dds_subset)[[factor1]] <- relevel(colData(dds_subset)[[factor1]], ref = ref_level1)
-            
-            contrasts <- append(contrasts, list(list(effect_type = "interaction",
-                                                     specificity_group = specificity_group,
-                                                     numerator = numerator,
-                                                     denominator = denominator,
-                                                     contrast = interaction,
-                                                     subset = dds_subset)))
+
+            dds_subset <- DESeq(dds_subset, test = "Wald")
+
+            contrast_res <- results(dds_subset,
+              name = interaction,
+              alpha = args$fdr,
+              lfcThreshold = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
+              independentFiltering = TRUE
+            )
+
+            significant_genes <- sum(contrast_res$padj < args$fdr, na.rm = TRUE)
+
+            contrasts <- append(contrasts, list(list(
+              effect_type = "interaction",
+              specificity_group = specificity_group,
+              numerator = numerator,
+              denominator = denominator,
+              contrast = interaction,
+              subset = dds_subset,
+              contrast_res = contrast_res,
+              significant_genes = significant_genes
+            )))
           }
         }
       }
     }
-    
+
     # Generate contrasts for factor2 vs factor1
     for (ref_level2 in levels2) {
       for (ref_level1 in levels1) {
@@ -402,56 +632,79 @@ generate_interaction_effect_contrasts <- function(dds) {
           specificity_group <- paste(factor1, level1, "vs", ref_level1, sep = "_")
           numerator <- paste0(factor2, level2)
           denominator <- paste0(factor2, ref_level2)
-          
+
           if (numerator != denominator && specificity_group != paste(factor1, ref_level1, "vs", ref_level1, sep = "_")) {
-            dds_subset <- dds[colData(dds)[[factor1]] == ref_level1, ]
+            # dds_subset <- dds[colData(dds)[[factor1]] == ref_level1, ]
+            dds_subset <- dds
             colData(dds_subset)[[factor2]] <- relevel(colData(dds_subset)[[factor2]], ref = ref_level2)
-            
-            contrasts <- append(contrasts, list(list(effect_type = "interaction",
-                                                     specificity_group = specificity_group,
-                                                     numerator = numerator,
-                                                     denominator = denominator,
-                                                     contrast = interaction,
-                                                     subset = dds_subset)))
+
+            dds_subset <- DESeq(dds_subset, test = "Wald")
+
+            contrast_res <- results(dds_subset,
+              name = interaction,
+              alpha = args$fdr,
+              lfcThreshold = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
+              independentFiltering = TRUE
+            )
+
+            significant_genes <- sum(contrast_res$padj < args$fdr, na.rm = TRUE)
+
+            contrasts <- append(contrasts, list(list(
+              effect_type = "interaction",
+              specificity_group = specificity_group,
+              numerator = numerator,
+              denominator = denominator,
+              contrast = interaction,
+              subset = dds_subset,
+              contrast_res = contrast_res,
+              significant_genes = significant_genes
+            )))
           }
         }
       }
     }
   }
-  
-  return(contrasts)
-}
 
-# Function to get number of significant genes
-get_num_significant_genes <- function(contrast) {
-  dds_subset <- contrast$subset
-  dds_subset <- DESeq(dds_subset, test = "Wald")
-  res <- results(dds_subset, 
-                 name = contrast$contrast,
-                 alpha = args$fdr,
-                 lfcThreshold = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
-                 independentFiltering = TRUE)
-  return(sum(res$padj < args$fdr, na.rm = TRUE))
+  end_time <- proc.time() - start_time
+
+  print("Total time of generate_interaction_effect_contrasts function execution: ")
+  print(end_time)
+
+  return(contrasts)
 }
 
 # Main function to generate the dataframe with all possible contrasts
 generate_contrasts <- function(dds) {
+
+  start_time <- proc.time()
+
   # Extract the design formula and model matrix
   design_formula <- design(dds)
-  
+
   # Get the levels of each factor in the design
   factors <- all.vars(design_formula)
+  factors <- factors[!str_detect(factors, "batch")]
+  print("Analyzing the following factors:")
+  print(factors)
+
   factor_levels <- lapply(factors, function(f) levels(colData(dds)[[f]]))
   names(factor_levels) <- factors
+  print("Analyzing the following factor levels:")
   print(factor_levels)
-  
-  # stop("Stop here")
-  
+
   # Generate main and interaction effect contrasts
   main_contrasts <- generate_main_effect_contrasts(dds, factors, factor_levels)
   interaction_contrasts <- generate_interaction_effect_contrasts(dds)
   all_contrasts <- c(main_contrasts, interaction_contrasts)
-  
+
+  print("Head of all_contrasts:")
+  print(head(all_contrasts))
+
+  all_contrasts <- purrr::list_modify(all_contrasts, expression_data_df = expression_data_df)
+
+  print(paste("Exporting contrasts list to", paste0(args$output, "_contrasts.rds"), sep = " "))
+  saveRDS(all_contrasts, file = paste0(args$output, "_contrasts.rds"))
+
   # Create a dataframe to store the contrasts and number of significant genes
   contrast_df <- data.frame(
     effect = character(),
@@ -459,38 +712,379 @@ generate_contrasts <- function(dds) {
     contrast = character(),
     numerator = character(),
     denominator = character(),
-    num_significant_genes = integer(),
+    significant_genes = integer(),
     stringsAsFactors = FALSE
   )
-  
+
   # Run DESeq2 for each contrast and store the results
-  count = 1
+  count <- 1
   for (contrast in all_contrasts) {
     print(count)
-    num_significant_genes <- get_num_significant_genes(contrast)
+
     contrast_df <- rbind(contrast_df, data.frame(
       effect = contrast$effect_type,
       contrast = contrast$contrast,
       specificity_group = contrast$specificity_group,
       numerator = contrast$numerator,
       denominator = contrast$denominator,
-      num_significant_genes = num_significant_genes,
+      significant_genes = contrast$significant_genes,
       stringsAsFactors = FALSE
     ))
-    count = count + 1
+    count <- count + 1
   }
-  
+
   # Remove duplicate contrasts
-  contrast_df <- contrast_df %>% 
-    group_by(specificity_group) %>% 
-    distinct(contrast, .keep_all = TRUE) %>% 
+  contrast_df <- contrast_df %>%
+    group_by(specificity_group) %>%
+    distinct(contrast, .keep_all = TRUE) %>%
     arrange(specificity_group) %>%
+    ungroup() %>%
+    ungroup() %>%
     mutate(contrast_number = row_number()) %>%
-    select(contrast_number, everything())
-  
+    select(contrast_number, everything()) %>%
+    arrange(desc(significant_genes))
+
+  end_time <- proc.time() - start_time
+
+  print("Total time of generate_contrasts function execution: ")
+  print(end_time)
+
   # Sort the dataframe by the number of significant genes
   return(contrast_df)
 }
+
+# Function to clean sample names
+clean_sample_names <- function(names) {
+  names <- trimws(names) # Remove leading/trailing whitespace
+  names <- tolower(names) # Convert to lowercase
+  names <- gsub("\\s+", "_", names) # Replace spaces with underscores
+  names <- gsub("[^[:alnum:]_]", "", names) # Remove non-alphanumeric characters except underscores
+  names <- gsub("^_+|_+$", "", names) # Remove leading/trailing underscores
+  return(names)
+}
+
+# Function to export MDS plot
+export_mds_html_plot <- function(norm_counts_data, location) {
+  tryCatch(
+    expr = {
+      htmlwidgets::saveWidget(
+        Glimma::glimmaMDS(
+          x      = norm_counts_data,
+          groups = as.data.frame(metadata_df),
+          labels = rownames(metadata_df)
+        ),
+        file = location
+      )
+    },
+    error = function(e) {
+      print(paste0("Failed to export MDS plot to ", location, " with error - ", e))
+    }
+  )
+}
+
+# Function to export normalized counts and filtered counts to GCT format
+# TODO: this function should also return levels of HOPACH clustering in the row annotation
+# Updated export_gct_data function:
+# 1. Write full GCT file without clustering.
+# 2. Filter rows by padj.
+# 3. Cluster only the filtered subset.
+# 4. Write filtered (and clustered) GCT file.
+
+export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefix) {
+  tryCatch({
+    # Ensure col_metadata columns are vectors
+    col_metadata <- col_metadata %>% mutate_all(as.vector)
+
+    # Create and export the initial GCT file
+    gct_data <- new("GCT", mat = normCounts, rdesc = row_metadata, cdesc = col_metadata)
+    cmapR::write_gct(ds = gct_data, ofile = paste0(output_prefix, "_counts_all.gct"), appenddim = FALSE)
+    print(paste("Exporting GCT data to", paste0(output_prefix, "_counts_all.gct")))
+
+    # Filter by padj if available
+    if ('padj' %in% colnames(row_metadata)) {
+      row_metadata_filtered <- row_metadata %>% filter(padj <= args$fdr)
+      print("=== After Filtering by padj ===")
+      print(paste("Number of rows in row_metadata_filtered:", nrow(row_metadata_filtered)))
+      print("Sample row names in row_metadata_filtered:")
+      print(head(rownames(row_metadata_filtered)))
+    } else {
+      row_metadata_filtered <- row_metadata
+      print("=== No Filtering by padj ===")
+      print(paste("Number of rows in row_metadata_filtered:", nrow(row_metadata_filtered)))
+    }
+
+    # Convert to uppercase and trim whitespace
+    rownames(row_metadata_filtered) <- toupper(trimws(rownames(row_metadata_filtered)))
+    rownames(normCounts)            <- toupper(trimws(rownames(normCounts)))
+
+    # Check for duplicates in normCounts
+    if (any(duplicated(rownames(normCounts)))) {
+      print("Duplicate gene IDs found in normCounts. Removing duplicates.")
+      normCounts <- normCounts[!duplicated(rownames(normCounts)),]
+    }
+
+    # Check for duplicates in row_metadata_filtered
+    if (any(duplicated(rownames(row_metadata_filtered)))) {
+      print("Duplicate gene IDs found in row_metadata_filtered. Removing duplicates.")
+      row_metadata_filtered <- row_metadata_filtered[!duplicated(rownames(row_metadata_filtered)),]
+    }
+
+    # Check if any rows pass the filter
+    if (nrow(row_metadata_filtered) == 0) {
+      warning(paste("No genes passed the FDR threshold of", args$fdr))
+      # Optionally, skip exporting filtered GCT
+      return(NULL)
+    }
+
+    # **New Debug Statements Before Subsetting**
+    print("=== Debugging before subsetting ===")
+    print("Checking if all row names in row_metadata_filtered are present in normCounts:")
+    all_present <- all(rownames(row_metadata_filtered) %in% rownames(normCounts))
+    print(paste("All row names present:", all_present))
+
+    if (!all_present) {
+      missing_rows <- setdiff(rownames(row_metadata_filtered), rownames(normCounts))
+      print(paste("Number of missing row names:", length(missing_rows)))
+      print("Examples of missing row names:")
+      print(head(missing_rows))
+    }
+
+    # Proceed to subset only the matching row names
+    # This prevents the "subscript out of bounds" error
+    common_rows           <- intersect(rownames(row_metadata_filtered), rownames(normCounts))
+    filtered_normCounts <- normCounts[common_rows, , drop = FALSE]
+    row_metadata_filtered <- row_metadata_filtered[common_rows, , drop = FALSE]  # This line ensures consistency
+    print(paste("Number of rows after subsetting:", nrow(filtered_normCounts)))
+
+    # **Existing Debug Statements Inside export_gct_data**
+    print("=== Debugging inside export_gct_data ===")
+    print("Dimensions of normCounts:")
+    print(dim(normCounts))
+    print("Dimensions of row_metadata:")
+    print(dim(row_metadata))
+    print("Columns of row_metadata:")
+    print(colnames(row_metadata))
+    print("A few row names of row_metadata:")
+    print(head(rownames(row_metadata)))
+
+    if ("padj" %in% colnames(row_metadata)) {
+      print("padj column found. Summary of padj:")
+      print(summary(row_metadata$padj))
+    } else {
+      print("padj column not found in row_metadata.")
+    }
+
+    # Now cluster the filtered data
+    clustered_data <- cluster_and_reorder(filtered_normCounts, col_metadata, row_metadata_filtered, args)
+
+    # After clustering:
+    print("Dimensions of row_metadata_filtered:")
+    print(dim(row_metadata_filtered))
+    print("A few row names of row_metadata_filtered:")
+    print(head(rownames(row_metadata_filtered)))
+
+    # Check intersection with normCounts rows:
+    matching_rows <- intersect(rownames(normCounts), rownames(row_metadata_filtered))
+    print("Number of matching row names between normCounts and row_metadata_filtered:")
+    print(length(matching_rows))
+
+    non_matching_rows <- setdiff(rownames(row_metadata_filtered), rownames(normCounts))
+    print("Number of row names in row_metadata_filtered not found in normCounts:")
+    print(length(non_matching_rows))
+    if (length(non_matching_rows) > 0) {
+      print("Examples of non-matching row names:")
+      print(head(non_matching_rows))
+    }
+
+    # Create and export the filtered GCT file
+    gct_data_filtered <- new("GCT",
+                             mat   = clustered_data$normCounts,
+                             rdesc = clustered_data$row_metadata,
+                             cdesc = clustered_data$col_metadata)
+
+    cmapR::write_gct(ds = gct_data_filtered, ofile = paste0(output_prefix, "_counts_filtered.gct"), appenddim = FALSE)
+    print(paste("Exporting GCT data to", paste0(output_prefix, "_counts_filtered.gct")))
+
+  }, error = function(e) {
+    print(paste("Failed to export GCT data to", output_prefix, "with error -", e$message))
+  })
+}
+
+# Removed clustering from here. Just export MDS and call export_gct_data().
+export_charts <- function(res, annotated_expression_df, column_data, normCounts, output, args) {
+  # Export MDS plot
+  print("Exporting MDS plot")
+  # In case we have original counts, we need to use them for MDS plot
+  # It means that we have some sort of batch-correction function applied
+  if (exists("original_counts")) {
+
+    dse <- DESeqDataSetFromMatrix(
+      countData = original_counts,
+      colData   = metadata_df,
+      design    = design_formula
+    )
+
+    rlog_original_counts <- assay(rlog(dse, blind = FALSE))
+
+    print("Exporting MDS plot with original counts")
+
+    export_mds_html_plot(rlog_original_counts, paste0(output, "_mds_plot.html"))
+
+    print("Exporting MDS plot with batch correction")
+
+    # normCounts is supposed to be batch-corrected here and rlog-normalised
+    export_mds_html_plot(normCounts, paste0(output, "_mds_plot_corrected.html"))
+
+  } else {
+    export_mds_html_plot(normCounts, paste0(output, "_mds_plot.html"))
+  }
+
+  # Now just call export_gct_data directly without clustering here.
+  export_gct_data(normCounts, annotated_expression_df, column_data, output)
+}
+
+# Function to generate clusters
+get_clustered_data <- function(expression_data, transpose = FALSE, k = 3, kmax = 5) {
+
+  start_time <- proc.time()
+
+  if (transpose) {
+    print("Transposing expression data")
+    expression_data <- t(expression_data)
+  }
+
+  # Apply scaling per row
+  expression_data <- t(apply(expression_data, 1, scale_min_max))
+
+  if (transpose) {
+    print("Transposing expression data back")
+    expression_data <- t(expression_data)
+  }
+
+  print(paste0("Running HOPACH for ", nrow(expression_data), "  features"))
+  hopach_results <- hopach::hopach(expression_data,
+                                   verbose = TRUE,
+                                   K       = k,
+                                   kmax    = kmax,
+                                   khigh   = kmax
+  )
+
+  print("Parsing cluster labels")
+  # hopach_results$clustering$labels gives final cluster labels as integers
+  # hopach returns them as numeric without the "c" prefix, so we add "c" ourselves or just rely on numeric.
+  # Actually hopach by default returns numeric labels (1,11,12...). We'll add "c" prefix ourselves for consistency.
+
+  # Final labels (no prefix 'c' in hopach by default)
+  final_labels      <- hopach_results$clustering$labels[hopach_results$clustering$order]
+  # Convert to character
+  final_labels_char <- as.character(final_labels)
+
+  # Add "c" prefix if desired (optional)
+  # final_labels_char <- paste0("c", final_labels_char)
+
+  # Each digit in the label corresponds to a level.
+  # Determine max number of levels
+  max_levels <- max(nchar(final_labels_char))
+
+  # Create a data frame for clusters
+  clusters           <- data.frame(Label = final_labels_char, stringsAsFactors = FALSE)
+  rownames(clusters) <- rownames(expression_data)[hopach_results$clustering$order]
+
+  # Split labels into levels
+  # For each label, we split into characters and assign to new columns
+  level_data <- do.call(rbind, lapply(clusters$Label, function(lbl) {
+    # Split into individual characters
+    chars <- unlist(strsplit(lbl, split = ""))
+    # If shorter than max_levels, pad with NA
+    if (length(chars) < max_levels) {
+      chars <- c(chars, rep(NA, max_levels - length(chars)))
+    }
+    return(chars)
+  }))
+
+  # Name the columns
+  colnames(level_data) <- paste0("Cluster_Level_", seq_len(max_levels))
+
+  # Combine into clusters
+  clusters <- cbind(clusters, level_data)
+
+  # Optionally remove the original 'Label' column if not needed
+  # Or rename it to something else
+  clusters$HCL   <- paste0("c", clusters$Label)
+  clusters$Label <- NULL
+
+  end_time <- proc.time() - start_time
+
+  print("Total time of get_clustered_data function execution: ")
+  print(end_time)
+
+  return(list(
+    order = hopach_results$clustering$order,
+    expression = expression_data,
+    clusters = clusters
+  ))
+}
+
+# Function for min-max scaling
+scale_min_max <- function(x,
+                          min_range = -2,
+                          max_range = 2) {
+  min_val <- min(x)
+  max_val <- max(x)
+  scaled_x <-
+  (x - min_val) / (max_val - min_val) * (max_range - min_range) + min_range
+  return(scaled_x)
+}
+
+cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
+
+  start_time <- proc.time()
+
+  if (args$cluster != "none") {
+    # Column clustering if requested
+    if (args$cluster == "column" || args$cluster == "both") {
+      clustered_data_cols <- get_clustered_data(normCounts, transpose = TRUE)
+      # TODO: should we use drop T or F here? (it fails with F, but works with T), I'm not quite sure if is it
+      #  correct way
+      normCounts <- normCounts[, clustered_data_cols$order]
+      col_metadata        <- col_metadata[clustered_data_cols$order, , drop = FALSE]
+      # After reordering, cbind cluster info
+      col_metadata        <- cbind(col_metadata, clustered_data_cols$clusters)
+    }
+    # Row clustering if requested
+    if (args$cluster == "row" || args$cluster == "both") {
+      if (args$test_mode) {
+        k    <- 2
+        kmax <- 2
+      } else {
+        k    <- args$k
+        kmax <- args$kmax
+      }
+      clustered_data_rows <- get_clustered_data(normCounts, transpose = FALSE, k = k, kmax = kmax)
+      normCounts          <- clustered_data_rows$expression[clustered_data_rows$order, , drop = FALSE]
+      row_metadata        <- row_metadata[clustered_data_rows$order, , drop = FALSE]
+      # After reordering rows, add cluster annotations
+      row_metadata        <- cbind(row_metadata, clustered_data_rows$clusters)
+    }
+  } else {
+    # No clustering
+  }
+
+  end_time <- proc.time() - start_time
+
+  print("Total time of execution cluster_and_reorder function: ")
+  print(end_time)
+
+  print("Clustered data:")
+  print(head(normCounts))
+  print("Row metadata:")
+  print(head(row_metadata))
+  print("Column metadata:")
+  print(head(col_metadata))
+
+  return(list(normCounts = normCounts, col_metadata = col_metadata, row_metadata = row_metadata))
+}
+
 
 # Parse arguments
 args <- get_args()
@@ -519,6 +1113,17 @@ reduced_formula <- as.formula(args$reduced)
 print("Load reduced formula")
 print(reduced_formula)
 
+# Clean sample names
+args$name <- clean_sample_names(args$name)
+colnames(metadata_df) <- clean_sample_names(colnames(metadata_df))
+rownames(metadata_df) <- clean_sample_names(rownames(metadata_df))
+
+print("Processed args$name:")
+print(args$name)
+
+print("Processed rownames(metadata_df):")
+print(rownames(metadata_df))
+
 # Load expression data
 expression_data_df <- load_expression_data(args$input, args$name, READ_COL, RPKM_COL, INTERSECT_BY)
 print("Expression data")
@@ -531,54 +1136,129 @@ read_counts_columns <- grep(
   value = TRUE,
   ignore.case = TRUE
 )
-read_counts_data_df <- expression_data_df[read_counts_columns]
+
+# TODO: double-check if we should use GeneId or RefseqId here
+read_counts_data_df <- expression_data_df %>%
+  dplyr::mutate_at("GeneId", toupper) %>%
+  dplyr::distinct(GeneId, .keep_all = TRUE) %>% # to prevent from failing when input files are not grouped by GeneId
+  remove_rownames() %>%
+  column_to_rownames("GeneId")
+
+read_counts_data_df <- read_counts_data_df[read_counts_columns]
+
+# Clean column names of read_counts_data_df
 colnames(read_counts_data_df) <- lapply(colnames(read_counts_data_df), function(s) {
   paste(head(unlist(strsplit(s, " ", fixed = TRUE)), -1), collapse = " ")
 })
+colnames(read_counts_data_df) <- clean_sample_names(colnames(read_counts_data_df))
+
+print("Processed colnames(read_counts_data_df):")
+print(colnames(read_counts_data_df))
+
 print("Read counts data")
 print(head(read_counts_data_df))
 
-# Convert both rownames of metadata_df and colnames of read_counts_data_df to lowercase
-print("Check if metadata file rows are present in read counts data columns")
-print(setdiff(rownames(metadata_df), colnames(read_counts_data_df)))
-rownames(metadata_df) <- tolower(rownames(metadata_df))
-colnames(read_counts_data_df) <- tolower(colnames(read_counts_data_df))
-print("Read counts data columns")
-print(colnames(read_counts_data_df))
-print("Metadata file rows")
-print(rownames(metadata_df))
-# Trim whitespace from column names and row names
-colnames(read_counts_data_df) <- trimws(colnames(read_counts_data_df))
-rownames(metadata_df) <- trimws(rownames(metadata_df))
+# Check for mismatches in sample names
+samples_in_metadata_not_in_data <- setdiff(rownames(metadata_df), colnames(read_counts_data_df))
+samples_in_data_not_in_metadata <- setdiff(colnames(read_counts_data_df), rownames(metadata_df))
 
-# Remove any non-visible characters
-colnames(read_counts_data_df) <- gsub("[^[:alnum:]_]", "", colnames(read_counts_data_df))
-rownames(metadata_df) <- gsub("[^[:alnum:]_]", "", rownames(metadata_df))
+if (length(samples_in_metadata_not_in_data) > 0) {
+  print("Error: The following samples are in the metadata but not in the expression data:")
+  print(samples_in_metadata_not_in_data)
+  stop("Sample names mismatch between metadata and expression data.")
+}
 
-tryCatch(
-  expr = {
-    # Try reorder columns in read_counts_data_df based on metadata_df rownames
-    print("Reorder read count columns based on the row names from the provided metadata file")
-    read_counts_data_df <- read_counts_data_df[, rownames(metadata_df)]
-    print(head(read_counts_data_df))
-  },
-  error = function(e) {
-    print(
-      "Exiting: failed to reorder read count columns based on the row names from the provided metadata file"
-    )
-    print(paste("Count data columns -", paste(
-      colnames(read_counts_data_df), collapse = " "
-    ), sep = " "))
-    print(paste("Metadata file rows -", paste(rownames(metadata_df), collapse = " "), sep = " "))
-    quit(save = "no",
-         status = 1,
-         runLast = FALSE)
+if (length(samples_in_data_not_in_metadata) > 0) {
+  print("Error: The following samples are in the expression data but not in the metadata:")
+  print(samples_in_data_not_in_metadata)
+  stop("Sample names mismatch between expression data and metadata.")
+}
+
+corrected_counts <- NULL
+
+# Reorder read counts data based on metadata
+read_counts_data_df <- read_counts_data_df[, rownames(metadata_df)]
+
+# Initialize batch warning message
+batch_warning <- NULL
+
+countData <- read_counts_data_df
+
+# Check for batch correction and handle accordingly
+if (args$batchcorrection != "none") {
+  if ("batch" %in% colnames(metadata_df)) {
+    # Ensure 'batch' is a factor
+    metadata_df$batch <- as.factor(metadata_df$batch)
+
+    if (args$batchcorrection == "combatseq") {
+      # Case 2: Apply ComBat_seq batch correction to raw counts
+      print("Applying ComBat_seq batch correction")
+      original_counts <- countData
+      corrected_counts <- apply_combat_seq(countData, design_formula, metadata_df)
+      countData  <- corrected_counts
+      # Design formula remains as provided
+    } else if (args$batchcorrection == "limmaremovebatcheffect") {
+      # Case 3: Include 'batch' in the design formula
+      print("Including 'batch' in the design formula for limma batch correction")
+      # Remove '~' from the original design formula string
+      original_design <- substring(args$design, 2)
+      # Create new design formula with 'batch' included
+      design_formula <- as.formula(paste("~ batch +", original_design))
+      # Note: We do not modify counts at this stage
+    }
+  } else {
+    batch_warning <- "You provided batch correction but there's no 'batch' column in your metadata."
+    print(batch_warning)
+    # Proceed without batch correction
+    # countData remains as read_counts_data_df
   }
+} else {
+  # Case 1: No batch correction
+  # countData remains as read_counts_data_df
+  # Design formula remains as provided
+  print("No batch correction provided; proceeding with default settings")
+}
+
+# Create DESeq2 dataset
+dse <- DESeqDataSetFromMatrix(
+  countData = countData,
+  colData = metadata_df,
+  design = design_formula
 )
 
-dse <- DESeqDataSetFromMatrix(countData = read_counts_data_df,
-                              colData = metadata_df,
-                              design = design_formula)
+# Extract the raw counts matrix
+cts <- counts(dse) # a matrix of counts, rows = genes, columns = samples
+
+# Sum counts per sample (sum columns to get total reads per sample)
+sample_sums <- colSums(cts)
+
+# Create a data frame for plotting
+plot_df <- data.frame(
+  Sample = names(sample_sums),
+  Count  = sample_sums
+)
+
+# Now 'plot_df' has three columns: Sample, Count, and Statistic
+# You can plot them using ggplot2, similar to the previous logic
+
+stat_barchart <- ggplot(plot_df, aes(x = Sample, y = Count)) +
+  geom_col(position = "dodge", fill = "royalblue") +
+  labs(
+    title = "Total Reads by Sample",
+    x     = "Sample",
+    y     = "Count"
+  ) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Save the plot
+ggsave("alignment_stats_barchart.png",
+       plot   = stat_barchart,
+       dpi    = 400,
+       height = 3,
+       width  = max(10, length(sample_sums) * 0.5),
+       units  = "in"
+)
 
 print("Run DESeq2 using Wald")
 dsq_wald <- DESeq(
@@ -587,6 +1267,30 @@ dsq_wald <- DESeq(
   quiet = FALSE,
   parallel = TRUE
 )
+
+# Obtain normalized counts for downstream analyses
+if (args$batchcorrection == "limmaremovebatcheffect" && "batch" %in% colnames(metadata_df)) {
+  # Case 3: After DESeq2, apply rlog transformation and remove batch effects using limma
+  print("Applying rlog transformation and limma batch effect removal")
+
+  original_counts <- countData
+
+  rlog_transformed <- rlog(dsq_wald, blind = FALSE)
+  rlog_counts <- assay(rlog_transformed)
+
+  # Prepare design matrix without 'batch' for removeBatchEffect
+  design_formula <- as.formula(paste0("~", str_remove(as.character(dsq_wald@design)[2], " \\+ batch")))
+
+  design_matrix <- model.matrix(design_formula, data = metadata_df)
+  # Apply removeBatchEffect
+  corrected_counts <- limma::removeBatchEffect(rlog_counts, batch = metadata_df$batch, design = design_matrix)
+  normCounts <- corrected_counts
+} else {
+  # Case 1 and Case 2: Use rlog-transformed counts without additional batch correction
+  print("Applying rlog transformation without additional batch effect removal")
+  rlog_transformed <- rlog(dsq_wald, blind = FALSE)
+  normCounts <- assay(rlog_transformed)
+}
 
 print("Run DESeq2 using LRT")
 dsq_lrt <- DESeq(
@@ -597,51 +1301,48 @@ dsq_lrt <- DESeq(
   parallel = TRUE
 )
 
-print("Generate contrasts")
-all_contrasts <- generate_contrasts(dsq_wald)
+if (!args$lrt_only_mode) {
+  print("Generate contrasts")
 
-dsq_lrt_res <- results(dsq_lrt,
-               alpha = args$fdr,
-               independentFiltering = TRUE)
+  contrast_df <- generate_contrasts(dsq_wald)
+
+  contrasts_filename <- paste(args$output, "_contrasts_table.tsv", sep = "")
+  write.table(
+    contrast_df,
+    file      = contrasts_filename,
+    sep       = "\t",
+    row.names = FALSE,
+    col.names = TRUE,
+    quote     = FALSE
+  )
+}
+
+
+dsq_lrt_res <- results(
+  dsq_lrt,
+  alpha = args$fdr,
+  independentFiltering = TRUE
+)
 
 print("LRT Results description")
 print(mcols(dsq_lrt_res))
 
-# Filter DESeq2 output
-res_filtered <- as.data.frame(dsq_lrt_res[, c(2, 5, 6)])
-res_filtered$log2FoldChange[is.na(res_filtered$log2FoldChange)] <- 0
-res_filtered[is.na(res_filtered)] <- 1
 # Export results to TSV file
-expression_data_df <- data.frame(
-  cbind(expression_data_df[, ], res_filtered),
-  check.names = F,
-  check.rows = F
-)
-expression_data_df[, "-LOG10(pval)"] <- -log(as.numeric(expression_data_df$pval), 10)
-expression_data_df[, "-LOG10(padj)"] <- -log(as.numeric(expression_data_df$padj), 10)
+annotated_expression_df <- expression_data_df %>%
+  bind_cols(as.data.frame(dsq_lrt_res) %>% select(pvalue, padj)) %>%
+  mutate(
+    `-LOG10(pval)` = -log10(as.numeric(pvalue)),
+    `-LOG10(padj)` = -log10(as.numeric(padj))
+  )
 
-contrasts_filename <- paste(args$output, "_contrasts_table.tsv", sep = "")
-print(all_contrasts)
-print(contrasts_filename)
-write.table(
-  all_contrasts,
-  file = contrasts_filename,
-  sep = "\t",
-  row.names = FALSE,
-  col.names = TRUE,
-  quote = FALSE
-)
-
-print(paste("Export contrasts to", contrasts_filename, sep = " "))
-
-lrt_report_filename <- paste(args$output, "_lrt_result.md", sep = "")
+lrt_report_filename <- paste0(args$output, "_lrt_result.md")
 summary(dsq_lrt_res)
-generate_lrt_md(dsq_lrt_res, args$design, args$reduced, lrt_report_filename)
+generate_lrt_md(dsq_lrt_res, args$design, args$reduced, lrt_report_filename, alpha = args$fdr, batch_warning = batch_warning)
 print(paste("Export LRT markdown report to", lrt_report_filename, sep = " "))
 
-results_filename <- paste(args$output, "_gene_exp_table.tsv", sep = "")
+results_filename <- paste0(args$output, "_gene_exp_table.tsv")
 write.table(
-  expression_data_df,
+  annotated_expression_df,
   file = results_filename,
   sep = "\t",
   row.names = FALSE,
@@ -650,3 +1351,20 @@ write.table(
 )
 print(paste("Export results to", results_filename, sep = " "))
 graphics.off()
+
+sample_order <- colnames(dse)
+
+colnames(annotated_expression_df) <- gsub(" Rpkm", "", colnames(annotated_expression_df))
+
+annotated_expression_df <- annotated_expression_df %>%
+  select(-one_of(sample_order)) # remove all sample columns
+
+colnames(annotated_expression_df) <- gsub(" TotalReads", "", colnames(annotated_expression_df))
+
+annotated_expression_df <- annotated_expression_df %>%
+  select(-one_of(sample_order)) %>% # remove all sample columns
+  distinct(GeneId, .keep_all = TRUE) %>%
+  remove_rownames() %>%
+  column_to_rownames("GeneId")
+
+export_charts(dsq_lrt_res, annotated_expression_df, metadata_df, normCounts, args$output, args)
