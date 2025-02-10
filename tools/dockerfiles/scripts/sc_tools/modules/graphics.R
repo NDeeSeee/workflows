@@ -80,7 +80,8 @@ export(
     "TRUE_COLOR",
     "FALSE_COLOR",
     "UP_COLOR",
-    "DOWN_COLOR"
+    "DOWN_COLOR",
+    "HIGHLIGHT_COLOR"
 )
 
 # https://sashamaps.net/docs/resources/20-colors/
@@ -109,6 +110,7 @@ TRUE_COLOR <- "#00916A"
 FALSE_COLOR <- "#EB6331"
 UP_COLOR <- "#FF0000"
 DOWN_COLOR <- "#0000FF"
+HIGHLIGHT_COLOR <- "#313266"                                     # should create a good contrast with NA_COLOR
 CC_COLORS <- c("#FB1C0D", "#0DE400", "#0D00FF", NA_COLOR)        # we added NA color, because sometimes the cell cycle phase is not being assigned
 
 get_theme <- function(theme){
@@ -2242,7 +2244,7 @@ composition_box_plot <- function(
                               .groups="drop"
                           ) %>%
                           dplyr::mutate(
-                              label = base::paste("P =", scales::scientific(p_value, digits=3))
+                              label = base::paste0("P=", scales::scientific(p_value, digits=3))
                           )
             plot <- counts_data %>%
                     ggplot2::ggplot(
@@ -2270,20 +2272,19 @@ composition_box_plot <- function(
                         alpha=1,
                         shape=1
                     ) +
-                    ggrepel::geom_label_repel(
+                    ggplot2::geom_label(
                         stats_data,
                         mapping=ggplot2::aes_string(
                             x=split_by,
-                            y=-Inf,
+                            y=Inf,
+                            hjust=1,
                             label="label"
                         ),
                         color="white",
                         fontface="bold",
                         fill="darkred",
-                        segment.colour=NA,
-                        direction="y",
-                        size=3,
-                        show.legend=FALSE
+                        angle=90,
+                        size=3
                     ) +
                     ggplot2::scale_color_manual(values=palette_colors) +
                     ggplot2::xlab(x_label) +

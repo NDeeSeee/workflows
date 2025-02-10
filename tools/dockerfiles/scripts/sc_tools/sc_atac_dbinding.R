@@ -7,7 +7,7 @@ suppressMessages(library(knitr))
 suppressMessages(library(dplyr))
 suppressMessages(library(Seurat))
 suppressMessages(library(Signac))
-# suppressMessages(library(forcats))
+suppressMessages(library(forcats))
 suppressMessages(library(stringr))
 suppressMessages(library(modules))
 suppressMessages(library(argparse))
@@ -20,98 +20,139 @@ suppressMessages(debug <- modules::use(file.path(HERE, "modules/debug.R")))
 suppressMessages(graphics <- modules::use(file.path(HERE, "modules/graphics.R")))
 suppressMessages(io <- modules::use(file.path(HERE, "modules/io.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
+suppressMessages(logger <- modules::use(file.path(HERE, "modules/logger.R")))
+
 
 ## ----
-prepare_fragments_and_peaks <- function(seurat_data, seqinfo_data, args){               # only MACS2 results will be saved to the --output. All other files are in --tmpdir
-    print(paste("Splitting ATAC fragments into two BED files by", args$splitby))        # we should always have only two groups because we prefiltered our Seurat object
-    SplitFragments(                                                                     # will place BED files into args$tmpdir
+get_ordered_metadata <- function(seurat_data, args){                                # reorder metadata only for better plots
+    ordered_metadata <- seurat_data@meta.data %>%
+                        dplyr::select(
+                            new.ident,                                              # this column is always present
+                            tidyselect::all_of(args$splitby)                        # should never be NULL, safe when set to new.ident
+                        ) %>%
+                        dplyr::mutate(
+                            !!args$splitby:=base::factor(
+                                .[[args$splitby]],
+                                levels=c(args$first, args$second)
+                            )
+                        ) %>%
+                        dplyr::arrange_at(c(args$splitby, "new.ident")) %>%         # safe when splitby is new.ident
+                        dplyr::mutate(                                              # if new.ident is already a factor arrange_at will sort by factor
+                            new.ident=forcats::fct_inorder(new.ident)
+                        )
+    return (ordered_metadata)
+}
+
+## ----
+prepare_fragments_and_peaks <- function(seurat_data, seqinfo_data, args){
+    ordered_metadata <- get_ordered_metadata(seurat_data, args)                     # we need it for a proper order of items shown on the plots
+    aggr_criteria <- ifelse(args$test=="manorm2", "new.ident", args$splitby)
+    aggr_names <- levels(ordered_metadata[[aggr_criteria]])                         # both "new.ident" and args$splitby are already factors
+    aggr_conditions <- ordered_metadata[[args$splitby]][                            # safe to use the first matched value even for new.ident because we
+        match(aggr_names, ordered_metadata[[aggr_criteria]])                        # checked that --splitby doesn't divide cells from the same datasets
+    ]
+    rm(ordered_metadata)                                                            # no reason to keep ordered_metadata anymore
+
+    mapped_counts <- AverageCounts(                                                 # need it for bigWig scaling
+        seurat_data, assay="ATAC", group.by=aggr_criteria, verbose=FALSE
+    ) * CellsPerGroup(
+        seurat_data, group.by=aggr_criteria
+    )
+
+    metadata <- NULL                                                                # a dataframe to collect files locations
+    for (i in 1:length(aggr_names)){
+        current_name <- aggr_names[i]
+        current_suffix <- tolower(
+            gsub("'|\"|\\s|\\t|#|%|&|-", "_", current_name)
+        )
+
+        current_data <- data.frame(
+            name=current_name,
+            suffix=current_suffix,
+            condition=aggr_conditions[i],
+
+            fragments=paste0(                                                       # temporary files, we use it to search for files
+                args$tmpdir, "/",
+                gsub(.Platform$file.sep, "_",
+                gsub(" ", "_", current_name)),
+                ".bed"
+            ),
+            tn5ct=paste0(args$tmpdir, "/", current_suffix, "_tn5ct.bed"),           # temporary files, we use it to create files
+            coverage=paste0(args$output, "_", current_suffix, ".bigWig"),           # will be saved as output, we use it to create files
+            peaks=paste0(args$output, "_", current_suffix, "_peaks.narrowPeak"),    # will be saved as output, we use it to search for files
+            summits=paste0(args$output, "_", current_suffix, "_summits.bed"),       # will be saved as output, we use it to search for files
+            xls=paste0(args$output, "_", current_suffix, "_peaks.xls"),             # will be saved as output, we use it to search for files
+
+            read_cnt=paste(current_suffix, "read_cnt", sep="."),                    # will be used by MAnorm for normalization
+            occupancy=paste(current_suffix, "occupancy", sep="."),                  # will be used by MAnorm for normalization
+            scaling=10^6/mapped_counts[current_name],                               # for scaling coverage
+            stringsAsFactors=FALSE,
+            check.names=FALSE
+        )
+        rownames(current_data) <- i                                                 # otherwise it somehow puts current_name as the rowname
+
+        if (is.null(metadata)) {
+            metadata <- current_data
+        } else {
+            metadata <- base::rbind(metadata, current_data)
+        }
+    }
+
+    print(
+        paste(
+            "Splitting ATAC fragments data into the",
+            "separate BED files by", aggr_criteria,
+            "metadata column"
+        )
+    )
+    SplitFragments(                                                                 # will put files to locations defined in fragments
         seurat_data,
         assay="ATAC",
-        group.by=args$splitby,                                                          # this column should have only two values (--first, --second) by this moment
+        group.by=aggr_criteria,
         outdir=args$tmpdir,
         verbose=TRUE
     )
-    if (args$test != "manorm2"){
-        print("Exporting original Seurat peaks")
-        peaks_data <- seurat_data[["ATAC"]]@ranges
-        seqlevels(peaks_data) <- seqlevels(seqinfo_data)
-        seqinfo(peaks_data) <- seqinfo_data
-        peaks_data$score <- 0
-        export.bb(
-            peaks_data,
-            paste0(args$output, "_seurat_peaks.bigBed")
-        )
-    }
 
-    mapped_counts <- AverageCounts(                                                     # named vector with the args$first and args$second names
-        seurat_data, assay="ATAC", group.by=args$splitby, verbose=FALSE                 # average nCount_ATAC per group multiplied on the number
-    ) * CellsPerGroup(                                                                  # of cells per group gives approximately mapped reads number 
-        seurat_data, group.by=args$splitby                                              # may include NA, because CellsPerGroup returns NA group
-    )
-
-    tmp_locations <- list(
-        scaling_coefficients=list(                                                      # for easy access in a proper order
-            first=10^6/mapped_counts[args$first],                                       # per million mapped reads
-            second=10^6/mapped_counts[args$second]
-        ),
-        fragments=list(
-            first=paste0(                                                               # BED file with ATAC fragments for cells from --first group
-                args$tmpdir, "/",
-                gsub(.Platform$file.sep, "_", gsub(" ", "_", args$first)),              # similar to what SplitFragments does
-                ".bed"),
-            second=paste0(                                                              # BED file with ATAC fragments for cells from --second group
-                args$tmpdir, "/",
-                gsub(.Platform$file.sep, "_", gsub(" ", "_", args$second)),             # similar to what SplitFragments does
-                ".bed")
-        ),
-        fragments_coverage=list(
-            first=paste0(basename(args$output), "_", "first.bigWig"),                   # bigWig file with ATAC fragments coverage for cells from --first group
-            second=paste0(basename(args$output), "_", "second.bigWig")                  # bigWig file with ATAC fragments coverage for cells from --second group
-        ),
-        macs2=list(
-            cut_sites=list(                                                             # doesn't include strand information, should be treated as single-read
-                first=paste0(args$tmpdir, "/", "first_tn5ct.bed"),                      # BED file with Tn5 cut sites for cells from --first group
-                second=paste0(args$tmpdir, "/", "second_tn5ct.bed")                     # BED file with Tn5 cut sites for cells from --second group
-            ),
-            peaks_xls=list(                                                             # output from MACS2, will be also used as output from the tool
-                first=paste0(basename(args$output), "_", "first_peaks.xls"),
-                second=paste0(basename(args$output), "_", "second_peaks.xls")
-            ),
-            peaks_narrow=list(                                                          # output from MACS2, will be used by MAnorm2 and as output from the tool
-                first=paste0(basename(args$output), "_", "first_peaks.narrowPeak"),
-                second=paste0(basename(args$output), "_", "second_peaks.narrowPeak")
-            ),
-            peaks_summit=list(                                                          # output from MACS2 (no need to keep it as output from the tool
-                first=paste0(basename(args$output), "_", "first_summits.bed"),          # as they will be used only by MAnorm2)
-                second=paste0(basename(args$output), "_", "second_summits.bed")
+    for (i in 1:nrow(metadata)){                                                    # iterating over the collected locations
+        current_row <- as.list(metadata[i, ])                                       # to have it as list instead of a data.frame with the single row
+        print(paste("Processing", current_row$name, "dataset"))
+        print(
+            paste(
+                "Loading ATAC fragments data",
+                "from", current_row$fragments
             )
         )
-    )
-    for (i in 1:length(tmp_locations$fragments)) {
-        print(paste("Loading ATAC fragments data from", tmp_locations$fragments[[i]]))
         fragments_data=rtracklayer::import(
-            tmp_locations$fragments[[i]],
+            current_row$fragments,
             format="BED",
             genome=seqinfo_data
         )
-        print("Generating coverage from the loaded ATAC fragments data")
+
         io$export_fragments_coverage(
             fragments_data=fragments_data,
-            location=tmp_locations$fragments_coverage[[i]],
-            scaling_coef=tmp_locations$scaling_coefficients[[i]]
+            location=current_row$coverage,
+            scaling_coef=current_row$scaling
         )
-        if (args$test == "manorm2"){
-            print("Extracting 1bp length Tn5 cut sites from the loaded ATAC fragments data")
-            cut_sites_data <- unlist(as(list(
-                resize(fragments_data, 1, fix="start", ignore.strand=TRUE),                    # will be 1bp region that corresponds to the beginning of the fragment
-                resize(fragments_data, 1, fix="end", ignore.strand=TRUE)                       # will be 1bp region that corresponds to the end of the fragment
-            ), "GRangesList"))
-            rtracklayer::export.bed(
-                cut_sites_data,
-                tmp_locations$macs2$cut_sites[[i]],
-                ignore.strand=TRUE                                                             # we need to ignore strand otherwise MACS2 will fail to parse it
+
+        if (args$test == "manorm2"){                                                # for MANorrm we need to call peaks with MACS2
+            print(
+                paste(
+                    "Extracting Tn5 cut sites (1bp length)",
+                    "from the loaded ATAC fragments data"
+                )
             )
-            rm(cut_sites_data)
+            tn5ct_data <- unlist(as(list(
+                resize(fragments_data, 1, fix="start", ignore.strand=TRUE),         # will be 1bp region that corresponds to the beginning of the fragment
+                resize(fragments_data, 1, fix="end", ignore.strand=TRUE)            # will be 1bp region that corresponds to the end of the fragment
+            ), "GRangesList"))
+
+            rtracklayer::export.bed(
+                tn5ct_data,
+                current_row$tn5ct,
+                ignore.strand=TRUE                                                  # we need to ignore strand otherwise MACS2 will fail to parse it
+            )
+            rm(tn5ct_data)                                                          # no reason to keep it
+
             print(
                 paste(
                     "Calling peaks with MACS2 from the extracted Tn5 cut sites",
@@ -120,162 +161,263 @@ prepare_fragments_and_peaks <- function(seurat_data, seqinfo_data, args){       
                     args$genome
                 )
             )
-            Signac::CallPeaks(                                                                 # we don't need to keep output as a variable
-                object=tmp_locations$macs2$cut_sites[[i]],
-                outdir=dirname(args$output),                                                   # we save output files directly to the output folder
-                name=paste0(basename(args$output), "_", c("first", "second")[i]),              # all the names will have prefix with group name
-                extsize=50,                                                                    # will be always called with --nomodel, so --shift
-                shift=-25,                                                                     # and --extsize make difference
-                effective.genome.size=args$genome,                                             # looks like it's ok to use character instead of an integer
+            Signac::CallPeaks(                                                      # we don't need to keep output as a variable
+                object=current_row$tn5ct,
+                outdir=dirname(args$output),                                        # we save output files directly to the output folder
+                name=paste0(basename(args$output), "_", current_row$suffix),        # set the name so we can use our peaks, summits, and xls locations
+                extsize=50,                                                         # will be always called with --nomodel, so --shift
+                shift=-25,                                                          # and --extsize make difference
+                effective.genome.size=args$genome,
                 additional.args=paste(
                     "-q", args$qvalue,
-                    "--keep-dup all",                                                          # our fragments are already deduplicated
-                    "--seed", args$seed,                                                       # just in case
+                    "--keep-dup all",                                               # our fragments are already deduplicated
+                    "--seed", args$seed,                                            # just in case
                     "--tempdir", args$tmpdir
                 ),
-                cleanup=FALSE,                                                                 # we want to keep outputs after running the script
+                cleanup=FALSE,                                                      # we want to keep outputs after running the script
                 verbose=FALSE
             )
-        } else if (!is.null(tmp_locations$macs2)) {
-            tmp_locations$macs2 <- NULL                           # no need to have macs2 slot if we are not going to use it
         }
+
         rm(fragments_data)
         gc(verbose=FALSE)
     }
-    return (tmp_locations)
+
+    print("Exporting original peaks from the loaded Seurat object")
+    peaks_data <- seurat_data[["ATAC"]]@ranges
+    seqlevels(peaks_data) <- seqlevels(seqinfo_data)
+    seqinfo(peaks_data) <- seqinfo_data
+    peaks_data$score <- 0                                                           # need it to export in bigBed format, otherwise fails
+    export.bb(
+        peaks_data,
+        paste0(args$output, "_dflt_peaks.bigBed")                                   # only for visualization purposes
+    )
+
+    return (metadata)
 }
 
 ## ----
 export_raw_plots <- function(seurat_data, args){
-    DefaultAssay(seurat_data) <- "ATAC"                           # safety measure
-    Idents(seurat_data) <- "new.ident"                            # safety measure
-    for (reduction in c("rnaumap", "atacumap", "wnnumap")) {
-        if (!(reduction %in% names(seurat_data@reductions))) {next}                                  # skip missing reductions
-        graphics$dim_plot(
-            data=seurat_data,
-            reduction=reduction,
-            plot_title=paste0(
-                "Cells UMAP split by ", args$splitby, " ",
-                ifelse(
-                    (!is.null(args$groupby) && !is.null(args$subset)),
-                    paste("subsetted to", paste(args$subset, collapse=", "), "values from the", args$groupby, "column "),
-                    ""
+    DefaultAssay(seurat_data) <- "ATAC"                                           # safety measure
+    Idents(seurat_data) <- "new.ident"                                            # safety measure
+
+    graphics$dim_plot(
+        data=seurat_data,
+        reduction=args$reduction,
+        plot_title="UMAP colored by selected for analysis cells",
+        plot_subtitle=paste0(
+            "Split by ", args$splitby, "; ",
+            ifelse(
+                (!is.null(args$groupby) && !is.null(args$subset)),
+                paste(
+                    "only cells with",
+                    paste(args$subset, collapse=", "),
+                    "values in the", args$groupby,
+                    "metadata column are selected."
                 ),
-                "(", reduction, " dim. reduction)"
-            ),
-            legend_title=ifelse(
-                (!is.null(args$groupby) && !is.null(args$subset)),
-                args$groupby,
-                args$splitby
-            ),
-            split_by=args$splitby,
-            group_by=ifelse(
-                (!is.null(args$groupby) && !is.null(args$subset)),
-                args$groupby,
-                args$splitby
-            ),
-            highlight_group=if(!is.null(args$groupby) && !is.null(args$subset)) args$subset else NULL,
-            label=FALSE,
-            label_color="black",
-            palette_colors=if(!is.null(args$groupby) && !is.null(args$subset)) c("#4CB6BA", "#FB1C0D") else c("darkred", "darkorchid4"),
-            theme=args$theme,
-            rootname=paste(args$output, "umap_rd", reduction, sep="_"),
-            pdf=args$pdf
-        )
-    }
-    gc(verbose=FALSE)
-}
-
-## ----
-export_browser_tracks <- function(db_results, seqinfo_data, args){
-    print(
-        paste(
-            "Filtering differentially bound sites to include",
-            "only regions with adjusted P-values not bigger",
-            "than", args$padj
-        )
-    )
-    db_sites <- db_results$db_sites %>%
-                dplyr::filter(.$padj <= args$padj) %>%
-                dplyr::mutate(
-                    "name"=paste0(
-                        "padj=", format(padj, digits=3, trim=TRUE),
-                        ";log2FC=", format(log2FoldChange, digits=3, trim=TRUE)
-                    )
-                ) %>%
-                dplyr::mutate("score"=0) %>%                                     # need it because export.bb fails without score
-                dplyr::select(
-                    c("chr", "start", "end", "name", "score", "log2FoldChange")  # we keep log2FoldChange for filtering
-                )
-    print(head(db_sites))
-
-    if (nrow(db_sites) > 0){
-        db_sites <- makeGRangesFromDataFrame(
-            db_sites,
-            seqinfo=seqinfo_data,
-            keep.extra.columns=TRUE                                              # to keep name and score metadata columns
-        )
-        first_db_sites <- db_sites[db_sites$log2FoldChange <= -args$logfc, ]
-        second_db_sites <- db_sites[db_sites$log2FoldChange >= args$logfc, ]
-        if (length(first_db_sites) > 0){                                         # we use length because it GRanges
-            export.bb(
-                first_db_sites,
-                paste0(args$output, "_first_enrch.bigBed")
+                "all cells selected."
             )
-            export.bed(
-                first_db_sites,
-                paste0(args$output, "_first_enrch.bed"),
-                ignore.strand=TRUE
-            )
-        }
-        if (length(second_db_sites) > 0){                                        # we use length because it GRanges
-            export.bb(
-                second_db_sites,
-                paste0(args$output, "_second_enrch.bigBed")
-            )
-            export.bed(
-                second_db_sites,
-                paste0(args$output, "_second_enrch.bed"),
-                ignore.strand=TRUE
-            )
-        }
-    } else (
-        print("No significant differentially bound sites found")
+        ),
+        legend_title="Cells",
+        split_by=args$splitby,
+        group_by=ifelse(                                                          # highlight_group won't work without it
+            (!is.null(args$groupby) && !is.null(args$subset)),
+            args$groupby,
+            args$splitby
+        ),
+        highlight_group=if(!is.null(args$groupby) && !is.null(args$subset))
+                            args$subset
+                        else
+                            c(args$first, args$second),                           # to highlight all cells
+        palette_colors=if(!is.null(args$groupby) && !is.null(args$subset))
+                           c(graphics$NA_COLOR, graphics$HIGHLIGHT_COLOR)
+                       else
+                           c(graphics$HIGHLIGHT_COLOR, graphics$NA_COLOR),        # need to reverse colors
+        theme=args$theme,
+        rootname=paste(args$output, "umap_spl_tst", sep="_"),
+        pdf=args$pdf
     )
 }
 
 ## ----
-export_processed_plots <- function(seurat_data, db_results, args){
-    DefaultAssay(seurat_data) <- "ATAC"                                 # safety measure
-    Idents(seurat_data) <- "new.ident"                                  # safety measure
+export_processed_plots <- function(db_results, seqinfo_data, args){
+    DefaultAssay(seurat_data) <- "ATAC"                                           # safety measure
+    Idents(seurat_data) <- "new.ident"                                            # safety measure
+
+    ordered_metadata <- get_ordered_metadata(seurat_data, args)
+    graphics$geom_bar_plot(
+        data=ordered_metadata,
+        x_axis=ifelse(args$test=="manorm2", "new.ident", args$splitby),
+        color_by=args$splitby,
+        x_label=ifelse(args$test=="manorm2", "Dataset", "Tested condition"),
+        y_label="Cell counts",
+        legend_title="Tested\ncondition",
+        plot_title=ifelse(
+            args$test=="manorm2",
+            "Number of cells per dataset",
+            "Number of cells per tested condition"
+        ),
+        plot_subtitle=paste0(
+            "Colored by ", args$splitby, "; ",
+            ifelse(
+                (!is.null(args$groupby) && !is.null(args$subset)),
+                paste(
+                    "only cells with", paste(args$subset, collapse=", "),
+                    "values in", args$groupby, "metadata column are selected; "
+                ),
+                "all cells selected."
+            )
+        ),
+        palette_colors=c(graphics$TRUE_COLOR, graphics$FALSE_COLOR),
+        theme=args$theme,
+        rootname=paste(args$output, "cell_cnts", sep="_"),
+        pdf=args$pdf
+    )
 
     graphics$volcano_plot(
-        data=db_results$db_sites,                                       # this is not filtered differentially bound sites
+        data=db_results$db_sites,                                                 # this is not filtered differentially bound sites
         x_axis="log2FoldChange",
         y_axis="padj",
         x_cutoff=args$logfc,
         y_cutoff=args$padj,
         x_label="log2FC",
         y_label="-log10Padj",
-        label_column="chr",                                             # doesn't matter what to set as label because features=NA
-        plot_title="Differentially bound sites",
+        label_column="chr",                                                       # doesn't matter what to set as label because features=NA
+        plot_title="Differentially accessible regions",
         plot_subtitle=paste0(
-            args$second, " vs ", args$first, " for cells split by ", args$splitby, ". ",
+            args$second, " vs ", args$first,
+            " for cells split by ", args$splitby, ". ",
             "Use ", args$test, " test. ",
             ifelse(
                 (!is.null(args$groupby) && !is.null(args$subset)),
-                paste("Subsetted to", paste(args$subset, collapse=", "), "values from", args$groupby, "column. "),
+                paste(
+                    "Subsetted to", paste(args$subset, collapse=", "),
+                    "values from", args$groupby, "column. "),
                 ""
             ),
             "Displayed thresholds: Padj <= ", args$padj,
             ", |log2FC| >= ", args$logfc
         ),
         caption=paste(nrow(db_results$db_sites), "peaks"),
-        features=NA,                                                    # we don't want to show peak names as they are too long
+        features=NA,                                                              # we don't want to show peak names as they are too long
         theme=args$theme,
-        rootname=paste(args$output, "dbnd_vlcn", sep="_"),
+        rootname=paste(args$output, "vlcn", sep="_"),
         pdf=args$pdf
     )
+
+    print(
+        paste(
+            "Filtering differentially accessible regions to",
+            "include only regions with adjusted p-values",
+            "not bigger than", args$padj, "and |log2FoldChange|",
+            "bigger or equal to", args$logfc
+        )
+    )
+    filtered_db_sites <- db_results$db_sites %>%
+                         dplyr::filter(.$padj <= args$padj) %>%                                      # to include only significant diff. accessible regions
+                         dplyr::filter(abs(.$log2FoldChange) >= args$logfc) %>%                      # to include only |log2FoldChange| >= args$logfc
+                         dplyr::mutate(
+                             "name"=paste0(
+                                 "padj=", format(padj, digits=3, trim=TRUE),
+                                 ";log2FC=", format(log2FoldChange, digits=3, trim=TRUE)
+                             )
+                         ) %>%
+                         dplyr::mutate("score"=-log10(padj)*10) %>%                                  # similar to what MACS2 does
+                         dplyr::select(
+                             c("chr", "start", "end", "name", "score", "log2FoldChange")             # we need log2FoldChange column only for filtering
+                         )
+    print(head(filtered_db_sites))
+
+    if (nrow(filtered_db_sites) > 0){
+        first_db_location <- paste0(args$output, "_first_enrch.bed")                                 # should be kept as output
+        second_db_location <- paste0(args$output, "_second_enrch.bed")                               # should be kept as output
+        score_matrix_location <- paste0(args$tmpdir, "/", "score_matrix.gz")                         # no reason to keep it
+
+        filtered_db_ranges <- makeGRangesFromDataFrame(                                              # fails when filtered_db_sites is empty
+            filtered_db_sites,
+            seqinfo=seqinfo_data,
+            keep.extra.columns=TRUE                                                                  # to keep the log2FoldChange column
+        )
+
+        first_db_ranges <- filtered_db_ranges[filtered_db_ranges$log2FoldChange <= -args$logfc, ]    # at least one of these groups won't be empty
+        second_db_ranges <- filtered_db_ranges[filtered_db_ranges$log2FoldChange >= args$logfc, ]
+
+        regions_locations <- c()
+        regions_labels <- c()
+        if (length(first_db_ranges) > 0){
+            regions_locations <- c(first_db_location, regions_locations)
+            regions_labels <- c(args$first, regions_labels)
+            export.bed(
+                first_db_ranges[order(mcols(first_db_ranges)$log2FoldChange, decreasing=FALSE)],
+                first_db_location,
+                ignore.strand=TRUE
+            )
+        }
+        if (length(second_db_ranges) > 0){
+            regions_locations <- c(second_db_location, regions_locations)
+            regions_labels <- c(args$second, regions_labels)
+            export.bed(
+                second_db_ranges[order(mcols(second_db_ranges)$log2FoldChange, decreasing=TRUE)],
+                second_db_location,
+                ignore.strand=TRUE
+            )
+        }
+
+        compute_matrix_args <- c(
+            "reference-point",
+            "--scoreFileName", args$metadata$coverage,
+            "--regionsFileName", regions_locations,
+            "--referencePoint", "center",
+            "--beforeRegionStartLength", 5000,
+            "--afterRegionStartLength", 5000,
+            "--binSize", 10,
+            "--sortRegions", "keep",
+            "--samplesLabel", args$metadata$name,
+            "--outFileName", score_matrix_location,
+            "--missingDataAsZero",
+            "--numberOfProcessors", args$cpus
+        )
+        exit_code <- sys::exec_wait(
+            cmd="computeMatrix",                                             # if it's not found in PATH, R will fail with error
+            args=compute_matrix_args
+        )
+        if (exit_code != 0){                                                 # we were able to run profile_bins, but something went wrong
+            print(                                                           # no reason to print through logger as the workflow shoudn't fail
+                paste(
+                    "Failed to run computeMatrix command",
+                    "with the exit code", exit_code
+                )
+            )
+        }
+
+        plot_heatmap_args <- c(
+            "--plotTitle", "Tag density around peak centers sorted by log2FoldChange",
+            "--matrixFile", score_matrix_location,
+            "--outFileName", paste0(args$output, "_", "tag_dnst_htmp.png"),
+            "--plotType", "lines",
+            "--sortRegions", "keep",
+            "--averageTypeSummaryPlot", "mean",
+            "--whatToShow", "plot, heatmap and colorbar",
+            "--refPointLabel", "Center",
+            "--regionsLabel", regions_labels,
+            "--xAxisLabel", "(bp)",
+            "--yAxisLabel", "Signal mean",
+            "--plotFileFormat", "png",
+            "--legendLocation", "upper-left"
+        )
+        exit_code <- sys::exec_wait(
+            cmd="plotHeatmap",                                              # if it's not found in PATH, R will fail with error
+            args=plot_heatmap_args
+        )
+        if (exit_code != 0){                                                # we were able to run profile_bins, but something went wrong
+            print(                                                          # no reason to print through logger as the workflow shoudn't fail
+                paste(
+                    "Failed to run plotHeatmap command",
+                    "with the exit code", exit_code
+                )
+            )
+        }
+    }
 }
 
 ## ----
@@ -286,18 +428,26 @@ get_args <- function(){
     parser$add_argument(
         "--query",
         help=paste(
-            "Path to the RDS file to load Seurat object from. This file should include",
-            "chromatin accessibility information stored in the ATAC assay. Additionally",
-            "'rnaumap', and/or 'atacumap', and/or 'wnnumap' dimensionality reductions",
-            "should be present."
+            "Path to the RDS file to load Seurat object from. This file should",
+            "include chromatin accessibility information stored in the ATAC assay.",
+            "The dimensionality reductions selected in the --reduction parameter",
+            "should be present in the loaded Seurat object."
+        ),
+        type="character", required="True"
+    )
+    parser$add_argument(
+        "--reduction",
+        help=paste(
+            "Dimensionality reduction to be used for generating UMAP plots."
         ),
         type="character", required="True"
     )
     parser$add_argument(
         "--fragments",
         help=paste(
-            "Count and barcode information for every ATAC fragment used in the loaded",
-            "Seurat object. File should be saved in TSV format with tbi-index file."
+            "Count and barcode information for every ATAC fragment used in",
+            "the loaded Seurat object. File should be saved in TSV format",
+            "with tbi-index file."
         ),
         type="character", required="True"
     )
@@ -339,7 +489,7 @@ get_args <- function(){
         "--subset",
         help=paste(
             "Values from the column set with --groupby parameter to subset cells",
-            "before running differential binding analysis. Ignored if --groupby",
+            "before running differential accessibility analysis. Ignored if --groupby",
             "is not provided. Default: do not subset cells, include all of them."
         ),
         type="character", nargs="*"
@@ -348,8 +498,10 @@ get_args <- function(){
         "--splitby",
         help=paste(
             "Column from the Seurat object metadata to split cells into two groups to",
-            "run --second vs --first differential binding analysis. May be one of",
-            "the extra metadata columns added with --metadata or --barcodes parameters."
+            "run --second vs --first differential accessibility analysis. If --test",
+            "parameter is set to manorm2, the --splitby shouldn't put cells from the",
+            "same dataset into the different comparison groups. May be one of the extra",
+            "metadata columns added with --metadata or --barcodes parameters."
         ),
         type="character", required="True"
     )
@@ -357,7 +509,7 @@ get_args <- function(){
         "--first",
         help=paste(
             "Value from the Seurat object metadata column set with --splitby parameter",
-            "to define the first group of cells for differential binding analysis."
+            "to define the first group of cells for differential accessibility analysis."
         ),
         type="character", required="True"
     )
@@ -365,16 +517,17 @@ get_args <- function(){
         "--second",
         help=paste(
             "Value from the Seurat object metadata column set with --splitby parameter",
-            "to define the second group of cells for differential binding analysis."
+            "to define the second group of cells for differential accessibility analysis."
         ),
         type="character", required="True"
     )
     parser$add_argument(
         "--test",
         help=paste(
-            "Test type to use in differential binding analysis. For all tests except",
-            "manorm2, peaks present in the loaded Seurat object will be used. If manorm2",
-            "test selected, peaks will be called per group defined by --splitby parameter.",
+            "Test type to use in the differential accessibility analysis. For all tests",
+            "except manorm2, peaks already present in the loaded Seurat object will be",
+            "used. If manorm2 test is selected, reads will be aggregated to pseudo bulk",
+            "form by dataset and peaks will be called with MACS2.",
             "Default: logistic-regression"
         ),
         type="character", default="logistic-regression",
@@ -383,7 +536,7 @@ get_args <- function(){
             "poisson",                    # (poisson) Poisson Generalized Linear Model (use FindMarkers with peaks from Seurat object)
             "logistic-regression",        # (LR) Logistic Regression (use FindMarkers with peaks from Seurat object)
             "mast",                       # (MAST) MAST package (use FindMarkers with peaks from Seurat object)
-            "manorm2"                      # call peaks for each group with MACS2, run MAnorm2
+            "manorm2"                     # call peaks for each dataset with MACS2, run MAnorm2
         )
     )
     parser$add_argument(
@@ -428,6 +581,16 @@ get_args <- function(){
         type="integer", default=1000
     )
     parser$add_argument(
+        "--minoverlap",
+        help=paste(
+            "Keep only those reference genomic bins that are present",
+            "in at least this fraction of datasets within each of the",
+            "comparison groups. Ignored if --test is not set to manorm2.",
+            "Default: 0.5"
+        ),
+        type="double", default=0.5
+    )
+    parser$add_argument(
         "--maxpeaks",
         help=paste(
             "The maximum number of the most significant (based on qvalue)",
@@ -441,7 +604,7 @@ get_args <- function(){
         "--blacklist",
         help=paste(
             "Path to the optional BED file with the genomic blacklist regions",
-            "to be filtered out before running differential binding analysis.",
+            "to be filtered out before running differential accessibility analysis.",
             "Any reference genomic bin overlapping a blacklist region will be",
             "removed from the output. Ignored if --test is not set to manorm2."
         ),
@@ -517,22 +680,24 @@ get_args <- function(){
         type="integer", default=42
     )
     args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
+    args$test <- switch(                        # need to adjust --test parameter
+        args$test,
+        "negative-binomial"   = "negbinom",
+        "poisson"             = "poisson",
+        "logistic-regression" = "LR",
+        "mast"                = "MAST",
+        "manorm2"             = "manorm2"
+    )
+    logger$setup(
+        paste0(args$output, "_hlog.txt"),
+        header="Single-Cell ATAC-Seq Differential Accessibility Analysis (sc_atac_dbinding.R)"
+    )
     print(args)
     return (args)
 }
 
 ## ----
 args <- get_args()
-print("Adjusting --test parameter")
-args$test <- switch(
-    args$test,
-    "negative-binomial"   = "negbinom",
-    "poisson"             = "poisson",
-    "logistic-regression" = "LR",
-    "mast"                = "MAST",
-    "manorm2"             = "manorm2"
-)
-print(paste("--test was adjusted to", args$test))
 prod$parallel(args)
 
 ## ----
@@ -541,23 +706,22 @@ seurat_data <- readRDS(args$query)
 debug$print_info(seurat_data, args)
 
 ## ----
-if (!any(c("rnaumap", "atacumap", "wnnumap") %in% names(seurat_data@reductions))){
-    print(
+if (!("ATAC" %in% names(seurat_data@assays))){
+    logger$info(
         paste(
-            "Loaded Seurat object includes neither of the required reductions:",
-            "'rnaumap', and/or 'atacumap', and/or 'wnnumap'.",
-            "Exiting."
+            "Loaded Seurat object doesn't include",
+            "the required ATAC assay. Exiting."
         )
     )
     quit(save="no", status=1, runLast=FALSE)
 }
 
 ## ----
-if (!("ATAC" %in% names(seurat_data@assays))){
-    print(
-        paste(
-            "Loaded Seurat object doesn't include required ATAC assay.",
-            "Exiting."
+if (!(args$reduction %in% names(seurat_data@reductions))){
+    logger$info(
+        paste0(
+            "Loaded Seurat object doesn't include selected ",
+            "reduction ", args$reduction, ". Exiting."
         )
     )
     quit(save="no", status=1, runLast=FALSE)
@@ -567,9 +731,12 @@ if (!("ATAC" %in% names(seurat_data@assays))){
 print("Setting default assay to ATAC")
 DefaultAssay(seurat_data) <- "ATAC"
 
+## ----
 seqinfo_data <- seurat_data[["ATAC"]]@seqinfo
 if (is.null(seqinfo_data)){
-    print("Loaded Seurat object doesn't include seqinfo data. Exiting.")
+    logger$info(
+        "Loaded Seurat object doesn't include seqinfo data. Exiting."
+    )
     quit(save="no", status=1, runLast=FALSE)
 }
 
@@ -598,12 +765,53 @@ if (!is.null(args$barcodes)){
 }
 
 ## ----
-print("Subsetting Seurat object to include only cells from the tested conditions")
-seurat_data <- io$apply_metadata_filters(seurat_data, args$splitby, c(args$first, args$second))
+if (args$test == "manorm2"){
+    # need to make sure that --splitby doesn't put
+    # cells from the same dataset into the different
+    # comparison groups, because when we use manorm2
+    # we aggregate everything to pseudobulk form per
+    # dataset.
+    cells_counts <- table(
+        seurat_data@meta.data$new.ident,
+        seurat_data@meta.data[[args$splitby]]
+    )
+    if (any(rowSums(cells_counts > 0) > 1)){
+        logger$info(
+            paste(
+                "Dividing cells by", args$splitby, "puts cells",
+                "from the same dataset into the different",
+                "comparison groups, which is not supported when",
+                "--test parameter is set to manorm2. Exiting."
+            )
+        )
+        logger$info(cells_counts)
+        quit(save="no", status=1, runLast=FALSE)
+    }
+}
+
+## ----
+tryCatch(
+    expr = {
+        print("Subsetting Seurat object to include only cells from the tested conditions")
+        seurat_data <- io$apply_metadata_filters(
+            seurat_data,
+            args$splitby,
+            c(args$first, args$second)
+        )
+    },
+    error = function(e){
+        logger$info(
+            paste(
+                "Failed to filter Seurat object with error. Exiting.", e
+            )
+        )
+        quit(save="no", status=1, runLast=FALSE)
+    }
+)
 debug$print_info(seurat_data, args)
 
 ## ----
-export_raw_plots(seurat_data, args)                                                        # will include only cells from --first and --second
+export_raw_plots(seurat_data, args)                                                        # need to run it befire we subset by --groupby
 
 ## ----
 if(!is.null(args$groupby) && !is.null(args$subset)){
@@ -614,13 +822,13 @@ if(!is.null(args$groupby) && !is.null(args$subset)){
 
 ## ----
 if (!all(table(seurat_data@meta.data[[args$splitby]]) > 0)){                               # check if we accidentally removed cells we want to compare
-    print(
+    logger$info(
         paste(
             "Not enough cells for comparison. Check --groupby",
             "and --subset parameters. Exiting."
         )
     )
-    print(table(seurat_data@meta.data[[args$splitby]]))
+    logger$info(table(seurat_data@meta.data[[args$splitby]]))
     quit(save="no", status=1, runLast=FALSE)
 }
 
@@ -636,9 +844,9 @@ if (args$test != "manorm2"){                                                    
 }
 
 ## ----
-args$tmp_locations <- prepare_fragments_and_peaks(                                         # will create ATAC fragments and Tn5 cut sites BED files
-    seurat_data=seurat_data,                                                               # for --first and --second groups of cells. If --test was
-    seqinfo_data=seqinfo_data,                                                             # set to manorm2, will call peaks from Tn5 cut sites.
+args$metadata <- prepare_fragments_and_peaks(
+    seurat_data=seurat_data,
+    seqinfo_data=seqinfo_data,
     args=args
 )
 
@@ -648,15 +856,12 @@ print(head(db_results$db_sites))
 
 ## ----
 io$export_data(
-    db_results$db_sites,                                                                      # not filtered na-removed differentially bound sites
-    paste(args$output, "_db_sites.tsv", sep="")
+    db_results$db_sites,                                                                   # not filtered na-removed differentially bound sites
+    paste0(args$output, "_db_sites.tsv")
 )
 
 ## ----
-export_processed_plots(seurat_data, db_results, args)
-
-## ----
-export_browser_tracks(                                                                           # exporting fragments coverage into bigWigs for visualization purposes
+export_processed_plots(
     db_results=db_results,
     seqinfo_data=seqinfo_data,
     args
