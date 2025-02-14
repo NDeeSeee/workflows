@@ -13,6 +13,7 @@ import("ggplot2", attach=FALSE)
 import("dynwrap", attach=FALSE)
 import("dynplot", attach=FALSE)
 import("ggrepel", attach=FALSE)
+import("morpheus", attach=FALSE)
 import("circlize", attach=FALSE)
 import("cluster", attach=FALSE)
 import("reshape2", attach=FALSE)
@@ -72,6 +73,7 @@ export(
     "dendro_plot",
     "topology_plot",
     "trajectory_heatmap",
+    "morpheus_html_heatmap",
     "expand_qc_suffix",
     "D40_COLORS",
     "D24_COLORS",
@@ -3153,6 +3155,53 @@ feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", s
         error = function(e){
             base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
             base::print(base::paste("Failed to export feature expression heatmap to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
+
+# For now we load GCT data from the file, because the function to create
+# GCT data in export_gct function was used from the cmapR package and
+# its output might nor be exactly the same as morpheus::read.gct
+morpheus_html_heatmap <- function(gct_location, rootname){
+    base::tryCatch(
+        expr = {
+            is_all_numeric <- function(x) {
+                !any(
+                    is.na(base::suppressWarnings(as.numeric(stats::na.omit(x))))
+                ) & is.character(x)
+            }
+            base::print(
+                base::paste("Loading GCT data from", gct_location)
+            )
+            gct_data <- morpheus::read.gct(gct_location)
+            html_data <- morpheus::morpheus(
+                x=gct_data$data,
+                rowAnnotations=if(base::nrow(gct_data$rowAnnotations) == 0)
+                                   NULL
+                               else
+                                   gct_data$rowAnnotations %>% dplyr::mutate_if(is_all_numeric, as.numeric),
+                columnAnnotations=if(base::nrow(gct_data$columnAnnotations) == 0)
+                                      NULL
+                                  else
+                                      gct_data$columnAnnotations
+            )
+            location <- base::paste0(rootname, ".html")
+            htmlwidgets::saveWidget(
+                html_data,
+                file=location
+            )
+            base::print(
+                base::paste0("Exporting morpheus heatmap to ", location)
+            )
+        },
+        error = function(e){
+            base::print(
+                base::paste0(
+                    "Failed to export morpheus heatmap to ",
+                    location, " with error - ", e
+                )
+            )
         }
     )
 }

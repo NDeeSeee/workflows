@@ -324,7 +324,7 @@ export_processed_plots <- function(db_results, seqinfo_data, args){
                          ) %>%
                          dplyr::mutate("score"=-log10(padj)*10) %>%                                  # similar to what MACS2 does
                          dplyr::select(
-                             c("chr", "start", "end", "name", "score", "log2FoldChange")             # we need log2FoldChange column only for filtering
+                             c("chr", "start", "end", "name", "score", "log2FoldChange", "padj")     # we keep log2FoldChange and padj for morpheus heatmap
                          )
     print(head(filtered_db_sites))
 
@@ -340,7 +340,7 @@ export_processed_plots <- function(db_results, seqinfo_data, args){
         )
 
         first_db_ranges <- filtered_db_ranges[filtered_db_ranges$log2FoldChange <= -args$logfc, ]    # at least one of these groups won't be empty
-        second_db_ranges <- filtered_db_ranges[filtered_db_ranges$log2FoldChange >= args$logfc, ]
+        second_db_ranges <- filtered_db_ranges[filtered_db_ranges$log2FoldChange >= args$logfc, ]    # because we checked nrow(filtered_db_sites) > 0)
 
         regions_locations <- c()
         regions_labels <- c()
@@ -370,7 +370,7 @@ export_processed_plots <- function(db_results, seqinfo_data, args){
             "--referencePoint", "center",
             "--beforeRegionStartLength", 5000,
             "--afterRegionStartLength", 5000,
-            "--binSize", 10,
+            "--binSize", 100,
             "--sortRegions", "keep",
             "--samplesLabel", args$metadata$name,
             "--outFileName", score_matrix_location,
@@ -388,33 +388,103 @@ export_processed_plots <- function(db_results, seqinfo_data, args){
                     "with the exit code", exit_code
                 )
             )
-        }
-
-        plot_heatmap_args <- c(
-            "--plotTitle", "Tag density around peak centers sorted by log2FoldChange",
-            "--matrixFile", score_matrix_location,
-            "--outFileName", paste0(args$output, "_", "tag_dnst_htmp.png"),
-            "--plotType", "lines",
-            "--sortRegions", "keep",
-            "--averageTypeSummaryPlot", "mean",
-            "--whatToShow", "plot, heatmap and colorbar",
-            "--refPointLabel", "Center",
-            "--regionsLabel", regions_labels,
-            "--xAxisLabel", "(bp)",
-            "--yAxisLabel", "Signal mean",
-            "--plotFileFormat", "png",
-            "--legendLocation", "upper-left"
-        )
-        exit_code <- sys::exec_wait(
-            cmd="plotHeatmap",                                              # if it's not found in PATH, R will fail with error
-            args=plot_heatmap_args
-        )
-        if (exit_code != 0){                                                # we were able to run profile_bins, but something went wrong
-            print(                                                          # no reason to print through logger as the workflow shoudn't fail
-                paste(
-                    "Failed to run plotHeatmap command",
-                    "with the exit code", exit_code
+        } else {
+            plot_heatmap_args <- c(
+                "--plotTitle", "Tag density around peak centers sorted by log2FoldChange",
+                "--matrixFile", score_matrix_location,
+                "--outFileName", paste0(args$output, "_", "tag_dnst_htmp.png"),
+                "--plotType", "lines",
+                "--sortRegions", "keep",
+                "--averageTypeSummaryPlot", "mean",
+                "--whatToShow", "plot, heatmap and colorbar",
+                "--refPointLabel", "Center",
+                "--regionsLabel", regions_labels,
+                "--xAxisLabel", "(bp)",
+                "--yAxisLabel", "Signal mean",
+                "--plotFileFormat", "png",
+                "--legendLocation", "upper-left"
+            )
+            exit_code <- sys::exec_wait(
+                cmd="plotHeatmap",                                              # if it's not found in PATH, R will fail with error
+                args=plot_heatmap_args
+            )
+            if (exit_code != 0){                                                # we were able to run profile_bins, but something went wrong
+                print(                                                          # no reason to print through logger as the workflow shoudn't fail
+                    paste(
+                        "Failed to run plotHeatmap command",
+                        "with the exit code", exit_code
+                    )
                 )
+            }
+
+            print("Exporting Morpheus heatmap")
+            score_matrix_data <- read.table(
+                score_matrix_location,
+                sep="\t",
+                skip=1,                                                         # we need to skip the first row because it includes metadata
+                header=FALSE,
+                check.names=FALSE,
+                stringsAsFactors=FALSE,
+                quote=""                                                        # safety measure
+            ) %>%
+            tidyr::separate(
+                col="V4",                                                       # has "chr:start-end" structure
+                into=c("chr", "start", "end"),
+                sep=":|-",
+                remove=TRUE,
+                convert=TRUE                                                    # will make start and end numeric
+            ) %>%
+            dplyr::mutate(
+                peak=base::paste0(chr, ":", start+1, "-", end)                  # there is 1 bp mismatch that we need to correct
+            ) %>%
+            dplyr::select(
+                -c("V1", "V2", "V3", "V5", "chr", "start", "end", "V6")
+            ) %>%
+            tibble::remove_rownames() %>%
+            tibble::column_to_rownames("peak")
+
+            row_metadata <- filtered_db_sites %>%                               # always not empty dataframe
+                            dplyr::mutate(
+                                "peak"=paste0(chr, ":", start, "-", end)        # to make it correspond to score_matrix_data
+                            ) %>%
+                            tibble::remove_rownames() %>%
+                            tibble::column_to_rownames("peak") %>%
+                            dplyr::select("log2FoldChange", "padj") %>%         # we need only these two columns from filtered_db_sites
+                            dplyr::mutate(
+                                !!args$splitby:=dplyr::case_when(
+                                                    log2FoldChange >= args$logfc ~ args$second,
+                                                    log2FoldChange <= -args$logfc ~ args$first
+                                                )
+                            )
+            row_metadata <- row_metadata[rownames(score_matrix_data), ]         # we want to have the rows order from deeptools results, should never fail
+
+            col_metadata <- NULL
+            n_times <- ncol(score_matrix_data) / length(args$metadata$name)     # shouldn't fail, as it's alsways dividable by the number of coverage files
+            for (i in 1:length(args$metadata$name)){
+                current_name <- args$metadata$name[i]
+                current_col_metadata <- data.frame(
+                    rep(current_name, n_times)
+                )
+                if (is.null(col_metadata)){
+                    col_metadata <- current_col_metadata
+                } else {
+                    col_metadata <- rbind(col_metadata, current_col_metadata)
+                }
+            }
+
+            colnames(col_metadata) <- args$splitby
+            rownames(col_metadata) <- colnames(score_matrix_data)               # score_matrix_data is already sorted by the values from provided as --samplesLabel
+
+            io$export_gct(
+                counts_mat=as.matrix(score_matrix_data),
+                row_metadata=row_metadata,
+                col_metadata=col_metadata,
+                location=paste0(args$output, "_", "tag_dnst_htmp.gct")
+            )
+
+            graphics$morpheus_html_heatmap(
+                gct_location=paste0(args$output, "_", "tag_dnst_htmp.gct"),
+                rootname=paste0(args$output, "_tag_dnst_htmp")
             )
         }
     }

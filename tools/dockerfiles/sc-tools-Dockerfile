@@ -57,6 +57,11 @@
 #   from the sc_atac_dbinding.R script.
 # - Moved P value labels on the composition_box_plot
 #   to the top, set angle to 90 degrees.
+# - Installed morpheus to build interactive heatmap
+#   from inside the sc_atac_dbinding.R script.
+# - Tools added:
+#   pip3 install deeptools==${DEEPTOOLS_VERSION}
+#   R -e 'devtools::install_github("michael-kotliar/morpheus.R")'
 #
 # v0.0.41 -- based on biowardrobe2/sc-tools:v0.0.40
 # - Updated UCSC Cellbrowser to 1.2.8.
@@ -485,6 +490,7 @@ RUN apt-get update && \
     R -e 'install.packages("ggdensity")' && \
     R -e 'devtools::install_github("satijalab/seurat-data", upgrade = "never", ref = "b198ed523b1fd773c09356d30d9dfcebd62f22cf")' && \
     R -e 'devtools::install_github("michael-kotliar/azimuth", upgrade = "never", ref = "v0.4.6mod")' && \
+    R -e 'devtools::install_github("michael-kotliar/morpheus.R")' && \
     wget ${LOUPER_URL} && \
     tar xzf loupeR_Linux.tar.gz && \
     sed -i 's/file\.exists(eula_lock_file())/TRUE/g' /tmp/loupeR/R/eula.R && \
