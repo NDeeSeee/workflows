@@ -807,7 +807,7 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefi
 
     # Convert the input string into a vector for column ordering if provided
     if (nzchar(args$heatmap_col_order)) {
-      col_order_vector <- unlist(strsplit(args$heatmap_col_order, "[,\\s]+"))
+      col_order_vector <- tolower(unlist(strsplit(args$heatmap_col_order, "[,\\s]+")))
 
       # Check for differences:
       # Columns specified in col_order_vector that are missing in normCounts and col_metadata
