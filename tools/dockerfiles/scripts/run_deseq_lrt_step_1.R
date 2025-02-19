@@ -818,6 +818,13 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefi
       extra_in_counts   <- setdiff(colnames(normCounts), col_order_vector)
       extra_in_metadata <- setdiff(rownames(col_metadata), col_order_vector)
 
+      print("Columns specified in col_order_vector:")
+      print(col_order_vector)
+      print("Columns present in normCounts:")
+      print(colnames(normCounts))
+      print("Columns present in col_metadata:")
+      print(rownames(col_metadata))
+
       # If any specified columns are missing, stop and output the differences
       if (length(missing_in_counts) > 0 || length(missing_in_metadata) > 0) {
         stop(sprintf("Mismatch in specified heatmap_col_order.\nColumns specified but not found in normCounts: %s\nColumns specified but not found in col_metadata: %s",
