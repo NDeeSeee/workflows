@@ -57,6 +57,9 @@ DEFAULT_META_FIELDS <- c(
     "quartile_frip",
     "quartile_blacklist_fraction",
 
+    "da_score",
+    "da_status",
+
     "prediction_cell_type",
     "prediction_mapping_score",
     "prediction_confidence_score",
@@ -103,6 +106,9 @@ DEFAULT_META_FIELDS_NAMES <- c(
     "Quartiles of Nucleosome signal",
     "Quartiles of FRiP",
     "Quartiles of Bl. regions",
+
+    "Diff. abundance score",
+    "Diff. abundance status",
 
     "Prediction cell type",
     "Prediction mapping score",
@@ -385,7 +391,7 @@ get_color_data <- function(
     if (length(metadata_column) > 0){
         for (i in 1:length(metadata_column)){
             current_column <- metadata_column[i]
-            categories <- base::levels(seurat_data@meta.data[[current_column]])       # will depend on the order of levels
+            categories <- base::levels(seurat_data@meta.data[[current_column]])        # will depend on the order of levels
             if (is.null(categories)) {                                                 # not a factor
                 categories <- base::sort(                                              # alphabetically sorted
                     base::unique(
@@ -446,6 +452,8 @@ export_cellbrowser <- function(
             ) %>%
             tibble::add_row(category="TRUE", color=graphics$TRUE_COLOR) %>%        # color for TRUE
             tibble::add_row(category="FALSE", color=graphics$FALSE_COLOR) %>%      # color for FALSE
+            tibble::add_row(category="UP", color=graphics$UP_COLOR) %>%            # color for UP
+            tibble::add_row(category="DOWN", color=graphics$DOWN_COLOR) %>%        # color for DOWN
             tibble::add_row(category="NA", color=graphics$NA_COLOR) %>%            # color for NA
             tibble::add_row(category="G1", color=graphics$CC_COLORS[1]) %>%        # color for G1 cell cycle phase
             tibble::add_row(category="S", color=graphics$CC_COLORS[2]) %>%         # color for S cell cycle phase
@@ -498,6 +506,10 @@ export_cellbrowser <- function(
             pseudotime_fields_names <- base::gsub("ptime_", "Pseudotime from ", pseudotime_fields)
             meta_fields <- base::append(meta_fields, pseudotime_fields)
             meta_fields_names <- base::append(meta_fields_names, pseudotime_fields_names)
+
+            if ("prediction_cell_type" %in% base::colnames(seurat_data@meta.data)){
+                color_data <- get_color_data(seurat_data, "prediction_cell_type", color_data, palette_colors)
+            }
 
             collected_markers <- NULL                                                                     # we collect markers only for clustering, custom, and "prediction_cell_type" fields
             collected_top_features <- c()                                                                 # of the current assay
@@ -590,20 +602,26 @@ export_cellbrowser <- function(
             }
 
             show_labels <- TRUE                                                      # by default we try to show labels, but we hide them if
-            if (is.null(label_field) || !(label_field %in% (meta_fields_names))){    # label_field was either not provided or not present in the metadata
-                show_labels <- FALSE                                                 # hide labels
-                for (i in 1:length(meta_fields)){                                    # searching the first field from the meta.data that is not unique for all cells
-                    current_field <- meta_fields[i]
-                    if (
-                        (current_field %in% base::colnames(seurat_data@meta.data)) &&
-                        (
-                            length(
-                                base::unique(base::as.vector(as.character(seurat_data@meta.data[, current_field])))
-                            ) > 1
-                        )
-                    ){
-                        label_field <- meta_fields_names[i]
-                        break
+            if (is.null(label_field) || !(label_field %in% (meta_fields_names))){    # label_field was either not provided or not present in the metadata field names
+                if (!is.null(label_field) && (label_field %in% (meta_fields))){      # check, maybe it's present in the meta_fields, so we can find correspondent name
+                    label_field <- meta_fields_names[                                # the order between meta_fields_names and meta_fields should be the same
+                        base::match(label_field, meta_fields)                        # this will always return something
+                    ]
+                } else {                                                             # need to select some default value as a label_field
+                    show_labels <- FALSE                                             # hide labels
+                    for (i in 1:length(meta_fields)){                                # searching the first field from the meta.data that is not unique for all cells
+                        current_field <- meta_fields[i]
+                        if (
+                            (current_field %in% base::colnames(seurat_data@meta.data)) &&
+                            (
+                                length(
+                                    base::unique(base::as.vector(as.character(seurat_data@meta.data[, current_field])))
+                                ) > 1
+                            )
+                        ){
+                            label_field <- meta_fields_names[i]
+                            break
+                        }
                     }
                 }
             }

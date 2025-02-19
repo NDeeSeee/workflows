@@ -206,6 +206,12 @@ SplitFragments(
     verbose=args$verbose
 )
 
+mapped_counts <- AverageCounts(                                            # named vector with the names from the splitby column
+    seurat_data, assay="ATAC", group.by="splitby", verbose=FALSE           # average nCount_ATAC per group multiplied on the number
+) * CellsPerGroup(                                                         # of cells per group gives approximately mapped reads number
+    seurat_data, group.by="splitby"                                        # may include NA, because CellsPerGroup returns NA group
+)
+
 ## ----
 groups <- unique(as.vector(as.character(seurat_data@meta.data$splitby)))
 for (i in 1:length(groups)){
@@ -220,7 +226,8 @@ for (i in 1:length(groups)){
             )
             io$export_fragments_coverage(
                 fragments_data=fragments_data,
-                location=fragments_cov_location
+                location=fragments_cov_location,
+                scaling_coef=10^6/mapped_counts[groups[i]]
             )
             fragments_data <- unlist(as(
                 list(
@@ -231,7 +238,8 @@ for (i in 1:length(groups)){
             ))
             io$export_fragments_coverage(
                 fragments_data=fragments_data,
-                location=cut_sites_cov_location
+                location=cut_sites_cov_location,
+                scaling_coef=10^6/mapped_counts[groups[i]]
             )
         },
         error = function(e){

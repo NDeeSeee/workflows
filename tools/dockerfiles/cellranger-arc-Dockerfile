@@ -15,7 +15,9 @@
 # v0.0.1 -- based on cumulusprod/cellranger-arc:2.0.2
 # - Need to patch mkref file, because
 #   os.access(output_parent_dir, os.W_OK) sometimes
-#   returns False on NFS mount storage
+#   returns False on NFS mount storage.
+#   For the same reason we remove similar check for
+#   parentname directory in utils.py.
 
 
 ### Base Image
@@ -32,6 +34,7 @@ WORKDIR /tmp
 RUN apt-get update && \
     apt-get install vim -y && \
     sed -i 's/exit_with_message("You do not have write permissions in %s\.\\n" % output_parent_dir)/pass/' /software/cellranger-arc-2.0.2/bin/atac_gex/mkref && \
+    sed -i '/if not os.access(parentname, os.W_OK)/,+2d' /software/cellranger-arc-2.0.2/external/anaconda/lib/python3.7/site-packages/tables/utils.py && \
 ### Cleaning
     apt-get clean && \
     apt-get purge && \

@@ -7,6 +7,7 @@ import("Azimuth", attach=FALSE)
 import("tibble", attach=FALSE)
 import("sceasy", attach=FALSE)
 import("forcats", attach=FALSE)
+import("GSEABase", attach=FALSE)
 import("SeuratDisk", attach=FALSE)
 import("SCopeLoomR", attach=FALSE)
 import("rtracklayer", attach=FALSE)
@@ -37,11 +38,11 @@ export(
     "load_10x_vdj_data",
     "load_10x_atac_data",
     "load_seqinfo_data",
+    "load_geneset_data",
     "export_h5seurat",
     "export_h5ad",
     "export_scope_loom",
     "export_fragments_coverage",
-    "export_coverage",
     "load_cell_cycle_data",
     "load_annotation_data",
     "replace_fragments"
@@ -118,13 +119,13 @@ load_cell_cycle_data <- function(seurat_data, location){
     )
 }
 
-export_fragments_coverage <- function(fragments_data, location){
+export_fragments_coverage <- function(fragments_data, location, scaling_coef=1){
     base::tryCatch(
         expr = {
             coverage_data <- methods::as(
                 base::lapply(
                     GenomicRanges::coverage(fragments_data),
-                    function(x) signif(10^6 * x/length(fragments_data), 3)               # scale to RPM mapped
+                    function(x) signif(x * scaling_coef, 3)
                 ),
                 "SimpleRleList"
             )
@@ -133,18 +134,6 @@ export_fragments_coverage <- function(fragments_data, location){
         },
         error = function(e){
             base::print(base::paste("Failed to export ATAC fragments coverage data to", location, "due to", e))
-        }
-    )
-}
-
-export_coverage <- function(coverage_data, location){
-    base::tryCatch(
-        expr = {
-            rtracklayer::export.bw(coverage_data, location)
-            base::print(base::paste("Exporting coverage data to", location, sep=" "))
-        },
-        error = function(e){
-            base::print(base::paste("Failed to export coverage data to", location, "due to", e))
         }
     )
 }
@@ -360,7 +349,12 @@ export_h5seurat <- function(data, location, overwrite=TRUE){
             base::print(base::paste("Exporting data as h5seurat to", location, sep=" "))
         },
         error = function(e){
-            base::print(base::paste("Failed to export data as h5seurat to", location, sep=" "))
+            base::print(
+                base::paste(
+                    "Failed to export data as h5seurat",
+                    "format to", location, "due to", e
+                )
+            )
         }
     )
 }
@@ -492,7 +486,8 @@ extend_metadata <- function(seurat_data, location, seurat_ref_column, meta_ref_c
         sep=get_file_type(location),
         header=TRUE,
         check.names=FALSE,
-        stringsAsFactors=FALSE
+        stringsAsFactors=FALSE,
+        na.strings=NULL                                                                          # to prevent coercing NA string to <NA> value
     )
     base::print(base::paste("Metadata is successfully loaded from", location))
     base::print(metadata)
@@ -635,10 +630,26 @@ extend_metadata_by_barcode <- function(seurat_data, location, filter=FALSE){
         sep=get_file_type(location),
         header=TRUE,
         check.names=FALSE,
-        stringsAsFactors=FALSE
-    ) %>% dplyr::rename("barcode"=1)                                                      # rename the first column to barcode
+        stringsAsFactors=FALSE,
+        na.strings=NULL                                                                          # to prevent coercing NA string to <NA> value
+    ) %>%
+    dplyr::rename("barcode"=1) %>%
+    dplyr::mutate(barcode_backup=barcode) %>%                                                    # when metadata has only one column with barcodes, we still
+    tibble::remove_rownames() %>%                                                                # want to have barcodes as column so we can use drop_na later
+    tibble::column_to_rownames("barcode")                                                        # we need it as the rownames to be able to select with []
 
-    base::print(base::paste("Barcodes metadata is successfully loaded from ", location))
+    metadata <- metadata[SeuratObject::Cells(seurat_data), , drop=FALSE] %>%                     # guarantees the order, will include  for missing cells
+                tidyr::drop_na(barcode_backup) %>%                                               # removes <NA> without changing the order
+                tibble::rownames_to_column("barcode") %>%                                        # return the barcodes to the column
+                dplyr::select(-c("barcode_backup"))                                              # don't need it anymore
+
+    base::print(
+        base::paste(
+            "Barcodes metadata with", base::nrow(metadata),
+            "cells is successfully loaded from", location
+        )
+    )
+    base::print(utils::head(metadata))
 
     if (filter){
         base::print(base::paste("Filtering Seurat data by loaded barcodes"))
@@ -660,7 +671,7 @@ extend_metadata_by_barcode <- function(seurat_data, location, filter=FALSE){
                                dplyr::left_join(metadata, by="barcode") %>%               # intersect with loaded extra metadata by "barcode"
                                tibble::remove_rownames() %>%
                                tibble::column_to_rownames("barcode") %>%
-                               replace(is.na(.), "Unknown")                               # in case Seurat object had more barcodes than loaded extra metadata
+                               replace(is.na(.), "NA")                                    # in case Seurat object had more barcodes than loaded extra metadata
         seurat_data <- SeuratObject::AddMetaData(
             seurat_data,
             refactored_metadata[SeuratObject::Cells(seurat_data), , drop=FALSE]           # to guarantee the proper cells order
@@ -726,6 +737,39 @@ load_seqinfo_data <- function(location) {
     )
     base::print(base::paste("Chromosome length data is successfully loaded from ", location))
     return (seqinfo_data)
+}
+
+load_geneset_data <- function(location){
+    geneset_list <- GSEABase::getGmt(location)                       # returns GeneSetCollection object that can be used as list
+    geneset_data <- data.frame(
+        name=base::character(), 
+        value=base::I(list()), 
+        stringsAsFactors=FALSE
+    )
+    for (i in 1:length(geneset_list)){
+        geneset_data <- geneset_data %>%
+                        tibble::add_row(
+                            name=names(geneset_list)[i],
+                            value=list(                              # we can't store a vector here
+                                base::as.vector(
+                                    as.character(
+                                        GSEABase::geneIds(
+                                            geneset_list[[i]]
+                                        )
+                                    )
+                                )
+                            )
+                        )
+    }
+    geneset_data <- geneset_data %>% tibble::deframe()               # converts dataframe to a list using first colunms for names, second - for values
+    base::print(
+        base::paste(
+            "Geneset data is successfully loaded from ",
+            location
+        )
+    )
+    base::rm(geneset_list)
+    return (geneset_data)
 }
 
 load_annotation_data <- function(location) {

@@ -510,6 +510,77 @@ export_all_clustering_plots <- function(seurat_data, args){
 }
 
 ## ----
+export_all_gse_plots <- function(seurat_data, genesets, args) {
+    SeuratObject::DefaultAssay(seurat_data) <- "GSE"                            # safety measure
+    SeuratObject::Idents(seurat_data) <- "new.ident"                            # safety measure
+
+    collected_ranges <- list()
+    for (i in 1:length(genesets)){
+        current_geneset <- genesets[i]
+        current_expression <- as.vector(FetchData(seurat_data, vars=current_geneset, layer="data"))
+        current_limit <- max(abs(c(
+            SetQuantile(cutoff="q1", current_expression),
+            SetQuantile(cutoff="q99", current_expression)
+        )))
+        collected_ranges[[i]] <- c(-current_limit, current_limit)
+    }
+    graphics$feature_plot(
+        data=seurat_data,
+        features=genesets,
+        labels=genesets,
+        reduction="rnaumap",
+        plot_title="UMAP colored by gene set expression score",
+        legend_title="Expression\nscore",
+        label=FALSE,
+        order=FALSE,
+        gradient_colors=c("darkblue", graphics$NA_COLOR, "darkred"),
+        color_scales=collected_ranges,
+        color_limits=collected_ranges,
+        combine_guides="keep",
+        width=400*ceiling(sqrt(length(genesets))),
+        height=400*ceiling(sqrt(length(genesets))),
+        theme=args$theme,
+        rootname=paste(args$output, "gse_per_cell", sep="_"),
+        pdf=args$pdf
+    )
+
+    for (i in 1:length(args$resolution)) {
+        current_resolution <- args$resolution[i]
+        Idents(seurat_data) <- paste("rna_res", current_resolution, sep=".")
+        graphics$dot_plot(
+            data=seurat_data,
+            features=genesets,
+            plot_title="Average gene set expression score",
+            plot_subtitle=paste(
+                "Resolution", current_resolution
+            ),
+            x_label="Gene sets",
+            y_label="Clusters",
+            cluster_idents=FALSE,
+            theme=args$theme,
+            rootname=paste(args$output, "gse_avg_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+        graphics$vln_plot(
+            data=seurat_data,
+            features=genesets,
+            labels=genesets,
+            plot_title="Gene set expression score density",
+            plot_subtitle=paste(
+                "Resolution", current_resolution
+            ),
+            legend_title="Cluster",
+            pt_size=0,
+            combine_guides="collect",
+            palette_colors=graphics$D40_COLORS,
+            theme=args$theme,
+            rootname=paste(args$output, "gse_dnst_res", current_resolution, sep="_"),
+            pdf=args$pdf
+        )
+    }
+}
+
+## ----
 export_all_expression_plots <- function(seurat_data, args) {
     DefaultAssay(seurat_data) <- "RNA"                            # safety measure
     Idents(seurat_data) <- "new.ident"                            # safety measure
@@ -748,6 +819,17 @@ get_args <- function(){
         ),
         type="character", nargs="*"
     )
+    parser$add_argument(    # more info https://www.waltermuskovic.com/2021/04/15/seurat-s-addmodulescore-function/ and https://github.com/satijalab/seurat/issues/522
+        "--genesets",
+        help=paste(
+            "Path to the GMT file for calculating average expression levels",
+            "(module scores) per gene set. This file can be downloaded from",
+            "the Molecular Signatures Database (MSigDB) following the link",
+            "https://www.gsea-msigdb.org/gsea/msigdb.",
+            "Default: do not calculate gene set expression scores."
+        ),
+        type="character"
+    )
     parser$add_argument(
         "--diffgenes",
         help=paste(
@@ -941,6 +1023,56 @@ export_all_clustering_plots(
 )
 
 ## ----
+if (!is.null(args$genesets)){
+    print("Calculating average gene expression per gene set")
+    seurat_data <- NormalizeData(                                        # need to normalize it in case it wasn't done before
+        seurat_data,
+        assay="RNA",                                                     # this doesn't change the default assay to RNA
+        verbose=FALSE
+    )
+    seurat_data <- analyses$get_module_scores(                           # add module score columns with gse_ suffix
+        seurat_data,
+        assay="RNA",                                                     # we need to use RNA assay as SCT is not actual expression data and doesn't include all the genes
+        features=io$load_geneset_data(args$genesets),                     # returns a named list of gene sets. if fails, gets caught by tryCatch
+        prefix="gse_"
+    )
+    gse_fields=base::grep(
+        "^gse_",
+        base::colnames(seurat_data@meta.data),
+        value=TRUE, ignore.case=TRUE
+    )
+    if (length(gse_fields) > 1){
+        print("Moving results from metadata columns to GSE assay")
+        gse_data <- t(
+            FetchData(
+                seurat_data,
+                vars=gse_fields
+            )
+        )
+        rownames(gse_data) <- gsub("^gse_", "", rownames(gse_data))      # we added this prefix when calculating module scores
+        seurat_data@assays[["GSE"]] <- CreateAssayObject(
+            counts=gse_data,                                             # data slot will be equal to counts. Both include log normalized expression values
+            min.cells=1,                                                 # to remove gene sets that have all signatures scores equal to 0
+            min.features=0                                               # to include all cells
+        )
+        Key(seurat_data@assays[["GSE"]]) <- "gse_"                       # fails without a key https://github.com/satijalab/seurat/issues/5699
+        seurat_data@meta.data <- seurat_data@meta.data %>%
+                                 dplyr::select(
+                                     -tidyselect::all_of(gse_fields)     # we don't need these columns as metadata anymore
+                                 )
+        debug$print_info(seurat_data, args)
+
+        export_all_gse_plots(
+            seurat_data=seurat_data,
+            genesets=as.vector(as.character(rownames(seurat_data@assays$GSE))),
+            args=args
+        )
+        rm(gse_data)
+    }
+    rm(gse_fields)
+}
+
+## ----
 if (!is.null(args$genes)){
     print("Adjusting genes of interest to include only those that are present in the loaded Seurat object")
     args$genes <- unique(args$genes)
@@ -990,14 +1122,42 @@ if(args$cbbuild){
     reduc_names <- names(seurat_data@reductions)
     ordered_reduc_names <- c("rnaumap", reduc_names[reduc_names!="rnaumap"])               # we checked before that rnaumap is present
     seurat_data@reductions <- seurat_data@reductions[ordered_reduc_names]
-    ucsc$export_cellbrowser(
-        seurat_data=seurat_data,
-        assay="RNA",
-        slot="counts",
-        short_label="RNA",
-        label_field=paste0("Clustering (rna ", args$resolution[1], ")"),                   # always use only the first resolution
-        rootname=paste(args$output, "_cellbrowser", sep="")
-    )
+
+    if (all(c("RNA", "GSE") %in% names(seurat_data@assays))){
+        ucsc$export_cellbrowser(
+            seurat_data=seurat_data,
+            assay="RNA",
+            slot="counts",
+            short_label="RNA",
+            label_field=paste0("Clustering (rna ", args$resolution[1], ")"),               # always use only the first resolution
+            is_nested=TRUE,
+            rootname=paste(args$output, "_cellbrowser/rna", sep="")
+        )
+        ucsc$export_cellbrowser(
+            seurat_data=seurat_data,
+            assay="GSE",
+            slot="counts",
+            short_label="GSE",
+            is_nested=TRUE,
+            features=as.vector(as.character(rownames(seurat_data@assays$GSE))),
+            rootname=paste(args$output, "_cellbrowser/gse", sep="")
+        )
+    } else {
+        ucsc$export_cellbrowser(
+            seurat_data=seurat_data,
+            assay="RNA",
+            slot="counts",
+            short_label="RNA",
+            label_field=paste0("Clustering (rna ", args$resolution[1], ")"),                   # always use only the first resolution
+            rootname=paste(args$output, "_cellbrowser", sep="")
+        )
+    }
+}
+
+## ----
+if ("GSE" %in% names(seurat_data@assays)){
+    print("Removing GSE assay")
+    seurat_data@assays$GSE <- NULL                # no need to keep it for downstream analyses
 }
 
 ## ----
