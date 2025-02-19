@@ -163,10 +163,10 @@ assert_args <- function(args) {
   tryCatch(
     expr = {
       # Try to load design formula
-      design_formula <- as.formula(args$design)
+      design_formula <- as.formula(tolower(args$design))
     },
     error = function(e) {
-      print(paste0("Exiting: failed to load --design ", args$design, " as formula"))
+      print(paste0("Exiting: failed to load --design ", tolower(args$design), " as formula"))
       quit(
         save = "no",
         status = 1,
@@ -177,10 +177,10 @@ assert_args <- function(args) {
   tryCatch(
     expr = {
       # Try to load reduced formula
-      reduced_formula <- as.formula(args$reduced)
+      reduced_formula <- as.formula(tolower(args$reduced))
     },
     error = function(e) {
-      print(paste0("Exiting: failed to load --reduced ", args$reduced, " as formula"))
+      print(paste0("Exiting: failed to load --reduced ", tolower(args$reduced), " as formula"))
       quit(
         save = "no",
         status = 1,
@@ -315,6 +315,12 @@ get_args <- function() {
     help    = "Maximum number of clusters at each level for Hopach clustering: min - 2, max - 9. Default: 5.",
     type    = "integer",
     default = 5
+  )
+  parser$add_argument(
+    "--heatmap_col_order",
+    help = "Specify the order of columns for the heatmap. Columns should be input as a string with column names separated by spaces and/or commas (e.g., 'sample3 sample1 sample2' or 'sample2, sample1, sample3').",
+    type = "character",
+    default = ""
   )
   parser$add_argument(
     "-o",
@@ -482,7 +488,7 @@ generate_main_effect_contrasts <- function(dds, factors, factor_levels) {
             numerator         = lvl,
             denominator       = ref_level,
             contrast          = contrast_name,
-            subset            = dds_temp,
+            # subset            = dds_temp,
             contrast_res      = contrast_res,
             significant_genes = sig_genes
           )))
@@ -536,7 +542,7 @@ generate_main_effect_contrasts <- function(dds, factors, factor_levels) {
                   numerator         = lvl,
                   denominator       = ref_level,
                   contrast          = contrast_name,
-                  subset            = dds_temp,
+                  # subset            = dds_temp,
                   contrast_res      = contrast_res,
                   significant_genes = sig_genes
                 )))
@@ -616,7 +622,7 @@ generate_interaction_effect_contrasts <- function(dds) {
               numerator = numerator,
               denominator = denominator,
               contrast = interaction,
-              subset = dds_subset,
+              # subset = dds_subset,
               contrast_res = contrast_res,
               significant_genes = significant_genes
             )))
@@ -655,7 +661,7 @@ generate_interaction_effect_contrasts <- function(dds) {
               numerator = numerator,
               denominator = denominator,
               contrast = interaction,
-              subset = dds_subset,
+              # subset = dds_subset,
               contrast_res = contrast_res,
               significant_genes = significant_genes
             )))
@@ -701,6 +707,7 @@ generate_contrasts <- function(dds) {
   print(head(all_contrasts))
 
   all_contrasts <- purrr::list_modify(all_contrasts, expression_data_df = expression_data_df)
+  all_contrasts <- purrr::list_modify(all_contrasts, deseq_obj = dds)
 
   print(paste("Exporting contrasts list to", paste0(args$output, "_contrasts.rds"), sep = " "))
   saveRDS(all_contrasts, file = paste0(args$output, "_contrasts.rds"))
@@ -795,6 +802,45 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefi
     # Ensure col_metadata columns are vectors
     col_metadata <- col_metadata %>% mutate_all(as.vector)
 
+    # Initialize col_order_vector (will be non-NULL if user specifies a column order)
+    col_order_vector <- NULL
+
+    # Convert the input string into a vector for column ordering if provided
+    if (nzchar(args$heatmap_col_order)) {
+      col_order_vector <- unlist(strsplit(args$heatmap_col_order, "[,\\s]+"))
+
+      # Check for differences:
+      # Columns specified in col_order_vector that are missing in normCounts and col_metadata
+      missing_in_counts   <- setdiff(col_order_vector, colnames(normCounts))
+      missing_in_metadata <- setdiff(col_order_vector, rownames(col_metadata))
+
+      # Also, identify any extra columns present in the data but not in col_order_vector
+      extra_in_counts   <- setdiff(colnames(normCounts), col_order_vector)
+      extra_in_metadata <- setdiff(rownames(col_metadata), col_order_vector)
+
+      # If any specified columns are missing, stop and output the differences
+      if (length(missing_in_counts) > 0 || length(missing_in_metadata) > 0) {
+        stop(sprintf("Mismatch in specified heatmap_col_order.\nColumns specified but not found in normCounts: %s\nColumns specified but not found in col_metadata: %s",
+                     paste(missing_in_counts, collapse = ", "),
+                     paste(missing_in_metadata, collapse = ", ")))
+      } else {
+        message("All columns specified in heatmap_col_order are present in both normCounts and col_metadata.")
+      }
+
+      # Optionally, output extra columns that are present in the data but not specified in col_order_vector
+      if (length(extra_in_counts) > 0 || length(extra_in_metadata) > 0) {
+        message(sprintf("Warning: Some columns are present in the data but not specified in heatmap_col_order.\nExtra in normCounts: %s\nExtra in col_metadata: %s",
+                        paste(extra_in_counts, collapse = ", "),
+                        paste(extra_in_metadata, collapse = ", ")))
+      }
+
+      # Reorder the normalized counts and column metadata based on col_order_vector
+      normCounts   <- normCounts[, col_order_vector, drop = FALSE]
+      col_metadata <- col_metadata[col_order_vector, , drop = FALSE]
+    } else {
+      message("No specific column order specified. Using default order.")
+    }
+
     # Create and export the initial GCT file
     gct_data <- new("GCT", mat = normCounts, rdesc = row_metadata, cdesc = col_metadata)
     cmapR::write_gct(ds = gct_data, ofile = paste0(output_prefix, "_counts_all.gct"), appenddim = FALSE)
@@ -836,7 +882,7 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefi
       return(NULL)
     }
 
-    # **New Debug Statements Before Subsetting**
+    # Debugging before subsetting
     print("=== Debugging before subsetting ===")
     print("Checking if all row names in row_metadata_filtered are present in normCounts:")
     all_present <- all(rownames(row_metadata_filtered) %in% rownames(normCounts))
@@ -849,14 +895,13 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefi
       print(head(missing_rows))
     }
 
-    # Proceed to subset only the matching row names
-    # This prevents the "subscript out of bounds" error
+    # Subset only the matching row names to prevent "subscript out of bounds" errors
     common_rows           <- intersect(rownames(row_metadata_filtered), rownames(normCounts))
-    filtered_normCounts <- normCounts[common_rows, , drop = FALSE]
-    row_metadata_filtered <- row_metadata_filtered[common_rows, , drop = FALSE]  # This line ensures consistency
+    filtered_normCounts   <- normCounts[common_rows, , drop = FALSE]
+    row_metadata_filtered <- row_metadata_filtered[common_rows, , drop = FALSE]
     print(paste("Number of rows after subsetting:", nrow(filtered_normCounts)))
 
-    # **Existing Debug Statements Inside export_gct_data**
+    # Existing debug statements
     print("=== Debugging inside export_gct_data ===")
     print("Dimensions of normCounts:")
     print(dim(normCounts))
@@ -876,6 +921,14 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefi
 
     # Now cluster the filtered data
     clustered_data <- cluster_and_reorder(filtered_normCounts, col_metadata, row_metadata_filtered, args)
+
+    # After clustering, if a column order was provided, reapply it to override any clustering on columns.
+    if (!is.null(col_order_vector)) {
+      # Ensure the reordering only includes columns present in the clustered data
+      col_order_vector <- intersect(col_order_vector, colnames(clustered_data$normCounts))
+      clustered_data$normCounts   <- clustered_data$normCounts[, col_order_vector, drop = FALSE]
+      clustered_data$col_metadata <- clustered_data$col_metadata[col_order_vector, , drop = FALSE]
+    }
 
     # After clustering:
     print("Dimensions of row_metadata_filtered:")
@@ -1104,12 +1157,12 @@ print(paste("Load metadata from", args$meta, sep = " "))
 print(metadata_df)
 
 # Load design formula
-design_formula <- as.formula(args$design)
+design_formula <- as.formula(tolower(args$design))
 print("Load design formula")
 print(design_formula)
 
 # Load reduced formula
-reduced_formula <- as.formula(args$reduced)
+reduced_formula <- as.formula(tolower(args$reduced))
 print("Load reduced formula")
 print(reduced_formula)
 
@@ -1201,7 +1254,7 @@ if (args$batchcorrection != "none") {
       # Case 3: Include 'batch' in the design formula
       print("Including 'batch' in the design formula for limma batch correction")
       # Remove '~' from the original design formula string
-      original_design <- substring(args$design, 2)
+      original_design <- substring(tolower(args$design), 2)
       # Create new design formula with 'batch' included
       design_formula <- as.formula(paste("~ batch +", original_design))
       # Note: We do not modify counts at this stage
@@ -1218,6 +1271,14 @@ if (args$batchcorrection != "none") {
   # Design formula remains as provided
   print("No batch correction provided; proceeding with default settings")
 }
+
+print("Starting DESeq object creation using:")
+print("Coldata:")
+print(metadata_df)
+print("Countdata:")
+print(head(countData))
+print("Design formula:")
+print(design_formula)
 
 # Create DESeq2 dataset
 dse <- DESeqDataSetFromMatrix(
