@@ -3163,7 +3163,7 @@ feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", s
 # For now we load GCT data from the file, because the function to create
 # GCT data in export_gct function was used from the cmapR package and
 # its output might nor be exactly the same as morpheus::read.gct
-morpheus_html_heatmap <- function(gct_location, rootname){
+morpheus_html_heatmap <- function(gct_location, rootname, color_scheme=NULL){
     base::tryCatch(
         expr = {
             is_all_numeric <- function(x) {
@@ -3184,7 +3184,8 @@ morpheus_html_heatmap <- function(gct_location, rootname){
                 columnAnnotations=if(base::nrow(gct_data$columnAnnotations) == 0)
                                       NULL
                                   else
-                                      gct_data$columnAnnotations
+                                      gct_data$columnAnnotations,
+                colorScheme=color_scheme
             )
             location <- base::paste0(rootname, ".html")
             htmlwidgets::saveWidget(

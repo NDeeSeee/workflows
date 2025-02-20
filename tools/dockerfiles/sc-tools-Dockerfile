@@ -59,6 +59,8 @@
 #   to the top, set angle to 90 degrees.
 # - Installed morpheus to build interactive heatmap
 #   from inside the sc_atac_dbinding.R script.
+# - Updated sc_ctype_assign.R script to export
+#   gene markers heatmap with Morpheus
 # - Tools added:
 #   pip3 install deeptools==${DEEPTOOLS_VERSION}
 #   R -e 'devtools::install_github("michael-kotliar/morpheus.R")'

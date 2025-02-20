@@ -1160,13 +1160,13 @@ export_gct <- function(counts_mat, location, row_metadata=NULL, col_metadata=NUL
             if (!is.null(row_metadata)){
                 row_metadata <- row_metadata %>%
                                 tibble::rownames_to_column("id") %>%
-                                dplyr::mutate_at("id", base::as.vector)
+                                dplyr::mutate_all(base::as.vector)               # all columns should be vectors
                 counts_mat <- counts_mat[row_metadata$id, ]                      # to guarantee the order and number of rows
             }
             if (!is.null(col_metadata)){
                 col_metadata <- col_metadata %>%
                                 tibble::rownames_to_column("id") %>%
-                                dplyr::mutate_at("id", base::as.vector)
+                                dplyr::mutate_all(base::as.vector)               # all columns should be vectors
                 counts_mat <- counts_mat[, col_metadata$id]                      # to guarantee the order and number of columns
             }
             gct_data <- methods::new(
