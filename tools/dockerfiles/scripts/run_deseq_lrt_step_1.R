@@ -317,12 +317,6 @@ get_args <- function() {
     default = 5
   )
   parser$add_argument(
-    "--heatmap_col_order",
-    help = "Specify the order of columns for the heatmap. Columns should be input as a string with column names separated by spaces and/or commas (e.g., 'sample3 sample1 sample2' or 'sample2, sample1, sample3').",
-    type = "character",
-    default = ""
-  )
-  parser$add_argument(
     "-o",
     "--output",
     help = "Output prefix for generated files",
@@ -476,11 +470,11 @@ generate_main_effect_contrasts <- function(dds, factors, factor_levels) {
             dds_temp,
             name                = contrast_name,
             alpha               = args$fdr,
-            lfcThreshold        = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
+            lfcThreshold        = lfcthreshold,
             independentFiltering = TRUE
           )
 
-          sig_genes <- sum(contrast_res$padj < args$fdr, na.rm = TRUE)
+          significant_genes <- nrow(subset(contrast_res, padj < args$fdr & abs(log2FoldChange) > lfcthreshold))
 
           contrasts <- append(contrasts, list(list(
             effect_type       = "main",
@@ -490,7 +484,7 @@ generate_main_effect_contrasts <- function(dds, factors, factor_levels) {
             contrast          = contrast_name,
             # subset            = dds_temp,
             contrast_res      = contrast_res,
-            significant_genes = sig_genes
+            significant_genes = significant_genes
           )))
         }
       }
@@ -530,11 +524,11 @@ generate_main_effect_contrasts <- function(dds, factors, factor_levels) {
                   dds_temp,
                   name                = contrast_name,
                   alpha               = args$fdr,
-                  lfcThreshold        = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
+                  lfcThreshold        = lfcthreshold,
                   independentFiltering = TRUE
                 )
 
-                sig_genes <- sum(contrast_res$padj < args$fdr, na.rm = TRUE)
+                significant_genes <- nrow(subset(contrast_res, padj < args$fdr & abs(log2FoldChange) > lfcthreshold))
 
                 contrasts <- append(contrasts, list(list(
                   effect_type       = "main",
@@ -544,7 +538,7 @@ generate_main_effect_contrasts <- function(dds, factors, factor_levels) {
                   contrast          = contrast_name,
                   # subset            = dds_temp,
                   contrast_res      = contrast_res,
-                  significant_genes = sig_genes
+                  significant_genes = significant_genes
                 )))
               }
             }
@@ -610,11 +604,11 @@ generate_interaction_effect_contrasts <- function(dds) {
             contrast_res <- results(dds_subset,
               name = interaction,
               alpha = args$fdr,
-              lfcThreshold = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
+              lfcThreshold = lfcthreshold,
               independentFiltering = TRUE
             )
 
-            significant_genes <- sum(contrast_res$padj < args$fdr, na.rm = TRUE)
+            significant_genes <- nrow(subset(contrast_res, padj < args$fdr & abs(log2FoldChange) > lfcthreshold))
 
             contrasts <- append(contrasts, list(list(
               effect_type = "interaction",
@@ -649,11 +643,11 @@ generate_interaction_effect_contrasts <- function(dds) {
             contrast_res <- results(dds_subset,
               name = interaction,
               alpha = args$fdr,
-              lfcThreshold = ifelse(args$use_lfc_thresh, args$lfcthreshold, 0),
+              lfcThreshold = lfcthreshold,
               independentFiltering = TRUE
             )
 
-            significant_genes <- sum(contrast_res$padj < args$fdr, na.rm = TRUE)
+            significant_genes <- nrow(subset(contrast_res, padj < args$fdr & abs(log2FoldChange) > lfcthreshold))
 
             contrasts <- append(contrasts, list(list(
               effect_type = "interaction",
@@ -803,50 +797,12 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefi
     col_metadata <- col_metadata %>% mutate_all(as.vector)
 
     # Initialize col_order_vector (will be non-NULL if user specifies a column order)
-    col_order_vector <- NULL
+    col_order_vector <- tolower(rownames(metadata_df))
+    print("Order of columns for heatmap without clustering, based on metadata input:")
+    print(col_order_vector)
 
-    # Convert the input string into a vector for column ordering if provided
-    if (nzchar(args$heatmap_col_order)) {
-      col_order_vector <- tolower(unlist(strsplit(args$heatmap_col_order, "[,\\s]+")))
-
-      # Check for differences:
-      # Columns specified in col_order_vector that are missing in normCounts and col_metadata
-      missing_in_counts   <- setdiff(col_order_vector, colnames(normCounts))
-      missing_in_metadata <- setdiff(col_order_vector, rownames(col_metadata))
-
-      # Also, identify any extra columns present in the data but not in col_order_vector
-      extra_in_counts   <- setdiff(colnames(normCounts), col_order_vector)
-      extra_in_metadata <- setdiff(rownames(col_metadata), col_order_vector)
-
-      print("Columns specified in col_order_vector:")
-      print(col_order_vector)
-      print("Columns present in normCounts:")
-      print(colnames(normCounts))
-      print("Columns present in col_metadata:")
-      print(rownames(col_metadata))
-
-      # If any specified columns are missing, stop and output the differences
-      if (length(missing_in_counts) > 0 || length(missing_in_metadata) > 0) {
-        stop(sprintf("Mismatch in specified heatmap_col_order.\nColumns specified but not found in normCounts: %s\nColumns specified but not found in col_metadata: %s",
-                     paste(missing_in_counts, collapse = ", "),
-                     paste(missing_in_metadata, collapse = ", ")))
-      } else {
-        message("All columns specified in heatmap_col_order are present in both normCounts and col_metadata.")
-      }
-
-      # Optionally, output extra columns that are present in the data but not specified in col_order_vector
-      if (length(extra_in_counts) > 0 || length(extra_in_metadata) > 0) {
-        message(sprintf("Warning: Some columns are present in the data but not specified in heatmap_col_order.\nExtra in normCounts: %s\nExtra in col_metadata: %s",
-                        paste(extra_in_counts, collapse = ", "),
-                        paste(extra_in_metadata, collapse = ", ")))
-      }
-
-      # Reorder the normalized counts and column metadata based on col_order_vector
-      normCounts   <- normCounts[, col_order_vector, drop = FALSE]
-      col_metadata <- col_metadata[col_order_vector, , drop = FALSE]
-    } else {
-      message("No specific column order specified. Using default order.")
-    }
+    normCounts   <- normCounts[, col_order_vector, drop = FALSE]
+    col_metadata <- col_metadata[col_order_vector, , drop = FALSE]
 
     # Create and export the initial GCT file
     gct_data <- new("GCT", mat = normCounts, rdesc = row_metadata, cdesc = col_metadata)
@@ -884,7 +840,7 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefi
 
     # Check if any rows pass the filter
     if (nrow(row_metadata_filtered) == 0) {
-      warning(paste("No genes passed the FDR threshold of", args$fdr))
+      warning(paste("No genes passed the FDR threshold of", args$fdr, "or the log2 fold change threshold of", lfcthreshold))
       # Optionally, skip exporting filtered GCT
       return(NULL)
     }
@@ -929,13 +885,8 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, output_prefi
     # Now cluster the filtered data
     clustered_data <- cluster_and_reorder(filtered_normCounts, col_metadata, row_metadata_filtered, args)
 
-    # After clustering, if a column order was provided, reapply it to override any clustering on columns.
-    if (!is.null(col_order_vector)) {
-      # Ensure the reordering only includes columns present in the clustered data
-      col_order_vector <- intersect(col_order_vector, colnames(clustered_data$normCounts))
-      clustered_data$normCounts   <- clustered_data$normCounts[, col_order_vector, drop = FALSE]
-      clustered_data$col_metadata <- clustered_data$col_metadata[col_order_vector, , drop = FALSE]
-    }
+    clustered_data$normCounts   <- clustered_data$normCounts[, col_order_vector, drop = FALSE]
+    clustered_data$col_metadata <- clustered_data$col_metadata[col_order_vector, , drop = FALSE]
 
     # After clustering:
     print("Dimensions of row_metadata_filtered:")
@@ -1172,6 +1123,12 @@ print(design_formula)
 reduced_formula <- as.formula(tolower(args$reduced))
 print("Load reduced formula")
 print(reduced_formula)
+
+print("Using use_lfc_thresh argument as:")
+print(args$use_lfc_thresh)
+print("So, the lfc threshold is:")
+lfcthreshold <- ifelse(args$use_lfc_thresh, args$lfcthreshold, 0)
+print(lfcthreshold)
 
 # Clean sample names
 args$name <- clean_sample_names(args$name)
