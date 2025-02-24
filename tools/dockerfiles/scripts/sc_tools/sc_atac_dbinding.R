@@ -759,7 +759,7 @@ get_args <- function(){
         "manorm2"             = "manorm2"
     )
     logger$setup(
-        paste0(args$output, "_hlog.txt"),
+        file.path(dirname(ifelse(args$output == "", "./", args$output)), "error_report.txt"),
         header="Single-Cell ATAC-Seq Differential Accessibility Analysis (sc_atac_dbinding.R)"
     )
     print(args)

@@ -417,7 +417,7 @@ get_args <- function(){
     )
     args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
     logger$setup(
-        paste0(args$output, "_hlog.txt"),
+        file.path(dirname(ifelse(args$output == "", "./", args$output)), "error_report.txt"),
         header="Single-Cell Differential Abundance Analysis (sc_rna_da_cells.R)"
     )
     print(args)

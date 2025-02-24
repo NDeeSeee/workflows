@@ -1214,7 +1214,7 @@ get_args <- function(){
     )
     args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
     logger$setup(
-        paste0(args$output, "_hlog.txt"),
+        file.path(dirname(ifelse(args$output == "", "./", args$output)), "error_report.txt"),
         header="Single-Cell Manual Cell Type Assignment (sc_ctype_assign.R)"
     )
     print(args)
