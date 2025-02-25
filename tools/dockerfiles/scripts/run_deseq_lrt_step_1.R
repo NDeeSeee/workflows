@@ -294,6 +294,15 @@ get_args <- function() {
     default = FALSE
   )
   parser$add_argument(
+    "--rpkm_cutoff",
+    help = paste(
+      "RPKM cutoff for filtering genes. Genes with RPKM values below this threshold will be excluded from the analysis.",
+      "Default: NULL (no filtering)"
+    ),
+    type    = "integer",
+    default = NULL
+  )
+  parser$add_argument(
     "--cluster",
     help = paste(
       "Hopach clustering method to be run on normalized read counts for the",
@@ -1047,6 +1056,11 @@ scale_min_max <- function(x,
   return(scaled_x)
 }
 
+filter_rpkm <- function(expression_df, n) {
+  expression_df %>%
+    filter(if_any(contains("Rpkm"), ~. > n))
+}
+
 cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
 
   start_time <- proc.time()
@@ -1143,8 +1157,18 @@ print(rownames(metadata_df))
 
 # Load expression data
 expression_data_df <- load_expression_data(args$input, args$name, READ_COL, RPKM_COL, INTERSECT_BY)
-print("Expression data")
+print("Expression data to analyze: ")
 print(head(expression_data_df))
+print(dim(expression_data_df))
+
+if (!is.null(args$rpkm_cutoff)) {
+  print("Using RPKM cutoff for filtering:")
+  print(args$rpkm_cutoff)
+  expression_data_df <- filter_rpkm(expression_data_df, args$rpkm_cutoff)
+  print("Expression data after RPKM filtering: ")
+  print(head(expression_data_df))
+  print(dim(expression_data_df))
+}
 
 # Select all columns with read counts data, reorder them based on the row names from metadata_df
 read_counts_columns <- grep(
