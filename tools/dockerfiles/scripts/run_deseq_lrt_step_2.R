@@ -305,10 +305,7 @@ log_message("Structure of Expression Data:")
 glimpse(expression_data_df)
 
 log_message(paste("Loading DESeq2 object from Contrasts"))
-dds <- all_contrasts[[1]]$subset
-# TODO:
-# Replace after to take only ONE deseq obj instead of saving subset for each contrast to reduce memory allocation
-# dds <- all_contrasts$deseq_obj
+dds <- all_contrasts$deseq_obj
 all_contrasts <- purrr::list_modify(all_contrasts, deseq_obj = NULL)
 
 log_message("DESeq2 Object Loaded:")
