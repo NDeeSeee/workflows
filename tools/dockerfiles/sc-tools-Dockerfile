@@ -61,6 +61,10 @@
 #   from inside the sc_atac_dbinding.R script.
 # - Updated sc_ctype_assign.R script to export
 #   gene markers heatmap with Morpheus
+# - Updated sc_rna_reduce.R script to exclude genes
+#   specified in --removegenes parameter from the
+#   list of the most variable genes so they don't
+#   impact neither integration nor PCA
 # - Tools added:
 #   pip3 install deeptools==${DEEPTOOLS_VERSION}
 #   R -e 'devtools::install_github("michael-kotliar/morpheus.R")'

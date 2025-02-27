@@ -19,6 +19,7 @@ suppressMessages(io <- modules::use(file.path(HERE, "modules/io.R")))
 suppressMessages(qc <- modules::use(file.path(HERE, "modules/qc.R")))
 suppressMessages(prod <- modules::use(file.path(HERE, "modules/prod.R")))
 suppressMessages(ucsc <- modules::use(file.path(HERE, "modules/ucsc.R")))
+suppressMessages(logger <- modules::use(file.path(HERE, "modules/logger.R")))
 
 ## ----
 export_all_dimensionality_plots <- function(seurat_data, args) {
@@ -368,10 +369,12 @@ get_args <- function(){
         action="store_true"
     )
     parser$add_argument(
-        "--regressgenes",
+        "--removegenes",
         help=paste(
-            "Regex pattern to identify genes which expression should be",
-            "regressed as a confounding source of variation. Default: none"
+            "Regex pattern to identify the genes which should",
+            "be removed from the list of the most variable genes,",
+            "so they don't impact neither integration nor PCA.",
+            "Default: none"
         ),
         type="character"
     )
@@ -551,6 +554,10 @@ get_args <- function(){
         type="integer", default=42
     )
     args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
+    logger$setup(
+        file.path(dirname(ifelse(args$output == "", "./", args$output)), "error_report.txt"),
+        header="Single-Cell RNA-Seq Dimensionality Reduction Analysis (sc_rna_reduce.R)"
+    )
     print(args)
     return (args)
 }
@@ -567,9 +574,23 @@ prod$parallel(args)
 ## ----
 print(paste("Loading Seurat data from", args$query))
 seurat_data <- readRDS(args$query)
+debug$print_info(seurat_data, args)
+
+## ----
+if (!("RNA" %in% names(seurat_data@assays))){
+    logger$info(
+        paste(
+            "Loaded Seurat object doesn't",
+            "include the required RNA assay.",
+            "Exiting."
+        )
+    )
+    quit(save="no", status=1, runLast=FALSE)
+}
+
+## ----
 print("Setting default assay to RNA")
 DefaultAssay(seurat_data) <- "RNA"
-debug$print_info(seurat_data, args)
 
 ## ----
 print(paste("Loading cell cycle data from", args$cellcycle))
@@ -595,29 +616,25 @@ if (!is.null(args$barcodes)){
 debug$print_info(seurat_data, args)
 
 ## ----
-if (!is.null(args$regressgenes)){
-    excluded_genes <- grep(                                # might return empty list if nothing found
-        args$regressgenes,
-        as.vector(as.character(rownames(seurat_data))),    # with RNA assay set as default the rownames should be genes
+if (!is.null(args$removegenes)){
+    genes_to_remove <- grep(                                              # might return an empty list if nothing found
+        args$removegenes,
+        as.vector(as.character(rownames(seurat_data))),                   # with RNA assay set as default the rownames should be genes
         value=TRUE,
         ignore.case=TRUE
     )
-    if (length(excluded_genes) > 0){                       # found some genes based on pattern
+    if (length(genes_to_remove) > 0){                                     # found some genes based on pattern
         print(
             paste(
-                "Based on the pattern", args$regressgenes, "the expression",
-                "of the following genes will be regressed as a confounding",
-                "source of variation", paste(excluded_genes, collapse=", ")
+                "Based on the", args$removegenes, "pattern",
+                "the following genes will be removed from",
+                "the list of the most variable genes:",
+                paste(genes_to_remove, collapse=", ")
             )
         )
-        args$regressgenes <- excluded_genes                # for easy access in the get_vars_to_regress function
-        seurat_data <- qc$add_gene_expr_percentage(
-            seurat_data=seurat_data,
-            target_genes=args$regressgenes
-        )
-        debug$print_info(seurat_data, args)
+        args$removegenes <- genes_to_remove                               # for easy access
     } else {
-        args$regressgenes <- NULL                          # no genes found, reset it to NULL
+        args$removegenes <- NULL                                          # no genes found, reset it to NULL
     }
 }
 

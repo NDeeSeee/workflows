@@ -105,18 +105,6 @@ get_vars_to_regress <- function(seurat_data, args, exclude_columns=NULL) {
             }
         }
     }
-    if (!is.null(args$regressgenes) && length(args$regressgenes) > 0){                      # easier to process regressgenes separately
-        for (i in 1:length(args$regressgenes)){
-            current_column <- base::make.names(                                             # when columns are added to meta.data they
-                base::paste("perc", args$regressgenes[i], sep="_")                          # are run through make.names function
-            )
-            if (is.null(vars_to_regress)) {
-                vars_to_regress <- current_column
-            } else {
-                vars_to_regress <- base::append(vars_to_regress, current_column)
-            }
-        }
-    }
     return (vars_to_regress)
 }
 
@@ -211,11 +199,36 @@ rna_log_single <- function(seurat_data, args, cell_cycle_data=NULL){
             }
         )
     }
-    seurat_data <- Seurat::FindVariableFeatures(
-        seurat_data,
-        nfeatures=args$highvargenes,
-        verbose=FALSE
-    )
+    if (!is.null(args$removegenes)){                                                            # can be either NULL or non-empty array
+        seurat_data <- Seurat::FindVariableFeatures(
+            seurat_data,
+            nfeatures=args$highvargenes+length(args$removegenes),
+            verbose=FALSE
+        )
+        var_features <- SeuratObject::VariableFeatures(
+            seurat_data,
+            assay="RNA"
+        )
+        base::print(
+            base::paste(
+                "The following genes will be removed from",
+                "the list of the the most variable genes",
+                paste(
+                    base::intersect(var_features, args$removegenes),
+                    collapse=", "
+                )
+            )
+        )
+        SeuratObject::VariableFeatures(seurat_data, assay="RNA") <- var_features[
+            !var_features %in% args$removegenes                                                 # doesn't change the order of var_features
+        ][1:args$highvargenes]                                                                  # to have the same number of var genes as user selected
+    } else {
+        seurat_data <- Seurat::FindVariableFeatures(
+            seurat_data,
+            nfeatures=args$highvargenes,
+            verbose=FALSE
+        )
+    }
     vars_to_regress <- get_vars_to_regress(seurat_data, args)                                   # may or may not include S.Score, G2M.Score, and CC.Difference columns
     base::print(base::paste0("Regressing out [", paste(vars_to_regress, collapse=", "), "]"))
     seurat_data <- Seurat::ScaleData(
@@ -235,16 +248,46 @@ sc_transform_helper <- function(seurat_data, args, vars_to_regress, method){
             "Regressing out [", paste(vars_to_regress, collapse=", "), "]"
         )
     )
-    seurat_data <- Seurat::SCTransform(
-        seurat_data,
-        assay="RNA",
-        new.assay.name="SCT",
-        variable.features.n=args$highvargenes,
-        method=method,
-        vars.to.regress=vars_to_regress,
-        conserve.memory=args$lowmem,
-        verbose=FALSE
-    )
+    if (!is.null(args$removegenes)){                                                # can be either NULL or non-empty array
+        seurat_data <- Seurat::SCTransform(
+            seurat_data,
+            assay="RNA",
+            new.assay.name="SCT",
+            variable.features.n=args$highvargenes+length(args$removegenes),         # to have more var features in case we will remove all removegenes
+            method=method,
+            vars.to.regress=vars_to_regress,
+            conserve.memory=args$lowmem,
+            verbose=FALSE
+        )
+        var_features <- SeuratObject::VariableFeatures(
+            seurat_data,
+            assay="SCT"
+        )
+        base::print(
+            base::paste(
+                "The following genes will be removed from",
+                "the list of the the most variable genes",
+                paste(
+                    base::intersect(var_features, args$removegenes),
+                    collapse=", "
+                )
+            )
+        )
+        SeuratObject::VariableFeatures(seurat_data, assay="SCT") <- var_features[
+            !var_features %in% args$removegenes                                     # doesn't change the order of var_features
+        ][1:args$highvargenes]                                                      # to have the same number of var genes as user selected
+    } else {
+        seurat_data <- Seurat::SCTransform(
+            seurat_data,
+            assay="RNA",
+            new.assay.name="SCT",
+            variable.features.n=args$highvargenes,
+            method=method,
+            vars.to.regress=vars_to_regress,
+            conserve.memory=args$lowmem,
+            verbose=FALSE
+        )
+    }
     return (seurat_data)
 }
 
@@ -379,12 +422,37 @@ rna_log_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
         }
     }
 
-    for (i in 1:length(splitted_seurat_data)){                          # don't know if cell cycle scores may somehow influence on the Variable features, that's
-        splitted_seurat_data[[i]] <- Seurat::FindVariableFeatures(      # why we run in only after either all datasets have cell cycle scores or neither of them
-            splitted_seurat_data[[i]],
-            nfeatures=args$highvargenes,
-            verbose=FALSE
-        )
+    for (i in 1:length(splitted_seurat_data)){                                          # don't know if cell cycle scores may somehow influence on the Variable features, that's
+        if (!is.null(args$removegenes)){                                                # can be either NULL or non-empty array
+            splitted_seurat_data[[i]] <- Seurat::FindVariableFeatures(                  # why we run in only after either all datasets have cell cycle scores or neither of them
+                splitted_seurat_data[[i]],
+                nfeatures=args$highvargenes+length(args$removegenes),
+                verbose=FALSE
+            )
+            var_features <- SeuratObject::VariableFeatures(
+                splitted_seurat_data[[i]],
+                assay="RNA"
+            )
+            base::print(
+                base::paste(
+                    "The following genes will be removed from",
+                    "the list of the the most variable genes",
+                    paste(
+                        base::intersect(var_features, args$removegenes),
+                        collapse=", "
+                    )
+                )
+            )
+            SeuratObject::VariableFeatures(splitted_seurat_data[[i]], assay="RNA") <- var_features[
+                !var_features %in% args$removegenes                                     # doesn't change the order of var_features
+            ][1:args$highvargenes]                                                      # to have the same number of var genes as user selected
+        } else {
+            splitted_seurat_data[[i]] <- Seurat::FindVariableFeatures(      # why we run in only after either all datasets have cell cycle scores or neither of them
+                splitted_seurat_data[[i]],
+                nfeatures=args$highvargenes,
+                verbose=FALSE
+            )
+        }
     }
 
     integration_features <- Seurat::SelectIntegrationFeatures(
