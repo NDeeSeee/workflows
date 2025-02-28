@@ -19,6 +19,7 @@ suppressMessages(library(tidyverse))
 suppressMessages(library(data.table))
 suppressMessages(library(htmlwidgets))
 suppressMessages(library(BiocParallel))
+suppressMessages(library(futile.logger))
 suppressMessages(library(EnhancedVolcano))
 
 theme_set(theme_classic())                       # set classic theme for all ggplot generated graphics
@@ -27,6 +28,26 @@ theme_set(theme_classic())                       # set classic theme for all ggp
 # 1. https://cran.r-project.org/web/packages/MAnorm2/vignettes/MAnorm2_vignette.html
 
 D40_COLORS <- c("#FB1C0D", "#0DE400", "#0D00FF", "#E8B4BD", "#FD00EA", "#0DD1FE", "#FF9B0D", "#0D601C", "#C50D69", "#CACA16", "#722A91", "#00DEBF", "#863B00", "#5D7C91", "#FD84D8", "#C100FB", "#8499FC", "#FD6658", "#83D87A", "#968549", "#DEB6FB", "#832E60", "#A8CAB0", "#FE8F95", "#FE1CBB", "#DF7CF8", "#FF0078", "#F9B781", "#4D493B", "#1C5198", "#7C32CE", "#EFBC16", "#7CD2DE", "#B30DA7", "#9FC0F6", "#7A940D", "#9B0000", "#946D9B", "#C8C2D9", "#94605A")
+
+logger_setup <- function(location, name="error_report", header=NULL, level=futile.logger::INFO, format="~m"){
+    futile.logger::flog.logger(
+        name,
+        level,
+        appender=futile.logger::appender.file(location),
+        layout=futile.logger::layout.format(format)
+    )
+    if (!is.null(header)){
+        futile.logger:::.log_level(
+            header, level=level, name=name,
+            capture=FALSE, logger=NULL           # this is what flog.info has by default
+        )
+    }
+}
+
+logger_info <- function(message, name="error_report", skip_stdout=FALSE){
+    futile.logger::flog.info(message, name=name) 
+    if (!skip_stdout) {print(message)}
+}
 
 parallel <- function (args) {
     print(
@@ -354,7 +375,7 @@ export_plots <- function(db_sites, metadata, args){
 
 assert_args <- function(args){
     if ((length(args$read1) != length(args$peak1)) || (length(args$read1) != length(args$name1))){
-        print(
+        logger_info(
             paste(
                 "Number of the values provided for the --read1,",
                 "--peak1, and --name1 parameters doesn't match"
@@ -363,7 +384,7 @@ assert_args <- function(args){
         quit(save="no", status=1, runLast=FALSE)
     }
     if ((length(args$read2) != length(args$peak2)) || (length(args$read2) != length(args$name2))){
-        print(
+        logger_info(
             paste(
                 "Number of the values provided for the --read2,",
                 "--peak2, and --name2 parameters doesn't match"
@@ -372,7 +393,7 @@ assert_args <- function(args){
         quit(save="no", status=1, runLast=FALSE)
     }
     if(!is.null(args$summit1) && (length(args$summit1) != length(args$read1))){
-        print(
+        logger_info(
             paste(
                 "Number of the values provided for the --summit1",
                 "and --read1 parameters doesn't match"
@@ -381,7 +402,7 @@ assert_args <- function(args){
         quit(save="no", status=1, runLast=FALSE)
     }
     if(!is.null(args$summit2) && (length(args$summit2) != length(args$read2))){
-        print(
+        logger_info(
             paste(
                 "Number of the values provided for the --summit2",
                 "and --read2 parameters doesn't match"
@@ -390,7 +411,7 @@ assert_args <- function(args){
         quit(save="no", status=1, runLast=FALSE)
     }
     if(xor(is.null(args$summit1), is.null(args$summit2))){
-        print(
+        logger_info(
             paste(
                 "Either both or neither of the --summit1 and",
                 "--summit2 parameters should be provided"
@@ -399,7 +420,7 @@ assert_args <- function(args){
         quit(save="no", status=1, runLast=FALSE)
     }
     if(any(duplicated(c(args$name1, args$name2)))){
-        print(
+        logger_info(
             paste(
                 "--name1 and/or --name2 parameters",
                 "include repeated values"
@@ -875,7 +896,12 @@ get_args <- function(){
         ),
         type="integer", default=42
     )
-    args <- assert_args(parser$parse_args(commandArgs(trailingOnly = TRUE)))
+    args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+    logger_setup(
+        file.path(dirname(ifelse(args$output == "", "./", args$output)), "error_report.txt"),
+        header="MAnorm2 for Normalizing and Comparing ChIP-Seq/ATAC-Seq Samples (run_manorm2.R)"
+    )
+    args <- assert_args(args)
     print(args)
     return (args)
 }
@@ -903,6 +929,7 @@ print(metadata)
 
 all_beds <- c()
 for (i in 1:nrow(metadata)){
+    current_name <- rownames(metadata)[i]                                  # we need it only for logs
     current_bam <- metadata$bams[i]
     current_sam <- file.path(args$tmpdir, paste0("sample_", i, ".sam"))
     current_bed <- file.path(args$tmpdir, paste0("sample_", i, ".bed"))
@@ -918,7 +945,12 @@ for (i in 1:nrow(metadata)){
         )
     )
     if (exit_code != 0){
-        print(paste("Failed to convert", current_bam, "to", current_sam))
+        logger_info(
+            paste(
+                "Failed to convert", current_bam, "to", current_sam,
+                "when processing", current_name, "sample. Exiting."
+            )
+        )
         unlink(args$tmpdir, recursive=TRUE)
         quit(save="no", status=1, runLast=FALSE)
     }
@@ -932,7 +964,12 @@ for (i in 1:nrow(metadata)){
         )
     )
     if (exit_code != 0){
-        print(paste("Failed to convert", current_sam, "to", current_bed))
+        logger_info(
+            paste(
+                "Failed to convert", current_sam, "to", current_bed,
+                "when processing", current_name, "sample. Exiting."
+            )
+        )
         unlink(args$tmpdir, recursive=TRUE)
         quit(save="no", status=1, runLast=FALSE)
     }
@@ -980,7 +1017,12 @@ exit_code <- sys::exec_wait(
     )
 )
 if (exit_code != 0){
-    print(paste("Failed to count reads in the reference genomic bins"))
+    logger_info(
+        paste(
+            "Failed to count reads in the",
+            "reference genomic bins. Exiting."
+        )
+    )
     unlink(args$tmpdir, recursive=TRUE)
     quit(save="no", status=1, runLast=FALSE)
 }
@@ -1032,9 +1074,15 @@ if (!is.null(args$batch)){                                                      
         stringsAsFactors=FALSE
     )
     if (!all(is.element(rownames(metadata), rownames(batch_data)))){                 # check if all our samples are present in the batch data file
-        print(
-            paste(
-                "Batch metadata file has missing sample names. Exiting"
+        logger_info(
+            paste0(
+                "Batch metadata file has ",
+                "missing sample names. ",
+                "Required sample names: ",
+                paste(rownames(metadata), collapse=", "), ". ",
+                "Sample names loaded from the batch metadata file: ",
+                paste(rownames(batch_data), collapse=", "), ". ",
+                "Exiting."
             )
         )
         quit(save="no", status=1, runLast=FALSE)
@@ -1072,21 +1120,56 @@ print(
     )
 )
 if (args$norm != "hierarchical"){
-    counts_data <- MAnorm2::normalize(                                                # Constructs a pseudo ChIP-seq profile by “averaging” the intesities from all samples.
-        counts_data,                                                                  # A reference genomic bin is occupied by the pseudo ChIP-seq sample if it was occupied
-        count=metadata$read_cnt,                                                      # by at least one sample that it was constructed from. Then each sample is MA-normalized
-        occupancy=metadata$occupancy,                                                 # to this pseudo reference using the common genomic bins between the reference and a sample.
-        baseline=if (args$norm == "pseudo-reference") "pseudo-reference" else NULL
+    tryCatch(
+        expr = {
+            counts_data <- MAnorm2::normalize(                                                # Constructs a pseudo ChIP-seq profile by “averaging” the intesities from all samples.
+                counts_data,                                                                  # A reference genomic bin is occupied by the pseudo ChIP-seq sample if it was occupied
+                count=metadata$read_cnt,                                                      # by at least one sample that it was constructed from. Then each sample is MA-normalized
+                occupancy=metadata$occupancy,                                                 # to this pseudo reference using the common genomic bins between the reference and a sample.
+                baseline=if (args$norm == "pseudo-reference") "pseudo-reference" else NULL
+            )
+        },
+        error = function(e){
+            logger_info(
+                paste(
+                    "Failed to normalize raw read counts",
+                    "using", args$norm, "normalization method.",
+                    "Select an alternative normalization method:",
+                    ifelse(
+                        args$norm == "pseudo-reference",
+                        "baseline",
+                        "pseudo-reference"
+                    ),
+                    "or hierarchical. Exiting.", e
+                )
+            )
+            quit(save="no", status=1, runLast=FALSE)
+        }
     )
 } else {
-    counts_data <- MAnorm2::normalize(
-        MAnorm2::normalize(
-            counts_data,
-            count=metadata$read_cnt[metadata$conditions == args$condition1],
-            occupancy=metadata$occupancy[metadata$conditions == args$condition1]
-        ),
-        count=metadata$read_cnt[metadata$conditions == args$condition2],
-        occupancy=metadata$occupancy[metadata$conditions == args$condition2]
+    tryCatch(
+        expr = {
+            counts_data <- MAnorm2::normalize(
+                MAnorm2::normalize(
+                    counts_data,
+                    count=metadata$read_cnt[metadata$conditions == args$condition1],
+                    occupancy=metadata$occupancy[metadata$conditions == args$condition1]
+                ),
+                count=metadata$read_cnt[metadata$conditions == args$condition2],
+                occupancy=metadata$occupancy[metadata$conditions == args$condition2]
+            )
+        },
+        error = function(e){
+            logger_info(
+                paste(
+                    "Failed to normalize raw read counts",
+                    "using", args$norm, "normalization method.",
+                    "Select an alternative normalization method:",
+                    "baseline or pseudo-reference. Exiting.", e
+                )
+            )
+            quit(save="no", status=1, runLast=FALSE)
+        }
     )
 }
 
@@ -1280,6 +1363,13 @@ export_data(
     location=paste(args$output, "diff_rgns.tsv", sep="_"),
 )
 
+print(
+    paste(
+        "Filtering normalized read counts matrix",
+        "to include only differentially bound sites",
+        "with padj <=", args$padj
+    )
+)
 row_metadata <- db_sites %>%
                 select(
                     "log2FoldChange", "padj",
@@ -1293,12 +1383,18 @@ col_metadata <- metadata %>%
 print(head(row_metadata))
 print(head(col_metadata))
 
-print(
-    paste(
-        "Filtering normalized read counts matrix to include",
-        "only differential binding sites with padj <= ", args$padj
+if (nrow(row_metadata) == 0){
+    logger_info(
+        paste0(
+            "Filtering by padj <= ", args$padj, " excluded ",
+            "all differentially bound sites. Increase ",
+            "adjusted P-value threshold to at least ",
+            min(db_sites$padj), ". Exiting."
+        )
     )
-)
+    quit(save="no", status=1, runLast=FALSE)
+}
+
 norm_counts_mat <- as.matrix(db_sites[as.vector(rownames(row_metadata)), rownames(col_metadata)])
 print("Size of the normalized read counts matrix after filtering")
 print(dim(norm_counts_mat))

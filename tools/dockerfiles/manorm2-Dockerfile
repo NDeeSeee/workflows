@@ -1,13 +1,18 @@
 #################################################################
-# Software Version: v0.0.1
+# Software Version: v0.0.2
 # Description:      MAnorm2 for quantitatively comparing groups of ChIP-seq samples
 # Website:          https://github.com/tushiqi/MAnorm2
 # Provides:         MAnorm2
 # Base Image:       r-base:4.4.0
-# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/manorm2:v0.0.1 -f manorm2-Dockerfile .
-# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/manorm2:v0.0.1
-# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/manorm2:v0.0.1 /bin/bash
+# Build Cmd:        docker build --platform linux/amd64 --no-cache --rm -t biowardrobe2/manorm2:v0.0.2 -f manorm2-Dockerfile .
+# Pull Cmd:         docker pull --platform linux/amd64 biowardrobe2/manorm2:v0.0.2
+# Run Cmd:          docker run --platform linux/amd64 --rm -ti biowardrobe2/manorm2:v0.0.2 /bin/bash
 #################################################################
+
+# v0.0.2 - based on biowardrobe2/manorm2:v0.0.1
+# - Updated run_manorm2.R script to generate
+#   error_report.txt with the common mistakes
+#   explanation.
 
 ### Base Image
 FROM r-base:4.4.0
