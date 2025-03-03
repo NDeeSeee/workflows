@@ -953,6 +953,18 @@ get_args <- function() {
       "abscor"
     )
   )
+  parser$add_argument(
+    "--k",
+    help    = "Number of levels (depth) for Hopach clustering: min - 1, max - 15. Default: 3.",
+    type    = "integer",
+    default = 3
+  )
+  parser$add_argument(
+    "--kmax",
+    help    = "Maximum number of clusters at each level for Hopach clustering: min - 2, max - 9. Default: 5.",
+    type    = "integer",
+    default = 5
+  )
   parser$add_argument("-o",
     "--output",
     help = "Output prefix. Default: deseq",
