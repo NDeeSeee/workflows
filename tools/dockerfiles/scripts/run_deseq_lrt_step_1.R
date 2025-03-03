@@ -303,6 +303,18 @@ get_args <- function() {
     default = NULL
   )
   parser$add_argument(
+    "--scaling_type",
+    help = paste(
+      "Specifies the type of scaling to be applied to the expression data.",
+      "- 'minmax' applies Min-Max scaling, normalizing values to a range of [-2, 2].",
+      "- 'zscore' applies Z-score standardization, centering data to mean = 0 and standard deviation = 1.",
+      "- Default: none (no scaling applied)."
+    ),
+    type = "character",
+    choices = c("minmax", "zscore"),
+    default = "zscore"
+  )
+  parser$add_argument(
     "--cluster",
     help = paste(
       "Hopach clustering method to be run on normalized read counts for the",
@@ -974,7 +986,15 @@ get_clustered_data <- function(expression_data, transpose = FALSE, k = 3, kmax =
   }
 
   # Apply scaling per row
-  expression_data <- t(apply(expression_data, 1, scale_min_max))
+  expression_data <- switch(args$scaling_type,
+    "minmax" = t(apply(expression_data, 1, scale_min_max)),
+    "zscore" = {
+      scaled_data <- t(scale(t(expression_data), center = TRUE, scale = TRUE))
+      scaled_data[is.na(scaled_data)] <- 0  # Handle zero-variance rows
+      scaled_data
+    },
+    stop("Invalid scaling type. Choose 'minmax' or 'zscore'.")  # Error handling
+  )
 
   if (transpose) {
     print("Transposing expression data back")
