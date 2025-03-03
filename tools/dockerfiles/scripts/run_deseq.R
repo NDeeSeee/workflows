@@ -353,12 +353,14 @@ get_clustered_data <- function(expression_data, dist, transpose) {
     expression_data <- t(expression_data)
   }
 
-  expression_data <- apply(
-    expression_data,
-    1,
-    FUN = function(x) {
-      scale_min_max(x)
-    }
+  expression_data <- switch(args$scaling_type,
+    "minmax" = t(apply(expression_data, 1, scale_min_max)),
+    "zscore" = {
+      scaled_data <- t(scale(t(expression_data), center = TRUE, scale = TRUE))
+      scaled_data[is.na(scaled_data)] <- 0  # Handle zero-variance rows
+      scaled_data
+    },
+    stop("Invalid scaling type. Choose 'minmax' or 'zscore'.")  # Error handling
   )
 
   print("Running HOPACH")
@@ -781,6 +783,18 @@ get_args <- function() {
     ),
     type = "double",
     default = 0.1
+  )
+  parser$add_argument(
+    "--scaling_type",
+    help = paste(
+      "Specifies the type of scaling to be applied to the expression data.",
+      "- 'minmax' applies Min-Max scaling, normalizing values to a range of [-2, 2].",
+      "- 'zscore' applies Z-score standardization, centering data to mean = 0 and standard deviation = 1.",
+      "- Default: none (no scaling applied)."
+    ),
+    type = "character",
+    choices = c("minmax", "zscore"),
+    default = "zscore"
   )
   parser$add_argument(
     "--cluster",
