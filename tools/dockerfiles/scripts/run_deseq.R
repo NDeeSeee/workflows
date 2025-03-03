@@ -719,6 +719,10 @@ export_heatmap <- function(mat_data,
   )
 }
 
+filter_rpkm <- function(expression_df, n) {
+  expression_df %>%
+    filter(if_any(contains("Rpkm"), ~. > n))
+}
 
 assert_args <- function(args) {
   print("Check input parameters")
@@ -850,6 +854,15 @@ get_args <- function() {
     type = "character",
     choices = c("minmax", "zscore"),
     default = "zscore"
+  )
+  parser$add_argument(
+    "--rpkm_cutoff",
+    help = paste(
+      "RPKM cutoff for filtering genes. Genes with RPKM values below this threshold will be excluded from the analysis.",
+      "Default: NULL (no filtering)"
+    ),
+    type    = "integer",
+    default = NULL
   )
   parser$add_argument(
     "--cluster",
@@ -1005,6 +1018,16 @@ print(paste(
   sep = ""
 ))
 print(head(collected_isoforms))
+
+if (!is.null(args$rpkm_cutoff)) {
+  print("Using RPKM cutoff for additional filtering of expression data:")
+  print(args$rpkm_cutoff)
+  collected_isoforms <- filter_rpkm(collected_isoforms, args$rpkm_cutoff)
+  print("Expression data after RPKM filtering: ")
+  print(head(collected_isoforms))
+  print(dim(collected_isoforms))
+}
+
 print("DESeq categories")
 print(column_data)
 print("DESeq count data")

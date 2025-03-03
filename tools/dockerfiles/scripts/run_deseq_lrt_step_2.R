@@ -194,6 +194,15 @@ get_args <- function() {
     default = "both"
   )
   parser$add_argument(
+    "--rpkm_cutoff",
+    help = paste(
+      "RPKM cutoff for filtering genes. Genes with RPKM values below this threshold will be excluded from the analysis.",
+      "Default: NULL (no filtering)"
+    ),
+    type    = "integer",
+    default = NULL
+  )
+  parser$add_argument(
     "--scaling_type",
     help = paste(
       "Specifies the type of scaling to be applied to the expression data.",
@@ -349,6 +358,15 @@ log_message("Expression Data Loaded:")
 print(head(expression_data_df))
 log_message("Structure of Expression Data:")
 glimpse(expression_data_df)
+
+if (!is.null(args$rpkm_cutoff)) {
+  print("Using RPKM cutoff for additional filtering of expression data:")
+  print(args$rpkm_cutoff)
+  expression_data_df <- filter_rpkm(expression_data_df, args$rpkm_cutoff)
+  print("Expression data after RPKM filtering: ")
+  print(head(expression_data_df))
+  print(dim(expression_data_df))
+}
 
 log_message(paste("Loading DESeq2 object from Contrasts"))
 dds <- all_contrasts$deseq_obj
