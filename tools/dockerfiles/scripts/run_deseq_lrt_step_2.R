@@ -206,6 +206,40 @@ get_args <- function() {
     default = "zscore"
   )
   parser$add_argument(
+    "--rowdist",
+    help = paste(
+      "Distance metric for HOPACH row clustering. Ignored if --cluster is not",
+      "provided. Default: cosangle"
+    ),
+    type = "character",
+    default = "cosangle",
+    choices = c(
+      "cosangle",
+      "abscosangle",
+      "euclid",
+      "abseuclid",
+      "cor",
+      "abscor"
+    )
+  )
+  parser$add_argument(
+    "--columndist",
+    help = paste(
+      "Distance metric for HOPACH column clustering. Ignored if --cluster is not",
+      "provided. Default: euclid"
+    ),
+    type = "character",
+    default = "euclid",
+    choices = c(
+      "cosangle",
+      "abscosangle",
+      "euclid",
+      "abseuclid",
+      "cor",
+      "abscor"
+    )
+  )
+  parser$add_argument(
     "--cluster",
     help = paste(
       "Hopach clustering method to be run on normalized read counts for the",
@@ -638,28 +672,34 @@ export_cls <- function(categories, location) {
 }
 
 # Function to generate clusters
-get_clustered_data <- function(expression_data, transpose = FALSE, k = 3, kmax = 5) {
+get_clustered_data <- function(expression_data, by = "row", k = 3, kmax = 5, dist = "cosangle", scaling_type = "zscore") {
 
   start_time <- proc.time()
 
-  if (transpose) {
-    print("Transposing expression data")
+  if (!(by %in% c("row", "col"))) {
+    stop("Invalid value for 'by'. Choose either 'row' or 'col'.")
+  }
+
+  # If clustering by columns, transpose so that columns become rows for scaling.
+  if (by == "col") {
+    print("Transposing expression data to scale columns")
     expression_data <- t(expression_data)
   }
 
-  # Apply scaling per row
-  expression_data <- switch(args$scaling_type,
+  # Apply scaling per row (which is the desired unit, either original rows or columns)
+  expression_data <- switch(scaling_type,
     "minmax" = t(apply(expression_data, 1, scale_min_max)),
     "zscore" = {
       scaled_data <- t(scale(t(expression_data), center = TRUE, scale = TRUE))
       scaled_data[is.na(scaled_data)] <- 0  # Handle zero-variance rows
       scaled_data
     },
-    stop("Invalid scaling type. Choose 'minmax' or 'zscore'.")  # Error handling
+    stop("Invalid scaling type. Choose 'minmax' or 'zscore'.")
   )
 
-  if (transpose) {
-    print("Transposing expression data back")
+  # If data was transposed for column scaling, transpose back to original orientation.
+  if (by == "col") {
+    print("Transposing expression data back to original orientation")
     expression_data <- t(expression_data)
   }
 
@@ -668,7 +708,8 @@ get_clustered_data <- function(expression_data, transpose = FALSE, k = 3, kmax =
                                    verbose = TRUE,
                                    K       = k,
                                    kmax    = kmax,
-                                   khigh   = kmax
+                                   khigh   = kmax,
+                                   d = dist
   )
 
   print("Parsing cluster labels")
@@ -750,9 +791,16 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
   start_time <- proc.time()
 
   if (args$cluster != "none") {
+    if (args$test_mode) {
+        k    <- 2
+        kmax <- 2
+      } else {
+        k    <- args$k
+        kmax <- args$kmax
+      }
     # Column clustering if requested
     if (args$cluster == "column" || args$cluster == "both") {
-      clustered_data_cols <- get_clustered_data(normCounts, transpose = TRUE)
+      clustered_data_cols <- get_clustered_data(normCounts, by = "col", k = k, kmax = kmax, scaling_type = args$scaling_type, dist = args$columndist)
       normCounts          <- normCounts[, clustered_data_cols$order, drop = FALSE]
       col_metadata        <- col_metadata[clustered_data_cols$order, , drop = FALSE]
       # After reordering, cbind cluster info
@@ -760,14 +808,7 @@ cluster_and_reorder <- function(normCounts, col_metadata, row_metadata, args) {
     }
     # Row clustering if requested
     if (args$cluster == "row" || args$cluster == "both") {
-      if (args$test_mode) {
-        k    <- 2
-        kmax <- 2
-      } else {
-        k    <- args$k
-        kmax <- args$kmax
-      }
-      clustered_data_rows <- get_clustered_data(normCounts, transpose = FALSE, k = k, kmax = kmax)
+      clustered_data_rows <- get_clustered_data(normCounts, by = "row", k = k, kmax = kmax, scaling_type = args$scaling_type, dist = args$rowdist)
       normCounts          <- clustered_data_rows$expression[clustered_data_rows$order, , drop = FALSE]
       row_metadata        <- row_metadata[clustered_data_rows$order, , drop = FALSE]
       # After reordering rows, add cluster annotations
@@ -846,15 +887,22 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata) {
 
     # Filter rows by any FDR column
     fdr_cols <- grep("_FDR$", colnames(row_metadata), value = TRUE)
+    print("FDR columns for filtering:")
+    print(fdr_cols)
+    lfc_cols <- grep("_LFC$", colnames(row_metadata), value = TRUE)
+    print("LFC columns for filtering:")
+    print(lfc_cols)
     if (length(fdr_cols) == 0) {
       warning("No FDR columns found. No filtering performed for counts_filtered.gct.")
       row_metadata_filtered <- row_metadata
     } else {
-      row_metadata_filtered <- row_metadata %>% filter(if_any(all_of(fdr_cols), ~. <= args$fdr))
+      row_metadata_filtered <- row_metadata %>%
+        filter(if_any(all_of(fdr_cols), ~. <= args$fdr)) %>%
+        filter(if_any(all_of(abs(lfc_cols)), ~. >= args$lfcthreshold))
     }
 
     if (nrow(row_metadata_filtered) == 0) {
-      warning(paste("No genes passed the FDR threshold of", args$fdr))
+      warning(paste("No genes passed the FDR/LFC thresholds of", args$fdr, "/", args$lfcthreshold, "and will be exported as empty GCT."))
     }
 
     filtered_normCounts <- normCounts[rownames(row_metadata_filtered), , drop = FALSE]
