@@ -898,7 +898,17 @@ export_deseq_report <- function(expression_data_df, output_prefix) {
 # Updated GCT export: filter if ANY FDR column meets the threshold
 export_gct_data <- function(normCounts, row_metadata, col_metadata) {
   tryCatch({
+    # Ensure col_metadata columns are vectors
     col_metadata <- col_metadata %>% mutate_all(as.vector)
+
+    # Initialize col_order_vector (will be non-NULL if user specifies a column order)
+    col_order_vector <- tolower(rownames(metadata_df))
+    print("Order of columns for heatmap without clustering, based on metadata input:")
+    print(col_order_vector)
+
+    normCounts   <- normCounts[, col_order_vector, drop = FALSE]
+    col_metadata <- col_metadata[col_order_vector, , drop = FALSE]
+
     gct_data     <- new("GCT", mat = normCounts, rdesc = row_metadata, cdesc = col_metadata)
     cmapR::write_gct(ds = gct_data, ofile = "counts_all.gct", appenddim = FALSE)
     print(paste("Exported GCT (all) to", "counts_all.gct"))
