@@ -1,0 +1,29 @@
+{
+  "expression_data_rds": {
+    "class": "File",
+    "path": "/Users/biocode/Documents/GitHub/CCHMC/BarskiiLab/workflows/tests/data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/deseq_expression_data.rds"
+  },
+  "contrasts_rds": {
+    "class": "File",
+    "path": "/Users/biocode/Documents/GitHub/CCHMC/BarskiiLab/workflows/tests/data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/deseq_contrasts.rds"
+  },
+  "dsq_wald_rds": {
+    "class": "File",
+    "path": "/Users/biocode/Documents/GitHub/CCHMC/BarskiiLab/workflows/tests/data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/deseq_dsq_wald.rds"
+  },
+  "metadata_rds": {
+    "class": "File",
+    "path": "/Users/biocode/Documents/GitHub/CCHMC/BarskiiLab/workflows/tests/data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/deseq_metadata.rds"
+  },
+  "batch_correction_method_rds": {
+    "class": "File",
+    "path": "/Users/biocode/Documents/GitHub/CCHMC/BarskiiLab/workflows/tests/data/dm3_chr4/main_inputs/geep/AFOS_LRT_step_1_test/deseq_batch_correction_method.rds"
+  },
+  "contrast_indices": "2",
+  "fdr": 0.9,
+  "lfcthreshold": 0,
+  "regulation": "both",
+  "output_prefix": "deseq_step_2",
+  "threads": 6,
+  "test_mode": true
+}

@@ -50,7 +50,25 @@
 #   names from --first and --second parameters.
 #   The gene_name column (the nearest gene) is also
 #   removed from the output file. The nearest gene
-#   should be asigned by iaintersect tool.
+#   should be asigned by iaintersect tool. When --test
+#   is set to manorm2, reads will be aggregated to
+#   pseudo bulk form per dataset.
+# - Installed deeptools to build tag density heatmaps
+#   from the sc_atac_dbinding.R script.
+# - Moved P value labels on the composition_box_plot
+#   to the top, set angle to 90 degrees.
+# - Installed morpheus to build interactive heatmap
+#   from inside the sc_atac_dbinding.R script.
+# - Updated sc_ctype_assign.R script to export
+#   gene markers heatmap with Morpheus
+# - Updated sc_rna_reduce.R script to exclude genes
+#   specified in --removegenes parameter from the
+#   list of the most variable genes so they don't
+#   impact neither integration nor PCA
+# - Tools added:
+#   pip3 install deeptools==${DEEPTOOLS_VERSION}
+#   R -e 'devtools::install_github("michael-kotliar/morpheus.R")'
+#
 # v0.0.41 -- based on biowardrobe2/sc-tools:v0.0.40
 # - Updated UCSC Cellbrowser to 1.2.8.
 # - Save gene and peak markers in the same rds file
@@ -398,6 +416,7 @@ ENV R_MAX_VSIZE=200000000000 \
     NUMPY_VERSION=1.22.4 \
     HTSLIB_VERSION=1.17 \
     LOUPER_VERSION=1.1.0 \
+    DEEPTOOLS_VERSION=3.5.5 \
     MACS2_URL=https://github.com/macs3-project/MACS.git
 ENV HTSLIB_URL=https://github.com/samtools/htslib/releases/download/${HTSLIB_VERSION}/htslib-${HTSLIB_VERSION}.tar.bz2 \
     LOUPER_URL=https://github.com/10XGenomics/loupeR/releases/download/v${LOUPER_VERSION}/loupeR_Linux.tar.gz
@@ -437,6 +456,7 @@ RUN apt-get update && \
     pip3 install . && \
     cd .. && \
     pip3 install sctriangulate==${SCTRIANGULATE_VERSION} && \
+    pip3 install deeptools==${DEEPTOOLS_VERSION} && \
     R -e 'install.packages("devtools", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("argparse", repo = "https://cloud.r-project.org/")' && \
     R -e 'install.packages("tidyverse", repo = "https://cloud.r-project.org/")' && \
@@ -476,6 +496,7 @@ RUN apt-get update && \
     R -e 'install.packages("ggdensity")' && \
     R -e 'devtools::install_github("satijalab/seurat-data", upgrade = "never", ref = "b198ed523b1fd773c09356d30d9dfcebd62f22cf")' && \
     R -e 'devtools::install_github("michael-kotliar/azimuth", upgrade = "never", ref = "v0.4.6mod")' && \
+    R -e 'devtools::install_github("michael-kotliar/morpheus.R")' && \
     wget ${LOUPER_URL} && \
     tar xzf loupeR_Linux.tar.gz && \
     sed -i 's/file\.exists(eula_lock_file())/TRUE/g' /tmp/loupeR/R/eula.R && \

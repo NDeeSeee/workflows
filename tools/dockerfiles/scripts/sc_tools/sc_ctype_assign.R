@@ -796,7 +796,7 @@ export_heatmaps <- function(seurat_data, args){
         as.vector(as.character(seurat_data@meta.data$new.ident)) != as.vector(as.character(seurat_data@meta.data$condition))
     )
 
-    clusters_order <- levels(seurat_data@meta.data[[args$target]])
+    clusters_order <- levels(seurat_data@meta.data[[args$target]])                                  # this is a vector sorted be frequency
     if (is.null(clusters_order)){
         clusters_order <- unique(seurat_data@meta.data[[args$target]])
     }
@@ -814,7 +814,7 @@ export_heatmaps <- function(seurat_data, args){
                                 dplyr::mutate(
                                     cluster=base::factor(
                                         cluster,
-                                        levels=clusters_order
+                                        levels=clusters_order                                       # to have the same order as the metadata column
                                     )
                                 ) %>%
                                 dplyr::arrange(cluster) %>%                                         # to have upregulated genes on the diagonal
@@ -873,6 +873,41 @@ export_heatmaps <- function(seurat_data, args){
             filtered_markers,
             paste(args$output, "xpr_htmp.tsv", sep="_")
         )
+
+        print("Exporting RNA markers as morpheus heatmap")
+        expression_mat <- t(scale(t(as.matrix(                                                 # will calculate z-score
+                              GetAssayData(
+                                  object=seurat_data,
+                                  assay="RNA",
+                                  slot="data"
+                              )
+                          ))))
+        expression_limits <- stats::quantile(abs(expression_mat), 0.99, na.rm=TRUE)            # to exclude outliers
+        expression_ranges <- base::pretty(c(-expression_limits, expression_limits), n=2)
+
+        io$export_gct(
+            counts_mat=expression_mat,
+            row_metadata=filtered_markers %>%
+                         tibble::remove_rownames() %>%
+                         tibble::column_to_rownames("feature"),
+            col_metadata=seurat_data@meta.data %>%
+                         dplyr::select(column_annotations) %>%
+                         dplyr::arrange_at(column_annotations),                                # sorting by "Cell type" first
+            location=paste0(args$output, "_", "xpr_htmp.gct")
+        )
+
+        graphics$morpheus_html_heatmap(
+            gct_location=paste0(args$output, "_", "xpr_htmp.gct"),
+            rootname=paste0(args$output, "_", "xpr_htmp"),
+            color_scheme=list(
+                scalingMode="fixed",
+                stepped=FALSE,
+                values=as.list(expression_ranges),
+                colors=c("darkblue", "black", "yellow")
+            )
+        )
+
+        rm(expression_mat)
     }
 }
 
@@ -1179,7 +1214,7 @@ get_args <- function(){
     )
     args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
     logger$setup(
-        paste0(args$output, "_hlog.txt"),
+        file.path(dirname(ifelse(args$output == "", "./", args$output)), "error_report.txt"),
         header="Single-Cell Manual Cell Type Assignment (sc_ctype_assign.R)"
     )
     print(args)
@@ -1274,15 +1309,15 @@ seurat_data <- io$extend_metadata(
     location=args$celltypes,
     seurat_ref_column=args$source,
     meta_ref_column="cluster",
-    split_by=args$splitby,                 # can be NULL if --splitby not provided
-    seurat_target_columns=args$target
+    split_by=args$splitby,                                                         # can be NULL if --splitby not provided
+    seurat_target_columns=args$target                                              # will be a factor ordered by frequency
 )
 debug$print_info(seurat_data, args)
 
 ## ----
 if ( (!is.null(args$fragments)) && ("ATAC" %in% names(seurat_data@assays)) ){
     print(paste("Loading ATAC fragments data from", args$fragments))
-    seurat_data <- io$replace_fragments(args$fragments, seurat_data)                                             # will change the default assay to ATAC
+    seurat_data <- io$replace_fragments(args$fragments, seurat_data)               # will change the default assay to ATAC
     debug$print_info(seurat_data, args)
 }
 

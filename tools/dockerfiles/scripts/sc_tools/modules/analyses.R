@@ -105,18 +105,6 @@ get_vars_to_regress <- function(seurat_data, args, exclude_columns=NULL) {
             }
         }
     }
-    if (!is.null(args$regressgenes) && length(args$regressgenes) > 0){                      # easier to process regressgenes separately
-        for (i in 1:length(args$regressgenes)){
-            current_column <- base::make.names(                                             # when columns are added to meta.data they
-                base::paste("perc", args$regressgenes[i], sep="_")                          # are run through make.names function
-            )
-            if (is.null(vars_to_regress)) {
-                vars_to_regress <- current_column
-            } else {
-                vars_to_regress <- base::append(vars_to_regress, current_column)
-            }
-        }
-    }
     return (vars_to_regress)
 }
 
@@ -211,11 +199,36 @@ rna_log_single <- function(seurat_data, args, cell_cycle_data=NULL){
             }
         )
     }
-    seurat_data <- Seurat::FindVariableFeatures(
-        seurat_data,
-        nfeatures=args$highvargenes,
-        verbose=FALSE
-    )
+    if (!is.null(args$removegenes)){                                                            # can be either NULL or non-empty array
+        seurat_data <- Seurat::FindVariableFeatures(
+            seurat_data,
+            nfeatures=args$highvargenes+length(args$removegenes),
+            verbose=FALSE
+        )
+        var_features <- SeuratObject::VariableFeatures(
+            seurat_data,
+            assay="RNA"
+        )
+        base::print(
+            base::paste(
+                "The following genes will be removed from",
+                "the list of the the most variable genes",
+                paste(
+                    base::intersect(var_features, args$removegenes),
+                    collapse=", "
+                )
+            )
+        )
+        SeuratObject::VariableFeatures(seurat_data, assay="RNA") <- var_features[
+            !var_features %in% args$removegenes                                                 # doesn't change the order of var_features
+        ][1:args$highvargenes]                                                                  # to have the same number of var genes as user selected
+    } else {
+        seurat_data <- Seurat::FindVariableFeatures(
+            seurat_data,
+            nfeatures=args$highvargenes,
+            verbose=FALSE
+        )
+    }
     vars_to_regress <- get_vars_to_regress(seurat_data, args)                                   # may or may not include S.Score, G2M.Score, and CC.Difference columns
     base::print(base::paste0("Regressing out [", paste(vars_to_regress, collapse=", "), "]"))
     seurat_data <- Seurat::ScaleData(
@@ -235,16 +248,46 @@ sc_transform_helper <- function(seurat_data, args, vars_to_regress, method){
             "Regressing out [", paste(vars_to_regress, collapse=", "), "]"
         )
     )
-    seurat_data <- Seurat::SCTransform(
-        seurat_data,
-        assay="RNA",
-        new.assay.name="SCT",
-        variable.features.n=args$highvargenes,
-        method=method,
-        vars.to.regress=vars_to_regress,
-        conserve.memory=args$lowmem,
-        verbose=FALSE
-    )
+    if (!is.null(args$removegenes)){                                                # can be either NULL or non-empty array
+        seurat_data <- Seurat::SCTransform(
+            seurat_data,
+            assay="RNA",
+            new.assay.name="SCT",
+            variable.features.n=args$highvargenes+length(args$removegenes),         # to have more var features in case we will remove all removegenes
+            method=method,
+            vars.to.regress=vars_to_regress,
+            conserve.memory=args$lowmem,
+            verbose=FALSE
+        )
+        var_features <- SeuratObject::VariableFeatures(
+            seurat_data,
+            assay="SCT"
+        )
+        base::print(
+            base::paste(
+                "The following genes will be removed from",
+                "the list of the the most variable genes",
+                paste(
+                    base::intersect(var_features, args$removegenes),
+                    collapse=", "
+                )
+            )
+        )
+        SeuratObject::VariableFeatures(seurat_data, assay="SCT") <- var_features[
+            !var_features %in% args$removegenes                                     # doesn't change the order of var_features
+        ][1:args$highvargenes]                                                      # to have the same number of var genes as user selected
+    } else {
+        seurat_data <- Seurat::SCTransform(
+            seurat_data,
+            assay="RNA",
+            new.assay.name="SCT",
+            variable.features.n=args$highvargenes,
+            method=method,
+            vars.to.regress=vars_to_regress,
+            conserve.memory=args$lowmem,
+            verbose=FALSE
+        )
+    }
     return (seurat_data)
 }
 
@@ -379,12 +422,37 @@ rna_log_integrated <- function(splitted_seurat_data, args, cell_cycle_data=NULL)
         }
     }
 
-    for (i in 1:length(splitted_seurat_data)){                          # don't know if cell cycle scores may somehow influence on the Variable features, that's
-        splitted_seurat_data[[i]] <- Seurat::FindVariableFeatures(      # why we run in only after either all datasets have cell cycle scores or neither of them
-            splitted_seurat_data[[i]],
-            nfeatures=args$highvargenes,
-            verbose=FALSE
-        )
+    for (i in 1:length(splitted_seurat_data)){                                          # don't know if cell cycle scores may somehow influence on the Variable features, that's
+        if (!is.null(args$removegenes)){                                                # can be either NULL or non-empty array
+            splitted_seurat_data[[i]] <- Seurat::FindVariableFeatures(                  # why we run in only after either all datasets have cell cycle scores or neither of them
+                splitted_seurat_data[[i]],
+                nfeatures=args$highvargenes+length(args$removegenes),
+                verbose=FALSE
+            )
+            var_features <- SeuratObject::VariableFeatures(
+                splitted_seurat_data[[i]],
+                assay="RNA"
+            )
+            base::print(
+                base::paste(
+                    "The following genes will be removed from",
+                    "the list of the the most variable genes",
+                    paste(
+                        base::intersect(var_features, args$removegenes),
+                        collapse=", "
+                    )
+                )
+            )
+            SeuratObject::VariableFeatures(splitted_seurat_data[[i]], assay="RNA") <- var_features[
+                !var_features %in% args$removegenes                                     # doesn't change the order of var_features
+            ][1:args$highvargenes]                                                      # to have the same number of var genes as user selected
+        } else {
+            splitted_seurat_data[[i]] <- Seurat::FindVariableFeatures(      # why we run in only after either all datasets have cell cycle scores or neither of them
+                splitted_seurat_data[[i]],
+                nfeatures=args$highvargenes,
+                verbose=FALSE
+            )
+        }
     }
 
     integration_features <- Seurat::SelectIntegrationFeatures(
@@ -1691,8 +1759,8 @@ atac_dbinding_analyze <- function(seurat_data, args){
     base::print(
         base::paste0(
             "Running ", args$second, " vs ", args$first,
-            " differential binding analysis using ", args$test,
-            " test for cells split by ", args$splitby,
+            " differential accessibility analysis using ",
+            args$test, " test for cells split by ", args$splitby,
             base::ifelse(
                 (!is.null(args$groupby) && !is.null(args$subset)),
                 paste(
@@ -1700,60 +1768,92 @@ atac_dbinding_analyze <- function(seurat_data, args){
                     "values from", args$groupby, "column."
                 ),
                 "."
+            ),
+            base::ifelse(
+                args$test == "manorm2",
+                " Aggregating reads to pseudo bulk form by dataset.",
+                ""
             )
         )
     )
 
-    results <- list(db_sites=NULL)                                          # to collect all outputs
+    results <- list(db_sites=NULL)                                                      # to collect all outputs
 
     if(args$test == "manorm2"){
-        base::print("Counting reads in reference genomic bins")
+        base::print(
+            paste0(
+                "Running profile_bins to calculate reads per ",
+                "reference genome bins with the following ",
+                "parameters: --typical-bin-size ", args$binsize,
+                " --min-peak-gap ", args$minpeakgap, " --shiftsize 0 ",
+                "--keep-dup all",
+                ifelse(
+                    !is.null(args$blacklist),
+                    base::paste0(" --filter ", args$blacklist),
+                    ""
+                ),
+                ifelse(
+                    !is.null(args$maxpeaks),
+                    base::paste0(" --keep-peaks ", args$maxpeaks),
+                    ""
+                )
+            )
+        )
         profile_bins_args <- c(
             base::paste0(
-                "--peaks=",
-                args$tmp_locations$macs2$peaks_narrow$second, ",",
-                args$tmp_locations$macs2$peaks_narrow$first
+                "--reads=", paste(args$metadata$tn5ct, collapse=",")
             ),
             base::paste0(
-                "--reads=",
-                args$tmp_locations$macs2$cut_sites$second, ",",
-                args$tmp_locations$macs2$cut_sites$first
+                "--peaks=", paste(args$metadata$peaks, collapse=",")
             ),
             base::paste0(
-                "--summits=",
-                args$tmp_locations$macs2$peaks_summit$second, ",",
-                args$tmp_locations$macs2$peaks_summit$first
+                "--summits=", paste(args$metadata$summits, collapse=",")
             ),
             base::paste0("--typical-bin-size=", args$binsize),
             base::paste0("--min-peak-gap=", args$minpeakgap),
-            "--labs=second,first",
+            base::paste0(
+                "--labs=", paste(args$metadata$suffix, collapse=",")
+            ),
             "--shiftsize=0",
             "--keep-dup=all",
             "-n", "peak"
         )
         if (!is.null(args$blacklist)){
-            profile_bins_args <- c(profile_bins_args, base::paste0("--filter=", args$blacklist))
+            profile_bins_args <- c(
+                profile_bins_args,
+                base::paste0("--filter=", args$blacklist)
+            )
         }
         if (!is.null(args$maxpeaks)){
-            profile_bins_args <- c(profile_bins_args, base::paste0("--keep-peaks=", args$maxpeaks))
+            profile_bins_args <- c(
+                profile_bins_args,
+                base::paste0("--keep-peaks=", args$maxpeaks)
+            )
         }
         exit_code <- sys::exec_wait(
-            cmd="profile_bins",                                             # if it's not found in PATH, R will fail with error
+            cmd="profile_bins",                                                         # if it's not found in PATH, R will fail with error
             args=profile_bins_args
         )
-        if (exit_code != 0){                                                # we were able to run profile_bins, but something went wrong
+        if (exit_code != 0){                                                            # we were able to run profile_bins, but something went wrong
             base::print(
                 base::paste0(
-                    "Failed to count reads in reference genomic ",
-                    "bins with exit code ", exit_code, ". Exiting."
+                    "Failed to run profile_bins ",
+                    "with exit code ", exit_code,
+                    ". Exiting."
                 )
             )
-            base::quit(save="no", status=1, runLast=FALSE)                  # force R to exit with error
+            base::quit(save="no", status=1, runLast=FALSE)
         }
 
-        base::print("Loadind read counts data")
+        base::print(
+            paste(
+                "Loadind read counts data from",
+                "the peak_profile_bins.xls file"
+            )
+
+        )
         read_counts_data <- utils::read.table(
-            "peak_profile_bins.xls",
+            "peak_profile_bins.xls",                                                    # will be saved to the output directory (current working dir)
             sep="\t",
             header=TRUE,
             check.names=FALSE,
@@ -1767,74 +1867,110 @@ atac_dbinding_analyze <- function(seurat_data, args){
                 "from being searched for common reference genomic bins."
             )
         )
-        read_counts_data <- MAnorm2::normalize(                                              # baseline should be selected automaticaly so the order of columns doesn't matter
-            read_counts_data,
-            count=c("second.read_cnt", "first.read_cnt"),                                    # columns with read counts
-            occupancy=c("second.occupancy", "first.occupancy"),                              # shows which reference genomic bins are overlapped by peaks
-            common.peak.regions=!(read_counts_data$chrom %in% c("chrX", "chrY", "X", "Y"))   # to exclude chrX and Y from being searched for common regions
-        )
-        base::print(
-            base::paste(
-                "Automatically selected as a baseline:",
-                attr(read_counts_data, "baseline")
+
+        read_counts_data <- MAnorm2::normalize(                                         # Constructs a pseudo ChIP-seq profile by “averaging” the intesities from all samples.
+            read_counts_data,                                                           # A reference genomic bin is occupied by the pseudo ChIP-seq sample if it was occupied
+            count=args$metadata$read_cnt,                                               # by at least one sample that it was constructed from. Then each sample is MA-normalized
+            occupancy=args$metadata$occupancy,                                          # to this pseudo reference using the common genomic bins between the reference and a sample.
+            baseline="pseudo-reference",
+            common.peak.regions=!(                                                      # to exclude chrX and Y from being searched for common regions
+                read_counts_data$chrom %in% c("chrX", "chrY", "X", "Y")
             )
         )
         base::print(utils::head(read_counts_data))
 
-        base::print("Adding biological conditions")
-        bio_conditions <- list(
-            second = MAnorm2::bioCond(
-                norm.signal=read_counts_data$second.read_cnt,
-                occupancy=read_counts_data$second.occupancy,
-                meta.info=read_counts_data[, c("chrom", "start", "end")],                    # to have reference genomic bins coordinates embedded (not used by MAnorm2)
-                name="second"
-            ),
-            first = MAnorm2::bioCond(
-                norm.signal=read_counts_data$first.read_cnt,
-                occupancy=read_counts_data$first.occupancy,
-                name="first"
-            ),
-            common = MAnorm2::bioCond(
-                norm.signal=read_counts_data[, c("second.read_cnt", "first.read_cnt")],
-                occupancy=read_counts_data[, c("second.occupancy", "first.occupancy")],
-                occupy.num=2,                                                                # include only reference genomic bins occupied by all conditions
-                name="common"
+        datasets_count_first <- length(
+            args$metadata$suffix[args$metadata$condition == args$first]
+        )
+        datasets_count_second <- length(
+            args$metadata$suffix[args$metadata$condition == args$second]
+        )
+        minoverlap_first <- max(round(args$minoverlap * datasets_count_first), 1)
+        minoverlap_second <- max(round(args$minoverlap * datasets_count_second), 1)
+
+        base::print(
+            paste0(
+                "Adding ", datasets_count_first, " datasets ",
+                "(min. overlap ", minoverlap_first, ") ",
+                "as ", args$first, " biological condition ",
+                "and ",  datasets_count_second, " datasets ",
+                "(min. overlap ", minoverlap_second, ") ",
+                "as ", args$second, " biological condition."
             )
         )
+
+        bio_conditions <- list(
+            first = MAnorm2::bioCond(
+                norm.signal=read_counts_data[
+                    , args$metadata$read_cnt[args$metadata$condition == args$first]
+                ],
+                occupancy=read_counts_data[
+                    , args$metadata$occupancy[args$metadata$condition == args$first]
+                ],
+                name="first",                                                           # influences the name of the column in the results
+                occupy.num=minoverlap_first,
+                meta.info=read_counts_data[, c("chrom", "start", "end")]                # to have reference genomic bins coordinates embedded (not used by MAnorm2)
+            ),
+            second = MAnorm2::bioCond(
+                norm.signal=read_counts_data[
+                    , args$metadata$read_cnt[args$metadata$condition == args$second]
+                ],
+                occupancy=read_counts_data[
+                    , args$metadata$occupancy[args$metadata$condition == args$second]
+                ],
+                name="second",                                                          # influences the name of the column in the results
+                occupy.num=minoverlap_second
+            )
+
+        )
+        if (datasets_count_first == 1 && datasets_count_second == 1){                   # we have only two datasets to compare, so need to add common condition
+            print("Adding common biological condition")
+            bio_conditions[["common"]] <- MAnorm2::bioCond(
+                norm.signal=read_counts_data[args$metadata$read_cnt],
+                occupancy=read_counts_data[args$metadata$occupancy],
+                occupy.num=2,                                                           # should always be 2 because we have only 2 datasets
+                name="common"                                                           # influences the name of the column in the results
+            )
+        }
         base::rm(read_counts_data)
+
         base::print("Fitting mean-variance curve based on the common bins")
-        bio_conditions <- MAnorm2::fitMeanVarCurve(                                          # will add fit.info field to the bioCond objects
-            bio_conditions,                                                                  # only "common" contains replicates, so it will be used for fitting MVC
-            method="parametric fit",
+        bio_conditions <- MAnorm2::fitMeanVarCurve(                                     # will add fit.info field to the bioCond objects
+            bio_conditions,                                                             # at list one condition should have replicates
+            method="parametric",
             occupy.only=TRUE,
-            init.coef=c(0.1, 10)                                                             # per manual it is expected to suit most practical datasets
+            init.coef=c(0.1, 10)                                                        # per manual it is expected to suit most practical datasets
         )
 
         base::print("Running differential test")
-        db_sites <- MAnorm2::diffTest(                                                       # data frame without coordinates, Mval is calculated as Y/X
+        db_sites <- MAnorm2::diffTest(                                                  # data frame without coordinates, Mval is calculated as Y/X
                         x=bio_conditions$first,
                         y=bio_conditions$second,
                     ) %>%
-                    tibble::rownames_to_column(var="rowname") %>%                            # we need it to join with coordinates
+                    tibble::rownames_to_column(var="rowname") %>%                       # we need it to join with coordinates
                     dplyr::left_join(
-                        bio_conditions$second$meta.info %>%                                  # we take the coordinates from the meta.info of the second bio condition
+                        y=bio_conditions$first$meta.info %>%                            # we take the coordinates from the meta.info of the first bio condition
                         tibble::rownames_to_column(var="rowname"),
                         by="rowname"
                     ) %>%
-                    stats::na.omit() %>%                                                     # we shouldn't have any NAs, but filter just in case 
+                    stats::na.omit() %>%                                                # we shouldn't have any NAs, but filter just in case 
                     dplyr::rename(
                         "pvalue"="pval",
                         "log2FoldChange"="Mval",
-                        "lfcSE"="Mval.se",                                                   # to have the name similar to what DESeq2 reports
+                        "lfcSE"="Mval.se",                                              # to have the name similar to what DESeq2 reports
                         "padj"="padj",
-                        "chr"="chrom"                                                        # for consistency
+                        "chr"="chrom"                                                   # for consistency
                     ) %>%
                     dplyr::mutate(
-                        "baseMean"=(first.mean + second.mean) / 2                            # to have the same column name as DESeq2 reports
+                        "baseMean"=(first.mean + second.mean) / 2                       # to have the same column name as DESeq2 reports
                     ) %>%
-                    dplyr::select(-c("rowname", "Mval.t", "first.mean", "second.mean")) %>%  # removing not relevant columns
-                    dplyr::select(                                                           # to have a proper coliumns order
-                        c("chr", "start", "end", "baseMean", "log2FoldChange", "lfcSE", "pvalue", "padj")
+                    dplyr::select(                                                      # removing not relevant columns
+                        -c("rowname", "Mval.t", "first.mean", "second.mean")
+                    ) %>%
+                    dplyr::select(                                                      # to have a proper columns order
+                        c(
+                            "chr", "start", "end", "baseMean", "log2FoldChange", "lfcSE", "pvalue", "padj"
+                        )
                     )
         base::print(
             base::paste(

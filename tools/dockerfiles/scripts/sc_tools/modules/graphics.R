@@ -13,6 +13,7 @@ import("ggplot2", attach=FALSE)
 import("dynwrap", attach=FALSE)
 import("dynplot", attach=FALSE)
 import("ggrepel", attach=FALSE)
+import("morpheus", attach=FALSE)
 import("circlize", attach=FALSE)
 import("cluster", attach=FALSE)
 import("reshape2", attach=FALSE)
@@ -72,6 +73,7 @@ export(
     "dendro_plot",
     "topology_plot",
     "trajectory_heatmap",
+    "morpheus_html_heatmap",
     "expand_qc_suffix",
     "D40_COLORS",
     "D24_COLORS",
@@ -80,7 +82,8 @@ export(
     "TRUE_COLOR",
     "FALSE_COLOR",
     "UP_COLOR",
-    "DOWN_COLOR"
+    "DOWN_COLOR",
+    "HIGHLIGHT_COLOR"
 )
 
 # https://sashamaps.net/docs/resources/20-colors/
@@ -109,6 +112,7 @@ TRUE_COLOR <- "#00916A"
 FALSE_COLOR <- "#EB6331"
 UP_COLOR <- "#FF0000"
 DOWN_COLOR <- "#0000FF"
+HIGHLIGHT_COLOR <- "#313266"                                     # should create a good contrast with NA_COLOR
 CC_COLORS <- c("#FB1C0D", "#0DE400", "#0D00FF", NA_COLOR)        # we added NA color, because sometimes the cell cycle phase is not being assigned
 
 get_theme <- function(theme){
@@ -2242,7 +2246,7 @@ composition_box_plot <- function(
                               .groups="drop"
                           ) %>%
                           dplyr::mutate(
-                              label = base::paste("P =", scales::scientific(p_value, digits=3))
+                              label = base::paste0("P=", scales::scientific(p_value, digits=3))
                           )
             plot <- counts_data %>%
                     ggplot2::ggplot(
@@ -2270,20 +2274,19 @@ composition_box_plot <- function(
                         alpha=1,
                         shape=1
                     ) +
-                    ggrepel::geom_label_repel(
+                    ggplot2::geom_label(
                         stats_data,
                         mapping=ggplot2::aes_string(
                             x=split_by,
-                            y=-Inf,
+                            y=Inf,
+                            hjust=1,
                             label="label"
                         ),
                         color="white",
                         fontface="bold",
                         fill="darkred",
-                        segment.colour=NA,
-                        direction="y",
-                        size=3,
-                        show.legend=FALSE
+                        angle=90,
+                        size=3
                     ) +
                     ggplot2::scale_color_manual(values=palette_colors) +
                     ggplot2::xlab(x_label) +
@@ -3152,6 +3155,54 @@ feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", s
         error = function(e){
             base::tryCatch(expr={grDevices::dev.off()}, error=function(e){})
             base::print(base::paste("Failed to export feature expression heatmap to ", rootname, ".(png/pdf) with error - ", e, sep=""))
+        }
+    )
+}
+
+
+# For now we load GCT data from the file, because the function to create
+# GCT data in export_gct function was used from the cmapR package and
+# its output might nor be exactly the same as morpheus::read.gct
+morpheus_html_heatmap <- function(gct_location, rootname, color_scheme=NULL){
+    base::tryCatch(
+        expr = {
+            is_all_numeric <- function(x) {
+                !any(
+                    is.na(base::suppressWarnings(as.numeric(stats::na.omit(x))))
+                ) & is.character(x)
+            }
+            base::print(
+                base::paste("Loading GCT data from", gct_location)
+            )
+            gct_data <- morpheus::read.gct(gct_location)
+            html_data <- morpheus::morpheus(
+                x=gct_data$data,
+                rowAnnotations=if(base::nrow(gct_data$rowAnnotations) == 0)
+                                   NULL
+                               else
+                                   gct_data$rowAnnotations %>% dplyr::mutate_if(is_all_numeric, as.numeric),
+                columnAnnotations=if(base::nrow(gct_data$columnAnnotations) == 0)
+                                      NULL
+                                  else
+                                      gct_data$columnAnnotations,
+                colorScheme=color_scheme
+            )
+            location <- base::paste0(rootname, ".html")
+            htmlwidgets::saveWidget(
+                html_data,
+                file=location
+            )
+            base::print(
+                base::paste0("Exporting morpheus heatmap to ", location)
+            )
+        },
+        error = function(e){
+            base::print(
+                base::paste0(
+                    "Failed to export morpheus heatmap to ",
+                    location, " with error - ", e
+                )
+            )
         }
     )
 }

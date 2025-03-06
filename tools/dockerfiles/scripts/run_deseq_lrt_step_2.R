@@ -215,38 +215,40 @@ get_args <- function() {
     default = "zscore"
   )
   parser$add_argument(
-    "--rowdist",
+    "--regulation",
     help = paste(
-      "Distance metric for HOPACH row clustering. Ignored if --cluster is not",
-      "provided. Default: cosangle"
+      "Direction of differential expression comparison. β is the log2 fold change.",
+      "'both' for both up and downregulated genes (|β| > lfcThreshold); ",
+      "'up' for upregulated genes (β > lfcThreshold); ",
+      "'down' for downregulated genes (β < -lfcThreshold). ",
+      "Default: both"
     ),
     type = "character",
-    default = "cosangle",
-    choices = c(
-      "cosangle",
-      "abscosangle",
-      "euclid",
-      "abseuclid",
-      "cor",
-      "abscor"
-    )
+    choices = c("both", "up", "down"),
+    default = "both"
   )
   parser$add_argument(
-    "--columndist",
+    "--cluster",
     help = paste(
-      "Distance metric for HOPACH column clustering. Ignored if --cluster is not",
-      "provided. Default: euclid"
+      "Hopach clustering method to be run on normalized read counts for the",
+      "exploratory visualization part of the analysis. Default: do not run",
+      "clustering"
     ),
     type = "character",
-    default = "euclid",
-    choices = c(
-      "cosangle",
-      "abscosangle",
-      "euclid",
-      "abseuclid",
-      "cor",
-      "abscor"
-    )
+    choices = c("row", "column", "both", "none"),
+    default = "none"
+  )
+  parser$add_argument(
+    "--k",
+    help    = "Number of levels (depth) for Hopach clustering: min - 1, max - 15. Default: 3.",
+    type    = "integer",
+    default = 3
+  )
+  parser$add_argument(
+    "--kmax",
+    help    = "Maximum number of clusters at each level for Hopach clustering: min - 2, max - 9. Default: 5.",
+    type    = "integer",
+    default = 5
   )
   parser$add_argument(
     "--cluster",
