@@ -27,6 +27,7 @@ import("htmlwidgets", attach=FALSE)
 import("scRepertoire", attach=FALSE)
 import("RColorBrewer", attach=FALSE)
 import("magrittr", `%>%`, attach=TRUE)
+import("ComplexHeatmap", attach=FALSE)
 import("EnhancedVolcano", attach=FALSE)
 import("SummarizedExperiment", attach=FALSE)
 
@@ -2582,7 +2583,7 @@ mds_html_plot <- function(norm_counts_data, rootname){
     )
 }
 
-dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, cluster_idents=FALSE, min_pct=0.01, col_min=-2.5, col_max=2.5, plot_subtitle=NULL, theme="classic", pdf=FALSE, width=1200, height=NULL, resolution=100){
+dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, group_by=NULL, scale=TRUE, cluster_idents=FALSE, min_pct=0.01, col_min=-2.5, col_max=2.5, plot_subtitle=NULL, theme="classic", pdf=FALSE, width=1200, height=NULL, resolution=100){
     base::tryCatch(
         expr = {
             plot <- Seurat::DotPlot(
@@ -2592,8 +2593,10 @@ dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, clu
                         dot.min=min_pct,
                         col.min=col_min,
                         col.max=col_max,
-                        scale=TRUE,
+                        group.by=group_by,
+                        scale=scale,
                         scale.by="size"  # for optimal perception
+
                     ) +
                     ggplot2::xlab(x_label) +
                     ggplot2::ylab(y_label) +
@@ -2602,7 +2605,15 @@ dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, clu
                     Seurat::RotatedAxis()
 
             if (is.null(height)){
-                height <- round((length(base::unique(base::as.vector(as.character(SeuratObject::Idents(data))))) + 2) * 0.4 * resolution)
+                height <- round((length(base::unique(base::as.vector(
+                              as.character(
+                                  base::ifelse(
+                                      !is.null(group_by),
+                                      data@meta.data[[group_by]],
+                                      SeuratObject::Idents(data)
+                                  )
+                              )))) + 2) * 0.4 * resolution
+                          )
                 height <- base::ifelse(height < 400, 400, height)
             }
 
@@ -3082,7 +3093,7 @@ volcano_plot <- function(data, rootname, x_axis, y_axis, x_cutoff, y_cutoff, x_l
     )
 }
 
-feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", slot="data", cells=NULL, scale_to_max=TRUE, scale="none", color_breaks=NA, highlight_features=NULL, cluster_rows=FALSE, split_rows=NULL, legend_title="Expression", heatmap_colors=c("blue", "black", "yellow"), group_by="new.ident", show_rownames=FALSE, palette_colors=D40_COLORS, pdf=FALSE, width=1200, height=900, resolution=100){
+feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", slot="data", cells=NULL, scale_to_max=TRUE, scale="none", color_breaks=NA, highlight_features=NULL, cluster_rows=FALSE, split_rows=NULL, legend_title="Expression", heatmap_colors=c("blue", "black", "yellow"), group_by="new.ident", order_by="new.ident", show_rownames=FALSE, palette_colors=D40_COLORS, pdf=FALSE, width=1200, height=1200, resolution=100){
     base::tryCatch(
         expr = {
 
@@ -3118,8 +3129,8 @@ feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", s
                 heatmap.colors.max.scaled=grDevices::colorRampPalette(heatmap_colors[1:2])(25),  # only two colors needed
                 breaks=color_breaks,
                 scale=scale,                        # can be "row"/"column"/"none" but will be forced to "none" if scaled.to.max is TRUE
-                annot.by=group_by,
-                order.by=group_by,                  # the order of items in group_by will define the levels of ordering
+                annot.by=group_by,                  # defines the groups to be shown as annotations
+                order.by=order_by,                  # defines the order of items
                 annot.colors=palette_colors,        # defines colors for the first item set in annot.by
                 drop_levels=TRUE,                   # to drop factor levels that are not present in factor values
                 use_raster=TRUE,
@@ -3132,12 +3143,12 @@ feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", s
             )
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
-            base::suppressMessages(base::print(plot))
+            base::suppressMessages(ComplexHeatmap::draw(plot, merge_legend=TRUE))    # we use draw instead of print to merge legends in one column
             grDevices::dev.off()
 
             if (!is.null(pdf) && pdf) {
                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
-                base::suppressMessages(base::print(plot))
+                base::suppressMessages(ComplexHeatmap::draw(plot, merge_legend=TRUE))
                 grDevices::dev.off()
             }
 
@@ -3166,6 +3177,7 @@ feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", s
 morpheus_html_heatmap <- function(gct_location, rootname, color_scheme=NULL){
     base::tryCatch(
         expr = {
+            location <- base::paste0(rootname, ".html")                             # need to define it before anything possibly fails
             is_all_numeric <- function(x) {
                 !any(
                     is.na(base::suppressWarnings(as.numeric(stats::na.omit(x))))
@@ -3187,7 +3199,6 @@ morpheus_html_heatmap <- function(gct_location, rootname, color_scheme=NULL){
                                       gct_data$columnAnnotations,
                 colorScheme=color_scheme
             )
-            location <- base::paste0(rootname, ".html")
             htmlwidgets::saveWidget(
                 html_data,
                 file=location

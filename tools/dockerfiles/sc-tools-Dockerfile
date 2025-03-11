@@ -65,6 +65,12 @@
 #   specified in --removegenes parameter from the
 #   list of the most variable genes so they don't
 #   impact neither integration nor PCA
+# - Updated sc_rna_de_pseudobulk.R script to
+#   export morpheus heatmap of diff. expr. genes.
+#   Updated heatmap to order cells in a more
+#   uniform way. Added --reduction parameter to
+#   visualize UMAP only for selected reduction.
+#   Added self explanatory error logs.
 # - Tools added:
 #   pip3 install deeptools==${DEEPTOOLS_VERSION}
 #   R -e 'devtools::install_github("michael-kotliar/morpheus.R")'

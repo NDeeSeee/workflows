@@ -906,6 +906,7 @@ export_heatmaps <- function(seurat_data, args){
                 scale="row",                                                                       # will calculate z-score
                 heatmap_colors=c("darkblue", "black", "yellow"),
                 group_by=column_annotations,
+                order_by=column_annotations,
                 palette_colors=graphics$D40_COLORS,
                 plot_title=paste0(
                     "Gene expression heatmap (resolution ", current_resolution, ")"

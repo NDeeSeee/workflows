@@ -1586,38 +1586,72 @@ get_aggregated_expession <- function(seurat_data, group_by, selected_genes=NULL,
 }
 
 get_de_cell_data <- function(seurat_data, args, samples_order=NULL){
-    if (!is.null(samples_order)){
-        cell_annotations <- c("new.ident", args$splitby)
-    } else {
-        cell_annotations <- c(args$splitby, "new.ident")
+
+    datasets_count <- length(
+        base::unique(base::as.vector(as.character(seurat_data@meta.data$new.ident)))
+    )
+    conditions_count <- length(
+        base::unique(base::as.vector(as.character(seurat_data@meta.data$condition)))
+    )
+    not_default_conditions <- all(
+        base::as.vector(
+            as.character(seurat_data@meta.data$new.ident)) != base::as.vector(as.character(seurat_data@meta.data$condition)
+        )
+    )
+
+    order_annotations <- c(args$splitby)                                                # how we order cells on the heatmap
+
+    if (args$test %in% c("deseq", "lrt")){
+        if (!is.null(samples_order)){
+            seurat_data@meta.data <- seurat_data@meta.data %>%                          # setting levels for new.ident from samples_order
+                                     dplyr::mutate(
+                                         new.ident=base::factor(
+                                             new.ident,
+                                             levels=samples_order
+                                         )
+                                     )
+            order_annotations <- c("new.ident", order_annotations)                      # new.ident should be first, if we have a specific samples order
+        } else {
+            order_annotations <- c(order_annotations, "new.ident")
+        }
     }
+
+    show_annotations <- order_annotations                                               # what we show on the heatmap
+
     if(!is.null(args$batchby)){
-        cell_annotations <- c(cell_annotations, args$batchby)
+        show_annotations <- c(show_annotations, args$batchby)
+        if (args$test %in% c("negbinom", "poisson", "LR")){                             # no reason to order by batch for deseq and lrt, because it's already ordered by sample
+            order_annotations <- c(order_annotations, args$batchby)
+        }
     }
-    if(
-        all(base::as.vector(as.character(seurat_data@meta.data$new.ident)) != base::as.vector(as.character(seurat_data@meta.data$condition))) &&
-        length(base::unique(base::as.vector(as.character(seurat_data@meta.data$condition)))) > 1
-    ){
-        cell_annotations <- c(cell_annotations, "condition")                                      # several conditions found
+
+    show_annotations <- c(show_annotations, "new.ident")
+    if (conditions_count > 1 && not_default_conditions){
+        show_annotations <- c(show_annotations, "condition")
     }
-    custom_fields <- base::grep("^custom_", base::colnames(seurat_data@meta.data), value=TRUE, ignore.case=TRUE)
+    custom_fields <- base::grep(
+        "^custom_",
+        base::colnames(seurat_data@meta.data),
+        value=TRUE,
+        ignore.case=TRUE
+    )
     if(length(custom_fields) > 0){
-        cell_annotations <- c(cell_annotations, custom_fields)                                    # adding all custom fields
+        show_annotations <- c(show_annotations, custom_fields)
     }
-    cell_annotations <- base::unique(cell_annotations)                                            # in case any of the found columns were defined in splitby or batchby
+    order_annotations <- base::unique(c(order_annotations, "nCount_RNA"))               # add nCount_RNA to make the heatmap look more uniform
+    show_annotations <- base::unique(show_annotations)
+
     cell_data <- seurat_data@meta.data %>%
-                 dplyr::select(tidyselect::all_of(cell_annotations))
-    if (!is.null(samples_order)){
-        cell_data <- cell_data %>%
-                     dplyr::mutate(new.ident=base::factor(new.ident, levels=samples_order))       # setting levels for new.ident from samples_order
-    }
-    cell_data[[args$splitby]] <- base::factor(                                                    # to have --second on the left side from --first (on the plots)
-                                     cell_data[[args$splitby]],
-                                     levels=c(args$second, args$first)
-                                 )
-    cell_data <- cell_data %>%
-                 dplyr::arrange_at(cell_annotations) %>%                                          # instead of dplyr::arrange(dplyr::across(tidyselect::all_of(cell_annotations)))
+                 dplyr::mutate(
+                     !!args$splitby:=base::factor(
+                         .data[[args$splitby]],
+                         levels=c(args$first, args$second)
+                     )
+                 ) %>%
+                 dplyr::arrange_at(order_annotations) %>%
+                 dplyr::select(tidyselect::all_of(show_annotations)) %>%
                  dplyr::mutate_at(base::colnames(.), base::as.vector)                             # no reasons to have it as factor
+
     base::print(utils::head(cell_data))
     return (cell_data)
 }
@@ -2055,7 +2089,7 @@ rna_de_analyze <- function(seurat_data, args, excluded_genes=NULL){
                 (!is.null(args$groupby) && !is.null(args$subset)),
                 paste(
                     " subsetted to", base::paste(args$subset, collapse=", "),
-                    "values from", args$groupby, "column. "
+                    "values from the", args$groupby, "column. "
                 ),
                 ". "
             ),
@@ -2221,7 +2255,10 @@ rna_de_analyze <- function(seurat_data, args, excluded_genes=NULL){
                         tibble::remove_rownames() %>%
                         tibble::column_to_rownames("gene") %>%
                         dplyr::filter(.$padj<=args$padj) %>%
-                        dplyr::arrange(desc(log2FoldChange))
+                        dplyr::arrange(
+                            dplyr::desc(log2FoldChange * (log2FoldChange >= 0)),
+                            log2FoldChange * (log2FoldChange < 0)
+                        )
 
         column_metadata <- sample_data %>%          # we keep the original order without changing it by --splitby
                            dplyr::mutate_at(        # because we can mess up when merging it with clusters
@@ -2321,7 +2358,10 @@ rna_de_analyze <- function(seurat_data, args, excluded_genes=NULL){
                         tibble::remove_rownames() %>%
                         tibble::column_to_rownames("gene") %>%
                         dplyr::filter(.$padj<=args$padj) %>%
-                        dplyr::arrange(desc(log2FoldChange))
+                        dplyr::arrange(
+                            dplyr::desc(log2FoldChange * (log2FoldChange >= 0)),
+                            log2FoldChange * (log2FoldChange < 0)
+                        )
 
         results$de_genes <- de_genes                                             # not filtered differentialy expressed genes
     }

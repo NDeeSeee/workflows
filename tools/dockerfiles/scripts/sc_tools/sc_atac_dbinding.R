@@ -249,21 +249,27 @@ export_processed_plots <- function(db_results, seqinfo_data, args){
         data=ordered_metadata,
         x_axis=ifelse(args$test=="manorm2", "new.ident", args$splitby),
         color_by=args$splitby,
-        x_label=ifelse(args$test=="manorm2", "Dataset", "Tested condition"),
+        x_label=ifelse(args$test=="manorm2", "Dataset", args$splitby),
         y_label="Cell counts",
         legend_title="Tested\ncondition",
         plot_title=ifelse(
             args$test=="manorm2",
             "Number of cells per dataset",
-            "Number of cells per tested condition"
+            paste(
+                "Number of cells per tested",
+                "condition defined by", args$splitby,
+                "metadata column"
+            )
         ),
         plot_subtitle=paste0(
             "Colored by ", args$splitby, "; ",
             ifelse(
                 (!is.null(args$groupby) && !is.null(args$subset)),
                 paste(
-                    "only cells with", paste(args$subset, collapse=", "),
-                    "values in", args$groupby, "metadata column are selected; "
+                    "only cells with",
+                    paste(args$subset, collapse=", "),
+                    "values in the", args$groupby,
+                    "metadata column are selected."
                 ),
                 "all cells selected."
             )
@@ -872,7 +878,10 @@ tryCatch(
     error = function(e){
         logger$info(
             paste(
-                "Failed to filter Seurat object with error. Exiting.", e
+                "Failed to filter Seurat object by",
+                paste(c(args$first, args$second), collapse=", "),
+                "values from the", args$splitby, "column.",
+                "Exiting.", e
             )
         )
         quit(save="no", status=1, runLast=FALSE)
@@ -885,8 +894,27 @@ export_raw_plots(seurat_data, args)                                             
 
 ## ----
 if(!is.null(args$groupby) && !is.null(args$subset)){
-    print("Subsetting Seurat object to include only selected groups of cells")
-    seurat_data <- io$apply_metadata_filters(seurat_data, args$groupby, args$subset)
+    tryCatch(
+        expr = {
+            print("Subsetting Seurat object to include only selected groups of cells")
+            seurat_data <- io$apply_metadata_filters(
+                seurat_data,
+                args$groupby,
+                args$subset
+            )
+        },
+        error = function(e){
+            logger$info(
+                paste(
+                    "Failed to filter Seurat object by",
+                    paste(args$subset, collapse=", "),
+                    "values from the", args$subset, "column.",
+                    "Exiting.", e
+                )
+            )
+            quit(save="no", status=1, runLast=FALSE)
+        }
+    )
     debug$print_info(seurat_data, args)
 }
 

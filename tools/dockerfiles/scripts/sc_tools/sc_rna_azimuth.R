@@ -1135,6 +1135,7 @@ export_heatmaps <- function(seurat_data, args){
             scale="row",                                                                       # will calculate z-score
             heatmap_colors=c("darkblue", "black", "yellow"),
             group_by=column_annotations,
+            order_by=column_annotations,
             palette_colors=graphics$D40_COLORS,
             plot_title="Gene expression heatmap from the filtered query cells",
             rootname=paste(args$output, "xpr_htmp", sep="_"),
