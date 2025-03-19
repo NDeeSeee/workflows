@@ -1804,7 +1804,7 @@ atac_dbinding_analyze <- function(seurat_data, args){
                 "."
             ),
             base::ifelse(
-                args$test == "manorm2",
+                args$test %in% c("manorm2-full", "manorm2-half"),
                 " Aggregating reads to pseudo bulk form by dataset.",
                 ""
             )
@@ -1813,7 +1813,7 @@ atac_dbinding_analyze <- function(seurat_data, args){
 
     results <- list(db_sites=NULL)                                                      # to collect all outputs
 
-    if(args$test == "manorm2"){
+    if(args$test %in% c("manorm2-full", "manorm2-half")){
         base::print(
             paste0(
                 "Running profile_bins to calculate reads per ",

@@ -46,7 +46,11 @@ get_ordered_metadata <- function(seurat_data, args){                            
 ## ----
 prepare_fragments_and_peaks <- function(seurat_data, seqinfo_data, args){
     ordered_metadata <- get_ordered_metadata(seurat_data, args)                     # we need it for a proper order of items shown on the plots
-    aggr_criteria <- ifelse(args$test=="manorm2", "new.ident", args$splitby)
+    aggr_criteria <- ifelse(
+        args$test %in% c("manorm2-full", "manorm2-half"),
+        "new.ident",
+        args$splitby
+    )
     aggr_names <- levels(ordered_metadata[[aggr_criteria]])                         # both "new.ident" and args$splitby are already factors
     aggr_conditions <- ordered_metadata[[args$splitby]][                            # safe to use the first matched value even for new.ident because we
         match(aggr_names, ordered_metadata[[aggr_criteria]])                        # checked that --splitby doesn't divide cells from the same datasets
@@ -134,7 +138,7 @@ prepare_fragments_and_peaks <- function(seurat_data, seqinfo_data, args){
             scaling_coef=current_row$scaling
         )
 
-        if (args$test == "manorm2"){                                                # for MANorrm we need to call peaks with MACS2
+        if (args$test %in% c("manorm2-full", "manorm2-half")){                      # for MAnorm2 we will need to have Tn5 cut sites for later calling with MACS2
             print(
                 paste(
                     "Extracting Tn5 cut sites (1bp length)",
@@ -152,35 +156,68 @@ prepare_fragments_and_peaks <- function(seurat_data, seqinfo_data, args){
                 ignore.strand=TRUE                                                  # we need to ignore strand otherwise MACS2 will fail to parse it
             )
             rm(tn5ct_data)                                                          # no reason to keep it
-
-            print(
-                paste(
-                    "Calling peaks with MACS2 from the extracted Tn5 cut sites",
-                    "with the following parameters: --qvalue", args$qvalue,
-                    "--shift -25 --extsize 50 --keep-dup all", "--gsize",
-                    args$genome
-                )
-            )
-            Signac::CallPeaks(                                                      # we don't need to keep output as a variable
-                object=current_row$tn5ct,
-                outdir=dirname(args$output),                                        # we save output files directly to the output folder
-                name=paste0(basename(args$output), "_", current_row$suffix),        # set the name so we can use our peaks, summits, and xls locations
-                extsize=50,                                                         # will be always called with --nomodel, so --shift
-                shift=-25,                                                          # and --extsize make difference
-                effective.genome.size=args$genome,
-                additional.args=paste(
-                    "-q", args$qvalue,
-                    "--keep-dup all",                                               # our fragments are already deduplicated
-                    "--seed", args$seed,                                            # just in case
-                    "--tempdir", args$tmpdir
-                ),
-                cleanup=FALSE,                                                      # we want to keep outputs after running the script
-                verbose=FALSE
-            )
         }
-
         rm(fragments_data)
         gc(verbose=FALSE)
+    }
+
+    # we call peaks in a separate for loop because we need to have all
+    # tn5ct files already created in case the --test was set to manorm2-half
+
+    if (args$test %in% c("manorm2-full", "manorm2-half")){                          # for MAnorm2 we need to call peaks with MACS2
+        for (i in 1:nrow(metadata)){                                                # iterating over the collected locations
+            current_row <- as.list(metadata[i, ])                                   # to have it as list instead of a data.frame with the single row
+            tn5ct_location <- current_row$tn5ct                                     # default tn5ct location from the current dataset
+            if (args$test == "manorm2-half"){
+                tn5ct_location <- as.vector(                                        # all tn5ct locations that belong to the current comparison group
+                    metadata[                                                       # they are all shoudl have been already created in the previous for loop
+                        metadata$condition == current_row$condition,
+                        "tn5ct"
+                    ]
+                )
+            }
+            tryCatch(
+                expr = {
+                    print(
+                        paste0(
+                            "Calling peaks with MACS2 for ", current_row$name,
+                            " dataset from the extracted Tn5 cut sites (",
+                            paste(basename(tn5ct_location), collapse=", "), ") ",
+                            "with the following parameters: --qvalue ", args$qvalue,
+                            " --shift -25 --extsize 50 --keep-dup all --gsize ",
+                            args$genome
+                        )
+                    )
+                    Signac::CallPeaks(                                                      # we don't need to keep output as a variable
+                        object=tn5ct_location,
+                        outdir=dirname(args$output),                                        # we save output files directly to the output folder
+                        name=paste0(basename(args$output), "_", current_row$suffix),        # set the name so we can use our peaks, summits, and xls locations
+                        extsize=50,                                                         # will be always called with --nomodel, so --shift
+                        shift=-25,                                                          # and --extsize make difference
+                        effective.genome.size=args$genome,
+                        additional.args=paste(
+                            "-q", args$qvalue,
+                            "--keep-dup all",                                               # our fragments are already deduplicated
+                            "--seed", args$seed,                                            # just in case
+                            "--tempdir", args$tmpdir
+                        ),
+                        cleanup=FALSE,                                                      # we want to keep outputs after running the script
+                        verbose=FALSE
+                    )
+                },
+                error = function(e){
+                    logger$info(
+                        paste0(
+                            "Failed to call peaks with MACS2 for ", current_row$name,
+                            " dataset from the extracted Tn5 cut sites (",
+                            paste(basename(tn5ct_location), collapse=", "), "). ",
+                            "Exiting. ", e
+                        )
+                    )
+                    quit(save="no", status=1, runLast=FALSE)
+                }
+            )
+        }
     }
 
     print("Exporting original peaks from the loaded Seurat object")
@@ -247,13 +284,21 @@ export_processed_plots <- function(db_results, seqinfo_data, args){
     ordered_metadata <- get_ordered_metadata(seurat_data, args)
     graphics$geom_bar_plot(
         data=ordered_metadata,
-        x_axis=ifelse(args$test=="manorm2", "new.ident", args$splitby),
+        x_axis=ifelse(
+            args$test %in% c("manorm2-full", "manorm2-half"),
+            "new.ident",
+            args$splitby
+        ),
         color_by=args$splitby,
-        x_label=ifelse(args$test=="manorm2", "Dataset", args$splitby),
+        x_label=ifelse(
+            args$test %in% c("manorm2-full", "manorm2-half"),
+            "Dataset",
+            args$splitby
+        ),
         y_label="Cell counts",
         legend_title="Tested\ncondition",
         plot_title=ifelse(
-            args$test=="manorm2",
+            args$test %in% c("manorm2-full", "manorm2-half"),
             "Number of cells per dataset",
             paste(
                 "Number of cells per tested",
@@ -286,8 +331,8 @@ export_processed_plots <- function(db_results, seqinfo_data, args){
         y_axis="padj",
         x_cutoff=args$logfc,
         y_cutoff=args$padj,
-        x_label="log2FC",
-        y_label="-log10Padj",
+        x_label="log2 FC",
+        y_label="-log10 Padj",
         label_column="chr",                                                       # doesn't matter what to set as label because features=NA
         plot_title="Differentially accessible regions",
         plot_subtitle=paste0(
@@ -377,18 +422,19 @@ export_processed_plots <- function(db_results, seqinfo_data, args){
             "--beforeRegionStartLength", 5000,
             "--afterRegionStartLength", 5000,
             "--binSize", 100,
-            "--sortRegions", "keep",
+            "--sortRegions", "descend",                                         # sort by mean of each row in a descending order
+            "--sortUsing", "mean",
             "--samplesLabel", args$metadata$name,
             "--outFileName", score_matrix_location,
             "--missingDataAsZero",
             "--numberOfProcessors", args$cpus
         )
         exit_code <- sys::exec_wait(
-            cmd="computeMatrix",                                             # if it's not found in PATH, R will fail with error
+            cmd="computeMatrix",                                                # if it's not found in PATH, R will fail with error
             args=compute_matrix_args
         )
-        if (exit_code != 0){                                                 # we were able to run profile_bins, but something went wrong
-            print(                                                           # no reason to print through logger as the workflow shoudn't fail
+        if (exit_code != 0){                                                    # we were able to run profile_bins, but something went wrong
+            print(                                                              # no reason to print through logger as the workflow shoudn't fail
                 paste(
                     "Failed to run computeMatrix command",
                     "with the exit code", exit_code
@@ -396,11 +442,11 @@ export_processed_plots <- function(db_results, seqinfo_data, args){
             )
         } else {
             plot_heatmap_args <- c(
-                "--plotTitle", "Tag density around peak centers sorted by log2FoldChange",
+                "--plotTitle", "Tag density around the centers of differentially accessible regions, sorted in descending order by the mean value of each region",
                 "--matrixFile", score_matrix_location,
                 "--outFileName", paste0(args$output, "_", "tag_dnst_htmp.png"),
                 "--plotType", "lines",
-                "--sortRegions", "keep",
+                "--sortRegions", "keep",                                        # the regions should be already sorted in the computeMatrix step
                 "--averageTypeSummaryPlot", "mean",
                 "--whatToShow", "plot, heatmap and colorbar",
                 "--refPointLabel", "Center",
@@ -408,7 +454,11 @@ export_processed_plots <- function(db_results, seqinfo_data, args){
                 "--xAxisLabel", "(bp)",
                 "--yAxisLabel", "Signal mean",
                 "--plotFileFormat", "png",
-                "--legendLocation", "upper-left"
+                "--legendLocation", "upper-left",
+                "--boxAroundHeatmaps", "no",
+                "--zMin", "auto",                                               # 1st percentile
+                "--zMax", "auto",                                               # 98th percentile
+                "--colorList", "white,darkblue"
             )
             exit_code <- sys::exec_wait(
                 cmd="plotHeatmap",                                              # if it's not found in PATH, R will fail with error
@@ -456,10 +506,11 @@ export_processed_plots <- function(db_results, seqinfo_data, args){
                             tibble::remove_rownames() %>%
                             tibble::column_to_rownames("peak") %>%
                             dplyr::select("log2FoldChange", "padj") %>%         # we need only these two columns from filtered_db_sites
-                            dplyr::mutate(
-                                !!args$splitby:=dplyr::case_when(
-                                                    log2FoldChange >= args$logfc ~ args$second,
-                                                    log2FoldChange <= -args$logfc ~ args$first
+                            dplyr::mutate(                                      # we need this column only for grouping in Morpheus
+                                "regions_group"=dplyr::case_when(
+                                                    log2FoldChange >= args$logfc ~ "open",
+                                                    log2FoldChange <= -args$logfc ~ "closed",
+                                                    .default = "other"         # this group should never exist in the filtered_db_sites, but we add it just in case to avoid NA
                                                 )
                             )
             row_metadata <- row_metadata[rownames(score_matrix_data), ]         # we want to have the rows order from deeptools results, should never fail
@@ -468,29 +519,61 @@ export_processed_plots <- function(db_results, seqinfo_data, args){
             n_times <- ncol(score_matrix_data) / length(args$metadata$name)     # shouldn't fail, as it's alsways dividable by the number of coverage files
             for (i in 1:length(args$metadata$name)){
                 current_name <- args$metadata$name[i]
-                current_col_metadata <- data.frame(
-                    rep(current_name, n_times)
-                )
+                current_condition <- args$metadata$condition[i]
+                if (args$test %in% c("manorm2-full", "manorm2-half")){
+                    current_col_metadata <- setNames(
+                        data.frame(
+                            list(
+                                rep(current_condition, n_times),
+                                rep(current_name, n_times)
+                            )
+                        ),
+                        c(args$splitby, "new.ident")
+                    )
+                } else {
+                    current_col_metadata <- setNames(
+                        data.frame(
+                            list(
+                                rep(current_condition, n_times)
+                            )
+                        ),
+                        c(args$splitby)
+                    )
+                }
                 if (is.null(col_metadata)){
                     col_metadata <- current_col_metadata
                 } else {
                     col_metadata <- rbind(col_metadata, current_col_metadata)
                 }
             }
-
-            colnames(col_metadata) <- args$splitby
             rownames(col_metadata) <- colnames(score_matrix_data)               # score_matrix_data is already sorted by the values from provided as --samplesLabel
 
+            score_matrix_mat <- as.matrix(score_matrix_data)
+            score_limits <- stats::quantile(                                    # to exclude outliers
+                score_matrix_mat,                                               # no reason to take the absolute value as everything in the score_matrix_mat >= 0
+                c(0.01, 0.98),                                                  # will return unnamed vector with 2 values for 1st and 98th percentile
+                na.rm=TRUE, names=FALSE
+            )
+
             io$export_gct(
-                counts_mat=as.matrix(score_matrix_data),
+                counts_mat=score_matrix_mat,
                 row_metadata=row_metadata,
                 col_metadata=col_metadata,
                 location=paste0(args$output, "_", "tag_dnst_htmp.gct")
             )
-
             graphics$morpheus_html_heatmap(
                 gct_location=paste0(args$output, "_", "tag_dnst_htmp.gct"),
-                rootname=paste0(args$output, "_tag_dnst_htmp")
+                rootname=paste0(args$output, "_tag_dnst_htmp"),
+                color_scheme=list(
+                    scalingMode="fixed",
+                    stepped=FALSE,
+                    values=as.list(score_limits),
+                    colors=c("white", "darkblue")
+                )
+            )
+            io$export_data(
+                row_metadata %>% tibble::rownames_to_column(var="feature"),
+                paste(args$output, "tag_dnst_htmp.tsv", sep="_")
             )
         }
     }
@@ -575,9 +658,10 @@ get_args <- function(){
         help=paste(
             "Column from the Seurat object metadata to split cells into two groups to",
             "run --second vs --first differential accessibility analysis. If --test",
-            "parameter is set to manorm2, the --splitby shouldn't put cells from the",
-            "same dataset into the different comparison groups. May be one of the extra",
-            "metadata columns added with --metadata or --barcodes parameters."
+            "parameter is set to manorm2-full or manorm2-half, the --splitby shouldn't",
+            "put cells from the same dataset into the different comparison groups.",
+            "May be one of the extra metadata columns added with --metadata or",
+            "--barcodes parameters."
         ),
         type="character", required="True"
     )
@@ -601,9 +685,10 @@ get_args <- function(){
         "--test",
         help=paste(
             "Test type to use in the differential accessibility analysis. For all tests",
-            "except manorm2, peaks already present in the loaded Seurat object will be",
-            "used. If manorm2 test is selected, reads will be aggregated to pseudo bulk",
-            "form by dataset and peaks will be called with MACS2.",
+            "except manorm2-full and manorm2-half, peaks already present in the loaded",
+            "Seurat object will be used. If manorm2-full or manorm2-half test is selected,",
+            "reads will be aggregated to pseudo bulk form either by dataset or comparison",
+            "group and then peaks will be called with MACS2 per dataset.",
             "Default: logistic-regression"
         ),
         type="character", default="logistic-regression",
@@ -612,7 +697,8 @@ get_args <- function(){
             "poisson",                    # (poisson) Poisson Generalized Linear Model (use FindMarkers with peaks from Seurat object)
             "logistic-regression",        # (LR) Logistic Regression (use FindMarkers with peaks from Seurat object)
             "mast",                       # (MAST) MAST package (use FindMarkers with peaks from Seurat object)
-            "manorm2"                     # call peaks for each dataset with MACS2, run MAnorm2
+            "manorm2-full",               # call peaks for each dataset with MACS2, then run MAnorm2 with datasets
+            "manorm2-half"                # call peaks for each comparison group with MACS2, then run MAnorm2 with datasets
         )
     )
     parser$add_argument(
@@ -621,7 +707,7 @@ get_args <- function(){
             "Genome type of the sequencing data loaded from the Seurat",
             "object. It will be used for effective genome size selection",
             "when calling peaks with MACS2. Ignored if --test is not set",
-            "to manorm2. Default: hs (2.7e9)"
+            "to either manorm2-full or manorm2-half. Default: hs (2.7e9)"
         ),
         type="character", default="hs",
         choices=c(
@@ -633,7 +719,8 @@ get_args <- function(){
         "--qvalue",
         help=paste(
             "Minimum FDR (q-value) cutoff for MACS2 peak detection. Ignored",
-            "if --test is not set to manorm2. Default: 0.05"
+            "if --test is not set to either manorm2-full or manorm2-half.",
+            "Default: 0.05"
         ),
         type="double", default=0.05
     )
@@ -642,8 +729,8 @@ get_args <- function(){
         help=paste(
             "If a distance between peaks is smaller than the provided value",
             "they will be merged before splitting them into reference genomic",
-            "bins of size --binsize. Ignored if --test is not set to manorm2.",
-            "Default: 150"
+            "bins of size --binsize. Ignored if --test is not set to either",
+            "manorm2-full or manorm2-half. Default: 150"
         ),
         type="integer", default=150
     )
@@ -652,7 +739,8 @@ get_args <- function(){
         help=paste(
             "The size of non-overlapping reference genomic bins used by",
             "MAnorm2 when generating a table of reads counts per peaks.",
-            "Ignored if --test is not set to manorm2. Default: 1000"
+            "Ignored if --test is not set to either manorm2-full or",
+            "manorm2-half. Default: 1000"
         ),
         type="integer", default=1000
     )
@@ -661,8 +749,9 @@ get_args <- function(){
         help=paste(
             "Keep only those reference genomic bins that are present",
             "in at least this fraction of datasets within each of the",
-            "comparison groups. Ignored if --test is not set to manorm2.",
-            "Default: 0.5"
+            "comparison groups. Used only when --test is set to",
+            "manorm2-full. For manorm2-half this parameter will be",
+            "automatically set to 1. Default: 0.5"
         ),
         type="double", default=0.5
     )
@@ -672,7 +761,7 @@ get_args <- function(){
             "The maximum number of the most significant (based on qvalue)",
             "peaks to keep from each group of cells when constructing",
             "reference genomic bins. Ignored if --test is not set to",
-            "manorm2. Default: keep all peaks"
+            "either manorm2-full or manorm2-half. Default: keep all peaks"
         ),
         type="integer"
     )   
@@ -682,7 +771,8 @@ get_args <- function(){
             "Path to the optional BED file with the genomic blacklist regions",
             "to be filtered out before running differential accessibility analysis.",
             "Any reference genomic bin overlapping a blacklist region will be",
-            "removed from the output. Ignored if --test is not set to manorm2."
+            "removed from the output. Ignored if --test is not set to either",
+            "manorm2-full or manorm2-half."
         ),
         type="character"
     )
@@ -756,14 +846,18 @@ get_args <- function(){
         type="integer", default=42
     )
     args <- parser$parse_args(str_subset(commandArgs(trailingOnly=TRUE), "\\.R$", negate=TRUE))  # to exclude itself when executed from the sc_report_wrapper.R
-    args$test <- switch(                        # need to adjust --test parameter
+    args$test <- switch(                                                                         # need to adjust --test parameter
         args$test,
         "negative-binomial"   = "negbinom",
         "poisson"             = "poisson",
         "logistic-regression" = "LR",
         "mast"                = "MAST",
-        "manorm2"             = "manorm2"
+        "manorm2-full"        = "manorm2-full",
+        "manorm2-half"        = "manorm2-half"
     )
+    if (args$test == "manorm2-half"){                                                            # when --test is set to "manorm2-half" all datasets within
+        args$minoverlap <- 1                                                                     # the same comparison group have identical peaks so better
+    }                                                                                            # to set --minoverlap to 1 to avoid confusion.
     logger$setup(
         file.path(dirname(ifelse(args$output == "", "./", args$output)), "error_report.txt"),
         header="Single-Cell ATAC-Seq Differential Accessibility Analysis (sc_atac_dbinding.R)"
@@ -841,12 +935,12 @@ if (!is.null(args$barcodes)){
 }
 
 ## ----
-if (args$test == "manorm2"){
+if (args$test %in% c("manorm2-full", "manorm2-half")){
     # need to make sure that --splitby doesn't put
     # cells from the same dataset into the different
-    # comparison groups, because when we use manorm2
-    # we aggregate everything to pseudobulk form per
-    # dataset.
+    # comparison groups, because when we use manorm2-full
+    # or manorm2-half we aggregate fragments counts to
+    # pseudobulk form per dataset.
     cells_counts <- table(
         seurat_data@meta.data$new.ident,
         seurat_data@meta.data[[args$splitby]]
@@ -857,7 +951,8 @@ if (args$test == "manorm2"){
                 "Dividing cells by", args$splitby, "puts cells",
                 "from the same dataset into the different",
                 "comparison groups, which is not supported when",
-                "--test parameter is set to manorm2. Exiting."
+                "--test parameter is set to either manorm2-full",
+                "or manorm2-half. Exiting."
             )
         )
         logger$info(cells_counts)
@@ -931,7 +1026,7 @@ if (!all(table(seurat_data@meta.data[[args$splitby]]) > 0)){                    
 }
 
 ## ----
-if (args$test != "manorm2"){                                                               # needed only for FindMarkers (not for MAnorm2)
+if (!(args$test %in% c("manorm2-full", "manorm2-half"))){                                  # needed only for FindMarkers (not for MAnorm2)
     print("Normalizing ATAC counts after all filters applied")
     seurat_data <- Signac::RunTFIDF(                                                       # might be redundant as it may not depend on the number of cells
         seurat_data,

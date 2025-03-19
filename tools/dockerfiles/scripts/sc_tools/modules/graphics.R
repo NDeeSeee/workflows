@@ -3037,7 +3037,7 @@ coverage_plot <- function(data, assay, region, group_by, plot_title, rootname, p
     )
 }
 
-volcano_plot <- function(data, rootname, x_axis, y_axis, x_cutoff, y_cutoff, x_label, y_label, plot_title, plot_subtitle, caption, features=NULL, label_column="gene", theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+volcano_plot <- function(data, rootname, x_axis, y_axis, x_cutoff, y_cutoff, x_label, y_label, plot_title, plot_subtitle, caption, features=NULL, label_column="gene", x_padding=0.25, y_padding=0.25,  theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
     base::tryCatch(
         expr = {
             plot <- EnhancedVolcano::EnhancedVolcano(
@@ -3049,6 +3049,11 @@ volcano_plot <- function(data, rootname, x_axis, y_axis, x_cutoff, y_cutoff, x_l
                         pCutoff=y_cutoff,
                         xlab=x_label,
                         ylab=y_label,
+                        xlim=c(
+                            min(data[[x_axis]], na.rm=TRUE) - x_padding,
+                            max(data[[x_axis]], na.rm=TRUE) + x_padding
+                        ),
+                        ylim=c(0, max(-log10(data[[y_axis]]), na.rm=TRUE) + y_padding),
                         selectLab=features,
                         title=plot_title,
                         subtitle=plot_subtitle,
@@ -3061,7 +3066,6 @@ volcano_plot <- function(data, rootname, x_axis, y_axis, x_cutoff, y_cutoff, x_l
                         drawConnectors=TRUE,
                         widthConnectors=0.75
                     ) +
-                    ggplot2::scale_y_log10() + ggplot2::annotation_logticks(sides="l", alpha=0.3) +
                     get_theme(theme) +
                     ggplot2::theme(legend.position="none", plot.subtitle=ggplot2::element_text(size=8, face="italic", color="gray30"))
 

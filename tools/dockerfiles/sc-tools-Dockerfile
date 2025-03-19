@@ -51,8 +51,10 @@
 #   The gene_name column (the nearest gene) is also
 #   removed from the output file. The nearest gene
 #   should be asigned by iaintersect tool. When --test
-#   is set to manorm2, reads will be aggregated to
-#   pseudo bulk form per dataset.
+#   is set to manorm2-full, reads will be aggregated to
+#   pseudo bulk form per dataset. If --test is set to
+#   manorm2-half, reads will be aggregated per condition
+#   but MAnorm2 will be still run by datasets.
 # - Installed deeptools to build tag density heatmaps
 #   from the sc_atac_dbinding.R script.
 # - Moved P value labels on the composition_box_plot
