@@ -93,8 +93,21 @@ jobs:
           
           version=$(ssh -F ~/.ssh/temp_config/config bmicluster-compute "cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt")
           echo "Deployment verified. Current version: $version"
+          # Store version for notification
+          echo "::set-output name=deployed_version::$version"
       
       - name: Clean up remote script
         if: always()
         run: |
-          ssh -F ~/.ssh/temp_config/config bmicluster-compute "rm -f /tmp/deploy_to_hpc.sh" || echo "Warning: Failed to clean up remote script" 
+          ssh -F ~/.ssh/temp_config/config bmicluster-compute "rm -f /tmp/deploy_to_hpc.sh" || echo "Warning: Failed to clean up remote script"
+          
+      - name: Send notification
+        if: always()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_CHANNEL: deployments
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_TITLE: "HPC Singularity Deployment"
+          SLACK_MESSAGE: "Deployment of biowardrobe2/scidap-deseq:${{ env.DOCKER_TAG }} to HPC - Status: ${{ job.status }}"
+          SLACK_FOOTER: "Deployed by GitHub Actions" 
