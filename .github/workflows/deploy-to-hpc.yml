@@ -48,27 +48,75 @@ jobs:
       - name: Make script executable
         run: chmod +x scripts/deploy_to_hpc.sh
       
-      - name: Verify environment
+      - name: Check scripts dir
         run: |
-          echo "Running on host: $(hostname) as user: $(whoami)"
-          echo "Working directory: $(pwd)"
-          echo "Contents of scripts directory:"
-          ls -la scripts/
-          echo "SSH test command:"
-          ssh -v bmicluster "hostname"
+          echo "Current directory: $(pwd)"
+          echo "Does scripts directory exist?"
+          ls -la
           
-      - name: Copy deployment script to HPC
+          if [ -d "scripts" ]; then
+            echo "Scripts directory exists"
+            ls -la scripts/
+          else
+            echo "Scripts directory DOES NOT exist!"
+          fi
+          
+          if [ -f "scripts/deploy_to_hpc.sh" ]; then
+            echo "Deploy script exists"
+            head -n 20 scripts/deploy_to_hpc.sh
+          else
+            echo "Deploy script DOES NOT exist!"
+          fi
+      
+      - name: Verify SSH environment
         run: |
-          scp scripts/deploy_to_hpc.sh bmicluster-compute:/tmp/deploy_to_hpc.sh
+          echo "Testing SSH connection to jump host:"
+          ssh -v bmicluster "hostname" || echo "Connection to bmicluster failed with exit code: $?"
+          
+          echo "Testing SSH connection to compute node:"
+          ssh -v bmicluster-compute "hostname" || echo "Connection to bmicluster-compute failed with exit code: $?"
+          
+      - name: Test SCP command separately 
+        run: |
+          echo "Testing SCP command:"
+          echo "Test content" > test-file.txt
+          scp -v test-file.txt bmicluster-compute:/tmp/test-file.txt || echo "SCP failed with exit code: $?"
+          
+          echo "Verifying file copy:"
+          ssh bmicluster-compute "cat /tmp/test-file.txt || echo 'File not found on remote'" 
+          
+      - name: Copy deployment script to HPC (with debug)
+        run: |
+          # First check if file exists
+          if [ ! -f "scripts/deploy_to_hpc.sh" ]; then
+            echo "ERROR: scripts/deploy_to_hpc.sh does not exist!"
+            exit 1
+          fi
+          
+          # Try to copy with verbose output
+          echo "Copying script to HPC..."
+          scp -v scripts/deploy_to_hpc.sh bmicluster-compute:/tmp/deploy_to_hpc.sh
+          
+          # Verify the copy worked
+          echo "Verifying script was copied..."
+          ssh bmicluster-compute "ls -la /tmp/deploy_to_hpc.sh || echo 'Script not found on remote'"
           
       - name: Execute deployment on HPC
         run: |
-          ssh bmicluster-compute << 'EOF'
+          echo "Executing deployment script on HPC..."
+          ssh -v bmicluster-compute << 'EOF'
+            echo "Setting script as executable..."
             chmod +x /tmp/deploy_to_hpc.sh
-            /tmp/deploy_to_hpc.sh ${{ env.DOCKER_TAG }}
+            
+            echo "Running deployment script..."
+            /tmp/deploy_to_hpc.sh ${{ env.DOCKER_TAG }} || echo "Deployment script failed with exit code: $?"
+            
+            echo "Cleaning up..."
             rm /tmp/deploy_to_hpc.sh  # Clean up
           EOF
           
       - name: Verify deployment
+        if: always()  # Try to run even if previous step failed
         run: |
-          ssh bmicluster-compute "ls -la /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:*.sif && cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt" 
+          echo "Checking deployment results..."
+          ssh bmicluster-compute "ls -la /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:*.sif || echo 'Image file not found' && cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt || echo 'Version file not found'" 
