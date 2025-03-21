@@ -78,13 +78,6 @@ For detailed logs, check the GitHub Actions output or the `deployment.log` file 
 - [HPC Usage Guide](docs/hpc-usage.md) - How to use the deployed Singularity images
 - [Runner Setup Guide](docs/runner-setup.md) - Detailed instructions for setting up the self-hosted runner
 
-## Notification Setup
-
-The workflow can send Slack notifications when deployments succeed or fail. To enable this:
-
-1. Create a Slack app and get a webhook URL
-2. Add the webhook URL as a GitHub repository secret named `SLACK_WEBHOOK`
-
 ## License
 
 [MIT License](LICENSE)
