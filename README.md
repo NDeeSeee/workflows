@@ -61,6 +61,8 @@ cd ~/actions-runner
 # To reattach later: tmux attach -t github-runner
 ```
 
+For detailed setup instructions, see [Self-hosted Runner Setup Guide](docs/runner-setup.md).
+
 ## Troubleshooting
 
 Common issues and solutions:
@@ -70,6 +72,11 @@ Common issues and solutions:
 - **Permission Problems**: Ensure file permissions are correct in the destination directory
 
 For detailed logs, check the GitHub Actions output or the `deployment.log` file generated during the run.
+
+## Documentation
+
+- [HPC Usage Guide](docs/hpc-usage.md) - How to use the deployed Singularity images
+- [Runner Setup Guide](docs/runner-setup.md) - Detailed instructions for setting up the self-hosted runner
 
 ## Notification Setup
 
