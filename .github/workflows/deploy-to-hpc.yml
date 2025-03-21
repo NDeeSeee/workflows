@@ -15,16 +15,22 @@ on:
         type: string
 
 env:
-  # The tag can come from the upstream workflow, manual input, or default to a fixed version
+  # Try to get the tag from:
+  # 1. Manual workflow input
+  # 2. Upstream workflow output
+  # 3. Default to v0.0.30
   DOCKER_TAG: ${{ github.event.inputs.docker_tag || 'v0.0.30' }}
 
 jobs:
   deploy_to_hpc:
     name: Deploy Singularity Image to HPC
     runs-on: self-hosted
+    # Only run if the upstream workflow was successful or this is a manual trigger
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    
     steps:
       - name: Check out repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         
       - name: Setup SSH Configuration
         run: |
