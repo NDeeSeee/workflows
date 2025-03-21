@@ -7,55 +7,90 @@ on:
       - completed
   workflow_dispatch:  # Allow manual triggering
 
+env:
+  LOG_DIR: "/tmp/gh-action-logs"
+
 jobs:
   test_connection:
     runs-on: self-hosted
     steps:
+      - name: Setup logging
+        run: |
+          mkdir -p ${{ env.LOG_DIR }}
+          echo "Starting run at $(date)" > ${{ env.LOG_DIR }}/run_log.txt
+          echo "Running as user: $(whoami)" >> ${{ env.LOG_DIR }}/run_log.txt
+          
       - name: SSH to jump host
         run: |
-          echo "Testing connection to jump host:"
-          ssh -v bmicluster "hostname && whoami"
+          echo "Testing connection to jump host:" | tee -a ${{ env.LOG_DIR }}/run_log.txt
+          ssh -v bmicluster "hostname && whoami" > ${{ env.LOG_DIR }}/jump_host.log 2>&1 || { 
+            echo "ERROR: Jump host connection failed with code $?" | tee -a ${{ env.LOG_DIR }}/run_log.txt
+            cat ${{ env.LOG_DIR }}/jump_host.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
+            exit 1
+          }
+          cat ${{ env.LOG_DIR }}/jump_host.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
       
       - name: SSH to compute node
         run: |
-          echo "Testing connection to compute node:"
-          ssh -v bmicluster-compute "hostname && whoami"
+          echo "Testing connection to compute node:" | tee -a ${{ env.LOG_DIR }}/run_log.txt
+          ssh -v bmicluster-compute "hostname && whoami" > ${{ env.LOG_DIR }}/compute_node.log 2>&1 || {
+            echo "ERROR: Compute node connection failed with code $?" | tee -a ${{ env.LOG_DIR }}/run_log.txt
+            cat ${{ env.LOG_DIR }}/compute_node.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
+            exit 1
+          }
+          cat ${{ env.LOG_DIR }}/compute_node.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
           
       - name: Test directory access
         run: |
-          echo "Testing access to target directory:"
-          ssh bmicluster-compute "ls -la /data/barskilab/scidap_server || echo 'Cannot access directory'"
+          echo "Testing access to target directory:" | tee -a ${{ env.LOG_DIR }}/run_log.txt
+          ssh bmicluster-compute "ls -la /data/barskilab/scidap_server" > ${{ env.LOG_DIR }}/dir_access.log 2>&1 || {
+            echo "ERROR: Directory access failed with code $?" | tee -a ${{ env.LOG_DIR }}/run_log.txt
+            cat ${{ env.LOG_DIR }}/dir_access.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
+            exit 1
+          }
+          cat ${{ env.LOG_DIR }}/dir_access.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
           
       - name: Test Singularity
         run: |
-          echo "Testing Singularity module:"
-          ssh bmicluster-compute << 'EOF'
-          # Try to load the module
+          echo "Testing Singularity module:" | tee -a ${{ env.LOG_DIR }}/run_log.txt
+          ssh bmicluster-compute << 'EOF' > ${{ env.LOG_DIR }}/singularity_test.log 2>&1
           echo "Loading module..."
-          module load singularity/3.7.0 || echo "Failed to load module"
+          module load singularity/3.7.0 || echo "Failed to load module with code $?"
           
-          # Check if singularity is available
           echo "Checking singularity command:"
-          which singularity || echo "Singularity command not found"
+          which singularity || echo "Singularity command not found with code $?"
           
-          # Check singularity version
           echo "Checking singularity version:"
-          singularity --version || echo "Failed to get version"
+          singularity --version || echo "Failed to get version with code $?"
           
-          # Create a test temp directory
           echo "Creating test directory:"
           TEMP_DIR=$(mktemp -d)
           cd "${TEMP_DIR}"
           pwd
           
-          # Test singularity pull to verify it works
-          echo "Testing a very small singularity pull (will take a moment):"
-          singularity pull docker://alpine:latest || echo "Failed to pull test image"
+          echo "Testing mkdir in destination:"
+          mkdir -p /data/barskilab/scidap_server/singularity_images || echo "Failed to create directory with code $?"
           
-          # Clean up
-          cd - 
-          rm -rf "${TEMP_DIR}"
+          echo "Testing write to destination:"
+          echo "test" > /data/barskilab/scidap_server/singularity_images/test.txt || echo "Failed to write test file with code $?"
+          
+          echo "Done with tests"
           EOF
+          
+          cat ${{ env.LOG_DIR }}/singularity_test.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
+          
+      - name: Print full logs
+        if: always()
+        run: |
+          echo "=============== FULL LOG OUTPUT ==============="
+          cat ${{ env.LOG_DIR }}/run_log.txt
+          echo "============== END OF LOG OUTPUT =============="
+          
+      - name: Copy logs locally
+        if: always()
+        run: |
+          cp ${{ env.LOG_DIR }}/run_log.txt ~/workflow_run_log.txt
+          echo "Full logs saved to ~/workflow_run_log.txt"
           
   mini_deploy:
     needs: test_connection
@@ -68,6 +103,7 @@ jobs:
           cat > /tmp/mini_deploy.sh << 'EOL'
           #!/bin/bash
           set -e  # Exit on error
+          set -x  # Echo commands
           
           # Configuration
           IMAGE_NAME="biowardrobe2/scidap-deseq"
@@ -89,17 +125,31 @@ jobs:
           echo "${VERSION}" > "${SINGULARITY_IMAGE_DIR}/scidap-deseq-version.txt"
           
           echo "Success! Created: ${SINGULARITY_IMAGE_DIR}/scidap-deseq-version.txt"
-          EOF
+          EOL
           
       - name: Copy minimal script to compute node
         run: |
-          scp /tmp/mini_deploy.sh bmicluster-compute:/tmp/mini_deploy.sh
+          scp /tmp/mini_deploy.sh bmicluster-compute:/tmp/mini_deploy.sh > ${{ env.LOG_DIR }}/scp.log 2>&1 || {
+            echo "ERROR: SCP failed with code $?"
+            cat ${{ env.LOG_DIR }}/scp.log
+            exit 1
+          }
           ssh bmicluster-compute "chmod +x /tmp/mini_deploy.sh"
           
       - name: Run minimal deployment
         run: |
-          ssh bmicluster-compute "/tmp/mini_deploy.sh ${{ env.DOCKER_TAG }}"
+          ssh bmicluster-compute "/tmp/mini_deploy.sh ${{ env.DOCKER_TAG }}" > ${{ env.LOG_DIR }}/deploy.log 2>&1 || {
+            echo "ERROR: Deployment failed with code $?"
+            cat ${{ env.LOG_DIR }}/deploy.log
+            exit 1
+          }
+          cat ${{ env.LOG_DIR }}/deploy.log
           
       - name: Verify minimal deployment
         run: |
-          ssh bmicluster-compute "cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt || echo 'Version file not found'" 
+          ssh bmicluster-compute "cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt" > ${{ env.LOG_DIR }}/verify.log 2>&1 || {
+            echo "ERROR: Verification failed with code $?"
+            cat ${{ env.LOG_DIR }}/verify.log
+            exit 1
+          }
+          cat ${{ env.LOG_DIR }}/verify.log 
