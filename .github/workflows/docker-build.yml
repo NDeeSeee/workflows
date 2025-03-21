@@ -27,6 +27,7 @@ jobs:
       DOCKER_TAG: v0.0.30
       # Hardcode your lowercase repository owner name here
       REPO_OWNER_LOWERCASE: ndeeseee
+      DOCKER_HUB_REPO: biowardrobe2
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
@@ -37,7 +38,10 @@ jobs:
           echo "Repository Owner: ${{ github.repository_owner }}"
           echo "Actor: ${{ github.actor }}"
           echo "Our hardcoded lowercase: ${{ env.REPO_OWNER_LOWERCASE }}"
-          echo "Target path: ghcr.io/${{ env.REPO_OWNER_LOWERCASE }}/${{ env.DOCKER_IMAGE_NAME }}"
+          echo "Target GHCR path: ghcr.io/${{ env.REPO_OWNER_LOWERCASE }}/${{ env.DOCKER_IMAGE_NAME }}"
+          echo "Target Docker Hub path: ${{ env.DOCKER_HUB_REPO }}/${{ env.DOCKER_IMAGE_NAME }}"
+          echo "Has Docker Hub username? ${{ secrets.DOCKER_USERNAME != '' }}"
+          echo "Has Docker Hub password? ${{ secrets.DOCKER_PASSWORD != '' }}"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -63,21 +67,11 @@ jobs:
             ghcr.io/${{ env.REPO_OWNER_LOWERCASE }}/${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_TAG }}
             ghcr.io/${{ env.REPO_OWNER_LOWERCASE }}/${{ env.DOCKER_IMAGE_NAME }}:latest
 
-      - name: Check Docker Hub Credentials
-        id: check_creds
-        run: |
-          if [[ -n "${{ secrets.DOCKER_USERNAME }}" && -n "${{ secrets.DOCKER_PASSWORD }}" ]]; then
-            echo "has_creds=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_creds=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-        if: steps.check_creds.outputs.has_creds == 'true'
 
       - name: Build and Push Docker Image to Docker Hub
         uses: docker/build-push-action@v4
@@ -87,6 +81,5 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            biowardrobe2/${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_TAG }}
-            biowardrobe2/${{ env.DOCKER_IMAGE_NAME }}:latest
-        if: steps.check_creds.outputs.has_creds == 'true'
+            ${{ env.DOCKER_HUB_REPO }}/${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_TAG }}
+            ${{ env.DOCKER_HUB_REPO }}/${{ env.DOCKER_IMAGE_NAME }}:latest
