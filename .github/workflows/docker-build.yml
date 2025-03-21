@@ -3,7 +3,7 @@ name: Build and Push Docker Image
 on:
   push:
     branches:
-      - main  # or your default branch
+      - master  # your default branch
     paths:
       - 'Dockerfile'
       - 'tools/dockerfiles/**'
@@ -11,7 +11,7 @@ on:
       - '.github/workflows/docker-build.yml'
   pull_request:
     branches:
-      - main
+      - master
     paths:
       - 'Dockerfile'
       - 'tools/dockerfiles/**'
