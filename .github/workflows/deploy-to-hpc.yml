@@ -19,55 +19,125 @@ jobs:
         
       - name: Make script executable
         run: chmod +x scripts/deploy_to_hpc.sh
+      
+      - name: Debug environment
+        run: |
+          echo "Working directory: $(pwd)"
+          echo "Contents of scripts directory:"
+          ls -la scripts/
         
       - name: Setup SSH key
         uses: webfactory/ssh-agent@v0.5.4
         with:
           ssh-private-key: ${{ secrets.HPC_SSH_KEY }}
+      
+      - name: Debug installed SSH
+        run: |
+          ssh -V
           
       - name: Setup SSH Config for ProxyJump
         run: |
           mkdir -p ~/.ssh
           cat > ~/.ssh/config << 'EOL'
+          Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+
           Host bmicluster
             HostName bmiclusterp.chmcres.cchmc.org
             User ${{ secrets.HPC_USER }}
             IdentityFile ~/.ssh/id_ed25519
             IdentitiesOnly yes
-            StrictHostKeyChecking no
+            LogLevel DEBUG3
 
           Host bmicluster-compute
             User ${{ secrets.HPC_USER }}
             HostName bmi-460g10-04.chmcres.cchmc.org
             IdentitiesOnly yes
             ProxyJump bmicluster
-            StrictHostKeyChecking no
+            LogLevel DEBUG3
           EOL
           chmod 600 ~/.ssh/config
           
-      - name: Add SSH key fingerprints to known hosts
-        run: |
-          ssh-keyscan bmiclusterp.chmcres.cchmc.org >> ~/.ssh/known_hosts
+          echo "SSH config:"
+          cat ~/.ssh/config
           
-      - name: Test SSH Connection
+      - name: Debug SSH Connection to jumphost
         run: |
-          ssh -v bmicluster-compute "hostname && whoami"
+          ssh -v bmicluster "hostname && whoami"
           
-      - name: Copy deployment script to HPC
+      - name: Test full SSH Connection
         run: |
-          scp scripts/deploy_to_hpc.sh bmicluster-compute:/tmp/deploy_to_hpc.sh
+          ssh -v bmicluster-compute "hostname && whoami && echo 'Connection successful!'"
+        continue-on-error: true
+        
+      - name: Set inline deployment script
+        run: |
+          cat > deploy_inline.sh << 'EOL'
+          #!/bin/bash
+          set -e
           
-      - name: Execute deployment on HPC
+          IMAGE_NAME="biowardrobe2/scidap-deseq"
+          SINGULARITY_IMAGE_DIR="/data/barskilab/scidap_server/singularity_images"
+          VERSION="v0.0.30"
+          SINGULARITY_FILENAME="biowardrobe2_scidap-deseq:${VERSION}.sif"
+          
+          echo "Starting deployment on $(hostname) as $(whoami)"
+          echo "Checking if directory exists:"
+          mkdir -p ${SINGULARITY_IMAGE_DIR}
+          ls -la ${SINGULARITY_IMAGE_DIR}
+          
+          echo "Loading singularity module..."
+          module load singularity/3.7.0
+          
+          echo "Using Singularity: $(which singularity)"
+          echo "Singularity version: $(singularity --version)"
+          
+          TEMP_DIR=$(mktemp -d)
+          cd "${TEMP_DIR}"
+          echo "Working in temporary directory: ${TEMP_DIR}"
+          
+          if [ -f "${SINGULARITY_IMAGE_DIR}/${SINGULARITY_FILENAME}" ]; then
+            echo "Removing existing file: ${SINGULARITY_IMAGE_DIR}/${SINGULARITY_FILENAME}"
+            rm "${SINGULARITY_IMAGE_DIR}/${SINGULARITY_FILENAME}"
+          fi
+          
+          echo "Pulling ${IMAGE_NAME}:${VERSION} from Docker Hub..."
+          singularity pull docker://${IMAGE_NAME}:${VERSION}
+          
+          PULLED_FILENAME=$(ls *.sif)
+          if [ -z "${PULLED_FILENAME}" ]; then
+            echo "Failed to pull Singularity image or locate .sif file"
+            exit 1
+          fi
+          
+          echo "Moving ${PULLED_FILENAME} to ${SINGULARITY_IMAGE_DIR}/${SINGULARITY_FILENAME}"
+          mv "${PULLED_FILENAME}" "${SINGULARITY_IMAGE_DIR}/${SINGULARITY_FILENAME}"
+          
+          cd - > /dev/null
+          rm -rf "${TEMP_DIR}"
+          
+          echo "Deployment complete!"
+          echo "Image available at: ${SINGULARITY_IMAGE_DIR}/${SINGULARITY_FILENAME}"
+          
+          echo "${VERSION}" > "${SINGULARITY_IMAGE_DIR}/scidap-deseq-version.txt"
+          EOL
+          chmod +x deploy_inline.sh
+          
+      - name: Execute deployment on HPC (simplified)
         run: |
-          ssh bmicluster-compute << 'EOF'
-            chmod +x /tmp/deploy_to_hpc.sh
-            /tmp/deploy_to_hpc.sh ${{ env.DOCKER_TAG }}
-            rm /tmp/deploy_to_hpc.sh  # Clean up
-          EOF
+          # Copy the script directly
+          scp -o StrictHostKeyChecking=no -v deploy_inline.sh bmicluster-compute:/tmp/deploy_inline.sh
+          
+          # Run it with detailed output
+          ssh -o StrictHostKeyChecking=no -v bmicluster-compute "bash -x /tmp/deploy_inline.sh || (echo 'DEPLOYMENT FAILED' && cat /tmp/deploy_inline.sh && exit 1)"
+        
+      - name: Cleanup
+        if: always()
+        run: |
+          ssh -o StrictHostKeyChecking=no -v bmicluster-compute "rm -f /tmp/deploy_inline.sh" || true
           
       - name: Verify deployment
+        if: success()
         run: |
-          ssh bmicluster-compute << 'EOF'
-            ls -la /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:*.sif
-            cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt
-          EOF 
+          ssh -o StrictHostKeyChecking=no -v bmicluster-compute "ls -la /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:*.sif && cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt" 
