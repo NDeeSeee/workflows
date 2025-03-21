@@ -9,6 +9,7 @@ on:
 
 env:
   LOG_DIR: "/tmp/gh-action-logs"
+  DOCKER_TAG: "v0.0.30"  # This should be dynamically set in a real workflow
 
 jobs:
   debug_ssh:
@@ -104,45 +105,6 @@ jobs:
           }
           cat ${{ env.LOG_DIR }}/compute_node.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
           
-      - name: Test directory access
-        run: |
-          echo "Testing access to target directory:" | tee -a ${{ env.LOG_DIR }}/run_log.txt
-          ssh -F ~/.ssh/temp_config/config bmicluster-compute "ls -la /data/barskilab/scidap_server" > ${{ env.LOG_DIR }}/dir_access.log 2>&1 || {
-            echo "ERROR: Directory access failed with code $?" | tee -a ${{ env.LOG_DIR }}/run_log.txt
-            cat ${{ env.LOG_DIR }}/dir_access.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
-            exit 1
-          }
-          cat ${{ env.LOG_DIR }}/dir_access.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
-          
-      - name: Test Singularity
-        run: |
-          echo "Testing Singularity module:" | tee -a ${{ env.LOG_DIR }}/run_log.txt
-          ssh -F ~/.ssh/temp_config/config bmicluster-compute << 'EOF' > ${{ env.LOG_DIR }}/singularity_test.log 2>&1
-          echo "Loading module..."
-          module load singularity/3.7.0 || echo "Failed to load module with code $?"
-          
-          echo "Checking singularity command:"
-          which singularity || echo "Singularity command not found with code $?"
-          
-          echo "Checking singularity version:"
-          singularity --version || echo "Failed to get version with code $?"
-          
-          echo "Creating test directory:"
-          TEMP_DIR=$(mktemp -d)
-          cd "${TEMP_DIR}"
-          pwd
-          
-          echo "Testing mkdir in destination:"
-          mkdir -p /data/barskilab/scidap_server/singularity_images || echo "Failed to create directory with code $?"
-          
-          echo "Testing write to destination:"
-          echo "test" > /data/barskilab/scidap_server/singularity_images/test.txt || echo "Failed to write test file with code $?"
-          
-          echo "Done with tests"
-          EOF
-          
-          cat ${{ env.LOG_DIR }}/singularity_test.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
-          
       - name: Print full logs
         if: always()
         run: |
@@ -156,64 +118,56 @@ jobs:
           cp ${{ env.LOG_DIR }}/run_log.txt ~/workflow_run_log.txt
           echo "Full logs saved to ~/workflow_run_log.txt"
           
-  mini_deploy:
+  full_deploy:
     needs: test_connection
     runs-on: self-hosted
-    env:
-      DOCKER_TAG: v0.0.30
     steps:
-      - name: Create minimal deploy script
+      - name: Check out repository to access scripts
+        uses: actions/checkout@v3
+        
+      - name: Setup SSH Configuration
         run: |
-          cat > /tmp/mini_deploy.sh << 'EOL'
-          #!/bin/bash
-          set -e  # Exit on error
-          set -x  # Echo commands
+          mkdir -p ~/.ssh/temp_config
+          cat > ~/.ssh/temp_config/config << EOF
+          Host bmicluster
+            HostName bmiclusterp.chmcres.cchmc.org
+            User pavb5f
+            IdentityFile ~/.ssh/id_ed25519
+            StrictHostKeyChecking no
+            BatchMode yes
+            IdentitiesOnly yes
+
+          Host bmicluster-compute
+            User pavb5f
+            HostName bmi-460g10-04.chmcres.cchmc.org
+            StrictHostKeyChecking no
+            BatchMode yes
+            IdentitiesOnly yes
+            ProxyJump bmicluster
+          EOF
           
-          # Configuration
-          IMAGE_NAME="biowardrobe2/scidap-deseq"
-          SINGULARITY_IMAGE_DIR="/data/barskilab/scidap_server/singularity_images"
-          VERSION="${1:-v0.0.30}" 
-          SINGULARITY_FILENAME="biowardrobe2_scidap-deseq:${VERSION}.sif"
-          
-          echo "Running as: $(whoami) on $(hostname)"
-          echo "Creating directory: ${SINGULARITY_IMAGE_DIR}"
-          mkdir -p "${SINGULARITY_IMAGE_DIR}"
-          
-          echo "Loading singularity module..."
-          module load singularity/3.7.0
-          
-          echo "Singularity version: $(singularity --version)"
-          
-          # Create a version file only (without pulling the image)
-          echo "Creating version file only..."
-          echo "${VERSION}" > "${SINGULARITY_IMAGE_DIR}/scidap-deseq-version.txt"
-          
-          echo "Success! Created: ${SINGULARITY_IMAGE_DIR}/scidap-deseq-version.txt"
-          EOL
-          
-      - name: Copy minimal script to compute node
+          chmod 600 ~/.ssh/temp_config/config
+      
+      - name: Make deployment script executable
+        run: chmod +x scripts/deploy_to_hpc.sh
+      
+      - name: Copy deployment script to compute node
         run: |
-          scp -F ~/.ssh/temp_config/config /tmp/mini_deploy.sh bmicluster-compute:/tmp/mini_deploy.sh > ${{ env.LOG_DIR }}/scp.log 2>&1 || {
-            echo "ERROR: SCP failed with code $?"
-            cat ${{ env.LOG_DIR }}/scp.log
-            exit 1
-          }
-          ssh -F ~/.ssh/temp_config/config bmicluster-compute "chmod +x /tmp/mini_deploy.sh"
-          
-      - name: Run minimal deployment
+          echo "Copying deployment script to compute node..."
+          scp -F ~/.ssh/temp_config/config scripts/deploy_to_hpc.sh bmicluster-compute:/tmp/deploy_to_hpc.sh
+          ssh -F ~/.ssh/temp_config/config bmicluster-compute "chmod +x /tmp/deploy_to_hpc.sh"
+      
+      - name: Execute deployment on compute node
         run: |
-          ssh -F ~/.ssh/temp_config/config bmicluster-compute "/tmp/mini_deploy.sh ${{ env.DOCKER_TAG }}" > ${{ env.LOG_DIR }}/deploy.log 2>&1 || {
-            echo "ERROR: Deployment failed with code $?"
-            cat ${{ env.LOG_DIR }}/deploy.log
-            exit 1
-          }
-          cat ${{ env.LOG_DIR }}/deploy.log
-          
-      - name: Verify minimal deployment
+          echo "Starting Singularity image deployment with version ${{ env.DOCKER_TAG }}..."
+          ssh -F ~/.ssh/temp_config/config bmicluster-compute "/tmp/deploy_to_hpc.sh ${{ env.DOCKER_TAG }}" | tee deployment.log
+      
+      - name: Verify deployment
         run: |
-          ssh -F ~/.ssh/temp_config/config bmicluster-compute "cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt" > ${{ env.LOG_DIR }}/verify.log 2>&1 || {
-            echo "ERROR: Verification failed with code $?"
-            cat ${{ env.LOG_DIR }}/verify.log
-            exit 1
-          }
-          cat ${{ env.LOG_DIR }}/verify.log 
+          echo "Verifying deployment..."
+          ssh -F ~/.ssh/temp_config/config bmicluster-compute "ls -la /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:${{ env.DOCKER_TAG }}.sif"
+          ssh -F ~/.ssh/temp_config/config bmicluster-compute "cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt"
+      
+      - name: Clean up remote script
+        if: always()
+        run: ssh -F ~/.ssh/temp_config/config bmicluster-compute "rm -f /tmp/deploy_to_hpc.sh" 
