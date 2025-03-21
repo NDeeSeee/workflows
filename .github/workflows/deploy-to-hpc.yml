@@ -8,115 +8,98 @@ on:
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
-  debug:
+  test_connection:
     runs-on: self-hosted
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-        
-      - name: Debug environment
+      - name: SSH to jump host
         run: |
-          echo "Running as: $(whoami)"
-          echo "Current directory: $(pwd)"
-          echo "Host: $(hostname)"
-          echo "PATH: $PATH"
-          ls -la
-          
-      - name: Test SSH config
+          echo "Testing connection to jump host:"
+          ssh -v bmicluster "hostname && whoami"
+      
+      - name: SSH to compute node
         run: |
-          echo "SSH config:"
-          cat ~/.ssh/config || echo "No SSH config found"
+          echo "Testing connection to compute node:"
+          ssh -v bmicluster-compute "hostname && whoami"
           
-          echo "Testing SSH connection to bmicluster:"
-          ssh -v bmicluster "hostname" || echo "Connection to bmicluster failed"
-          
-      - name: Check SSH keys
+      - name: Test directory access
         run: |
-          echo "Available SSH keys:"
-          ls -la ~/.ssh/
-          ssh-add -l || echo "No SSH keys in agent"
+          echo "Testing access to target directory:"
+          ssh bmicluster-compute "ls -la /data/barskilab/scidap_server || echo 'Cannot access directory'"
           
-  deploy:
-    needs: debug
+      - name: Test Singularity
+        run: |
+          echo "Testing Singularity module:"
+          ssh bmicluster-compute << 'EOF'
+          # Try to load the module
+          echo "Loading module..."
+          module load singularity/3.7.0 || echo "Failed to load module"
+          
+          # Check if singularity is available
+          echo "Checking singularity command:"
+          which singularity || echo "Singularity command not found"
+          
+          # Check singularity version
+          echo "Checking singularity version:"
+          singularity --version || echo "Failed to get version"
+          
+          # Create a test temp directory
+          echo "Creating test directory:"
+          TEMP_DIR=$(mktemp -d)
+          cd "${TEMP_DIR}"
+          pwd
+          
+          # Test singularity pull to verify it works
+          echo "Testing a very small singularity pull (will take a moment):"
+          singularity pull docker://alpine:latest || echo "Failed to pull test image"
+          
+          # Clean up
+          cd - 
+          rm -rf "${TEMP_DIR}"
+          EOF
+          
+  mini_deploy:
+    needs: test_connection
     runs-on: self-hosted
     env:
       DOCKER_TAG: v0.0.30
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-        
-      - name: Make script executable
-        run: chmod +x scripts/deploy_to_hpc.sh
-      
-      - name: Check scripts dir
+      - name: Create minimal deploy script
         run: |
-          echo "Current directory: $(pwd)"
-          echo "Does scripts directory exist?"
-          ls -la
+          cat > /tmp/mini_deploy.sh << 'EOL'
+          #!/bin/bash
+          set -e  # Exit on error
           
-          if [ -d "scripts" ]; then
-            echo "Scripts directory exists"
-            ls -la scripts/
-          else
-            echo "Scripts directory DOES NOT exist!"
-          fi
+          # Configuration
+          IMAGE_NAME="biowardrobe2/scidap-deseq"
+          SINGULARITY_IMAGE_DIR="/data/barskilab/scidap_server/singularity_images"
+          VERSION="${1:-v0.0.30}" 
+          SINGULARITY_FILENAME="biowardrobe2_scidap-deseq:${VERSION}.sif"
           
-          if [ -f "scripts/deploy_to_hpc.sh" ]; then
-            echo "Deploy script exists"
-            head -n 20 scripts/deploy_to_hpc.sh
-          else
-            echo "Deploy script DOES NOT exist!"
-          fi
-      
-      - name: Verify SSH environment
-        run: |
-          echo "Testing SSH connection to jump host:"
-          ssh -v bmicluster "hostname" || echo "Connection to bmicluster failed with exit code: $?"
+          echo "Running as: $(whoami) on $(hostname)"
+          echo "Creating directory: ${SINGULARITY_IMAGE_DIR}"
+          mkdir -p "${SINGULARITY_IMAGE_DIR}"
           
-          echo "Testing SSH connection to compute node:"
-          ssh -v bmicluster-compute "hostname" || echo "Connection to bmicluster-compute failed with exit code: $?"
+          echo "Loading singularity module..."
+          module load singularity/3.7.0
           
-      - name: Test SCP command separately 
-        run: |
-          echo "Testing SCP command:"
-          echo "Test content" > test-file.txt
-          scp -v test-file.txt bmicluster-compute:/tmp/test-file.txt || echo "SCP failed with exit code: $?"
+          echo "Singularity version: $(singularity --version)"
           
-          echo "Verifying file copy:"
-          ssh bmicluster-compute "cat /tmp/test-file.txt || echo 'File not found on remote'" 
+          # Create a version file only (without pulling the image)
+          echo "Creating version file only..."
+          echo "${VERSION}" > "${SINGULARITY_IMAGE_DIR}/scidap-deseq-version.txt"
           
-      - name: Copy deployment script to HPC (with debug)
-        run: |
-          # First check if file exists
-          if [ ! -f "scripts/deploy_to_hpc.sh" ]; then
-            echo "ERROR: scripts/deploy_to_hpc.sh does not exist!"
-            exit 1
-          fi
-          
-          # Try to copy with verbose output
-          echo "Copying script to HPC..."
-          scp -v scripts/deploy_to_hpc.sh bmicluster-compute:/tmp/deploy_to_hpc.sh
-          
-          # Verify the copy worked
-          echo "Verifying script was copied..."
-          ssh bmicluster-compute "ls -la /tmp/deploy_to_hpc.sh || echo 'Script not found on remote'"
-          
-      - name: Execute deployment on HPC
-        run: |
-          echo "Executing deployment script on HPC..."
-          ssh -v bmicluster-compute << 'EOF'
-            echo "Setting script as executable..."
-            chmod +x /tmp/deploy_to_hpc.sh
-            
-            echo "Running deployment script..."
-            /tmp/deploy_to_hpc.sh ${{ env.DOCKER_TAG }} || echo "Deployment script failed with exit code: $?"
-            
-            echo "Cleaning up..."
-            rm /tmp/deploy_to_hpc.sh  # Clean up
+          echo "Success! Created: ${SINGULARITY_IMAGE_DIR}/scidap-deseq-version.txt"
           EOF
           
-      - name: Verify deployment
-        if: always()  # Try to run even if previous step failed
+      - name: Copy minimal script to compute node
         run: |
-          echo "Checking deployment results..."
-          ssh bmicluster-compute "ls -la /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:*.sif || echo 'Image file not found' && cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt || echo 'Version file not found'" 
+          scp /tmp/mini_deploy.sh bmicluster-compute:/tmp/mini_deploy.sh
+          ssh bmicluster-compute "chmod +x /tmp/mini_deploy.sh"
+          
+      - name: Run minimal deployment
+        run: |
+          ssh bmicluster-compute "/tmp/mini_deploy.sh ${{ env.DOCKER_TAG }}"
+          
+      - name: Verify minimal deployment
+        run: |
+          ssh bmicluster-compute "cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt || echo 'Version file not found'" 
