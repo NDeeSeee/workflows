@@ -5,128 +5,30 @@ on:
     workflows: ["Build and Push Docker Image"]
     types:
       - completed
+    branches: [master, main]
   workflow_dispatch:  # Allow manual triggering
+    inputs:
+      docker_tag:
+        description: 'Docker image tag to deploy'
+        required: false
+        default: 'v0.0.30'
+        type: string
 
 env:
-  LOG_DIR: "/tmp/gh-action-logs"
-  DOCKER_TAG: "v0.0.30"  # This should be dynamically set in a real workflow
+  # The tag can come from the upstream workflow, manual input, or default to a fixed version
+  DOCKER_TAG: ${{ github.event.inputs.docker_tag || 'v0.0.30' }}
 
 jobs:
-  debug_ssh:
+  deploy_to_hpc:
+    name: Deploy Singularity Image to HPC
     runs-on: self-hosted
     steps:
-      - name: Check SSH environment
-        run: |
-          mkdir -p ${{ env.LOG_DIR }}
-          echo "=== Environment info ===" > ${{ env.LOG_DIR }}/ssh_debug.log
-          echo "Running as user: $(whoami)" >> ${{ env.LOG_DIR }}/ssh_debug.log
-          echo "Home directory: $HOME" >> ${{ env.LOG_DIR }}/ssh_debug.log
-          echo "Current directory: $(pwd)" >> ${{ env.LOG_DIR }}/ssh_debug.log
-          echo "SSH_AUTH_SOCK: $SSH_AUTH_SOCK" >> ${{ env.LOG_DIR }}/ssh_debug.log
-          
-          echo "=== SSH Config ===" >> ${{ env.LOG_DIR }}/ssh_debug.log
-          cat ~/.ssh/config >> ${{ env.LOG_DIR }}/ssh_debug.log 2>&1 || echo "No SSH config found" >> ${{ env.LOG_DIR }}/ssh_debug.log
-          
-          echo "=== SSH Key ===" >> ${{ env.LOG_DIR }}/ssh_debug.log
-          ls -la ~/.ssh/ >> ${{ env.LOG_DIR }}/ssh_debug.log 2>&1
-          
-          echo "=== Testing connectivity ===" >> ${{ env.LOG_DIR }}/ssh_debug.log
-          
-          # First attempt with SSH agent forwarding
-          echo "Connection test with normal SSH:" >> ${{ env.LOG_DIR }}/ssh_debug.log
-          ssh -v bmicluster "hostname && whoami" >> ${{ env.LOG_DIR }}/ssh_debug.log 2>&1 || echo "SSH connection failed with normal config" >> ${{ env.LOG_DIR }}/ssh_debug.log
-          
-          # Test with explicit key
-          echo "Connection test with explicit key:" >> ${{ env.LOG_DIR }}/ssh_debug.log
-          ssh -v -i ~/.ssh/id_ed25519 bmiclusterp.chmcres.cchmc.org -l pavb5f "hostname && whoami" >> ${{ env.LOG_DIR }}/ssh_debug.log 2>&1 || echo "SSH connection failed with explicit key" >> ${{ env.LOG_DIR }}/ssh_debug.log
-          
-          # Test with StrictHostKeyChecking disabled
-          echo "Connection test with disabled host key checking:" >> ${{ env.LOG_DIR }}/ssh_debug.log
-          ssh -v -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 bmiclusterp.chmcres.cchmc.org -l pavb5f "hostname && whoami" >> ${{ env.LOG_DIR }}/ssh_debug.log 2>&1 || echo "SSH connection failed with disabled host checking" >> ${{ env.LOG_DIR }}/ssh_debug.log
-          
-          # Print the results
-          echo "=== DEBUG LOG CONTENTS ==="
-          cat ${{ env.LOG_DIR }}/ssh_debug.log
-          cp ${{ env.LOG_DIR }}/ssh_debug.log ~/ssh_debug.log
-          echo "Full debug log saved to ~/ssh_debug.log"
-      
-  test_connection:
-    needs: debug_ssh
-    runs-on: self-hosted
-    steps:
-      - name: Setup logging
-        run: |
-          mkdir -p ${{ env.LOG_DIR }}
-          echo "Starting run at $(date)" > ${{ env.LOG_DIR }}/run_log.txt
-          echo "Running as user: $(whoami)" >> ${{ env.LOG_DIR }}/run_log.txt
-          
-      - name: Create SSH configuration
-        run: |
-          # Create a temporary SSH config that forces usage of the key
-          mkdir -p ~/.ssh/temp_config
-          cat > ~/.ssh/temp_config/config << EOF
-          Host bmicluster
-            HostName bmiclusterp.chmcres.cchmc.org
-            User pavb5f
-            IdentityFile ~/.ssh/id_ed25519
-            StrictHostKeyChecking no
-            BatchMode yes
-            IdentitiesOnly yes
-
-          Host bmicluster-compute
-            User pavb5f
-            HostName bmi-460g10-04.chmcres.cchmc.org
-            StrictHostKeyChecking no
-            BatchMode yes
-            IdentitiesOnly yes
-            ProxyJump bmicluster
-          EOF
-          
-          chmod 600 ~/.ssh/temp_config/config
-          echo "Created temporary SSH config file" | tee -a ${{ env.LOG_DIR }}/run_log.txt
-          
-      - name: SSH to jump host with temporary config
-        run: |
-          echo "Testing connection to jump host with temp config:" | tee -a ${{ env.LOG_DIR }}/run_log.txt
-          ssh -vF ~/.ssh/temp_config/config bmicluster "hostname && whoami" > ${{ env.LOG_DIR }}/jump_host.log 2>&1 || { 
-            echo "ERROR: Jump host connection failed with code $?" | tee -a ${{ env.LOG_DIR }}/run_log.txt
-            cat ${{ env.LOG_DIR }}/jump_host.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
-            exit 1
-          }
-          cat ${{ env.LOG_DIR }}/jump_host.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
-      
-      - name: SSH to compute node with temporary config
-        run: |
-          echo "Testing connection to compute node with temp config:" | tee -a ${{ env.LOG_DIR }}/run_log.txt
-          ssh -vF ~/.ssh/temp_config/config bmicluster-compute "hostname && whoami" > ${{ env.LOG_DIR }}/compute_node.log 2>&1 || {
-            echo "ERROR: Compute node connection failed with code $?" | tee -a ${{ env.LOG_DIR }}/run_log.txt
-            cat ${{ env.LOG_DIR }}/compute_node.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
-            exit 1
-          }
-          cat ${{ env.LOG_DIR }}/compute_node.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
-          
-      - name: Print full logs
-        if: always()
-        run: |
-          echo "=============== FULL LOG OUTPUT ==============="
-          cat ${{ env.LOG_DIR }}/run_log.txt
-          echo "============== END OF LOG OUTPUT =============="
-          
-      - name: Copy logs locally
-        if: always()
-        run: |
-          cp ${{ env.LOG_DIR }}/run_log.txt ~/workflow_run_log.txt
-          echo "Full logs saved to ~/workflow_run_log.txt"
-          
-  full_deploy:
-    needs: test_connection
-    runs-on: self-hosted
-    steps:
-      - name: Check out repository to access scripts
+      - name: Check out repository
         uses: actions/checkout@v3
         
       - name: Setup SSH Configuration
         run: |
+          # Create a temporary SSH config with proper settings
           mkdir -p ~/.ssh/temp_config
           cat > ~/.ssh/temp_config/config << EOF
           Host bmicluster
@@ -147,6 +49,23 @@ jobs:
           EOF
           
           chmod 600 ~/.ssh/temp_config/config
+          echo "SSH configuration created successfully"
+      
+      - name: Test SSH Connection
+        run: |
+          echo "Testing SSH connection to jump host..."
+          ssh -F ~/.ssh/temp_config/config bmicluster "hostname && whoami" || {
+            echo "ERROR: SSH connection to jump host failed"
+            exit 1
+          }
+          
+          echo "Testing SSH connection to compute node..."
+          ssh -F ~/.ssh/temp_config/config bmicluster-compute "hostname && whoami" || {
+            echo "ERROR: SSH connection to compute node failed"
+            exit 1
+          }
+          
+          echo "SSH connections verified successfully"
       
       - name: Make deployment script executable
         run: chmod +x scripts/deploy_to_hpc.sh
@@ -156,8 +75,10 @@ jobs:
           echo "Copying deployment script to compute node..."
           scp -F ~/.ssh/temp_config/config scripts/deploy_to_hpc.sh bmicluster-compute:/tmp/deploy_to_hpc.sh
           ssh -F ~/.ssh/temp_config/config bmicluster-compute "chmod +x /tmp/deploy_to_hpc.sh"
+          echo "Deployment script copied successfully"
       
       - name: Execute deployment on compute node
+        id: deploy
         run: |
           echo "Starting Singularity image deployment with version ${{ env.DOCKER_TAG }}..."
           ssh -F ~/.ssh/temp_config/config bmicluster-compute "/tmp/deploy_to_hpc.sh ${{ env.DOCKER_TAG }}" | tee deployment.log
@@ -165,9 +86,15 @@ jobs:
       - name: Verify deployment
         run: |
           echo "Verifying deployment..."
-          ssh -F ~/.ssh/temp_config/config bmicluster-compute "ls -la /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:${{ env.DOCKER_TAG }}.sif"
-          ssh -F ~/.ssh/temp_config/config bmicluster-compute "cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt"
+          ssh -F ~/.ssh/temp_config/config bmicluster-compute "ls -la /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:${{ env.DOCKER_TAG }}.sif" || {
+            echo "ERROR: Failed to verify Singularity image exists"
+            exit 1
+          }
+          
+          version=$(ssh -F ~/.ssh/temp_config/config bmicluster-compute "cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt")
+          echo "Deployment verified. Current version: $version"
       
       - name: Clean up remote script
         if: always()
-        run: ssh -F ~/.ssh/temp_config/config bmicluster-compute "rm -f /tmp/deploy_to_hpc.sh" 
+        run: |
+          ssh -F ~/.ssh/temp_config/config bmicluster-compute "rm -f /tmp/deploy_to_hpc.sh" || echo "Warning: Failed to clean up remote script" 
