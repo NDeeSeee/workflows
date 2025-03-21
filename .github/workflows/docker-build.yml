@@ -1,0 +1,82 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches:
+      - main  # or your default branch
+    paths:
+      - 'Dockerfile'
+      - 'tools/dockerfiles/**'
+      - 'tools/dockerfiles/scripts/**'
+      - '.github/workflows/docker-build.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'Dockerfile'
+      - 'tools/dockerfiles/**'
+      - 'tools/dockerfiles/scripts/**'
+      - '.github/workflows/docker-build.yml'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_IMAGE_NAME: scidap-deseq
+      DOCKER_TAG: v0.0.30
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Docker Image to GHCR
+        uses: docker/build-push-action@v4
+        with:
+          context: tools/dockerfiles
+          file: tools/dockerfiles/scidap-deseq-Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_TAG }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.DOCKER_IMAGE_NAME }}:latest
+
+      - name: Check Docker Hub Credentials
+        id: check_creds
+        run: |
+          if [[ -n "${{ secrets.DOCKER_USERNAME }}" && -n "${{ secrets.DOCKER_PASSWORD }}" ]]; then
+            echo "has_creds=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_creds=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+        if: steps.check_creds.outputs.has_creds == 'true'
+
+      - name: Build and Push Docker Image to Docker Hub
+        uses: docker/build-push-action@v4
+        with:
+          context: tools/dockerfiles
+          file: tools/dockerfiles/scidap-deseq-Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            biowardrobe2/${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_TAG }}
+            biowardrobe2/${{ env.DOCKER_IMAGE_NAME }}:latest
+        if: steps.check_creds.outputs.has_creds == 'true'

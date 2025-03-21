@@ -38,7 +38,7 @@ distinct <- dplyr::distinct
 # v0.0.5 LRT Step 2
 #
 # Changes:
-# - Applied 'limmaremovebatcheffect' batch correction in Step 2 if specified.
+# - Applied 'model' batch correction in Step 2 if specified.
 # - Used batch information from Step 1.
 # - Ensured necessary data is passed between steps.
 #
@@ -46,7 +46,7 @@ distinct <- dplyr::distinct
 # v0.0.3 - Modified to save all possible information into RDS files and handle batch correction
 #
 # Changes:
-# - Added batch correction options (`CombatSeq` and `limmaRemoveBatchEffect`).
+# - Added batch correction options (`CombatSeq` and `model`).
 # - Modified design formula based on batch correction method.
 # - Saved all necessary data (dds, contrasts, expression data, metadata) into RDS files.
 #
@@ -72,7 +72,7 @@ distinct <- dplyr::distinct
 #
 # - Integrated **batch correction** with two options:
 #   - `combatseq`: Corrects for batch effects prior to differential analysis.
-#   - `limmaremovebatcheffect`: Removes batch effects post-analysis using limma.
+#   - `model`: Removes batch effects post-analysis using limma.
 #
 # - Visual outputs include:
 #   - **Heatmaps** displaying top 30 most variable genes.
@@ -215,40 +215,36 @@ get_args <- function() {
     default = "zscore"
   )
   parser$add_argument(
-    "--regulation",
+    "--rowdist",
     help = paste(
-      "Direction of differential expression comparison. β is the log2 fold change.",
-      "'both' for both up and downregulated genes (|β| > lfcThreshold); ",
-      "'up' for upregulated genes (β > lfcThreshold); ",
-      "'down' for downregulated genes (β < -lfcThreshold). ",
-      "Default: both"
+      "Distance metric for HOPACH row clustering. Ignored if --cluster is not",
+      "provided. Default: cosangle"
     ),
     type = "character",
-    choices = c("both", "up", "down"),
-    default = "both"
+    default = "cosangle",
+    choices = c(
+      "cosangle",
+      "euclid",
+      "abseuclid",
+      "cor",
+      "abscor"
+    )
   )
   parser$add_argument(
-    "--cluster",
+    "--columndist",
     help = paste(
-      "Hopach clustering method to be run on normalized read counts for the",
-      "exploratory visualization part of the analysis. Default: do not run",
-      "clustering"
+      "Distance metric for HOPACH column clustering. Ignored if --cluster is not",
+      "provided. Default: euclid"
     ),
     type = "character",
-    choices = c("row", "column", "both", "none"),
-    default = "none"
-  )
-  parser$add_argument(
-    "--k",
-    help    = "Number of levels (depth) for Hopach clustering: min - 1, max - 15. Default: 3.",
-    type    = "integer",
-    default = 3
-  )
-  parser$add_argument(
-    "--kmax",
-    help    = "Maximum number of clusters at each level for Hopach clustering: min - 2, max - 9. Default: 5.",
-    type    = "integer",
-    default = 5
+    default = "euclid",
+    choices = c(
+      "cosangle",
+      "euclid",
+      "abseuclid",
+      "cor",
+      "abscor"
+    )
   )
   parser$add_argument(
     "--cluster",
@@ -487,7 +483,7 @@ if (!setequal(colnames(dds), colnames(read_counts_data_df))) {
 }
 
 # Apply limma batch correction if specified
-if (batch_correction_method == "limmaremovebatcheffect" && "batch" %in% colnames(metadata_df)) {
+if (batch_correction_method == "model" && "batch" %in% colnames(metadata_df)) {
   # Case 3: After DESeq2, apply rlog transformation and remove batch effects using limma
   print("Applying rlog transformation and limma batch effect removal")
   rlog_transformed <- rlog(dds, blind = FALSE)
@@ -503,26 +499,6 @@ if (batch_correction_method == "limmaremovebatcheffect" && "batch" %in% colnames
 } else {
   # If no batch correction is needed, just perform rlog
   normCounts <- assay(rlog(dds, blind = FALSE))
-}
-
-# Helper function to re-build a DESeqDataSet with new reference levels.
-rebuild_dds <- function(dds, factor_ref_list) {
-  # Convert colData to a plain data.frame for manipulation
-  colData_df <- as.data.frame(colData(dds))
-
-  # Loop over each factor and re-level according to the provided reference level
-  for (f_name in names(factor_ref_list)) {
-    ref_level <- factor_ref_list[[f_name]]
-    colData_df[[f_name]] <- relevel(as.factor(colData_df[[f_name]]), ref = ref_level)
-  }
-
-  # Build a new DESeqDataSet with the updated colData
-  dds_new <- DESeqDataSetFromMatrix(
-    countData = counts(dds),
-    colData   = colData_df,
-    design    = design(dds)
-  )
-  return(dds_new)
 }
 
 # Updated get_contrast_res function that handles main effects (single & multi)

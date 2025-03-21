@@ -232,8 +232,8 @@ generate_md <- function(batchcorrection, batchfile, deseq_results, output_file) 
   md_content <- ""
 
   # Add warning message if applicable
-  if (!is.null(batchcorrection) && (batchcorrection == "combatseq" || batchcorrection == "limmaremovebatcheffect") && is.null(batchfile)) {
-    warning_message <- "# Warning!\n\n---\n\n**You provided a batch-correction method, but not a batch-file.**\n\nThe chosen parameter was ignored.\n\nPlease ensure that you provide a batch file when using the following batch correction methods:\n\n- **combatseq**\n- **limmaremovebatcheffect**\n\nIf you do not need batch correction, set the method to 'none'.\n\n---\n\n"
+  if (!is.null(batchcorrection) && (batchcorrection == "combatseq" || batchcorrection == "model") && is.null(batchfile)) {
+    warning_message <- "# Warning!\n\n---\n\n**You provided a batch-correction method, but not a batch-file.**\n\nThe chosen parameter was ignored.\n\nPlease ensure that you provide a batch file when using the following batch correction methods:\n\n- **combatseq**\n- **model**\n\nIf you do not need batch correction, set the method to 'none'.\n\n---\n\n"
     md_content <- paste0(md_content, warning_message)
   }
 
@@ -879,11 +879,11 @@ get_args <- function() {
     help = paste(
       "Specifies the batch correction method to be applied.
       - 'combatseq' applies ComBat_seq at the beginning of the analysis, removing batch effects from the design formula before differential expression analysis.
-      - 'limmaremovebatcheffect' applies removeBatchEffect from the limma package after differential expression analysis, incorporating batch effects into the model during DE analysis.
+      - 'model' applies removeBatchEffect from the limma package after differential expression analysis, incorporating batch effects into the model during DE analysis.
       - Default: none"
     ),
     type = "character",
-    choices = c("none", "combatseq", "limmaremovebatcheffect"),
+    choices = c("none", "combatseq", "model"),
     default = "none"
   )
   parser$add_argument(
@@ -931,7 +931,6 @@ get_args <- function() {
       "cosangle",
       "abscosangle",
       "euclid",
-      "abseuclid",
       "cor",
       "abscor"
     )
@@ -948,7 +947,6 @@ get_args <- function() {
       "cosangle",
       "abscosangle",
       "euclid",
-      "abseuclid",
       "cor",
       "abscor"
     )
@@ -1068,7 +1066,7 @@ if (length(args$treated) > 1 && length(args$untreated) > 1) {
         group = NULL
       )
     } else {
-      if (args$batchcorrection == "limmaremovebatcheffect") {
+      if (args$batchcorrection == "model") {
         print("Including batch as part of the design-formula")
         design <- ~conditions + batch # We use simple +, because batch is not biologically interesting for us.
       }
