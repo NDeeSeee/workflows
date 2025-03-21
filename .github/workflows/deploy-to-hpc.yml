@@ -11,7 +11,46 @@ env:
   LOG_DIR: "/tmp/gh-action-logs"
 
 jobs:
+  debug_ssh:
+    runs-on: self-hosted
+    steps:
+      - name: Check SSH environment
+        run: |
+          mkdir -p ${{ env.LOG_DIR }}
+          echo "=== Environment info ===" > ${{ env.LOG_DIR }}/ssh_debug.log
+          echo "Running as user: $(whoami)" >> ${{ env.LOG_DIR }}/ssh_debug.log
+          echo "Home directory: $HOME" >> ${{ env.LOG_DIR }}/ssh_debug.log
+          echo "Current directory: $(pwd)" >> ${{ env.LOG_DIR }}/ssh_debug.log
+          echo "SSH_AUTH_SOCK: $SSH_AUTH_SOCK" >> ${{ env.LOG_DIR }}/ssh_debug.log
+          
+          echo "=== SSH Config ===" >> ${{ env.LOG_DIR }}/ssh_debug.log
+          cat ~/.ssh/config >> ${{ env.LOG_DIR }}/ssh_debug.log 2>&1 || echo "No SSH config found" >> ${{ env.LOG_DIR }}/ssh_debug.log
+          
+          echo "=== SSH Key ===" >> ${{ env.LOG_DIR }}/ssh_debug.log
+          ls -la ~/.ssh/ >> ${{ env.LOG_DIR }}/ssh_debug.log 2>&1
+          
+          echo "=== Testing connectivity ===" >> ${{ env.LOG_DIR }}/ssh_debug.log
+          
+          # First attempt with SSH agent forwarding
+          echo "Connection test with normal SSH:" >> ${{ env.LOG_DIR }}/ssh_debug.log
+          ssh -v bmicluster "hostname && whoami" >> ${{ env.LOG_DIR }}/ssh_debug.log 2>&1 || echo "SSH connection failed with normal config" >> ${{ env.LOG_DIR }}/ssh_debug.log
+          
+          # Test with explicit key
+          echo "Connection test with explicit key:" >> ${{ env.LOG_DIR }}/ssh_debug.log
+          ssh -v -i ~/.ssh/id_ed25519 bmiclusterp.chmcres.cchmc.org -l pavb5f "hostname && whoami" >> ${{ env.LOG_DIR }}/ssh_debug.log 2>&1 || echo "SSH connection failed with explicit key" >> ${{ env.LOG_DIR }}/ssh_debug.log
+          
+          # Test with StrictHostKeyChecking disabled
+          echo "Connection test with disabled host key checking:" >> ${{ env.LOG_DIR }}/ssh_debug.log
+          ssh -v -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 bmiclusterp.chmcres.cchmc.org -l pavb5f "hostname && whoami" >> ${{ env.LOG_DIR }}/ssh_debug.log 2>&1 || echo "SSH connection failed with disabled host checking" >> ${{ env.LOG_DIR }}/ssh_debug.log
+          
+          # Print the results
+          echo "=== DEBUG LOG CONTENTS ==="
+          cat ${{ env.LOG_DIR }}/ssh_debug.log
+          cp ${{ env.LOG_DIR }}/ssh_debug.log ~/ssh_debug.log
+          echo "Full debug log saved to ~/ssh_debug.log"
+      
   test_connection:
+    needs: debug_ssh
     runs-on: self-hosted
     steps:
       - name: Setup logging
@@ -20,10 +59,34 @@ jobs:
           echo "Starting run at $(date)" > ${{ env.LOG_DIR }}/run_log.txt
           echo "Running as user: $(whoami)" >> ${{ env.LOG_DIR }}/run_log.txt
           
-      - name: SSH to jump host
+      - name: Use exact same SSH environment
         run: |
-          echo "Testing connection to jump host:" | tee -a ${{ env.LOG_DIR }}/run_log.txt
-          ssh -v bmicluster "hostname && whoami" > ${{ env.LOG_DIR }}/jump_host.log 2>&1 || { 
+          # Create a temporary SSH config that forces usage of the key
+          mkdir -p ~/.ssh/temp_config
+          cat > ~/.ssh/temp_config/config << EOF
+          Host bmicluster
+            HostName bmiclusterp.chmcres.cchmc.org
+            User pavb5f
+            IdentityFile ~/.ssh/id_ed25519
+            StrictHostKeyChecking no
+            BatchMode yes
+            IdentitiesOnly yes
+
+          Host bmicluster-compute
+            User pavb5f
+            HostName bmi-460g10-04.chmcres.cchmc.org
+            StrictHostKeyChecking no
+            BatchMode yes
+            IdentitiesOnly yes
+            ProxyJump bmicluster
+          EOF
+          
+          chmod 600 ~/.ssh/temp_config/config
+          
+      - name: SSH to jump host with temporary config
+        run: |
+          echo "Testing connection to jump host with temp config:" | tee -a ${{ env.LOG_DIR }}/run_log.txt
+          ssh -vF ~/.ssh/temp_config/config bmicluster "hostname && whoami" > ${{ env.LOG_DIR }}/jump_host.log 2>&1 || { 
             echo "ERROR: Jump host connection failed with code $?" | tee -a ${{ env.LOG_DIR }}/run_log.txt
             cat ${{ env.LOG_DIR }}/jump_host.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
             exit 1
