@@ -26,7 +26,7 @@ jobs:
       DOCKER_IMAGE_NAME: scidap-deseq
       DOCKER_TAG: v0.0.30
       # Hardcode your lowercase repository owner name here
-      REPO_OWNER_LOWERCASE: ndeesee
+      REPO_OWNER_LOWERCASE: ndeeseee
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
