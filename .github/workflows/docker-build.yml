@@ -30,6 +30,14 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
+        
+      - name: Debug Info
+        run: |
+          echo "GitHub Repository: ${{ github.repository }}"
+          echo "Repository Owner: ${{ github.repository_owner }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "Our hardcoded lowercase: ${{ env.REPO_OWNER_LOWERCASE }}"
+          echo "Target path: ghcr.io/${{ env.REPO_OWNER_LOWERCASE }}/${{ env.DOCKER_IMAGE_NAME }}"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
