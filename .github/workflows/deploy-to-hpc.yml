@@ -59,7 +59,7 @@ jobs:
           echo "Starting run at $(date)" > ${{ env.LOG_DIR }}/run_log.txt
           echo "Running as user: $(whoami)" >> ${{ env.LOG_DIR }}/run_log.txt
           
-      - name: Use exact same SSH environment
+      - name: Create SSH configuration
         run: |
           # Create a temporary SSH config that forces usage of the key
           mkdir -p ~/.ssh/temp_config
@@ -82,6 +82,7 @@ jobs:
           EOF
           
           chmod 600 ~/.ssh/temp_config/config
+          echo "Created temporary SSH config file" | tee -a ${{ env.LOG_DIR }}/run_log.txt
           
       - name: SSH to jump host with temporary config
         run: |
@@ -93,10 +94,10 @@ jobs:
           }
           cat ${{ env.LOG_DIR }}/jump_host.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
       
-      - name: SSH to compute node
+      - name: SSH to compute node with temporary config
         run: |
-          echo "Testing connection to compute node:" | tee -a ${{ env.LOG_DIR }}/run_log.txt
-          ssh -v bmicluster-compute "hostname && whoami" > ${{ env.LOG_DIR }}/compute_node.log 2>&1 || {
+          echo "Testing connection to compute node with temp config:" | tee -a ${{ env.LOG_DIR }}/run_log.txt
+          ssh -vF ~/.ssh/temp_config/config bmicluster-compute "hostname && whoami" > ${{ env.LOG_DIR }}/compute_node.log 2>&1 || {
             echo "ERROR: Compute node connection failed with code $?" | tee -a ${{ env.LOG_DIR }}/run_log.txt
             cat ${{ env.LOG_DIR }}/compute_node.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
             exit 1
@@ -106,7 +107,7 @@ jobs:
       - name: Test directory access
         run: |
           echo "Testing access to target directory:" | tee -a ${{ env.LOG_DIR }}/run_log.txt
-          ssh bmicluster-compute "ls -la /data/barskilab/scidap_server" > ${{ env.LOG_DIR }}/dir_access.log 2>&1 || {
+          ssh -F ~/.ssh/temp_config/config bmicluster-compute "ls -la /data/barskilab/scidap_server" > ${{ env.LOG_DIR }}/dir_access.log 2>&1 || {
             echo "ERROR: Directory access failed with code $?" | tee -a ${{ env.LOG_DIR }}/run_log.txt
             cat ${{ env.LOG_DIR }}/dir_access.log | tee -a ${{ env.LOG_DIR }}/run_log.txt
             exit 1
@@ -116,7 +117,7 @@ jobs:
       - name: Test Singularity
         run: |
           echo "Testing Singularity module:" | tee -a ${{ env.LOG_DIR }}/run_log.txt
-          ssh bmicluster-compute << 'EOF' > ${{ env.LOG_DIR }}/singularity_test.log 2>&1
+          ssh -F ~/.ssh/temp_config/config bmicluster-compute << 'EOF' > ${{ env.LOG_DIR }}/singularity_test.log 2>&1
           echo "Loading module..."
           module load singularity/3.7.0 || echo "Failed to load module with code $?"
           
@@ -192,16 +193,16 @@ jobs:
           
       - name: Copy minimal script to compute node
         run: |
-          scp /tmp/mini_deploy.sh bmicluster-compute:/tmp/mini_deploy.sh > ${{ env.LOG_DIR }}/scp.log 2>&1 || {
+          scp -F ~/.ssh/temp_config/config /tmp/mini_deploy.sh bmicluster-compute:/tmp/mini_deploy.sh > ${{ env.LOG_DIR }}/scp.log 2>&1 || {
             echo "ERROR: SCP failed with code $?"
             cat ${{ env.LOG_DIR }}/scp.log
             exit 1
           }
-          ssh bmicluster-compute "chmod +x /tmp/mini_deploy.sh"
+          ssh -F ~/.ssh/temp_config/config bmicluster-compute "chmod +x /tmp/mini_deploy.sh"
           
       - name: Run minimal deployment
         run: |
-          ssh bmicluster-compute "/tmp/mini_deploy.sh ${{ env.DOCKER_TAG }}" > ${{ env.LOG_DIR }}/deploy.log 2>&1 || {
+          ssh -F ~/.ssh/temp_config/config bmicluster-compute "/tmp/mini_deploy.sh ${{ env.DOCKER_TAG }}" > ${{ env.LOG_DIR }}/deploy.log 2>&1 || {
             echo "ERROR: Deployment failed with code $?"
             cat ${{ env.LOG_DIR }}/deploy.log
             exit 1
@@ -210,7 +211,7 @@ jobs:
           
       - name: Verify minimal deployment
         run: |
-          ssh bmicluster-compute "cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt" > ${{ env.LOG_DIR }}/verify.log 2>&1 || {
+          ssh -F ~/.ssh/temp_config/config bmicluster-compute "cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt" > ${{ env.LOG_DIR }}/verify.log 2>&1 || {
             echo "ERROR: Verification failed with code $?"
             cat ${{ env.LOG_DIR }}/verify.log
             exit 1
