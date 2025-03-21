@@ -1,0 +1,50 @@
+name: Deploy to HPC with Singularity
+
+on:
+  workflow_run:
+    workflows: ["Build and Push Docker Image"]
+    types:
+      - completed
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_TAG: v0.0.30
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        
+      - name: Make script executable
+        run: chmod +x scripts/deploy_to_hpc.sh
+        
+      - name: Setup SSH key
+        uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: ${{ secrets.HPC_SSH_KEY }}
+          
+      - name: Add SSH key fingerprint to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan bmicluster-compute >> ~/.ssh/known_hosts
+          
+      - name: Copy deployment script to HPC
+        run: |
+          scp scripts/deploy_to_hpc.sh ${{ secrets.HPC_USER }}@bmicluster-compute:/tmp/deploy_to_hpc.sh
+          
+      - name: Execute deployment on HPC
+        run: |
+          ssh ${{ secrets.HPC_USER }}@bmicluster-compute << 'EOF'
+            chmod +x /tmp/deploy_to_hpc.sh
+            /tmp/deploy_to_hpc.sh ${{ env.DOCKER_TAG }}
+            rm /tmp/deploy_to_hpc.sh  # Clean up
+          EOF
+          
+      - name: Verify deployment
+        run: |
+          ssh ${{ secrets.HPC_USER }}@bmicluster-compute << 'EOF'
+            ls -la /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:*.sif
+            cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt
+          EOF 
