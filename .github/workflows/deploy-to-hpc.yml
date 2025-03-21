@@ -25,37 +25,31 @@ jobs:
           echo "Working directory: $(pwd)"
           echo "Contents of scripts directory:"
           ls -la scripts/
-        
-      - name: Setup SSH key
-        uses: webfactory/ssh-agent@v0.5.4
-        with:
-          ssh-private-key: ${{ secrets.HPC_SSH_KEY }}
-      
-      - name: Debug installed SSH
-        run: |
-          ssh -V
           
-      - name: Setup SSH Config for ProxyJump
+      - name: Create SSH key
         run: |
           mkdir -p ~/.ssh
+          echo "${{ secrets.HPC_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ls -la ~/.ssh/id_ed25519
+      
+      - name: Setup SSH Config
+        run: |
           cat > ~/.ssh/config << 'EOL'
           Host *
             StrictHostKeyChecking no
             UserKnownHostsFile=/dev/null
-
+            LogLevel DEBUG3
+            
           Host bmicluster
             HostName bmiclusterp.chmcres.cchmc.org
             User ${{ secrets.HPC_USER }}
             IdentityFile ~/.ssh/id_ed25519
-            IdentitiesOnly yes
-            LogLevel DEBUG3
-
+            
           Host bmicluster-compute
-            User ${{ secrets.HPC_USER }}
             HostName bmi-460g10-04.chmcres.cchmc.org
-            IdentitiesOnly yes
-            ProxyJump bmicluster
-            LogLevel DEBUG3
+            User ${{ secrets.HPC_USER }}
+            ProxyCommand ssh -W %h:%p bmicluster
           EOL
           chmod 600 ~/.ssh/config
           
@@ -64,11 +58,13 @@ jobs:
           
       - name: Debug SSH Connection to jumphost
         run: |
-          ssh -v bmicluster "hostname && whoami"
+          echo "Testing connection to jumphost..."
+          ssh -i ~/.ssh/id_ed25519 -v bmicluster "hostname && whoami"
           
       - name: Test full SSH Connection
         run: |
-          ssh -v bmicluster-compute "hostname && whoami && echo 'Connection successful!'"
+          echo "Testing connection to compute node..."
+          ssh -i ~/.ssh/id_ed25519 -v bmicluster-compute "hostname && whoami && echo 'Connection successful!'"
         continue-on-error: true
         
       - name: Set inline deployment script
@@ -127,17 +123,17 @@ jobs:
       - name: Execute deployment on HPC (simplified)
         run: |
           # Copy the script directly
-          scp -o StrictHostKeyChecking=no -v deploy_inline.sh bmicluster-compute:/tmp/deploy_inline.sh
+          scp -i ~/.ssh/id_ed25519 -v deploy_inline.sh bmicluster-compute:/tmp/deploy_inline.sh
           
           # Run it with detailed output
-          ssh -o StrictHostKeyChecking=no -v bmicluster-compute "bash -x /tmp/deploy_inline.sh || (echo 'DEPLOYMENT FAILED' && cat /tmp/deploy_inline.sh && exit 1)"
+          ssh -i ~/.ssh/id_ed25519 -v bmicluster-compute "bash -x /tmp/deploy_inline.sh || (echo 'DEPLOYMENT FAILED' && exit 1)"
         
       - name: Cleanup
         if: always()
         run: |
-          ssh -o StrictHostKeyChecking=no -v bmicluster-compute "rm -f /tmp/deploy_inline.sh" || true
+          ssh -i ~/.ssh/id_ed25519 -v bmicluster-compute "rm -f /tmp/deploy_inline.sh" || true
           
       - name: Verify deployment
         if: success()
         run: |
-          ssh -o StrictHostKeyChecking=no -v bmicluster-compute "ls -la /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:*.sif && cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt" 
+          ssh -i ~/.ssh/id_ed25519 -v bmicluster-compute "ls -la /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:*.sif && cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt" 
