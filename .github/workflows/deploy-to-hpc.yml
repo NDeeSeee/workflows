@@ -8,9 +8,37 @@ on:
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
+  debug:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        
+      - name: Debug environment
+        run: |
+          echo "Running as: $(whoami)"
+          echo "Current directory: $(pwd)"
+          echo "Host: $(hostname)"
+          echo "PATH: $PATH"
+          ls -la
+          
+      - name: Test SSH config
+        run: |
+          echo "SSH config:"
+          cat ~/.ssh/config || echo "No SSH config found"
+          
+          echo "Testing SSH connection to bmicluster:"
+          ssh -v bmicluster "hostname" || echo "Connection to bmicluster failed"
+          
+      - name: Check SSH keys
+        run: |
+          echo "Available SSH keys:"
+          ls -la ~/.ssh/
+          ssh-add -l || echo "No SSH keys in agent"
+          
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
-    runs-on: self-hosted  # Changed to use the self-hosted runner
+    needs: debug
+    runs-on: self-hosted
     env:
       DOCKER_TAG: v0.0.30
     steps:
