@@ -53,6 +53,11 @@ jobs:
           echo "docker_tag=${DOCKER_TAG}" >> $GITHUB_OUTPUT
           echo "Using Docker tag: ${DOCKER_TAG}"
           
+          # Convert repository owner to lowercase for Docker tags
+          REPO_OWNER_LOWERCASE=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "repo_owner_lowercase=${REPO_OWNER_LOWERCASE}" >> $GITHUB_OUTPUT
+          echo "Repository owner (lowercase): ${REPO_OWNER_LOWERCASE}"
+          
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
         
@@ -77,8 +82,8 @@ jobs:
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ env.DOCKER_IMAGE_NAME }}:${{ steps.set-tag.outputs.docker_tag }}
-            ghcr.io/${{ github.repository_owner }}/${{ env.DOCKER_IMAGE_NAME }}:latest
+            ghcr.io/${{ steps.set-tag.outputs.repo_owner_lowercase }}/${{ env.DOCKER_IMAGE_NAME }}:${{ steps.set-tag.outputs.docker_tag }}
+            ghcr.io/${{ steps.set-tag.outputs.repo_owner_lowercase }}/${{ env.DOCKER_IMAGE_NAME }}:latest
             ${{ env.DOCKER_HUB_REPO }}/${{ env.DOCKER_IMAGE_NAME }}:${{ steps.set-tag.outputs.docker_tag }}
             ${{ env.DOCKER_HUB_REPO }}/${{ env.DOCKER_IMAGE_NAME }}:latest
           cache-from: type=gha
