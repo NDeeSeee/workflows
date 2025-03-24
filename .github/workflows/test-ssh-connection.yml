@@ -17,18 +17,35 @@ jobs:
           mkdir -p ~/.ssh
           
           # Create the SSH key with proper format
-          echo "-----BEGIN OPENSSH PRIVATE KEY-----" > ~/.ssh/id_test
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" | grep -v "OPENSSH PRIVATE KEY" >> ~/.ssh/id_test
-          echo "-----END OPENSSH PRIVATE KEY-----" >> ~/.ssh/id_test
+          # First, write the key content directly
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_test
+          
+          # Verify the key format
+          if ! grep -q "BEGIN OPENSSH PRIVATE KEY" ~/.ssh/id_test; then
+            echo "ERROR: Key does not contain proper OpenSSH format"
+            echo "First line of key:"
+            head -n 1 ~/.ssh/id_test
+            exit 1
+          fi
+          
+          # Set proper permissions
           chmod 600 ~/.ssh/id_test
           
           # Check key format validity
           echo "Key fingerprint:"
-          ssh-keygen -l -f ~/.ssh/id_test || echo "Invalid key format detected"
+          ssh-keygen -l -f ~/.ssh/id_test || {
+            echo "ERROR: Invalid key format"
+            echo "Key contents (first line):"
+            head -n 1 ~/.ssh/id_test
+            exit 1
+          }
           
           # Start SSH agent
           eval $(ssh-agent -s)
-          ssh-add -v ~/.ssh/id_test
+          ssh-add -v ~/.ssh/id_test || {
+            echo "ERROR: Failed to add key to SSH agent"
+            exit 1
+          }
           
           # Create test config
           cat > ~/.ssh/test_config << EOF
@@ -41,6 +58,9 @@ jobs:
             LogLevel DEBUG3
             ConnectTimeout 30
           EOF
+          
+          # Set proper permissions for config
+          chmod 600 ~/.ssh/test_config
           
           # Show system information
           echo "=== SYSTEM INFO ==="
@@ -55,7 +75,18 @@ jobs:
           
           # Test SSH connection with max verbosity
           echo "=== SSH CONNECTION TEST ==="
-          ssh -vvv -F ~/.ssh/test_config jumphost "echo SSH_CONNECTION_SUCCESS" || echo "Connection failed"
+          ssh -vvv -F ~/.ssh/test_config jumphost "echo SSH_CONNECTION_SUCCESS" || {
+            echo "ERROR: SSH connection failed"
+            echo "Checking key permissions:"
+            ls -la ~/.ssh/id_test
+            echo "Checking config permissions:"
+            ls -la ~/.ssh/test_config
+            echo "Checking SSH agent:"
+            ssh-agent
+            echo "Checking loaded keys:"
+            ssh-add -l || echo "No keys loaded"
+            exit 1
+          }
           
           # Clean up
           rm -f ~/.ssh/id_test ~/.ssh/test_config
