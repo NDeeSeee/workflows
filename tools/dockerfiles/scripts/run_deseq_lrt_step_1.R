@@ -6,7 +6,7 @@
 # Likelihood Ratio Test (LRT). It's been refactored for better maintainability
 # with functions organized into separate files.
 #
-# Version: 0.1.0
+# Version: 0.1.1
 
 # Set options
 options(warn = -1)
@@ -139,8 +139,8 @@ main_with_memory_management <- function() {
     message("Running in single-threaded mode")
   }
   
-  # Run the main workflow
-  main()
+  # Run the main workflow with validated args
+  main(args)
   
   # Report end time and duration
   end_time <- Sys.time()

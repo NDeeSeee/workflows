@@ -2,197 +2,183 @@
 
 # --- DESeq2 analysis functions ---
 
-# Process count data and apply batch correction
-process_count_data <- function(args, count_data_df, metadata_df, design_formula) {
-  log_message("Processing count data...", "STEP")
+# Function to run DESeq2 LRT analysis
+run_deseq2_lrt <- function(count_data, sample_metadata, design_formula, reduced_formula, 
+                           batchcorrection = "none", threads = 1) {
+  require(DESeq2)
   
-  # Initialize batch warning flag
-  batch_warning <- FALSE
-  
-  # Check if batch correction is requested and apply it if needed
-  if (!is.null(args$batchcorrection) && args$batchcorrection != "none") {
-    log_message(glue::glue("Applying {args$batchcorrection} batch correction..."), "STEP")
-    
-    # Apply batch correction using common utility
-    corrected_count_data <- apply_batch_correction(
-      count_data = count_data_df,
-      metadata_df = metadata_df,
-      batch_method = args$batchcorrection,
-      design_formula = design_formula,
-      normalized = FALSE  # Raw counts for DESeq2
-    )
-    
-    # Check if batch correction was actually applied
-    if (identical(corrected_count_data, count_data_df)) {
-      batch_warning <- TRUE
-      log_message("Batch correction could not be applied to raw counts. Will be applied after normalization.", "WARNING")
-    } else {
-      log_message(paste("Batch correction applied using", args$batchcorrection), "SUCCESS")
-    }
-  } else {
-    # No batch correction
-    corrected_count_data <- count_data_df
-    log_message("No batch correction applied", "INFO")
-  }
-  
-  # Return processed data
-  return(list(
-    countData = corrected_count_data,
-    design_formula = design_formula,
-    batch_warning = batch_warning
-  ))
-}
-
-# Run DESeq2 LRT analysis
-run_deseq2 <- function(count_data, metadata_df, design_formula, reduced_formula, args) {
-  log_message("Running DESeq2 LRT analysis...", "STEP")
-  
-  # Create DESeq2 dataset object
-  dds <- DESeq2::DESeqDataSetFromMatrix(
+  # Create DESeqDataSet
+  message("Creating DESeqDataSet...")
+  dds <- DESeqDataSetFromMatrix(
     countData = count_data,
-    colData = metadata_df,
+    colData = sample_metadata,
     design = design_formula
   )
   
-  # Pre-filter low count genes to speed up analysis
-  log_message(glue::glue("Pre-filtering genes with fewer than {args$mincounts} counts across all samples..."), "INFO")
-  keep <- rowSums(counts(dds)) >= args$mincounts
-  dds <- dds[keep, ]
-  log_message(glue::glue("Retained {sum(keep)} out of {length(keep)} genes after pre-filtering"), "INFO")
-  
-  # Store original design for reference
-  design_formula_str <- deparse(design_formula)
-  reduced_formula_str <- deparse(as.formula(args$reduced))
-  
-  # Verify formulas are different
-  if (design_formula_str == reduced_formula_str) {
-    report_error(
-      "Full and reduced design formulas are identical",
-      details = c(
-        "Full design formula: ", design_formula_str,
-        "Reduced design formula: ", reduced_formula_str
-      ),
-      recommendations = c(
-        "The full design formula should include terms that are not in the reduced formula",
-        "Modify either the full or reduced formula to create a proper comparison"
-      )
+  # Apply batch correction if requested
+  if (batchcorrection == "combatseq") {
+    message("Applying ComBat-Seq batch correction...")
+    require(sva)
+    
+    # Check if 'batch' column exists in sample metadata
+    if (!("batch" %in% colnames(sample_metadata))) {
+      stop("Batch correction requested but 'batch' column not found in metadata")
+    }
+    
+    # Get batch information
+    batch <- sample_metadata$batch
+    
+    # Get model matrix from full design
+    group <- sample_metadata[, sapply(sample_metadata, is.factor)]
+    mod <- model.matrix(design_formula, data = group)
+    
+    # Apply ComBat-Seq
+    corrected_counts <- ComBat_seq(
+      counts = count_data,
+      batch = batch,
+      group = group
+    )
+    
+    # Update DESeqDataSet with corrected counts
+    dds <- DESeqDataSetFromMatrix(
+      countData = corrected_counts,
+      colData = sample_metadata,
+      design = design_formula
     )
   }
   
-  # Run DESeq with LRT test
-  log_message("Running DESeq2 with Likelihood Ratio Test...", "STEP")
-  dds <- DESeq2::DESeq(
+  # Set up parallel processing
+  if (threads > 1) {
+    message(paste("Using", threads, "threads for parallel processing"))
+    BiocParallel::register(BiocParallel::MulticoreParam(threads))
+  }
+  
+  # Run DESeq2 with LRT
+  message("Running DESeq2 LRT analysis...")
+  dds <- DESeq(
     dds,
     test = "LRT",
-    reduced = as.formula(args$reduced),
-    parallel = TRUE
+    reduced = reduced_formula,
+    parallel = (threads > 1)
   )
   
-  # Get LRT results
-  lrt_res <- DESeq2::results(dds)
+  return(dds)
+}
+
+# Function to extract results from DESeq2 analysis
+extract_deseq2_results <- function(dds, fdr = 0.1, lfcthreshold = 0.59, use_lfc_thresh = FALSE) {
+  require(DESeq2)
   
-  # Generate contrasts
-  contrasts <- generate_contrasts(dds, args)
+  # Determine if we're dealing with LRT or Wald test
+  is_lrt <- mcols(dds)$modelMatrixType == "LRT"
+  
+  if (is_lrt) {
+    message(paste("Extracting DESeq2 LRT results with FDR =", fdr))
+    
+    # For LRT test, don't use lfcThreshold parameter
+    res <- results(
+      dds,
+      alpha = fdr,
+      altHypothesis = "greaterAbs",
+      pAdjustMethod = "BH",
+      independentFiltering = TRUE,
+      cooksCutoff = TRUE,
+      parallel = FALSE
+    )
+  } else {
+    # Wald test logic
+    if (use_lfc_thresh) {
+      message(paste("Extracting DESeq2 Wald results with FDR =", fdr, 
+                    "and LFC threshold =", lfcthreshold, "as hypothesis threshold"))
+      
+      # If use_lfc_thresh is TRUE, use lfcthreshold directly in hypothesis test
+      res <- results(
+        dds,
+        alpha = fdr,
+        lfcThreshold = lfcthreshold,
+        altHypothesis = "greaterAbs",
+        pAdjustMethod = "BH",
+        independentFiltering = TRUE,
+        cooksCutoff = TRUE,
+        parallel = FALSE
+      )
+    } else {
+      message(paste("Extracting DESeq2 Wald results with FDR =", fdr, 
+                    "and post-filtering with LFC threshold =", lfcthreshold))
+      
+      # If use_lfc_thresh is FALSE, use lfcThreshold = 0 and filter later
+      res <- results(
+        dds,
+        alpha = fdr,
+        lfcThreshold = 0,
+        altHypothesis = "greaterAbs",
+        pAdjustMethod = "BH",
+        independentFiltering = TRUE,
+        cooksCutoff = TRUE,
+        parallel = FALSE
+      )
+    }
+  }
+  
+  # Convert to data frame for easier manipulation
+  res_df <- as.data.frame(res)
+  
+  # Add gene names if available
+  if (!is.null(mcols(dds)$symbol)) {
+    res_df$symbol <- mcols(dds)$symbol
+  }
+  
+  # Apply post-filtering for LFC if use_lfc_thresh is FALSE and it's not an LRT test
+  if (!is_lrt && !use_lfc_thresh && lfcthreshold > 0) {
+    message(paste("Post-filtering results with |log2FoldChange| >=", lfcthreshold))
+    
+    # Mark genes not meeting threshold as non-significant
+    significant_genes <- !is.na(res_df$padj) & res_df$padj < fdr & abs(res_df$log2FoldChange) >= lfcthreshold
+    
+    # Create a new column for LFC-filtered p-values
+    res_df$padj_lfc_filtered <- res_df$padj
+    res_df$padj_lfc_filtered[!significant_genes] <- NA
+    
+    # Create a filtering status column
+    res_df$lfc_significant <- significant_genes
+    
+    message(paste("After LFC filtering:", sum(significant_genes, na.rm = TRUE), "of", 
+                  sum(!is.na(res_df$padj) & res_df$padj < fdr), "significant genes remain"))
+  }
+  
+  # Sort by adjusted p-value
+  res_df <- res_df[order(res_df$padj), ]
+  
+  return(res_df)
+}
+
+# Function to apply limma batch correction on the results
+apply_limma_batch_correction <- function(dds, sample_metadata) {
+  require(limma)
+  
+  message("Applying limma batch correction to normalized counts...")
+  
+  # Check if 'batch' column exists in sample metadata
+  if (!("batch" %in% colnames(sample_metadata))) {
+    stop("Batch correction requested but 'batch' column not found in metadata")
+  }
   
   # Get normalized counts
-  norm_counts <- DESeq2::counts(dds, normalized = TRUE)
+  normalized_counts <- counts(dds, normalized = TRUE)
   
-  log_message("DESeq2 analysis completed successfully", "SUCCESS")
+  # Create design matrix
+  model <- model.matrix(~ 0 + group, data = sample_metadata)
+  colnames(model) <- levels(sample_metadata$group)
   
-  # Return results
-  return(list(
-    dds = dds,
-    lrt_res = lrt_res,
-    contrasts = contrasts,
-    normCounts = norm_counts
-  ))
-}
-
-# Generate all possible contrasts from DESeq2 results object
-generate_contrasts <- function(dds, args) {
-  log_message("Generating contrasts for differential expression analysis...", "STEP")
+  # Create batch variable
+  batch <- sample_metadata$batch
   
-  # Get results names from DESeq2 object
-  result_names <- resultsNames(dds)
-  debug_log(glue::glue("Available result names from DESeq2: {paste(result_names, collapse=', ')}"))
-  
-  # Skip intercept
-  result_names <- result_names[result_names != "Intercept"]
-  
-  # Initialize contrast dataframe  
-  contrast_df <- data.frame(
-    factor = character(),
-    contrast_name = character(),
-    numerator = character(),
-    denominator = character(),
-    type = character(),
-    stringsAsFactors = FALSE
+  # Apply removeBatchEffect
+  corrected_counts <- removeBatchEffect(
+    normalized_counts,
+    batch = batch,
+    design = model
   )
   
-  # If no valid results, return empty dataframe
-  if (length(result_names) == 0) {
-    log_message("No valid contrasts found in DESeq2 results.", "WARNING")
-    return(contrast_df)
-  }
-  
-  # Process main effects
-  main_effect_contrasts <- generate_main_effect_contrasts(dds, result_names)
-  if (nrow(main_effect_contrasts) > 0) {
-    contrast_df <- rbind(contrast_df, main_effect_contrasts)
-    log_message(glue::glue("Generated {nrow(main_effect_contrasts)} main effect contrasts"), "SUCCESS")
-  } else {
-    log_message("No main effect contrasts generated", "INFO")
-  }
-  
-  # Process interaction effects
-  interaction_effect_contrasts <- generate_interaction_effect_contrasts(dds, result_names)
-  if (nrow(interaction_effect_contrasts) > 0) {
-    contrast_df <- rbind(contrast_df, interaction_effect_contrasts)
-    log_message(glue::glue("Generated {nrow(interaction_effect_contrasts)} interaction effect contrasts"), "SUCCESS")
-  } else {
-    log_message("No interaction effect contrasts generated", "INFO")
-  }
-  
-  # Final validation
-  if (nrow(contrast_df) == 0) {
-    log_message("Warning: No contrasts could be generated. Check your design formula and metadata.", "WARNING")
-  } else {
-    log_message(glue::glue("Successfully generated {nrow(contrast_df)} total contrasts"), "SUCCESS")
-  }
-  
-  return(contrast_df)
-}
-
-# Helper function to find contrast name using various patterns
-find_contrast_name <- function(result_names, factor_name, level) {
-  # Common patterns for contrast names in DESeq2
-  patterns <- c(
-    paste0(factor_name, "_", level),
-    paste0(factor_name, level),
-    paste0(factor_name, ".", level),
-    paste0(tolower(factor_name), "_", tolower(level)),
-    paste0(tolower(factor_name), tolower(level)),
-    paste0(tolower(factor_name), ".", tolower(level))
-  )
-  
-  debug_log(glue::glue("Searching for contrast patterns: {paste(patterns, collapse=', ')}"))
-  
-  # Try exact matches first
-  for (pattern in patterns) {
-    if (pattern %in% result_names) {
-      return(pattern)
-    }
-  }
-  
-  # Try partial/fuzzy matches
-  for (pattern in patterns) {
-    matches <- grep(pattern, result_names, ignore.case = TRUE, value = TRUE)
-    if (length(matches) > 0) {
-      debug_log(glue::glue("Found fuzzy match: {matches[1]} for pattern {pattern}"))
-      return(matches[1])
-    }
-  }
-  
-  # No match found
-  return(NULL)
+  return(corrected_counts)
 } 

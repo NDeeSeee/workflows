@@ -146,12 +146,69 @@ run_deseq_analysis <- function(args) {
   message(glue::glue("Finished at {format(Sys.time(), '%Y-%m-%d %H:%M:%S')}"))
 }
 
+# Harmonize parameter names for compatibility
+harmonize_parameters <- function(args) {
+  # Map renamed parameters to their original names for backwards compatibility
+  param_mapping <- list(
+    cluster_method = "cluster",
+    row_distance = "rowdist", 
+    column_distance = "columndist",
+    k_hopach = "k",
+    kmax_hopach = "kmax",
+    output_prefix = "output"
+  )
+  
+  # For each parameter, ensure we have a consistent name
+  for (new_param in names(param_mapping)) {
+    old_param <- param_mapping[[new_param]]
+    
+    # If the new parameter exists, use it
+    if (!is.null(args[[new_param]])) {
+      # Copy to old parameter name for functions that might use it
+      args[[old_param]] <- args[[new_param]]
+    } 
+    # If only the old parameter exists, copy it to the new name
+    else if (!is.null(args[[old_param]])) {
+      args[[new_param]] <- args[[old_param]]
+    }
+  }
+  
+  return(args)
+}
+
+# Check required parameters for analysis
+validate_analysis_params <- function(args) {
+  # Check critical parameters
+  critical_params <- c("input", "name", "meta", "design", "reduced")
+  missing_params <- critical_params[!critical_params %in% names(args) | sapply(args[critical_params], is.null)]
+  
+  if (length(missing_params) > 0) {
+    stop(paste("Missing critical parameters:", paste(missing_params, collapse=", ")))
+  }
+  
+  # Validate batch correction parameter
+  if (args$batchcorrection != "none" && !"batch" %in% colnames(read.table(args$meta, sep=get_file_type(args$meta), header=TRUE))) {
+    warning("Batch correction requested but 'batch' column not found in metadata. Batch correction will be disabled.")
+    args$batchcorrection <- "none"
+  }
+  
+  return(args)
+}
+
 # Main script execution with enhanced error handling
-main <- function() {
+main <- function(args = NULL) {
   # Set up error handling
   tryCatch({
-    # Parse arguments
-    args <- get_args()
+    # Parse arguments if not provided
+    if (is.null(args)) {
+      args <- get_args()
+    }
+    
+    # Harmonize parameter names for compatibility
+    args <- harmonize_parameters(args)
+    
+    # Validate analysis parameters
+    args <- validate_analysis_params(args)
     
     # Setup debugging and logging
     if ("debug" %in% names(args) && args$debug) {

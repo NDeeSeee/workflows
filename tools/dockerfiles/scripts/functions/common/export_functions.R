@@ -67,14 +67,43 @@ export_cls <- function(categories, location) {
 export_results <- function(deseq_results, expression_df, metadata_df, args, batch_warning, rpkm_filtered_count) {
   log_message("Exporting results and visualizations...", "STEP")
   
+  # Handle parameter naming consistency
+  # Ensure we have both old and new parameter names available
+  if (!exists("harmonize_parameters")) {
+    # Define the function locally if not available
+    harmonize_parameters <- function(args) {
+      param_mapping <- list(
+        cluster_method = "cluster",
+        row_distance = "rowdist", 
+        column_distance = "columndist",
+        k_hopach = "k",
+        kmax_hopach = "kmax",
+        output_prefix = "output"
+      )
+      
+      for (new_param in names(param_mapping)) {
+        old_param <- param_mapping[[new_param]]
+        if (!is.null(args[[new_param]])) {
+          args[[old_param]] <- args[[new_param]]
+        } else if (!is.null(args[[old_param]])) {
+          args[[new_param]] <- args[[old_param]]
+        }
+      }
+      return(args)
+    }
+  }
+  
+  # Harmonize parameters
+  args <- harmonize_parameters(args)
+  
   # Create output directory if it doesn't exist
-  output_dir <- args$output
-  if (!dir.exists(output_dir)) {
+  output_dir <- dirname(args$output_prefix)
+  if (!dir.exists(output_dir) && output_dir != ".") {
     dir.create(output_dir, recursive = TRUE)
   }
   
   # Set output prefix
-  output_prefix <- file.path(output_dir, args$prefix)
+  output_prefix <- args$output_prefix
   
   # Save DESeq2 dataset and results as RDS files
   saveRDS(deseq_results$dds, file = paste0(output_prefix, "_dds.rds"))
@@ -233,8 +262,13 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, args, output
     if (is.character(args)) {
       output_prefix <- args
       args <- list(fdr = 0.1, lfcthreshold = 1)
-    } else if (is.null(output_prefix) && !is.null(args$output)) {
-      output_prefix <- args$output
+    } else if (is.null(output_prefix)) {
+      # Check for both old and new parameter names
+      if (!is.null(args$output_prefix)) {
+        output_prefix <- args$output_prefix
+      } else if (!is.null(args$output)) {
+        output_prefix <- args$output
+      }
     }
     
     # Default filenames
@@ -327,13 +361,31 @@ export_gct_data <- function(normCounts, row_metadata, col_metadata, args, output
     
     # Cluster filtered data if possible
     if (exists("cluster_and_reorder") && nrow(filtered_normCounts) > 1 && ncol(filtered_normCounts) > 1) {
-      clustered_data <- cluster_and_reorder(filtered_normCounts, col_metadata, filtered_row_metadata, args)
+      # Ensure both old and new parameter names are available
+      if (!is.null(args$cluster_method)) {
+        cluster_param <- args$cluster_method
+      } else if (!is.null(args$cluster)) {
+        cluster_param <- args$cluster
+      } else {
+        cluster_param <- "none"
+      }
       
-      gct_data_filtered <- cmapR::GCT(
-        mat = as.matrix(clustered_data$normCounts),
-        rdesc = as.data.frame(clustered_data$row_metadata),
-        cdesc = as.data.frame(clustered_data$col_metadata)
-      )
+      # Only cluster if requested
+      if (cluster_param != "none") {
+        clustered_data <- cluster_and_reorder(filtered_normCounts, col_metadata, filtered_row_metadata, args)
+        
+        gct_data_filtered <- cmapR::GCT(
+          mat = as.matrix(clustered_data$normCounts),
+          rdesc = as.data.frame(clustered_data$row_metadata),
+          cdesc = as.data.frame(clustered_data$col_metadata)
+        )
+      } else {
+        gct_data_filtered <- cmapR::GCT(
+          mat = as.matrix(filtered_normCounts),
+          rdesc = as.data.frame(filtered_row_metadata),
+          cdesc = as.data.frame(col_metadata)
+        )
+      }
     } else {
       gct_data_filtered <- cmapR::GCT(
         mat = as.matrix(filtered_normCounts),
@@ -373,6 +425,8 @@ export_parameters <- function(args, rpkm_filtered_count, output_prefix) {
     fdr_threshold = if ("fdr" %in% names(args)) args$fdr else 0.1,
     lfc_threshold = if ("lfcthreshold" %in% names(args)) args$lfcthreshold else 1,
     batch_correction = if ("batchcorrection" %in% names(args)) args$batchcorrection else NULL,
+    clustering_method = if ("cluster_method" %in% names(args)) args$cluster_method else 
+                        if ("cluster" %in% names(args)) args$cluster else "none",
     filtering_stats = list(
       rpkm_filtered_genes = rpkm_filtered_count
     )
