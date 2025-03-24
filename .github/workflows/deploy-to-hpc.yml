@@ -32,41 +32,70 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
         
-      - name: Setup SSH Configuration
+      - name: Setup SSH keys and configuration
         run: |
-          # Create a temporary SSH config with proper settings
+          # Create the .ssh directory if it doesn't exist
+          mkdir -p ~/.ssh
+          
+          # Ensure the SSH private key exists or create it from the secret
+          if [ ! -f ~/.ssh/id_ed25519 ]; then
+            echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+            chmod 600 ~/.ssh/id_ed25519
+          fi
+          
+          # Create a temporary SSH config directory
           mkdir -p ~/.ssh/temp_config
+          
+          # Create an SSH config file with proper settings
           cat > ~/.ssh/temp_config/config << EOF
           Host bmicluster
             HostName bmiclusterp.chmcres.cchmc.org
             User pavb5f
             IdentityFile ~/.ssh/id_ed25519
             StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
             BatchMode yes
             IdentitiesOnly yes
+            LogLevel ERROR
+            ServerAliveInterval 60
+            ServerAliveCountMax 5
 
           Host bmicluster-compute
             User pavb5f
             HostName bmi-460g10-04.chmcres.cchmc.org
+            IdentityFile ~/.ssh/id_ed25519
             StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
             BatchMode yes
             IdentitiesOnly yes
+            LogLevel ERROR
             ProxyJump bmicluster
+            ServerAliveInterval 60
+            ServerAliveCountMax 5
           EOF
           
           chmod 600 ~/.ssh/temp_config/config
+          
+          # Verify permissions
+          ls -la ~/.ssh
+          ls -la ~/.ssh/temp_config
+          
+          # Make sure SSH agent is running
+          eval $(ssh-agent -s)
+          ssh-add ~/.ssh/id_ed25519
+          
           echo "SSH configuration created successfully"
       
       - name: Test SSH Connection
         run: |
           echo "Testing SSH connection to jump host..."
-          ssh -F ~/.ssh/temp_config/config bmicluster "hostname && whoami" || {
+          ssh -v -F ~/.ssh/temp_config/config bmicluster "hostname && whoami" || {
             echo "ERROR: SSH connection to jump host failed"
             exit 1
           }
           
           echo "Testing SSH connection to compute node..."
-          ssh -F ~/.ssh/temp_config/config bmicluster-compute "hostname && whoami" || {
+          ssh -v -F ~/.ssh/temp_config/config bmicluster-compute "hostname && whoami" || {
             echo "ERROR: SSH connection to compute node failed"
             exit 1
           }
