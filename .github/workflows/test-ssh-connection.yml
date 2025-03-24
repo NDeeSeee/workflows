@@ -16,15 +16,33 @@ jobs:
           # Create .ssh directory
           mkdir -p ~/.ssh
           
+          # Debug: Check if secret is available
+          echo "Checking if SSH_PRIVATE_KEY secret is available..."
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+            echo "ERROR: SSH_PRIVATE_KEY secret is empty or not set"
+            exit 1
+          fi
+          
           # Create the SSH key with proper format
           # First, write the key content directly
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_test
+          
+          # Debug: Check key file content
+          echo "Checking key file content..."
+          if [ ! -s ~/.ssh/id_test ]; then
+            echo "ERROR: Key file is empty"
+            exit 1
+          fi
           
           # Verify the key format
           if ! grep -q "BEGIN OPENSSH PRIVATE KEY" ~/.ssh/id_test; then
             echo "ERROR: Key does not contain proper OpenSSH format"
             echo "First line of key:"
             head -n 1 ~/.ssh/id_test
+            echo "Last line of key:"
+            tail -n 1 ~/.ssh/id_test
+            echo "Key file size:"
+            ls -l ~/.ssh/id_test
             exit 1
           fi
           
@@ -37,6 +55,8 @@ jobs:
             echo "ERROR: Invalid key format"
             echo "Key contents (first line):"
             head -n 1 ~/.ssh/id_test
+            echo "Key file size:"
+            ls -l ~/.ssh/id_test
             exit 1
           }
           
@@ -44,6 +64,10 @@ jobs:
           eval $(ssh-agent -s)
           ssh-add -v ~/.ssh/id_test || {
             echo "ERROR: Failed to add key to SSH agent"
+            echo "SSH agent status:"
+            ssh-agent
+            echo "Key file permissions:"
+            ls -l ~/.ssh/id_test
             exit 1
           }
           
@@ -85,6 +109,9 @@ jobs:
             ssh-agent
             echo "Checking loaded keys:"
             ssh-add -l || echo "No keys loaded"
+            echo "Checking key file content:"
+            head -n 1 ~/.ssh/id_test
+            tail -n 1 ~/.ssh/id_test
             exit 1
           }
           
