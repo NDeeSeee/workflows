@@ -1,187 +1,166 @@
-name: Deploy to HPC with Singularity
+name: Deploy to HPC
 
 on:
-  workflow_run:
-    workflows: ["Build and Push Docker Image"]
-    types:
-      - completed
-    branches: [master, main]
-  workflow_dispatch:  # Allow manual triggering
+  workflow_dispatch:
     inputs:
       docker_tag:
-        description: 'Docker image tag to deploy'
-        required: false
-        default: 'v0.0.30'
+        description: 'Docker tag to deploy'
+        required: true
         type: string
-
-env:
-  # Try to get the tag from:
-  # 1. Manual workflow input
-  # 2. Upstream workflow output
-  # 3. Default to v0.0.30
-  DOCKER_TAG: ${{ github.event.inputs.docker_tag || 'v0.0.30' }}
+      target_host:
+        description: 'Target HPC host'
+        required: true
+        type: choice
+        options:
+          - bmicluster
+          - bmicluster-compute
 
 jobs:
-  deploy_to_hpc:
-    name: Deploy Singularity Image to HPC
+  deploy:
+    name: Deploy to HPC
     runs-on: self-hosted
-    # Only run if the upstream workflow was successful or this is a manual trigger
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    environment: production
     
     steps:
-      - name: Check out repository
+      - name: Checkout repository
         uses: actions/checkout@v4
-        
-      - name: Setup SSH keys and configuration
+      
+      - name: Setup SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
-          # Create the .ssh directory if it doesn't exist
+          set -x  # Echo commands for better debugging
+          
+          # Create .ssh directory
           mkdir -p ~/.ssh
           
-          # Create private key from secret with proper format
-          # First, ensure the key is properly formatted
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
+          # Debug: Check if secret is available
+          echo "Checking if SSH_PRIVATE_KEY secret is available..."
+          if [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "ERROR: SSH_PRIVATE_KEY secret is empty or not set"
+            exit 1
+          fi
+          
+          # Create the SSH key with proper format
+          printf "%s\n" "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          
+          # Debug: Check key file content
+          echo "Checking key file content..."
+          if [ ! -s ~/.ssh/id_ed25519 ]; then
+            echo "ERROR: Key file is empty"
+            exit 1
+          fi
           
           # Verify the key format
           if ! grep -q "BEGIN OPENSSH PRIVATE KEY" ~/.ssh/id_ed25519; then
-            echo "Adding OpenSSH key headers..."
-            echo "-----BEGIN OPENSSH PRIVATE KEY-----" > ~/.ssh/id_ed25519.tmp
-            cat ~/.ssh/id_ed25519 >> ~/.ssh/id_ed25519.tmp
-            echo "-----END OPENSSH PRIVATE KEY-----" >> ~/.ssh/id_ed25519.tmp
-            mv ~/.ssh/id_ed25519.tmp ~/.ssh/id_ed25519
+            echo "ERROR: Key does not contain proper OpenSSH format"
+            echo "First line of key:"
+            head -n 1 ~/.ssh/id_ed25519
+            echo "Last line of key:"
+            tail -n 1 ~/.ssh/id_ed25519
+            echo "Key file size:"
+            ls -l ~/.ssh/id_ed25519
+            exit 1
           fi
           
           # Set proper permissions
           chmod 600 ~/.ssh/id_ed25519
           
-          # Verify SSH key format
-          echo "Checking SSH key format:"
+          # Check key format validity
+          echo "Key fingerprint:"
           ssh-keygen -l -f ~/.ssh/id_ed25519 || {
-            echo "ERROR: Invalid SSH key format"
+            echo "ERROR: Invalid key format"
             echo "Key contents (first line):"
             head -n 1 ~/.ssh/id_ed25519
+            echo "Key file size:"
+            ls -l ~/.ssh/id_ed25519
             exit 1
           }
           
-          # Create a temporary SSH config directory
-          mkdir -p ~/.ssh/temp_config
+          # Start SSH agent
+          eval $(ssh-agent -s)
+          ssh-add -v ~/.ssh/id_ed25519 || {
+            echo "ERROR: Failed to add key to SSH agent"
+            echo "SSH agent status:"
+            ssh-agent
+            echo "Key file permissions:"
+            ls -l ~/.ssh/id_ed25519
+            exit 1
+          }
           
-          # Create an SSH config file with proper settings
-          cat > ~/.ssh/temp_config/config << EOF
+          # Create SSH config
+          cat > ~/.ssh/config << EOF
           Host bmicluster
             HostName bmiclusterp.chmcres.cchmc.org
             User pavb5f
             IdentityFile ~/.ssh/id_ed25519
             StrictHostKeyChecking no
             UserKnownHostsFile=/dev/null
-            BatchMode yes
-            IdentitiesOnly yes
             LogLevel DEBUG3
             ConnectTimeout 30
-            ServerAliveInterval 60
-            ServerAliveCountMax 5
-
+          
           Host bmicluster-compute
+            HostName bmiclusterp.chmcres.cchmc.org
             User pavb5f
-            HostName bmi-460g10-04.chmcres.cchmc.org
             IdentityFile ~/.ssh/id_ed25519
             StrictHostKeyChecking no
             UserKnownHostsFile=/dev/null
-            BatchMode yes
-            IdentitiesOnly yes
             LogLevel DEBUG3
-            ProxyJump bmicluster
             ConnectTimeout 30
-            ServerAliveInterval 60
-            ServerAliveCountMax 5
+            RequestTTY yes
+            RemoteCommand ssh bmicluster-compute
           EOF
           
-          chmod 600 ~/.ssh/temp_config/config
+          # Set proper permissions for config
+          chmod 600 ~/.ssh/config
           
-          # Make sure SSH agent is running and add key
-          eval $(ssh-agent -s)
-          ssh-add -v ~/.ssh/id_ed25519 || {
-            echo "ERROR: Failed to add SSH key to agent"
-            exit 1
-          }
-          
-          # Test network connectivity (basic)
-          ping -c 2 bmiclusterp.chmcres.cchmc.org || echo "Cannot ping jump host (may be blocked or normal if ICMP is disabled)"
-          
-          echo "SSH configuration created successfully"
-      
-      - name: Test SSH Connection
-        run: |
-          # First, verify the SSH key is loaded in the agent
-          echo "Checking SSH agent status:"
-          ssh-add -l || echo "No keys loaded in SSH agent"
-          
-          # Test basic SSH functionality
-          echo "Testing basic SSH command:"
+          # Show system information
+          echo "=== SYSTEM INFO ==="
+          uname -a
           which ssh
           ssh -V
           
-          echo "Testing SSH connection to jump host..."
-          # Try with different verbosity levels and options
-          ssh -vvv -F ~/.ssh/temp_config/config bmicluster "hostname && whoami" || {
-            echo "ERROR: SSH connection to jump host failed"
-            echo "Checking SSH key permissions:"
+          # Check firewall (basic)
+          echo "=== NETWORK CHECKS ==="
+          ping -c 2 bmiclusterp.chmcres.cchmc.org || echo "Cannot ping jump host (may be normal)"
+          nc -zv bmiclusterp.chmcres.cchmc.org 22 || echo "Cannot connect to port 22"
+      
+      - name: Test SSH connection
+        run: |
+          echo "Testing SSH connection to ${{ inputs.target_host }}..."
+          ssh -vvv ${{ inputs.target_host }} "echo SSH_CONNECTION_SUCCESS" || {
+            echo "ERROR: SSH connection failed"
+            echo "Checking key permissions:"
             ls -la ~/.ssh/id_ed25519
-            echo "Checking SSH config permissions:"
-            ls -la ~/.ssh/temp_config/config
+            echo "Checking config permissions:"
+            ls -la ~/.ssh/config
             echo "Checking SSH agent:"
             ssh-agent
-            echo "Attempting connection with different options..."
-            # Try without BatchMode to see if it prompts for password
-            ssh -vvv -F ~/.ssh/temp_config/config -o BatchMode=no -o PasswordAuthentication=no bmicluster "hostname" || true
-            echo "Checking if we can resolve the host:"
-            nslookup bmiclusterp.chmcres.cchmc.org || true
-            echo "Checking if we can reach the host:"
-            nc -zv bmiclusterp.chmcres.cchmc.org 22 || true
+            echo "Checking loaded keys:"
+            ssh-add -l || echo "No keys loaded"
+            echo "Checking key file content:"
+            head -n 1 ~/.ssh/id_ed25519
+            tail -n 1 ~/.ssh/id_ed25519
             exit 1
           }
+      
+      - name: Deploy to HPC
+        run: |
+          # Set environment variables
+          export DOCKER_TAG=${{ inputs.docker_tag }}
+          export TARGET_HOST=${{ inputs.target_host }}
           
-          echo "Testing SSH connection to compute node..."
-          ssh -vvv -F ~/.ssh/temp_config/config bmicluster-compute "hostname && whoami" || {
-            echo "ERROR: SSH connection to compute node failed"
-            echo "Check if we can connect to the jump host at all:"
-            ssh -vvv -F ~/.ssh/temp_config/config bmicluster "echo 'Jump host connection works'" || true
-            echo "Checking if we can resolve the compute node:"
-            nslookup bmi-460g10-04.chmcres.cchmc.org || true
-            echo "Checking if we can reach the compute node through jump host:"
-            ssh -F ~/.ssh/temp_config/config bmicluster "nc -zv bmi-460g10-04.chmcres.cchmc.org 22" || true
-            exit 1
-          }
+          # Deploy using the deployment script
+          ./deploy.sh
           
-          echo "SSH connections verified successfully"
-      
-      - name: Make deployment script executable
-        run: chmod +x scripts/deploy_to_hpc.sh
-      
-      - name: Copy deployment script to compute node
-        run: |
-          echo "Copying deployment script to compute node..."
-          scp -F ~/.ssh/temp_config/config scripts/deploy_to_hpc.sh bmicluster-compute:/tmp/deploy_to_hpc.sh
-          ssh -F ~/.ssh/temp_config/config bmicluster-compute "chmod +x /tmp/deploy_to_hpc.sh"
-          echo "Deployment script copied successfully"
-      
-      - name: Execute deployment on compute node
-        id: deploy
-        run: |
-          echo "Starting Singularity image deployment with version ${{ env.DOCKER_TAG }}..."
-          ssh -F ~/.ssh/temp_config/config bmicluster-compute "/tmp/deploy_to_hpc.sh ${{ env.DOCKER_TAG }}" | tee deployment.log
-      
-      - name: Verify deployment
-        run: |
+          # Verify deployment
           echo "Verifying deployment..."
-          ssh -F ~/.ssh/temp_config/config bmicluster-compute "ls -la /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:${{ env.DOCKER_TAG }}.sif" || {
-            echo "ERROR: Failed to verify Singularity image exists"
+          ssh ${{ inputs.target_host }} "docker ps | grep ${{ inputs.docker_tag }}" || {
+            echo "ERROR: Container not running"
             exit 1
           }
-          
-          version=$(ssh -F ~/.ssh/temp_config/config bmicluster-compute "cat /data/barskilab/scidap_server/singularity_images/scidap-deseq-version.txt")
-          echo "Deployment verified. Current version: $version"
       
-      - name: Clean up remote script
+      - name: Cleanup
         if: always()
         run: |
-          ssh -F ~/.ssh/temp_config/config bmicluster-compute "rm -f /tmp/deploy_to_hpc.sh" || echo "Warning: Failed to clean up remote script" 
+          rm -f ~/.ssh/id_ed25519 ~/.ssh/config 

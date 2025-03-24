@@ -10,6 +10,8 @@ jobs:
     
     steps:
       - name: Setup SSH key and test connection
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           set -x  # Echo commands for better debugging
           
@@ -18,14 +20,14 @@ jobs:
           
           # Debug: Check if secret is available
           echo "Checking if SSH_PRIVATE_KEY secret is available..."
-          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+          if [ -z "$SSH_PRIVATE_KEY" ]; then
             echo "ERROR: SSH_PRIVATE_KEY secret is empty or not set"
             exit 1
           fi
           
           # Create the SSH key with proper format
           # First, write the key content directly
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_test
+          printf "%s\n" "$SSH_PRIVATE_KEY" > ~/.ssh/id_test
           
           # Debug: Check key file content
           echo "Checking key file content..."
