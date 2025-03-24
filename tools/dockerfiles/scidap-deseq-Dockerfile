@@ -179,6 +179,9 @@ COPY scripts/run_deseq_lrt_step_2.R /usr/local/bin/run_deseq_lrt_step_2.R
 # Copy the install_packages.R script into the Docker image
 COPY ./scripts/docker_R_packages_installation/scidap-deseq-R-packages.R /tmp/scidap-deseq-R-packages.R
 
+# Copy function directories
+COPY scripts/functions/ /usr/local/bin/functions/
+
 ## Update the sources list to use the Debian Bullseye repository
 #RUN echo "deb http://deb.debian.org/debian bullseye main" > /etc/apt/sources.list
 
@@ -212,6 +215,9 @@ RUN chmod +x /usr/local/bin/run_deseq.R && \
     chmod +x /usr/local/bin/run_deseq_lrt_step_1.R && \
     chmod +x /usr/local/bin/run_deseq_lrt_step_2.R && \
     chmod +x /usr/local/bin/get_gene_n_tss.R && \
+    # Set permissions for function files
+    chmod -R +r /usr/local/bin/functions/ && \
+    find /usr/local/bin/functions -name "*.R" -exec chmod +x {} \; && \
 # Cleaning
     apt-get clean && \
     apt-get purge && \
