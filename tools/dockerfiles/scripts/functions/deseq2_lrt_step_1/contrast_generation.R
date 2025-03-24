@@ -161,18 +161,104 @@ generate_interaction_effect_contrasts <- function(dds, result_names) {
   
   debug_log(glue::glue("Found {length(interaction_terms)} interaction terms: {paste(interaction_terms, collapse=', ')}"))
   
+  # Get factor information from colData
+  col_data <- as.data.frame(colData(dds))
+  factor_cols <- sapply(col_data, is.factor)
+  factor_names <- names(factor_cols)[factor_cols]
+  
   # Process each interaction term
   for (interaction_term in interaction_terms) {
-    # For now, we'll just add these to the results with some placeholder values
-    # In a real implementation, you'd parse these properly to extract the interacting factors
+    # Split the interaction term by colon
+    interacting_factors <- unlist(strsplit(interaction_term, ":", fixed = TRUE))
     
+    if (length(interacting_factors) < 2) {
+      log_message(glue::glue("Invalid interaction term: {interaction_term}"), "WARNING")
+      next
+    }
+    
+    # Parse each factor and its level
+    factor_levels <- list()
+    reference_levels <- list()
+    
+    for (i in 1:length(interacting_factors)) {
+      term <- interacting_factors[i]
+      
+      # Try different parsing approaches for factor_level
+      if (grepl("_", term)) {
+        # Format like "factor_level"
+        parts <- unlist(strsplit(term, "_"))
+        potential_factor <- parts[1]
+        
+        if (potential_factor %in% factor_names) {
+          factor_levels[[i]] <- list(
+            factor = potential_factor,
+            level = paste(parts[-1], collapse = "_")
+          )
+          
+          # Get reference level (first level)
+          ref_levels <- levels(col_data[[potential_factor]])
+          if (length(ref_levels) > 0) {
+            reference_levels[[i]] <- ref_levels[1]
+          } else {
+            reference_levels[[i]] <- NA
+          }
+        }
+      } else {
+        # Try to match against known factors
+        for (factor_name in factor_names) {
+          if (startsWith(term, factor_name)) {
+            level <- substring(term, nchar(factor_name) + 1)
+            if (level != "") {
+              factor_levels[[i]] <- list(
+                factor = factor_name,
+                level = level
+              )
+              
+              # Get reference level
+              ref_levels <- levels(col_data[[factor_name]])
+              if (length(ref_levels) > 0) {
+                reference_levels[[i]] <- ref_levels[1]
+              } else {
+                reference_levels[[i]] <- NA
+              }
+              break
+            }
+          }
+        }
+      }
+      
+      # If we couldn't determine the factor/level, log a warning
+      if (is.null(factor_levels[[i]])) {
+        log_message(glue::glue("Could not parse interaction term component: {term}"), "WARNING")
+        factor_levels[[i]] <- list(factor = "unknown", level = term)
+        reference_levels[[i]] <- NA
+      }
+    }
+    
+    # Build numerator and denominator strings
+    num_factors <- sapply(factor_levels, function(x) x$factor)
+    num_levels <- sapply(factor_levels, function(x) x$level)
+    
+    # Format as factor1level1:factor2level2
+    numerator <- paste(
+      paste0(num_factors, num_levels),
+      collapse = ":"
+    )
+    
+    # Format reference as factor1ref1:factor2ref2
+    denominator <- paste(
+      paste0(num_factors, reference_levels),
+      collapse = ":"
+    )
+    
+    # Add to results dataframe
     interaction_effect_contrasts <- rbind(
       interaction_effect_contrasts,
       data.frame(
-        factor = "interaction",
+        factor = paste(num_factors, collapse = ":"),
         contrast_name = interaction_term,
-        numerator = interaction_term,
-        denominator = "reference",
+        numerator = numerator,
+        denominator = denominator,
         type = "interaction_effect",
         stringsAsFactors = FALSE
       )

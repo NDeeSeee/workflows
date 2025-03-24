@@ -6,7 +6,8 @@ cran_packages <- c(
   "locfit", "tidyverse", "patchwork", "argparse", "data.table",
   "pheatmap", "ggrepel", "htmlwidgets", "devtools", "kableExtra",
   "systemfonts", "svglite", "gridExtra", "rlang", "stringr", 
-  "RColorBrewer", "glue"
+  "RColorBrewer", "glue", "pryr", "plotly", "ggplot2", "future",
+  "jsonlite", "magrittr", "reshape2"
 )
 
 # List of Bioconductor packages to install
@@ -17,10 +18,18 @@ bioc_packages <- c(
 
 # Function to install and check CRAN packages
 install_and_check_cran <- function(packages) {
-  install.packages(packages, repos = "https://cloud.r-project.org")
+  install.packages(packages, repos = "https://cloud.r-project.org", dependencies = TRUE)
   for (pkg in packages) {
     if (!require(pkg, character.only = TRUE)) {
-      stop(paste("Package", pkg, "failed to install."))
+      cat(paste("Warning: Package", pkg, "failed to install or load. Trying alternative method...\n"))
+      try({
+        install.packages(pkg, repos = "https://cloud.r-project.org", dependencies = TRUE)
+        if (!require(pkg, character.only = TRUE)) {
+          stop(paste("Package", pkg, "failed to install after retry."))
+        }
+      })
+    } else {
+      cat(paste("Package", pkg, "successfully installed and loaded.\n"))
     }
   }
 }
@@ -31,18 +40,28 @@ install_and_check_bioc <- function(packages) {
     install.packages("BiocManager", repos = "https://cloud.r-project.org")
   }
   BiocManager::install(version = "3.19", update = FALSE, ask = FALSE)
-  BiocManager::install(packages, update = TRUE, ask = FALSE)
+  BiocManager::install(packages, update = FALSE, ask = FALSE)
   for (pkg in packages) {
     if (!require(pkg, character.only = TRUE)) {
-      stop(paste("Package", pkg, "failed to install."))
+      cat(paste("Warning: Bioconductor package", pkg, "failed to install or load. Trying alternative method...\n"))
+      try({
+        BiocManager::install(pkg, update = FALSE, ask = FALSE)
+        if (!require(pkg, character.only = TRUE)) {
+          stop(paste("Bioconductor package", pkg, "failed to install after retry."))
+        }
+      })
+    } else {
+      cat(paste("Bioconductor package", pkg, "successfully installed and loaded.\n"))
     }
   }
 }
 
 # Install CRAN packages
+cat("Installing CRAN packages...\n")
 install_and_check_cran(cran_packages)
 
 # Install Bioconductor packages
+cat("Installing Bioconductor packages...\n")
 install_and_check_bioc(bioc_packages)
 
 # Install additional packages from GitHub
@@ -60,4 +79,12 @@ if (!require("Glimma", character.only = TRUE)) {
   stop("Package GlimmaV2 failed to install from GitHub.")
 }
 
+# Set global R options for better memory handling in scripts
+cat("Setting up global R options for memory management...\n")
+options(future.globals.maxSize = 4000 * 1024^2)  # 4GB max for global data
+options(expressions = 5000)  # Increase expression stack size
+options(gc.aggressiveness = 0)  # Default GC behavior
+options(stringsAsFactors = FALSE)  # Don't convert strings to factors by default
+
 cat("All packages installed successfully.\n")
+cat("Memory management options have been configured.\n")

@@ -13,30 +13,26 @@ process_count_data <- function(args, count_data_df, metadata_df, design_formula)
   if (!is.null(args$batchcorrection) && args$batchcorrection != "none") {
     log_message(glue::glue("Applying {args$batchcorrection} batch correction..."), "STEP")
     
-    # Find batch column (accounting for case)
-    batch_col <- colnames(metadata_df)[tolower(colnames(metadata_df)) == "batch"]
+    # Apply batch correction using common utility
+    corrected_count_data <- apply_batch_correction(
+      count_data = count_data_df,
+      metadata_df = metadata_df,
+      batch_method = args$batchcorrection,
+      design_formula = design_formula,
+      normalized = FALSE  # Raw counts for DESeq2
+    )
     
-    # Apply batch correction
-    if (args$batchcorrection == "combatseq") {
-      # Use ComBat-Seq for count data
-      corrected_count_data <- apply_combatseq_correction(count_data_df, metadata_df, batch_col, design_formula)
-      log_message("ComBat-Seq batch correction applied", "SUCCESS")
-    } else {
-      # For other methods, note that batch correction will be applied later in the pipeline
-      corrected_count_data <- count_data_df
+    # Check if batch correction was actually applied
+    if (identical(corrected_count_data, count_data_df)) {
       batch_warning <- TRUE
-      log_message("Batch correction will be applied after DESeq2 normalization", "INFO")
+      log_message("Batch correction could not be applied to raw counts. Will be applied after normalization.", "WARNING")
+    } else {
+      log_message(paste("Batch correction applied using", args$batchcorrection), "SUCCESS")
     }
   } else {
     # No batch correction
     corrected_count_data <- count_data_df
     log_message("No batch correction applied", "INFO")
-  }
-  
-  # Apply rounding to counts if needed (for some correction methods)
-  if (!is.null(args$batchcorrection) && args$batchcorrection == "combatseq") {
-    # ComBat-Seq should produce integers, but round to be safe
-    corrected_count_data <- round(corrected_count_data)
   }
   
   # Return processed data
@@ -45,49 +41,6 @@ process_count_data <- function(args, count_data_df, metadata_df, design_formula)
     design_formula = design_formula,
     batch_warning = batch_warning
   ))
-}
-
-# Apply ComBat-Seq batch correction
-apply_combatseq_correction <- function(count_data_df, metadata_df, batch_col, design_formula) {
-  log_message("Applying ComBat-Seq batch correction...", "STEP")
-  
-  # Extract batch information
-  batch <- metadata_df[[batch_col]]
-  
-  # Get covariates from design formula (excluding batch)
-  design_vars <- all.vars(design_formula)
-  covar_cols <- design_vars[design_vars != "batch"] 
-  
-  # Only include covariates that are in metadata
-  covar_cols <- intersect(covar_cols, colnames(metadata_df))
-  
-  # Create model matrix if covariates exist
-  if (length(covar_cols) > 0) {
-    # Create formula for covariates
-    covar_formula <- as.formula(paste("~", paste(covar_cols, collapse = "+")))
-    
-    # Create model matrix
-    covar_matrix <- model.matrix(covar_formula, data = metadata_df)[, -1, drop = FALSE]
-    
-    # Apply ComBat-Seq with covariates
-    corrected_counts <- sva::ComBat_seq(
-      counts = as.matrix(count_data_df),
-      batch = batch,
-      group = NULL,
-      covar_mod = covar_matrix
-    )
-  } else {
-    # Apply ComBat-Seq without covariates
-    corrected_counts <- sva::ComBat_seq(
-      counts = as.matrix(count_data_df),
-      batch = batch
-    )
-  }
-  
-  # Convert back to data frame
-  corrected_counts_df <- as.data.frame(corrected_counts)
-  
-  return(corrected_counts_df)
 }
 
 # Run DESeq2 LRT analysis

@@ -24,22 +24,15 @@ load_and_validate_metadata <- function(args) {
   
   message(glue::glue("Loaded metadata for {nrow(metadata_df)} samples with {ncol(metadata_df)} covariates"))
   
-  # Validate metadata
-  check_batch_column(metadata_df, args$batchcorrection)
-  
   # Check design formulas
-  design_formula <- check_design_formula(args$design, "Full Design-Formula")
-  reduced_formula <- check_design_formula(args$reduced, "Reduced Design-Formula")
+  design_formula <- as.formula(args$design)
   
-  # Verify covariates exist in metadata
-  check_design_covariates(design_formula, metadata_df)
-  
-  # Make sure there are sufficient replicates for all factors
-  check_replicates(metadata_df, all.vars(design_formula))
+  # Apply comprehensive metadata validation using the common utility function
+  metadata_df <- validate_metadata(metadata_df, args$batchcorrection, design_formula)
   
   # Add formulas to metadata for convenience
   attr(metadata_df, "design_formula") <- design_formula
-  attr(metadata_df, "reduced_formula") <- reduced_formula
+  attr(metadata_df, "reduced_formula") <- as.formula(args$reduced)
   
   return(metadata_df)
 }

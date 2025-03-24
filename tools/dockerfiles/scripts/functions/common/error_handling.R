@@ -1,4 +1,52 @@
 #!/usr/bin/env Rscript
+#
+# Common error handling functions for DESeq2 analysis
+#
+
+#' Handle errors with traceback and a user-friendly message
+#'
+#' @param expr The expression to evaluate
+#' @param message Optional custom error message
+#' @param exit_on_error Whether to exit the script on error
+#' @return The result of the expression if successful
+#' @export
+with_error_handling <- function(expr, message = NULL, exit_on_error = TRUE) {
+  tryCatch(
+    expr,
+    error = function(e) {
+      error_msg <- ifelse(is.null(message), e$message, paste0(message, ": ", e$message))
+      log_error(error_msg)
+      print(rlang::last_trace())
+      if (exit_on_error) {
+        quit(save = "no", status = 1, runLast = FALSE)
+      }
+      return(NULL)
+    }
+  )
+}
+
+#' Check if required packages are installed
+#'
+#' @param packages Vector of package names to check
+#' @param exit_on_missing Whether to exit if packages are missing
+#' @return Boolean indicating if all packages are installed
+#' @export
+check_required_packages <- function(packages, exit_on_missing = TRUE) {
+  missing_packages <- packages[!sapply(packages, requireNamespace, quietly = TRUE)]
+  
+  if (length(missing_packages) > 0) {
+    log_error(paste0("Required packages are missing: ", paste(missing_packages, collapse = ", ")))
+    
+    if (exit_on_missing) {
+      log_error("Please install missing packages and try again.")
+      quit(save = "no", status = 1, runLast = FALSE)
+    }
+    
+    return(FALSE)
+  }
+  
+  return(TRUE)
+}
 
 # --- Error handling functions ---
 
