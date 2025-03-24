@@ -37,11 +37,12 @@ jobs:
           # Create the .ssh directory if it doesn't exist
           mkdir -p ~/.ssh
           
-          # Ensure the SSH private key exists or create it from the secret
-          if [ ! -f ~/.ssh/id_ed25519 ]; then
-            echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-            chmod 600 ~/.ssh/id_ed25519
-          fi
+          # Create private key from secret with proper format
+          # Ensure it includes the proper BEGIN/END markers
+          echo "-----BEGIN OPENSSH PRIVATE KEY-----" > ~/.ssh/id_ed25519
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | grep -v "OPENSSH PRIVATE KEY" >> ~/.ssh/id_ed25519
+          echo "-----END OPENSSH PRIVATE KEY-----" >> ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
           
           # Create a temporary SSH config directory
           mkdir -p ~/.ssh/temp_config
@@ -56,7 +57,8 @@ jobs:
             UserKnownHostsFile=/dev/null
             BatchMode yes
             IdentitiesOnly yes
-            LogLevel ERROR
+            LogLevel DEBUG3
+            ConnectTimeout 30
             ServerAliveInterval 60
             ServerAliveCountMax 5
 
@@ -68,35 +70,44 @@ jobs:
             UserKnownHostsFile=/dev/null
             BatchMode yes
             IdentitiesOnly yes
-            LogLevel ERROR
+            LogLevel DEBUG3
             ProxyJump bmicluster
+            ConnectTimeout 30
             ServerAliveInterval 60
             ServerAliveCountMax 5
           EOF
           
           chmod 600 ~/.ssh/temp_config/config
           
-          # Verify permissions
-          ls -la ~/.ssh
-          ls -la ~/.ssh/temp_config
+          # Verify SSH key format
+          echo "Checking SSH key format:"
+          ssh-keygen -l -f ~/.ssh/id_ed25519 || echo "Invalid key format"
           
           # Make sure SSH agent is running
           eval $(ssh-agent -s)
-          ssh-add ~/.ssh/id_ed25519
+          ssh-add -v ~/.ssh/id_ed25519
+          
+          # Test network connectivity (basic)
+          ping -c 2 bmiclusterp.chmcres.cchmc.org || echo "Cannot ping jump host (may be blocked or normal if ICMP is disabled)"
           
           echo "SSH configuration created successfully"
       
       - name: Test SSH Connection
         run: |
           echo "Testing SSH connection to jump host..."
-          ssh -v -F ~/.ssh/temp_config/config bmicluster "hostname && whoami" || {
+          ssh -vvv -F ~/.ssh/temp_config/config bmicluster "hostname && whoami" || {
             echo "ERROR: SSH connection to jump host failed"
+            echo "Attempting connection with different options..."
+            # Try without BatchMode to see if it prompts for password
+            ssh -vvv -F ~/.ssh/temp_config/config -o BatchMode=no -o PasswordAuthentication=no bmicluster "hostname" || true
             exit 1
           }
           
           echo "Testing SSH connection to compute node..."
-          ssh -v -F ~/.ssh/temp_config/config bmicluster-compute "hostname && whoami" || {
+          ssh -vvv -F ~/.ssh/temp_config/config bmicluster-compute "hostname && whoami" || {
             echo "ERROR: SSH connection to compute node failed"
+            echo "Check if we can connect to the jump host at all:"
+            ssh -vvv -F ~/.ssh/temp_config/config bmicluster "echo 'Jump host connection works'" || true
             exit 1
           }
           
