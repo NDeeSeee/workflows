@@ -1,0 +1,72 @@
+name: Test SSH Connection
+
+on:
+  workflow_dispatch:  # Only run manually
+
+jobs:
+  test_ssh:
+    name: Test SSH Connection
+    runs-on: self-hosted
+    
+    steps:
+      - name: Setup SSH key and test connection
+        run: |
+          set -x  # Echo commands for better debugging
+          
+          # Create .ssh directory
+          mkdir -p ~/.ssh
+          
+          # Create the SSH key with proper format
+          echo "-----BEGIN OPENSSH PRIVATE KEY-----" > ~/.ssh/id_test
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | grep -v "OPENSSH PRIVATE KEY" >> ~/.ssh/id_test
+          echo "-----END OPENSSH PRIVATE KEY-----" >> ~/.ssh/id_test
+          chmod 600 ~/.ssh/id_test
+          
+          # Check key format validity
+          echo "Key fingerprint:"
+          ssh-keygen -l -f ~/.ssh/id_test || echo "Invalid key format detected"
+          
+          # Start SSH agent
+          eval $(ssh-agent -s)
+          ssh-add -v ~/.ssh/id_test
+          
+          # Create test config
+          cat > ~/.ssh/test_config << EOF
+          Host jumphost
+            HostName bmiclusterp.chmcres.cchmc.org
+            User pavb5f
+            IdentityFile ~/.ssh/id_test
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+            LogLevel DEBUG3
+            ConnectTimeout 30
+          EOF
+          
+          # Show system information
+          echo "=== SYSTEM INFO ==="
+          uname -a
+          which ssh
+          ssh -V
+          
+          # Check firewall (basic)
+          echo "=== NETWORK CHECKS ==="
+          ping -c 2 bmiclusterp.chmcres.cchmc.org || echo "Cannot ping jump host (may be normal)"
+          nc -zv bmiclusterp.chmcres.cchmc.org 22 || echo "Cannot connect to port 22"
+          
+          # Test SSH connection with max verbosity
+          echo "=== SSH CONNECTION TEST ==="
+          ssh -vvv -F ~/.ssh/test_config jumphost "echo SSH_CONNECTION_SUCCESS" || echo "Connection failed"
+          
+          # Clean up
+          rm -f ~/.ssh/id_test ~/.ssh/test_config
+      
+      - name: Collect diagnostics
+        if: always()
+        run: |
+          echo "=== SSH_KEY FORMAT CHECK ==="
+          # Show first and last line of the key (without revealing the whole key)
+          head -n 1 ~/.ssh/id_test 2>/dev/null || echo "Key file not found"
+          tail -n 1 ~/.ssh/id_test 2>/dev/null || echo "Key file not found"
+          
+          echo "=== SSH CONFIG CHECK ==="
+          cat ~/.ssh/test_config 2>/dev/null || echo "Config file not found" 

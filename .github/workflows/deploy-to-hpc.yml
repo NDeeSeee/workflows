@@ -38,11 +38,29 @@ jobs:
           mkdir -p ~/.ssh
           
           # Create private key from secret with proper format
-          # Ensure it includes the proper BEGIN/END markers
-          echo "-----BEGIN OPENSSH PRIVATE KEY-----" > ~/.ssh/id_ed25519
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" | grep -v "OPENSSH PRIVATE KEY" >> ~/.ssh/id_ed25519
-          echo "-----END OPENSSH PRIVATE KEY-----" >> ~/.ssh/id_ed25519
+          # First, ensure the key is properly formatted
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
+          
+          # Verify the key format
+          if ! grep -q "BEGIN OPENSSH PRIVATE KEY" ~/.ssh/id_ed25519; then
+            echo "Adding OpenSSH key headers..."
+            echo "-----BEGIN OPENSSH PRIVATE KEY-----" > ~/.ssh/id_ed25519.tmp
+            cat ~/.ssh/id_ed25519 >> ~/.ssh/id_ed25519.tmp
+            echo "-----END OPENSSH PRIVATE KEY-----" >> ~/.ssh/id_ed25519.tmp
+            mv ~/.ssh/id_ed25519.tmp ~/.ssh/id_ed25519
+          fi
+          
+          # Set proper permissions
           chmod 600 ~/.ssh/id_ed25519
+          
+          # Verify SSH key format
+          echo "Checking SSH key format:"
+          ssh-keygen -l -f ~/.ssh/id_ed25519 || {
+            echo "ERROR: Invalid SSH key format"
+            echo "Key contents (first line):"
+            head -n 1 ~/.ssh/id_ed25519
+            exit 1
+          }
           
           # Create a temporary SSH config directory
           mkdir -p ~/.ssh/temp_config
@@ -79,13 +97,12 @@ jobs:
           
           chmod 600 ~/.ssh/temp_config/config
           
-          # Verify SSH key format
-          echo "Checking SSH key format:"
-          ssh-keygen -l -f ~/.ssh/id_ed25519 || echo "Invalid key format"
-          
-          # Make sure SSH agent is running
+          # Make sure SSH agent is running and add key
           eval $(ssh-agent -s)
-          ssh-add -v ~/.ssh/id_ed25519
+          ssh-add -v ~/.ssh/id_ed25519 || {
+            echo "ERROR: Failed to add SSH key to agent"
+            exit 1
+          }
           
           # Test network connectivity (basic)
           ping -c 2 bmiclusterp.chmcres.cchmc.org || echo "Cannot ping jump host (may be blocked or normal if ICMP is disabled)"
@@ -94,12 +111,32 @@ jobs:
       
       - name: Test SSH Connection
         run: |
+          # First, verify the SSH key is loaded in the agent
+          echo "Checking SSH agent status:"
+          ssh-add -l || echo "No keys loaded in SSH agent"
+          
+          # Test basic SSH functionality
+          echo "Testing basic SSH command:"
+          which ssh
+          ssh -V
+          
           echo "Testing SSH connection to jump host..."
+          # Try with different verbosity levels and options
           ssh -vvv -F ~/.ssh/temp_config/config bmicluster "hostname && whoami" || {
             echo "ERROR: SSH connection to jump host failed"
+            echo "Checking SSH key permissions:"
+            ls -la ~/.ssh/id_ed25519
+            echo "Checking SSH config permissions:"
+            ls -la ~/.ssh/temp_config/config
+            echo "Checking SSH agent:"
+            ssh-agent
             echo "Attempting connection with different options..."
             # Try without BatchMode to see if it prompts for password
             ssh -vvv -F ~/.ssh/temp_config/config -o BatchMode=no -o PasswordAuthentication=no bmicluster "hostname" || true
+            echo "Checking if we can resolve the host:"
+            nslookup bmiclusterp.chmcres.cchmc.org || true
+            echo "Checking if we can reach the host:"
+            nc -zv bmiclusterp.chmcres.cchmc.org 22 || true
             exit 1
           }
           
@@ -108,6 +145,10 @@ jobs:
             echo "ERROR: SSH connection to compute node failed"
             echo "Check if we can connect to the jump host at all:"
             ssh -vvv -F ~/.ssh/temp_config/config bmicluster "echo 'Jump host connection works'" || true
+            echo "Checking if we can resolve the compute node:"
+            nslookup bmi-460g10-04.chmcres.cchmc.org || true
+            echo "Checking if we can reach the compute node through jump host:"
+            ssh -F ~/.ssh/temp_config/config bmicluster "nc -zv bmi-460g10-04.chmcres.cchmc.org 22" || true
             exit 1
           }
           
