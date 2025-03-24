@@ -61,19 +61,19 @@ select <- dplyr::select
 
 # Source function files from the functions directory
 # Common functions
-source("functions/common/logging.R")
-source("functions/common/error_handling.R")
-source("functions/common/utilities.R")
+source("/usr/local/bin/functions/common/logging.R")
+source("/usr/local/bin/functions/common/error_handling.R")
+source("/usr/local/bin/functions/common/utilities.R")
 
 # DESeq2 LRT Step 1 specific functions
-source("functions/deseq2_lrt_step_1/cli_args.R")
-source("functions/deseq2_lrt_step_1/data_processing.R")
-source("functions/deseq2_lrt_step_1/metadata_validation.R")
-source("functions/deseq2_lrt_step_1/deseq2_analysis.R")
-source("functions/deseq2_lrt_step_1/contrast_generation.R")
-source("functions/deseq2_lrt_step_1/export_functions.R")
-source("functions/deseq2_lrt_step_1/visualization.R")
-source("functions/deseq2_lrt_step_1/workflow.R")
+source("/usr/local/bin/functions/deseq2_lrt_step_1/cli_args.R")
+source("/usr/local/bin/functions/deseq2_lrt_step_1/data_processing.R")
+source("/usr/local/bin/functions/deseq2_lrt_step_1/metadata_validation.R")
+source("/usr/local/bin/functions/deseq2_lrt_step_1/deseq2_analysis.R")
+source("/usr/local/bin/functions/deseq2_lrt_step_1/contrast_generation.R")
+source("/usr/local/bin/functions/deseq2_lrt_step_1/export_functions.R")
+source("/usr/local/bin/functions/deseq2_lrt_step_1/visualization.R")
+source("/usr/local/bin/functions/deseq2_lrt_step_1/workflow.R")
 
 # Configure plot theme
 configure_plot_theme()
