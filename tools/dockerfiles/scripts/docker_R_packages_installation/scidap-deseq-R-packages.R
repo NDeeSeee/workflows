@@ -5,7 +5,8 @@ cran_packages <- c(
   "googledrive", "googlesheets4", "httr", "ragg", "rvest", "xml2",
   "locfit", "tidyverse", "patchwork", "argparse", "data.table",
   "pheatmap", "ggrepel", "htmlwidgets", "devtools", "kableExtra",
-  "systemfonts", "svglite"
+  "systemfonts", "svglite", "gridExtra", "rlang", "stringr", 
+  "RColorBrewer", "glue"
 )
 
 # List of Bioconductor packages to install
