@@ -165,13 +165,20 @@ READ_COL <- "TotalReads"
 RPKM_COL <- "Rpkm"
 INTERSECT_BY <- c("RefseqId", "GeneId", "Chrom", "TxStart", "TxEnd", "Strand")
 
-get_file_type <- function(filename) {
-  ext <- tools::file_ext(filename)
-  separator <- ","
-  if (ext == "tsv") {
-    separator <- "\t"
+get_file_type <- function(file_path) {
+  # Get file extension
+  ext <- tolower(tools::file_ext(file_path))
+  
+  # Return appropriate delimiter based on extension
+  if (ext == "csv") {
+    return(",")
+  } else if (ext %in% c("tsv", "txt")) {
+    return("\t")
+  } else {
+    # Default to tab if extension is unknown
+    log_message(glue::glue("Warning: Unknown file extension '{ext}', defaulting to tab delimiter"), "WARNING")
+    return("\t")
   }
-  return(separator)
 }
 
 load_expression_data <- function(filenames,
