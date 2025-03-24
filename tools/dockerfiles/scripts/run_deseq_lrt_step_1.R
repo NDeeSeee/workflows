@@ -257,1097 +257,6 @@ assert_args <- function(args) {
   return(args)
 }
 
-
-create_releveled_deseq_object <- function(dds, relevel_list) {
-  # Rebuild DESeqDataSet to ensure a proper copy
-  dds_copy <- DESeq2::DESeqDataSetFromMatrix(
-    countData = counts(dds),
-    colData   = as.data.frame(colData(dds)),
-    design    = design(dds)
-  )
-  # Apply releveling for each factor as specified in relevel_list
-  for (fac in names(relevel_list)) {
-    new_ref <- relevel_list[[fac]]
-    dds_copy[[fac]] <- relevel(dds_copy[[fac]], ref = new_ref)
-  }
-  return(dds_copy)
-}
-
-# Function to check if the design-formula syntax correct
-check_design_formula <- function(formula_string, type = "Design") {
-  log_message(glue::glue("Validating {type} formula syntax: '{formula_string}'"), "STEP")
-  
-  # Try to parse the formula
-  tryCatch(
-    {
-      f <- as.formula(formula_string)
-      
-      # Additional validation for formula terms
-      terms <- attr(terms(f), "term.labels")
-      debug_log(glue::glue("Formula terms: {paste(terms, collapse=', ')}"))
-      
-      # Check for interactions
-      has_interactions <- any(grepl(":", terms, fixed = TRUE))
-      log_message(glue::glue("Formula contains interaction terms: {has_interactions}"), "INFO")
-      
-      return(f)
-    },
-    error = function(e) {
-      log_message(glue::glue("Formula parsing error: {e$message}"), "ERROR")
-      report_error(
-        msg = paste(type, "Formula Parsing Error"),
-        details = c(
-          paste0("Failed to parse the ", type, " formula: '", formula_string, "'."),
-          "Ensure the formula starts with '~' and uses '+' (as independent), ':' (for interaction) or '*' (as + and : at once) to add covariates. E.g. '~factor1 + factor2 + factor1:factor2' (or just '~factor1 * factor2'). "
-        ),
-        recommendations = c("Please check the syntax of your formula and try again.")
-      )
-    }
-  )
-}
-
-# Function to check if the design-formula covariates are the same as colnames in metdata
-check_design_covariates <- function(design_formula, metadata_df) {
-  # Extract covariate names from the design formula
-  covariates <- all.vars(design_formula)
-  
-  # Identify missing covariates
-  missing_covariates <- setdiff(covariates, colnames(metadata_df))
-  
-  if (length(missing_covariates) > 0) {
-    report_error(
-      msg = "Missing Covariates in Metadata",
-      details = paste("The following covariates are missing in metadata:", paste(missing_covariates, collapse = ", ")),
-      recommendations = c("Ensure metadata contains all covariates specified in the design formula.")
-    )
-  } else {
-    message("All covariates in the design formula are present in the metadata.")
-  }
-}
-
-# Function to apply batch correction using ComBat_seq
-apply_combat_seq <- function(count_data, design, column_data) {
-
-  start_time <- proc.time()
-
-  print("Applying ComBat_seq batch correction")
-
-  print("Checking full-rank of the model...")
-  validate_full_rank_design(design, column_data)
-
-  corrected_counts <- sva::ComBat_seq(
-    counts = as.matrix(count_data),
-    batch = column_data$batch,
-    covar_mod = model.matrix(design, data = column_data)
-  )
-
-  end_time <- proc.time() - start_time
-
-  print("Total time of apply_combat_seq execution: ")
-  print(end_time) # This shows user, system, and elapsed times
-
-  return(corrected_counts)
-}
-
-# Enhanced batch correction handling with detailed logging
-handle_batch_correction <- function(args, countData, metadata_df, design_formula) {
-  log_message("Handling batch correction setup...", "STEP")
-  
-  # Store original values
-  original_counts <- NULL
-  corrected_counts <- NULL
-  batch_warning <- NULL
-  original_design_formula <- design_formula
-  
-  # Check if batch correction is requested
-  if (args$batchcorrection == "none") {
-    log_message("No batch correction requested", "INFO")
-    return(list(
-      countData = countData,
-      design_formula = design_formula,
-      original_counts = NULL,
-      corrected_counts = NULL,
-      batch_warning = NULL
-    ))
-  }
-  
-  log_message(glue::glue("Batch correction method requested: {args$batchcorrection}"), "INFO")
-  
-  # Check if 'batch' column exists
-  if (!("batch" %in% colnames(metadata_df))) {
-    batch_warning <- "⚠️ You specified batch correction but there's no 'batch' column in your metadata. Proceeding without batch correction."
-    log_message(batch_warning, "WARNING")
-    return(list(
-      countData = countData,
-      design_formula = design_formula,
-      original_counts = NULL,
-      corrected_counts = NULL,
-      batch_warning = batch_warning
-    ))
-  }
-  
-  # Ensure 'batch' is a factor
-  metadata_df$batch <- as.factor(metadata_df$batch)
-  batch_levels <- levels(metadata_df$batch)
-  log_message(glue::glue("Batch factor has {length(batch_levels)} levels: {paste(batch_levels, collapse=', ')}"), "INFO")
-  
-  # Check if we have sufficient samples in each batch
-  batch_counts <- table(metadata_df$batch)
-  debug_log("Samples per batch:", batch_counts)
-  
-  # Apply appropriate batch correction
-  if (args$batchcorrection == "combatseq") {
-    log_message("Applying ComBat-seq batch correction to count data...", "STEP")
-    
-    # Check if any batch has only one sample
-    if (any(batch_counts < 2)) {
-      log_message("Warning: Some batches have fewer than 2 samples, which might affect batch correction", "WARNING")
-    }
-    
-    original_counts <- countData
-    
-    # Timing the ComBat-seq operation
-    start_time <- proc.time()
-    corrected_counts <- apply_combat_seq(countData, design_formula, metadata_df)
-    end_time <- proc.time() - start_time
-    
-    log_message(glue::glue("ComBat-seq batch correction completed in {round(end_time['elapsed'], 2)} seconds"), "SUCCESS")
-    
-    # Compare before and after statistics
-    debug_log("Original counts summary statistics:")
-    print(summary(as.vector(as.matrix(original_counts))))
-    
-    debug_log("Corrected counts summary statistics:")
-    print(summary(as.vector(as.matrix(corrected_counts))))
-    
-    countData <- corrected_counts
-    log_message("ComBat-seq batch correction applied. Original design formula maintained.", "SUCCESS")
-    
-  } else if (args$batchcorrection == "model") {
-    log_message("Including 'batch' in the design formula for limma batch correction...", "STEP")
-    
-    # Show the original design formula
-    debug_log(glue::glue("Original design formula: {deparse(design_formula)}"))
-    
-    # Remove '~' from the original design formula string and add batch
-    original_design <- substring(deparse(design_formula), 2)
-    new_design_formula <- as.formula(paste("~ batch +", original_design))
-    design_formula <- new_design_formula
-    
-    log_message(glue::glue("Modified design formula to include batch: {deparse(design_formula)}"), "SUCCESS")
-  }
-  
-  return(list(
-    countData = countData,
-    design_formula = design_formula,
-    original_counts = original_counts,
-    corrected_counts = corrected_counts,
-    batch_warning = batch_warning
-  ))
-}
-
-get_args <- function() {
-  parser <- ArgumentParser(description = "Run DESeq2 for multi-factor analysis using LRT (likelihood ratio or chi-squared test)")
-  parser$add_argument(
-    "-i",
-    "--input",
-    help = "Grouped by gene / TSS/ isoform expression files, formatted as CSV/TSV",
-    type = "character",
-    required = TRUE,
-    nargs = "+"
-  )
-  parser$add_argument(
-    "-n",
-    "--name",
-    help = "Unique names for input files, no special characters, spaces are allowed. Number and order corresponds to --input",
-    type = "character",
-    required = TRUE,
-    nargs = "+"
-  )
-  parser$add_argument(
-    "-m",
-    "--meta",
-    help = "Metadata file to describe relation between samples, where first column corresponds to --name, formatted as CSV/TSV",
-    type = "character",
-    required = TRUE
-  )
-  parser$add_argument(
-    "-d",
-    "--design",
-    help = "Design formula. Should start with ~, like ~condition+celltype+condition:celltype. See DESeq2 manual for details",
-    type = "character",
-    required = TRUE
-  )
-  parser$add_argument(
-    "-r",
-    "--reduced",
-    help = "Reduced formula to compare against with the term(s) of interest removed. Should start with ~. See DESeq2 manual for details",
-    type = "character",
-    required = TRUE
-  )
-  parser$add_argument(
-    "--batchcorrection",
-    help = paste(
-      "Specifies the batch correction method to be applied.",
-      "- 'combatseq' applies ComBat_seq at the beginning of the analysis, removing batch effects from the counts before differential expression analysis.",
-      "- 'model' applies removeBatchEffect from the limma package after differential expression analysis.",
-      "- Default: none"
-    ),
-    type = "character",
-    choices = c("none", "combatseq", "model"),
-    default = "none"
-  )
-  parser$add_argument(
-    "--fdr",
-    help = paste(
-      "In the exploratory visualization part of the analysis output only features",
-      "with adjusted p-value (FDR) not bigger than this value. Also the significance",
-      "cutoff used for optimizing the independent filtering. Default: 0.1."
-    ),
-    type = "double",
-    default = 0.1
-  )
-  parser$add_argument(
-    "--lfcthreshold",
-    help = paste(
-      "Log2 fold change threshold for determining significant differential expression.",
-      "Genes with absolute log2 fold change greater than this threshold will be considered.",
-      "Default: 0.59 (about 1.5 fold change)"
-    ),
-    type = "double",
-    default = 0.59
-  )
-  parser$add_argument(
-    "--use_lfc_thresh",
-    help = paste(
-      "Flag to indicate whether to use lfcthreshold as the null hypothesis value in the results function call.",
-      "If TRUE, lfcthreshold is used in the hypothesis test (i.e., genes are tested against this threshold).",
-      "If FALSE, the null hypothesis is set to 0, and lfcthreshold is used only as a downstream filter.",
-      "Default: FALSE"
-    ),
-    action = "store_true",
-    default = FALSE
-  )
-  parser$add_argument(
-    "--rpkm_cutoff",
-    help = paste(
-      "RPKM cutoff for filtering genes. Genes with RPKM values below this threshold will be excluded from the analysis.",
-      "Default: NULL (no filtering)"
-    ),
-    type    = "integer",
-    default = NULL
-  )
-  parser$add_argument(
-    "--scaling_type",
-    help = paste(
-      "Specifies the type of scaling to be applied to the expression data.",
-      "- 'minmax' applies Min-Max scaling, normalizing values to a range of [-2, 2].",
-      "- 'zscore' applies Z-score standardization, centering data to mean = 0 and standard deviation = 1.",
-      "- Default: none (no scaling applied)."
-    ),
-    type = "character",
-    choices = c("minmax", "zscore"),
-    default = "zscore"
-  )
-  parser$add_argument(
-    "--rowdist",
-    help = paste(
-      "Distance metric for HOPACH row clustering. Ignored if --cluster is not",
-      "provided. Default: cosangle"
-    ),
-    type = "character",
-    default = "cosangle",
-    choices = c(
-      "cosangle",
-      "euclid",
-      "abseuclid",
-      "cor",
-      "abscor"
-    )
-  )
-  parser$add_argument(
-    "--columndist",
-    help = paste(
-      "Distance metric for HOPACH column clustering. Ignored if --cluster is not",
-      "provided. Default: euclid"
-    ),
-    type = "character",
-    default = "euclid",
-    choices = c(
-      "cosangle",
-      "euclid",
-      "abseuclid",
-      "cor",
-      "abscor"
-    )
-  )
-  parser$add_argument(
-    "--cluster",
-    help = paste(
-      "Hopach clustering method to be run on normalized read counts for the",
-      "exploratory visualization part of the analysis. Default: do not run",
-      "clustering"
-    ),
-    type = "character",
-    choices = c("row", "column", "both", "none"),
-    default = "none"
-  )
-  parser$add_argument(
-    "--k",
-    help    = "Number of levels (depth) for Hopach clustering: min - 1, max - 15. Default: 3.",
-    type    = "integer",
-    default = 3
-  )
-  parser$add_argument(
-    "--kmax",
-    help    = "Maximum number of clusters at each level for Hopach clustering: min - 2, max - 9. Default: 5.",
-    type    = "integer",
-    default = 5
-  )
-  parser$add_argument(
-    "-o",
-    "--output",
-    help = "Output prefix for generated files",
-    type = "character",
-    default = "./deseq"
-  )
-  parser$add_argument(
-    "-p",
-    "--threads",
-    help = "Threads number",
-    type = "integer",
-    default = 1
-  )
-  parser$add_argument(
-    "--lrt_only_mode",
-    help    = "Run LRT only, no contrasts",
-    action  = "store_true",
-    default = FALSE
-  )
-  parser$add_argument(
-    "--test_mode",
-    help = "Run for test, only first 500 rows, clustering minimised",
-    action = "store_true",
-    default = FALSE
-  )
-  parser$add_argument(
-    "--clean_logs",
-    help = "Clean existing log files before starting new analysis",
-    action = "store_true",
-    default = FALSE
-  )
-  parser$add_argument(
-    "--debug",
-    help = "Enable debug mode for more verbose logging",
-    action = "store_true",
-    default = FALSE
-  )
-  parser$add_argument(
-    "--save_rdata",
-    help = "Save intermediate RData files for debugging",
-    action = "store_true",
-    default = FALSE
-  )
-  args <- assert_args(parser$parse_args(commandArgs(trailingOnly = TRUE)))
-  return(args)
-}
-
-generate_lrt_md <- function(deseq_results, full_formula, reduced_formula, output_file, alpha = args$fdr,
-                            batch_warning = NULL, rpkm_filtered_count = NULL) {
-  # Initialize the markdown content
-  md_content <- ""
-
-  # Add batch warning if present
-  if (!is.null(batch_warning)) {
-    md_content <- paste0(md_content, "# **Warning**\n\n", batch_warning, "\n\n---\n\n")
-  }
-
-  # Add DESeq LRT results summary based on padj value only
-  if (!is.null(deseq_results)) {
-    # Start summarizing the LRT results
-    md_content <- paste0(md_content, "# Likelihood Ratio Test (LRT) Results\n\n---\n\n")
-
-    # Describe the full and reduced formulas
-    md_content <- paste0(
-      md_content,
-      "Based on your **full formula**: `", full_formula, "` and **reduced formula**: `", reduced_formula, "`, ",
-      "this LRT analysis tests whether removing the interaction term (or terms) significantly affects gene expression. ",
-      "The test uses only the **FDR adjusted p-value** (padj) to determine significance, as Log Fold Change (LFC) is irrelevant in the context of LRT.\n\n"
-    )
-
-    # Calculate the number of significant genes based on padj value
-    significant_genes <- sum(deseq_results$padj < alpha, na.rm = TRUE)
-    total_genes <- sum(!is.na(deseq_results$padj))
-
-    # Extract the outliers and low counts from the DESeq results summary
-    summary_output <- capture.output(summary(deseq_results))
-
-    outliers <- gsub(".*: ", "", summary_output[6]) # Outliers
-    low_counts <- gsub(".*: ", "", summary_output[7]) # Low counts (independent filtering)
-    mean_count <- gsub("[^0-9]", "", summary_output[8])
-
-    # Add a summary of significant genes
-    lrt_summary <- paste0(
-      "### Results Summary\n\n",
-      "From this LRT analysis, **", significant_genes, " genes** (out of ", total_genes, " tested) are identified as significant with a padj value < ", alpha, ".\n\n"
-    )
-
-    # Add information about outliers and low counts
-    lrt_summary <- paste0(
-      lrt_summary,
-      "**Outliers**<sup>1</sup>: ", outliers, " of genes were detected as outliers and excluded from analysis.\n\n",
-      "**Low counts**<sup>2</sup>: ", low_counts, " of genes were removed due to low counts (mean <", mean_count, ") and independent filtering.\n\n",
-      "Arguments of ?DESeq2::results():   \n<sup>1</sup> - see 'cooksCutoff',\n<sup>2</sup> - see 'independentFiltering'\n\n"
-    )
-
-    # Add this summary to the markdown content
-    md_content <- paste0(md_content, lrt_summary)
-
-    # Add explanation for the next steps
-    next_steps <- paste0(
-      "---\n\n",
-      "### Next Steps\n\n",
-      "If the number of significant genes is substantial, consider including the interaction term in your design formula ",
-      "for a more detailed analysis of differential gene expression.\n\n",
-      "For further insights and to explore detailed contrasts using the Wald test for the complex design formula, ",
-      "please visit the **Complex Interaction Analysis** tab for more information.\n\n"
-    )
-
-    md_content <- paste0(md_content, next_steps)
-  }
-
-  if (!is.null(rpkm_filtered_count)) {
-    md_content <- glue::glue("{md_content}### RPKM Filtering Summary\n\n")
-    md_content <- glue::glue("{md_content}**Genes filtered out by RPKM threshold**: {rpkm_filtered_count}\n\n")
-  }
-  # Write the content to the output file
-  writeLines(md_content, con = output_file)
-}
-
-# Enhanced logging function with file output and debug levels
-log_message <- function(message, type = "INFO", log_file = "deseq_analysis.log") {
-  timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-  prefix <- switch(type,
-                  "INFO" = "ℹ️",
-                  "WARNING" = "⚠️",
-                  "ERROR" = "❌",
-                  "SUCCESS" = "✅",
-                  "DEBUG" = "🔍",
-                  "STEP" = "▶️",
-                  "▶️")
-  
-  formatted_message <- glue::glue("[{timestamp}] {prefix} {message}")
-  message(formatted_message)
-  
-  # Always write to log file
-  write(formatted_message, file = log_file, append = TRUE)
-}
-
-# Setup debug mode handling
-enable_debug_mode <- function(args) {
-  # Create a global debug flag
-  assign("DEBUG_MODE", args$debug, envir = .GlobalEnv)
-  
-  if (args$debug) {
-    log_message("Debug mode enabled - verbose logging will be shown", "DEBUG")
-    # Set R options for more verbose error reporting
-    options(error = function() {
-      traceback(3)
-      log_message("Error encountered, see traceback above", "ERROR")
-      if (!interactive()) quit(status = 1)
-    })
-  }
-  
-  # Clean up any existing log file at the start
-  if (args$clean_logs) {
-    file.remove("deseq_analysis.log")
-    log_message("Started new log file", "INFO")
-  }
-}
-
-# Debug-specific logging that only appears when debug mode is on
-debug_log <- function(message, data = NULL) {
-  if (exists("DEBUG_MODE") && DEBUG_MODE) {
-    log_message(message, "DEBUG")
-    
-    # If data object is provided, print its summary
-    if (!is.null(data)) {
-      if (is.data.frame(data)) {
-        log_message(glue::glue("Data dimensions: {nrow(data)} rows x {ncol(data)} columns"), "DEBUG")
-        if (nrow(data) > 0) {
-          class_info <- sapply(data, class)
-          log_message("Column types: ", "DEBUG")
-          print(class_info)
-          
-          # Print a few rows for inspection
-          log_message("Preview of data:", "DEBUG")
-          print(head(data, 5))
-        }
-      } else if (is.matrix(data)) {
-        log_message(glue::glue("Matrix dimensions: {nrow(data)} rows x {ncol(data)} columns"), "DEBUG")
-        log_message("Matrix preview:", "DEBUG")
-        print(head(data, 5))
-      } else if (is.list(data)) {
-        log_message(glue::glue("List with {length(data)} elements"), "DEBUG")
-        log_message(glue::glue("List names: {paste(names(data), collapse=', ')}"), "DEBUG")
-      } else {
-        log_message("Object summary:", "DEBUG")
-        print(summary(data))
-      }
-    }
-  }
-}
-
-# Main execution function to organize workflow
-run_deseq_analysis <- function(args) {
-  # Start time tracking for the entire analysis
-  total_start_time <- proc.time()
-  
-  # Setup and validation
-  message("=== DESeq2 Analysis Pipeline ===")
-  message(glue::glue("Analysis started at {format(Sys.time(), '%Y-%m-%d %H:%M:%S')}"))
-  
-  # 1. Load and validate metadata
-  metadata_df <- load_and_validate_metadata(args)
-  
-  # 2. Load and validate expression data
-  expression_data <- load_and_validate_expression_data(args, metadata_df)
-  
-  # 3. Process count data and apply batch correction
-  count_data_results <- process_count_data(args, expression_data$counts, metadata_df, 
-                                         expression_data$design_formula)
-  
-  # 4. Run DESeq2 analysis
-  deseq_results <- run_deseq2(count_data_results$countData, 
-                            metadata_df, 
-                            count_data_results$design_formula,
-                            args$reduced,
-                            args)
-  
-  # 5. Process and export results
-  export_results(deseq_results, expression_data$expression_df, 
-                metadata_df, args, count_data_results$batch_warning,
-                expression_data$rpkm_filtered_count)
-  
-  # Report total elapsed time
-  total_elapsed <- proc.time() - total_start_time
-  message(glue::glue("=== Analysis completed in {round(total_elapsed['elapsed']/60, 1)} minutes ==="))
-  message(glue::glue("Finished at {format(Sys.time(), '%Y-%m-%d %H:%M:%S')}"))
-}
-
-# Function to load and validate metadata
-load_and_validate_metadata <- function(args) {
-  message("Loading metadata...")
-  
-  # Check if metadata file is formatted correctly
-  check_file_delimiter(args$meta)
-  
-  # Load metadata
-  metadata_df <- read.table(
-    args$meta,
-    sep = get_file_type(args$meta),
-    header = TRUE,
-    stringsAsFactors = FALSE,
-    row.names = 1
-  )
-  
-  # Clean metadata column and row names
-  colnames(metadata_df) <- clean_sample_names(colnames(metadata_df))
-  rownames(metadata_df) <- clean_sample_names(rownames(metadata_df))
-  
-  message(glue::glue("Loaded metadata for {nrow(metadata_df)} samples with {ncol(metadata_df)} covariates"))
-  
-  # Validate metadata
-  check_batch_column(metadata_df, args$batchcorrection)
-  
-  # Check design formulas
-  design_formula <- check_design_formula(args$design, "Full Design-Formula")
-  reduced_formula <- check_design_formula(args$reduced, "Reduced Design-Formula")
-  
-  # Verify covariates exist in metadata
-  check_design_covariates(design_formula, metadata_df)
-  
-  # Make sure there are sufficient replicates for all factors
-  check_replicates(metadata_df, all.vars(design_formula))
-  
-  # Add formulas to metadata for convenience
-  attr(metadata_df, "design_formula") <- design_formula
-  attr(metadata_df, "reduced_formula") <- reduced_formula
-  
-  return(metadata_df)
-}
-
-# Function to load and validate expression data
-load_and_validate_expression_data <- function(args, metadata_df) {
-  message("Loading expression data...")
-  
-  # Clean sample names for consistency
-  clean_names <- clean_sample_names(args$name)
-  
-  # Load expression data
-  expression_data_df <- load_expression_data(args$input, clean_names, READ_COL, RPKM_COL, INTERSECT_BY)
-  message(glue::glue("Loaded expression data for {nrow(expression_data_df)} genes from {length(args$input)} files"))
-  
-  # Apply RPKM filtering if specified
-  rpkm_filtered_count <- NULL
-  if (!is.null(args$rpkm_cutoff)) {
-    message(glue::glue("Applying RPKM cutoff of {args$rpkm_cutoff}..."))
-    initial_gene_count <- nrow(expression_data_df)
-    
-    expression_data_df <- filter_rpkm(expression_data_df, args$rpkm_cutoff)
-    
-    # Ensure at least some genes remain
-    if (nrow(expression_data_df) == 0) {
-      report_error(
-        "No genes remaining after RPKM filtering!",
-        details = "All genes were removed due to the RPKM cutoff being too high.",
-        recommendations = c("Reduce the RPKM threshold to retain more genes.")
-      )
-    }
-    
-    # Calculate how many genes were removed
-    rpkm_filtered_count <- initial_gene_count - nrow(expression_data_df)
-    
-    message(glue::glue("{rpkm_filtered_count} genes removed, {nrow(expression_data_df)} genes retained"))
-  }
-  
-  # Process count data
-  read_counts_columns <- grep(
-    paste(READ_COL, sep = ""),
-    colnames(expression_data_df),
-    value = TRUE,
-    ignore.case = TRUE
-  )
-  
-  read_counts_data_df <- expression_data_df %>%
-    dplyr::mutate_at("GeneId", toupper) %>%
-    dplyr::distinct(GeneId, .keep_all = TRUE) %>%
-    remove_rownames() %>%
-    column_to_rownames("GeneId")
-  
-  read_counts_data_df <- read_counts_data_df[read_counts_columns]
-  
-  # Clean count data column names
-  colnames(read_counts_data_df) <- lapply(colnames(read_counts_data_df), function(s) {
-    paste(head(unlist(strsplit(s, " ", fixed = TRUE)), -1), collapse = " ")
-  })
-  colnames(read_counts_data_df) <- clean_sample_names(colnames(read_counts_data_df))
-  
-  # Verify sample name consistency between metadata and counts
-  validate_sample_consistency(metadata_df, read_counts_data_df)
-  
-  # Reorder count data columns to match metadata
-  read_counts_data_df <- read_counts_data_df[, rownames(metadata_df)]
-  
-  # Return all results
-  return(list(
-    expression_df = expression_data_df,
-    counts = read_counts_data_df,
-    design_formula = attr(metadata_df, "design_formula"),
-    reduced_formula = attr(metadata_df, "reduced_formula"),
-    rpkm_filtered_count = rpkm_filtered_count
-  ))
-}
-
-# Function to validate sample names consistency
-validate_sample_consistency <- function(metadata_df, count_data_df) {
-  log_message("Validating sample consistency between metadata and expression data...", "STEP")
-  
-  debug_log("Metadata sample names:", rownames(metadata_df))
-  debug_log("Count data column names:", colnames(count_data_df))
-  
-  # Check for exact matches
-  samples_in_metadata_not_in_data <- setdiff(rownames(metadata_df), colnames(count_data_df))
-  samples_in_data_not_in_metadata <- setdiff(colnames(count_data_df), rownames(metadata_df))
-  
-  # More advanced debugging - check for case-insensitive matches or partial matches
-  if (length(samples_in_metadata_not_in_data) > 0) {
-    debug_log("Checking for case-insensitive matches for missing samples...")
-    
-    # Try case-insensitive matching
-    lower_count_names <- tolower(colnames(count_data_df))
-    for (sample in samples_in_metadata_not_in_data) {
-      matches <- grep(tolower(sample), lower_count_names, value = TRUE)
-      if (length(matches) > 0) {
-        debug_log(glue::glue("Sample '{sample}' has potential case-insensitive matches: {paste(matches, collapse=', ')}"))
-      }
-    }
-  }
-  
-  # Report results
-  if (length(samples_in_metadata_not_in_data) > 0) {
-    report_error(
-      "Missing Samples in Expression Data",
-      details = c(
-        "### Issue:",
-        "The following samples are present in the metadata but missing from the expression data:",
-        "",
-        paste(paste0("- ", samples_in_metadata_not_in_data), collapse = "\n")
-      ),
-      recommendations = c(
-        "Ensure that sample names in the metadata file match exactly those in the expression data.",
-        "Check for typos, extra spaces, or differences in letter case.",
-        "Verify that the correct expression data file was loaded."
-      )
-    )
-  }
-  
-  if (length(samples_in_data_not_in_metadata) > 0) {
-    report_error(
-      "Missing Samples in Metadata",
-      details = c(
-        "### Issue:",
-        "The following samples are present in the expression data but missing from the metadata:",
-        "",
-        paste(paste0("- ", samples_in_data_not_in_metadata), collapse = "\n")
-      ),
-      recommendations = c(
-        "Ensure that all samples in the expression data are listed in the metadata file.",
-        "Check for typos, extra spaces, or differences in letter case.",
-        "Confirm that the metadata file corresponds to the current expression dataset."
-      )
-    )
-  }
-  
-  log_message("✓ Sample consistency validation passed", "SUCCESS")
-}
-
-# Enhanced DESeq2 analysis with detailed progress reporting
-run_deseq2 <- function(countData, metadata_df, design_formula, reduced_formula, args) {
-  log_message("Starting DESeq2 analysis...", "STEP")
-  
-  # Verify input data dimensions
-  log_message(glue::glue("Count data dimensions: {nrow(countData)} genes x {ncol(countData)} samples"), "INFO")
-  log_message(glue::glue("Metadata dimensions: {nrow(metadata_df)} samples x {ncol(metadata_df)} variables"), "INFO")
-  
-  # Create DESeq2 dataset
-  log_message("Creating DESeqDataSet object...", "INFO")
-  dse <- tryCatch({
-    DESeqDataSetFromMatrix(
-      countData = countData,
-      colData = metadata_df,
-      design = design_formula
-    )
-  }, error = function(e) {
-    log_message(glue::glue("Error creating DESeqDataSet: {e$message}"), "ERROR")
-    stop(e$message)
-  })
-  
-  log_message(glue::glue("Created DESeqDataSet with {nrow(dse)} genes and {ncol(dse)} samples"), "SUCCESS")
-  
-  # Save the raw DESeqDataSet if debugging is enabled
-  if (args$save_rdata) {
-    saveRDS(dse, file = "debug_dse_raw.rds")
-    log_message("Saved raw DESeqDataSet to debug_dse_raw.rds", "DEBUG")
-  }
-  
-  # Run DESeq2 with Wald test for contrasts
-  log_message("Running DESeq2 with Wald test (this may take a while)...", "STEP")
-  start_time <- proc.time()
-  
-  dsq_wald <- tryCatch({
-    DESeq(
-      dse,
-      test = "Wald",
-      quiet = FALSE,
-      parallel = TRUE
-    )
-  }, error = function(e) {
-    log_message(glue::glue("Error in DESeq Wald test: {e$message}"), "ERROR")
-    stop(e$message)
-  })
-  
-  end_time <- proc.time() - start_time
-  log_message(glue::glue("DESeq2 Wald test completed in {round(end_time['elapsed']/60, 2)} minutes"), "SUCCESS")
-  
-  # Save Wald results if debugging
-  if (args$save_rdata) {
-    saveRDS(dsq_wald, file = "debug_dsq_wald.rds")
-    log_message("Saved Wald test results to debug_dsq_wald.rds", "DEBUG")
-  }
-  
-  # Normalize counts
-  log_message("Normalizing counts with rlog transformation...", "STEP")
-  start_time <- proc.time()
-  
-  if (args$batchcorrection == "model" && "batch" %in% colnames(metadata_df)) {
-    log_message("Applying rlog transformation and batch effect removal...", "INFO")
-    
-    rlog_transformed <- tryCatch({
-      rlog(dsq_wald, blind = FALSE)
-    }, error = function(e) {
-      log_message(glue::glue("Error in rlog transformation: {e$message}"), "ERROR")
-      stop(e$message)
-    })
-    
-    rlog_counts <- assay(rlog_transformed)
-    
-    # Prepare design matrix without 'batch' for removeBatchEffect
-    design_formula_no_batch <- as.formula(paste0("~", str_remove(as.character(dsq_wald@design)[2], " \\+ batch")))
-    design_matrix <- model.matrix(design_formula_no_batch, data = metadata_df)
-    
-    debug_log("Design matrix for batch correction:", head(design_matrix))
-    
-    # Apply removeBatchEffect
-    log_message("Removing batch effects from normalized counts...", "INFO")
-    corrected_counts <- tryCatch({
-      limma::removeBatchEffect(rlog_counts, batch = metadata_df$batch, design = design_matrix)
-    }, error = function(e) {
-      log_message(glue::glue("Error in batch effect removal: {e$message}"), "ERROR")
-      stop(e$message)
-    })
-    
-    normCounts <- corrected_counts
-    
-    # Compare before/after batch correction
-    debug_log("Before batch correction (summary):")
-    print(summary(as.vector(rlog_counts)))
-    debug_log("After batch correction (summary):")
-    print(summary(as.vector(normCounts)))
-    
-  } else {
-    log_message("Applying standard rlog transformation without batch correction...", "INFO")
-    rlog_transformed <- tryCatch({
-      rlog(dsq_wald, blind = FALSE)
-    }, error = function(e) {
-      log_message(glue::glue("Error in rlog transformation: {e$message}"), "ERROR")
-      stop(e$message)
-    })
-    
-    normCounts <- assay(rlog_transformed)
-  }
-  
-  end_time <- proc.time() - start_time
-  log_message(glue::glue("Normalization completed in {round(end_time['elapsed'], 2)} seconds"), "SUCCESS")
-  
-  # Run DESeq2 with LRT
-  log_message("Running DESeq2 with Likelihood Ratio Test...", "STEP")
-  start_time <- proc.time()
-  
-  dsq_lrt <- tryCatch({
-    DESeq(
-      dse,
-      test = "LRT",
-      reduced = reduced_formula,
-      quiet = FALSE,
-      parallel = TRUE
-    )
-  }, error = function(e) {
-    log_message(glue::glue("Error in DESeq LRT test: {e$message}"), "ERROR")
-    stop(e$message)
-  })
-  
-  end_time <- proc.time() - start_time
-  log_message(glue::glue("DESeq2 LRT test completed in {round(end_time['elapsed']/60, 2)} minutes"), "SUCCESS")
-  
-  # Save LRT results if debugging
-  if (args$save_rdata) {
-    saveRDS(dsq_lrt, file = "debug_dsq_lrt.rds")
-    log_message("Saved LRT test results to debug_dsq_lrt.rds", "DEBUG")
-  }
-  
-  # Get LRT results
-  log_message("Extracting LRT test results...", "INFO")
-  dsq_lrt_res <- tryCatch({
-    results(
-      dsq_lrt,
-      alpha = args$fdr,
-      independentFiltering = TRUE
-    )
-  }, error = function(e) {
-    log_message(glue::glue("Error extracting LRT results: {e$message}"), "ERROR")
-    stop(e$message)
-  })
-  
-  # Log summary of LRT results
-  significant_count <- sum(dsq_lrt_res$padj < args$fdr, na.rm = TRUE)
-  total_tested <- sum(!is.na(dsq_lrt_res$padj))
-  log_message(glue::glue("LRT results: {significant_count} significant genes of {total_tested} tested (FDR < {args$fdr})"), "INFO")
-  
-  # Generate contrasts if not in LRT-only mode
-  contrast_df <- data.frame()
-  if (!args$lrt_only_mode) {
-    log_message("Generating contrasts...", "STEP")
-    contrast_df <- generate_contrasts(dsq_wald, args)
-    log_message(glue::glue("Generated {nrow(contrast_df)} contrast entries"), "INFO")
-  } else {
-    log_message("Skipping contrast generation (LRT-only mode)", "INFO")
-  }
-  
-  # Return all results
-  log_message("DESeq2 analysis completed successfully", "SUCCESS")
-  return(list(
-    dsq_wald = dsq_wald,
-    dsq_lrt = dsq_lrt,
-    dsq_lrt_res = dsq_lrt_res,
-    normCounts = normCounts,
-    contrast_df = contrast_df
-  ))
-}
-
-# Function to export all results
-export_results <- function(deseq_results, expression_data_df, metadata_df, args, 
-                          batch_warning, rpkm_filtered_count) {
-  message("Exporting analysis results...")
-  output_prefix <- args$output
-  
-  # Export LRT contrasts with significant gene counts
-  contrasts_df <- generate_effect_contrasts(metadata_df, as.formula(args$design), deseq_results$dsq_lrt, args$fdr)
-  
-  # Write contrasts to TSV
-  contrasts_filename <- paste(output_prefix, "_contrasts_table.tsv", sep = "")
-  write.table(contrasts_df, file = contrasts_filename, sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
-  message(glue::glue("✓ Exported contrasts to {contrasts_filename}"))
-  
-  # Annotate expression data with LRT results
-  annotated_expression_df <- expression_data_df %>%
-    bind_cols(as.data.frame(deseq_results$dsq_lrt_res) %>% select(pvalue, padj)) %>%
-    mutate(
-      `-LOG10(pval)` = -log10(as.numeric(pvalue)),
-      `-LOG10(padj)` = -log10(as.numeric(padj))
-    )
-  
-  # Export LRT report
-  lrt_report_filename <- paste0(output_prefix, "_lrt_result.md")
-  generate_lrt_md(
-    deseq_results$dsq_lrt_res, 
-    args$design, 
-    args$reduced, 
-    lrt_report_filename, 
-    alpha = args$fdr, 
-    batch_warning = batch_warning, 
-    rpkm_filtered_count = rpkm_filtered_count
-  )
-  message(glue::glue("✓ Exported LRT markdown report to {lrt_report_filename}"))
-  
-  # Export full expression table
-  results_filename <- paste0(output_prefix, "_gene_exp_table.tsv")
-  write.table(
-    annotated_expression_df,
-    file = results_filename,
-    sep = "\t",
-    row.names = FALSE,
-    col.names = TRUE,
-    quote = FALSE
-  )
-  message(glue::glue("✓ Exported results table to {results_filename}"))
-  
-  # Clean up graphics
-  graphics.off()
-  
-  # Process sample columns for the annotations
-  sample_order <- colnames(deseq_results$dsq_lrt)
-  
-  colnames(annotated_expression_df) <- gsub(" Rpkm", "", colnames(annotated_expression_df))
-  annotated_expression_df <- annotated_expression_df %>%
-    select(-one_of(sample_order)) # remove all sample columns
-  
-  colnames(annotated_expression_df) <- gsub(" TotalReads", "", colnames(annotated_expression_df))
-  
-  annotated_expression_df <- annotated_expression_df %>%
-    select(-one_of(sample_order)) %>% # remove all sample columns
-    distinct(GeneId, .keep_all = TRUE) %>%
-    remove_rownames() %>%
-    column_to_rownames("GeneId")
-  
-  # Export charts and GCT files
-  export_charts(
-    deseq_results$dsq_lrt_res,
-    annotated_expression_df, 
-    metadata_df, 
-    deseq_results$normCounts, 
-    output_prefix, 
-    args
-  )
-  message("✓ Exported charts and GCT files")
-}
-
-# Export GCT with subset of significant genes only
-subset_significant_genes <- function(lrt_results, alpha = 0.1) {
-  log_message("=== Debugging before subsetting ===")
-  # Get genes with padj < alpha
-  sig_genes <- rownames(lrt_results)[which(lrt_results$padj < alpha)]
-  log_message(paste("Checking if all row names in row_metadata_filtered are present in normCounts:"))
-  log_message(paste("All row names present:", !is.null(sig_genes)))
-  log_message(paste("Number of rows after subsetting:", length(sig_genes)))
-  return(sig_genes)
-}
-
-# Create a function to standardize plot settings
-configure_plot_theme <- function() {
-  # Set default theme for all plots
-  ggplot2::theme_set(
-    ggplot2::theme_classic() + 
-    ggplot2::theme(
-      plot.title = ggplot2::element_text(size = 14, face = "bold", hjust = 0.5),
-      axis.title = ggplot2::element_text(size = 12),
-      axis.text = ggplot2::element_text(size = 10),
-      legend.title = ggplot2::element_text(size = 12),
-      legend.text = ggplot2::element_text(size = 10),
-      legend.position = "right"
-    )
-  )
-}
-
-# Call this at the start of your script
-configure_plot_theme()
-
-# Main script execution with enhanced error handling
-main <- function() {
-  # Set up error handling
-  tryCatch({
-    # Parse arguments
-    args <- get_args()
-    
-    # Setup debugging and logging
-    if ("debug" %in% names(args) && args$debug) {
-      enable_debug_mode(args)
-    }
-    
-    # Configure BiocParallel
-    register(MulticoreParam(args$threads))
-    log_message(glue::glue("Using {args$threads} CPU threads for parallel processing"), "INFO")
-    
-    # Run the analysis
-    run_deseq_analysis(args)
-    
-    # Report successful completion
-    log_message("DESeq2 analysis completed successfully! ✓", "SUCCESS")
-    
-  }, error = function(e) {
-    # Capture full error information
-    error_msg <- paste("Analysis failed:", e$message)
-    error_trace <- paste(capture.output(traceback()), collapse="\n")
-    
-    log_message(error_msg, "ERROR")
-    log_message("Error traceback:", "ERROR")
-    message(error_trace)
-    
-    # Check if error_report.txt exists
-    if (file.exists("error_report.txt")) {
-      log_message("See error_report.txt for detailed error information", "ERROR")
-    } else {
-      # Create basic error report if none exists
-      writeLines(
-        paste0(
-          "# ❌ Error Report\n\n",
-          "**Timestamp:** ", format(Sys.time(), "%A, %B %d, %Y %I:%M:%S %p"), "\n\n",
-          "**Error Message:** ", e$message, "\n\n",
-          "## Error Traceback\n\n```\n", error_trace, "\n```\n"
-        ),
-        con = "error_report.txt"
-      )
-      log_message("Basic error report written to error_report.txt", "ERROR")
-    }
-    
-    # Exit with error code
-    quit(status = 1)
-  })
-}
-
-# Execute main function
-main()
-
 # Generate all possible contrasts from DESeq2 results object
 generate_contrasts <- function(dds, args) {
   log_message("Generating contrasts for differential expression analysis...", "STEP")
@@ -2791,3 +1700,1092 @@ export_contrasts_with_de_data <- function(lrt_results, dds, output_prefix, alpha
   ))
 }
 
+create_releveled_deseq_object <- function(dds, relevel_list) {
+  # Rebuild DESeqDataSet to ensure a proper copy
+  dds_copy <- DESeq2::DESeqDataSetFromMatrix(
+    countData = counts(dds),
+    colData   = as.data.frame(colData(dds)),
+    design    = design(dds)
+  )
+  # Apply releveling for each factor as specified in relevel_list
+  for (fac in names(relevel_list)) {
+    new_ref <- relevel_list[[fac]]
+    dds_copy[[fac]] <- relevel(dds_copy[[fac]], ref = new_ref)
+  }
+  return(dds_copy)
+}
+
+# Function to check if the design-formula syntax correct
+check_design_formula <- function(formula_string, type = "Design") {
+  log_message(glue::glue("Validating {type} formula syntax: '{formula_string}'"), "STEP")
+  
+  # Try to parse the formula
+  tryCatch(
+    {
+      f <- as.formula(formula_string)
+      
+      # Additional validation for formula terms
+      terms <- attr(terms(f), "term.labels")
+      debug_log(glue::glue("Formula terms: {paste(terms, collapse=', ')}"))
+      
+      # Check for interactions
+      has_interactions <- any(grepl(":", terms, fixed = TRUE))
+      log_message(glue::glue("Formula contains interaction terms: {has_interactions}"), "INFO")
+      
+      return(f)
+    },
+    error = function(e) {
+      log_message(glue::glue("Formula parsing error: {e$message}"), "ERROR")
+      report_error(
+        msg = paste(type, "Formula Parsing Error"),
+        details = c(
+          paste0("Failed to parse the ", type, " formula: '", formula_string, "'."),
+          "Ensure the formula starts with '~' and uses '+' (as independent), ':' (for interaction) or '*' (as + and : at once) to add covariates. E.g. '~factor1 + factor2 + factor1:factor2' (or just '~factor1 * factor2'). "
+        ),
+        recommendations = c("Please check the syntax of your formula and try again.")
+      )
+    }
+  )
+}
+
+# Function to check if the design-formula covariates are the same as colnames in metdata
+check_design_covariates <- function(design_formula, metadata_df) {
+  # Extract covariate names from the design formula
+  covariates <- all.vars(design_formula)
+  
+  # Identify missing covariates
+  missing_covariates <- setdiff(covariates, colnames(metadata_df))
+  
+  if (length(missing_covariates) > 0) {
+    report_error(
+      msg = "Missing Covariates in Metadata",
+      details = paste("The following covariates are missing in metadata:", paste(missing_covariates, collapse = ", ")),
+      recommendations = c("Ensure metadata contains all covariates specified in the design formula.")
+    )
+  } else {
+    message("All covariates in the design formula are present in the metadata.")
+  }
+}
+
+# Function to apply batch correction using ComBat_seq
+apply_combat_seq <- function(count_data, design, column_data) {
+
+  start_time <- proc.time()
+
+  print("Applying ComBat_seq batch correction")
+
+  print("Checking full-rank of the model...")
+  validate_full_rank_design(design, column_data)
+
+  corrected_counts <- sva::ComBat_seq(
+    counts = as.matrix(count_data),
+    batch = column_data$batch,
+    covar_mod = model.matrix(design, data = column_data)
+  )
+
+  end_time <- proc.time() - start_time
+
+  print("Total time of apply_combat_seq execution: ")
+  print(end_time) # This shows user, system, and elapsed times
+
+  return(corrected_counts)
+}
+
+# Enhanced batch correction handling with detailed logging
+handle_batch_correction <- function(args, countData, metadata_df, design_formula) {
+  log_message("Handling batch correction setup...", "STEP")
+  
+  # Store original values
+  original_counts <- NULL
+  corrected_counts <- NULL
+  batch_warning <- NULL
+  original_design_formula <- design_formula
+  
+  # Check if batch correction is requested
+  if (args$batchcorrection == "none") {
+    log_message("No batch correction requested", "INFO")
+    return(list(
+      countData = countData,
+      design_formula = design_formula,
+      original_counts = NULL,
+      corrected_counts = NULL,
+      batch_warning = NULL
+    ))
+  }
+  
+  log_message(glue::glue("Batch correction method requested: {args$batchcorrection}"), "INFO")
+  
+  # Check if 'batch' column exists
+  if (!("batch" %in% colnames(metadata_df))) {
+    batch_warning <- "⚠️ You specified batch correction but there's no 'batch' column in your metadata. Proceeding without batch correction."
+    log_message(batch_warning, "WARNING")
+    return(list(
+      countData = countData,
+      design_formula = design_formula,
+      original_counts = NULL,
+      corrected_counts = NULL,
+      batch_warning = batch_warning
+    ))
+  }
+  
+  # Ensure 'batch' is a factor
+  metadata_df$batch <- as.factor(metadata_df$batch)
+  batch_levels <- levels(metadata_df$batch)
+  log_message(glue::glue("Batch factor has {length(batch_levels)} levels: {paste(batch_levels, collapse=', ')}"), "INFO")
+  
+  # Check if we have sufficient samples in each batch
+  batch_counts <- table(metadata_df$batch)
+  debug_log("Samples per batch:", batch_counts)
+  
+  # Apply appropriate batch correction
+  if (args$batchcorrection == "combatseq") {
+    log_message("Applying ComBat-seq batch correction to count data...", "STEP")
+    
+    # Check if any batch has only one sample
+    if (any(batch_counts < 2)) {
+      log_message("Warning: Some batches have fewer than 2 samples, which might affect batch correction", "WARNING")
+    }
+    
+    original_counts <- countData
+    
+    # Timing the ComBat-seq operation
+    start_time <- proc.time()
+    corrected_counts <- apply_combat_seq(countData, design_formula, metadata_df)
+    end_time <- proc.time() - start_time
+    
+    log_message(glue::glue("ComBat-seq batch correction completed in {round(end_time['elapsed'], 2)} seconds"), "SUCCESS")
+    
+    # Compare before and after statistics
+    debug_log("Original counts summary statistics:")
+    print(summary(as.vector(as.matrix(original_counts))))
+    
+    debug_log("Corrected counts summary statistics:")
+    print(summary(as.vector(as.matrix(corrected_counts))))
+    
+    countData <- corrected_counts
+    log_message("ComBat-seq batch correction applied. Original design formula maintained.", "SUCCESS")
+    
+  } else if (args$batchcorrection == "model") {
+    log_message("Including 'batch' in the design formula for limma batch correction...", "STEP")
+    
+    # Show the original design formula
+    debug_log(glue::glue("Original design formula: {deparse(design_formula)}"))
+    
+    # Remove '~' from the original design formula string and add batch
+    original_design <- substring(deparse(design_formula), 2)
+    new_design_formula <- as.formula(paste("~ batch +", original_design))
+    design_formula <- new_design_formula
+    
+    log_message(glue::glue("Modified design formula to include batch: {deparse(design_formula)}"), "SUCCESS")
+  }
+  
+  return(list(
+    countData = countData,
+    design_formula = design_formula,
+    original_counts = original_counts,
+    corrected_counts = corrected_counts,
+    batch_warning = batch_warning
+  ))
+}
+
+get_args <- function() {
+  parser <- ArgumentParser(description = "Run DESeq2 for multi-factor analysis using LRT (likelihood ratio or chi-squared test)")
+  parser$add_argument(
+    "-i",
+    "--input",
+    help = "Grouped by gene / TSS/ isoform expression files, formatted as CSV/TSV",
+    type = "character",
+    required = TRUE,
+    nargs = "+"
+  )
+  parser$add_argument(
+    "-n",
+    "--name",
+    help = "Unique names for input files, no special characters, spaces are allowed. Number and order corresponds to --input",
+    type = "character",
+    required = TRUE,
+    nargs = "+"
+  )
+  parser$add_argument(
+    "-m",
+    "--meta",
+    help = "Metadata file to describe relation between samples, where first column corresponds to --name, formatted as CSV/TSV",
+    type = "character",
+    required = TRUE
+  )
+  parser$add_argument(
+    "-d",
+    "--design",
+    help = "Design formula. Should start with ~, like ~condition+celltype+condition:celltype. See DESeq2 manual for details",
+    type = "character",
+    required = TRUE
+  )
+  parser$add_argument(
+    "-r",
+    "--reduced",
+    help = "Reduced formula to compare against with the term(s) of interest removed. Should start with ~. See DESeq2 manual for details",
+    type = "character",
+    required = TRUE
+  )
+  parser$add_argument(
+    "--batchcorrection",
+    help = paste(
+      "Specifies the batch correction method to be applied.",
+      "- 'combatseq' applies ComBat_seq at the beginning of the analysis, removing batch effects from the counts before differential expression analysis.",
+      "- 'model' applies removeBatchEffect from the limma package after differential expression analysis.",
+      "- Default: none"
+    ),
+    type = "character",
+    choices = c("none", "combatseq", "model"),
+    default = "none"
+  )
+  parser$add_argument(
+    "--fdr",
+    help = paste(
+      "In the exploratory visualization part of the analysis output only features",
+      "with adjusted p-value (FDR) not bigger than this value. Also the significance",
+      "cutoff used for optimizing the independent filtering. Default: 0.1."
+    ),
+    type = "double",
+    default = 0.1
+  )
+  parser$add_argument(
+    "--lfcthreshold",
+    help = paste(
+      "Log2 fold change threshold for determining significant differential expression.",
+      "Genes with absolute log2 fold change greater than this threshold will be considered.",
+      "Default: 0.59 (about 1.5 fold change)"
+    ),
+    type = "double",
+    default = 0.59
+  )
+  parser$add_argument(
+    "--use_lfc_thresh",
+    help = paste(
+      "Flag to indicate whether to use lfcthreshold as the null hypothesis value in the results function call.",
+      "If TRUE, lfcthreshold is used in the hypothesis test (i.e., genes are tested against this threshold).",
+      "If FALSE, the null hypothesis is set to 0, and lfcthreshold is used only as a downstream filter.",
+      "Default: FALSE"
+    ),
+    action = "store_true",
+    default = FALSE
+  )
+  parser$add_argument(
+    "--rpkm_cutoff",
+    help = paste(
+      "RPKM cutoff for filtering genes. Genes with RPKM values below this threshold will be excluded from the analysis.",
+      "Default: NULL (no filtering)"
+    ),
+    type    = "integer",
+    default = NULL
+  )
+  parser$add_argument(
+    "--scaling_type",
+    help = paste(
+      "Specifies the type of scaling to be applied to the expression data.",
+      "- 'minmax' applies Min-Max scaling, normalizing values to a range of [-2, 2].",
+      "- 'zscore' applies Z-score standardization, centering data to mean = 0 and standard deviation = 1.",
+      "- Default: none (no scaling applied)."
+    ),
+    type = "character",
+    choices = c("minmax", "zscore"),
+    default = "zscore"
+  )
+  parser$add_argument(
+    "--rowdist",
+    help = paste(
+      "Distance metric for HOPACH row clustering. Ignored if --cluster is not",
+      "provided. Default: cosangle"
+    ),
+    type = "character",
+    default = "cosangle",
+    choices = c(
+      "cosangle",
+      "euclid",
+      "abseuclid",
+      "cor",
+      "abscor"
+    )
+  )
+  parser$add_argument(
+    "--columndist",
+    help = paste(
+      "Distance metric for HOPACH column clustering. Ignored if --cluster is not",
+      "provided. Default: euclid"
+    ),
+    type = "character",
+    default = "euclid",
+    choices = c(
+      "cosangle",
+      "euclid",
+      "abseuclid",
+      "cor",
+      "abscor"
+    )
+  )
+  parser$add_argument(
+    "--cluster",
+    help = paste(
+      "Hopach clustering method to be run on normalized read counts for the",
+      "exploratory visualization part of the analysis. Default: do not run",
+      "clustering"
+    ),
+    type = "character",
+    choices = c("row", "column", "both", "none"),
+    default = "none"
+  )
+  parser$add_argument(
+    "--k",
+    help    = "Number of levels (depth) for Hopach clustering: min - 1, max - 15. Default: 3.",
+    type    = "integer",
+    default = 3
+  )
+  parser$add_argument(
+    "--kmax",
+    help    = "Maximum number of clusters at each level for Hopach clustering: min - 2, max - 9. Default: 5.",
+    type    = "integer",
+    default = 5
+  )
+  parser$add_argument(
+    "-o",
+    "--output",
+    help = "Output prefix for generated files",
+    type = "character",
+    default = "./deseq"
+  )
+  parser$add_argument(
+    "-p",
+    "--threads",
+    help = "Threads number",
+    type = "integer",
+    default = 1
+  )
+  parser$add_argument(
+    "--lrt_only_mode",
+    help    = "Run LRT only, no contrasts",
+    action  = "store_true",
+    default = FALSE
+  )
+  parser$add_argument(
+    "--test_mode",
+    help = "Run for test, only first 500 rows, clustering minimised",
+    action = "store_true",
+    default = FALSE
+  )
+  parser$add_argument(
+    "--clean_logs",
+    help = "Clean existing log files before starting new analysis",
+    action = "store_true",
+    default = FALSE
+  )
+  parser$add_argument(
+    "--debug",
+    help = "Enable debug mode for more verbose logging",
+    action = "store_true",
+    default = FALSE
+  )
+  parser$add_argument(
+    "--save_rdata",
+    help = "Save intermediate RData files for debugging",
+    action = "store_true",
+    default = FALSE
+  )
+  args <- assert_args(parser$parse_args(commandArgs(trailingOnly = TRUE)))
+  return(args)
+}
+
+generate_lrt_md <- function(deseq_results, full_formula, reduced_formula, output_file, alpha = args$fdr,
+                            batch_warning = NULL, rpkm_filtered_count = NULL) {
+  # Initialize the markdown content
+  md_content <- ""
+
+  # Add batch warning if present
+  if (!is.null(batch_warning)) {
+    md_content <- paste0(md_content, "# **Warning**\n\n", batch_warning, "\n\n---\n\n")
+  }
+
+  # Add DESeq LRT results summary based on padj value only
+  if (!is.null(deseq_results)) {
+    # Start summarizing the LRT results
+    md_content <- paste0(md_content, "# Likelihood Ratio Test (LRT) Results\n\n---\n\n")
+
+    # Describe the full and reduced formulas
+    md_content <- paste0(
+      md_content,
+      "Based on your **full formula**: `", full_formula, "` and **reduced formula**: `", reduced_formula, "`, ",
+      "this LRT analysis tests whether removing the interaction term (or terms) significantly affects gene expression. ",
+      "The test uses only the **FDR adjusted p-value** (padj) to determine significance, as Log Fold Change (LFC) is irrelevant in the context of LRT.\n\n"
+    )
+
+    # Calculate the number of significant genes based on padj value
+    significant_genes <- sum(deseq_results$padj < alpha, na.rm = TRUE)
+    total_genes <- sum(!is.na(deseq_results$padj))
+
+    # Extract the outliers and low counts from the DESeq results summary
+    summary_output <- capture.output(summary(deseq_results))
+
+    outliers <- gsub(".*: ", "", summary_output[6]) # Outliers
+    low_counts <- gsub(".*: ", "", summary_output[7]) # Low counts (independent filtering)
+    mean_count <- gsub("[^0-9]", "", summary_output[8])
+
+    # Add a summary of significant genes
+    lrt_summary <- paste0(
+      "### Results Summary\n\n",
+      "From this LRT analysis, **", significant_genes, " genes** (out of ", total_genes, " tested) are identified as significant with a padj value < ", alpha, ".\n\n"
+    )
+
+    # Add information about outliers and low counts
+    lrt_summary <- paste0(
+      lrt_summary,
+      "**Outliers**<sup>1</sup>: ", outliers, " of genes were detected as outliers and excluded from analysis.\n\n",
+      "**Low counts**<sup>2</sup>: ", low_counts, " of genes were removed due to low counts (mean <", mean_count, ") and independent filtering.\n\n",
+      "Arguments of ?DESeq2::results():   \n<sup>1</sup> - see 'cooksCutoff',\n<sup>2</sup> - see 'independentFiltering'\n\n"
+    )
+
+    # Add this summary to the markdown content
+    md_content <- paste0(md_content, lrt_summary)
+
+    # Add explanation for the next steps
+    next_steps <- paste0(
+      "---\n\n",
+      "### Next Steps\n\n",
+      "If the number of significant genes is substantial, consider including the interaction term in your design formula ",
+      "for a more detailed analysis of differential gene expression.\n\n",
+      "For further insights and to explore detailed contrasts using the Wald test for the complex design formula, ",
+      "please visit the **Complex Interaction Analysis** tab for more information.\n\n"
+    )
+
+    md_content <- paste0(md_content, next_steps)
+  }
+
+  if (!is.null(rpkm_filtered_count)) {
+    md_content <- glue::glue("{md_content}### RPKM Filtering Summary\n\n")
+    md_content <- glue::glue("{md_content}**Genes filtered out by RPKM threshold**: {rpkm_filtered_count}\n\n")
+  }
+  # Write the content to the output file
+  writeLines(md_content, con = output_file)
+}
+
+# Enhanced logging function with file output and debug levels
+log_message <- function(message, type = "INFO", log_file = "deseq_analysis.log") {
+  timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+  prefix <- switch(type,
+                  "INFO" = "ℹ️",
+                  "WARNING" = "⚠️",
+                  "ERROR" = "❌",
+                  "SUCCESS" = "✅",
+                  "DEBUG" = "🔍",
+                  "STEP" = "▶️",
+                  "▶️")
+  
+  formatted_message <- glue::glue("[{timestamp}] {prefix} {message}")
+  message(formatted_message)
+  
+  # Always write to log file
+  write(formatted_message, file = log_file, append = TRUE)
+}
+
+# Setup debug mode handling
+enable_debug_mode <- function(args) {
+  # Create a global debug flag
+  assign("DEBUG_MODE", args$debug, envir = .GlobalEnv)
+  
+  if (args$debug) {
+    log_message("Debug mode enabled - verbose logging will be shown", "DEBUG")
+    # Set R options for more verbose error reporting
+    options(error = function() {
+      traceback(3)
+      log_message("Error encountered, see traceback above", "ERROR")
+      if (!interactive()) quit(status = 1)
+    })
+  }
+  
+  # Clean up any existing log file at the start
+  if (args$clean_logs) {
+    file.remove("deseq_analysis.log")
+    log_message("Started new log file", "INFO")
+  }
+}
+
+# Debug-specific logging that only appears when debug mode is on
+debug_log <- function(message, data = NULL) {
+  if (exists("DEBUG_MODE") && DEBUG_MODE) {
+    log_message(message, "DEBUG")
+    
+    # If data object is provided, print its summary
+    if (!is.null(data)) {
+      if (is.data.frame(data)) {
+        log_message(glue::glue("Data dimensions: {nrow(data)} rows x {ncol(data)} columns"), "DEBUG")
+        if (nrow(data) > 0) {
+          class_info <- sapply(data, class)
+          log_message("Column types: ", "DEBUG")
+          print(class_info)
+          
+          # Print a few rows for inspection
+          log_message("Preview of data:", "DEBUG")
+          print(head(data, 5))
+        }
+      } else if (is.matrix(data)) {
+        log_message(glue::glue("Matrix dimensions: {nrow(data)} rows x {ncol(data)} columns"), "DEBUG")
+        log_message("Matrix preview:", "DEBUG")
+        print(head(data, 5))
+      } else if (is.list(data)) {
+        log_message(glue::glue("List with {length(data)} elements"), "DEBUG")
+        log_message(glue::glue("List names: {paste(names(data), collapse=', ')}"), "DEBUG")
+      } else {
+        log_message("Object summary:", "DEBUG")
+        print(summary(data))
+      }
+    }
+  }
+}
+
+# Main execution function to organize workflow
+run_deseq_analysis <- function(args) {
+  # Start time tracking for the entire analysis
+  total_start_time <- proc.time()
+  
+  # Setup and validation
+  message("=== DESeq2 Analysis Pipeline ===")
+  message(glue::glue("Analysis started at {format(Sys.time(), '%Y-%m-%d %H:%M:%S')}"))
+  
+  # 1. Load and validate metadata
+  metadata_df <- load_and_validate_metadata(args)
+  
+  # 2. Load and validate expression data
+  expression_data <- load_and_validate_expression_data(args, metadata_df)
+  
+  # 3. Process count data and apply batch correction
+  count_data_results <- process_count_data(args, expression_data$counts, metadata_df, 
+                                         expression_data$design_formula)
+  
+  # 4. Run DESeq2 analysis
+  deseq_results <- run_deseq2(count_data_results$countData, 
+                            metadata_df, 
+                            count_data_results$design_formula,
+                            args$reduced,
+                            args)
+  
+  # 5. Process and export results
+  export_results(deseq_results, expression_data$expression_df, 
+                metadata_df, args, count_data_results$batch_warning,
+                expression_data$rpkm_filtered_count)
+  
+  # Report total elapsed time
+  total_elapsed <- proc.time() - total_start_time
+  message(glue::glue("=== Analysis completed in {round(total_elapsed['elapsed']/60, 1)} minutes ==="))
+  message(glue::glue("Finished at {format(Sys.time(), '%Y-%m-%d %H:%M:%S')}"))
+}
+
+# Function to load and validate metadata
+load_and_validate_metadata <- function(args) {
+  message("Loading metadata...")
+  
+  # Check if metadata file is formatted correctly
+  check_file_delimiter(args$meta)
+  
+  # Load metadata
+  metadata_df <- read.table(
+    args$meta,
+    sep = get_file_type(args$meta),
+    header = TRUE,
+    stringsAsFactors = FALSE,
+    row.names = 1
+  )
+  
+  # Clean metadata column and row names
+  colnames(metadata_df) <- clean_sample_names(colnames(metadata_df))
+  rownames(metadata_df) <- clean_sample_names(rownames(metadata_df))
+  
+  message(glue::glue("Loaded metadata for {nrow(metadata_df)} samples with {ncol(metadata_df)} covariates"))
+  
+  # Validate metadata
+  check_batch_column(metadata_df, args$batchcorrection)
+  
+  # Check design formulas
+  design_formula <- check_design_formula(args$design, "Full Design-Formula")
+  reduced_formula <- check_design_formula(args$reduced, "Reduced Design-Formula")
+  
+  # Verify covariates exist in metadata
+  check_design_covariates(design_formula, metadata_df)
+  
+  # Make sure there are sufficient replicates for all factors
+  check_replicates(metadata_df, all.vars(design_formula))
+  
+  # Add formulas to metadata for convenience
+  attr(metadata_df, "design_formula") <- design_formula
+  attr(metadata_df, "reduced_formula") <- reduced_formula
+  
+  return(metadata_df)
+}
+
+# Function to load and validate expression data
+load_and_validate_expression_data <- function(args, metadata_df) {
+  message("Loading expression data...")
+  
+  # Clean sample names for consistency
+  clean_names <- clean_sample_names(args$name)
+  
+  # Load expression data
+  expression_data_df <- load_expression_data(args$input, clean_names, READ_COL, RPKM_COL, INTERSECT_BY)
+  message(glue::glue("Loaded expression data for {nrow(expression_data_df)} genes from {length(args$input)} files"))
+  
+  # Apply RPKM filtering if specified
+  rpkm_filtered_count <- NULL
+  if (!is.null(args$rpkm_cutoff)) {
+    message(glue::glue("Applying RPKM cutoff of {args$rpkm_cutoff}..."))
+    initial_gene_count <- nrow(expression_data_df)
+    
+    expression_data_df <- filter_rpkm(expression_data_df, args$rpkm_cutoff)
+    
+    # Ensure at least some genes remain
+    if (nrow(expression_data_df) == 0) {
+      report_error(
+        "No genes remaining after RPKM filtering!",
+        details = "All genes were removed due to the RPKM cutoff being too high.",
+        recommendations = c("Reduce the RPKM threshold to retain more genes.")
+      )
+    }
+    
+    # Calculate how many genes were removed
+    rpkm_filtered_count <- initial_gene_count - nrow(expression_data_df)
+    
+    message(glue::glue("{rpkm_filtered_count} genes removed, {nrow(expression_data_df)} genes retained"))
+  }
+  
+  # Process count data
+  read_counts_columns <- grep(
+    paste(READ_COL, sep = ""),
+    colnames(expression_data_df),
+    value = TRUE,
+    ignore.case = TRUE
+  )
+  
+  read_counts_data_df <- expression_data_df %>%
+    dplyr::mutate_at("GeneId", toupper) %>%
+    dplyr::distinct(GeneId, .keep_all = TRUE) %>%
+    remove_rownames() %>%
+    column_to_rownames("GeneId")
+  
+  read_counts_data_df <- read_counts_data_df[read_counts_columns]
+  
+  # Clean count data column names
+  colnames(read_counts_data_df) <- lapply(colnames(read_counts_data_df), function(s) {
+    paste(head(unlist(strsplit(s, " ", fixed = TRUE)), -1), collapse = " ")
+  })
+  colnames(read_counts_data_df) <- clean_sample_names(colnames(read_counts_data_df))
+  
+  # Verify sample name consistency between metadata and counts
+  validate_sample_consistency(metadata_df, read_counts_data_df)
+  
+  # Reorder count data columns to match metadata
+  read_counts_data_df <- read_counts_data_df[, rownames(metadata_df)]
+  
+  # Return all results
+  return(list(
+    expression_df = expression_data_df,
+    counts = read_counts_data_df,
+    design_formula = attr(metadata_df, "design_formula"),
+    reduced_formula = attr(metadata_df, "reduced_formula"),
+    rpkm_filtered_count = rpkm_filtered_count
+  ))
+}
+
+# Function to validate sample names consistency
+validate_sample_consistency <- function(metadata_df, count_data_df) {
+  log_message("Validating sample consistency between metadata and expression data...", "STEP")
+  
+  debug_log("Metadata sample names:", rownames(metadata_df))
+  debug_log("Count data column names:", colnames(count_data_df))
+  
+  # Check for exact matches
+  samples_in_metadata_not_in_data <- setdiff(rownames(metadata_df), colnames(count_data_df))
+  samples_in_data_not_in_metadata <- setdiff(colnames(count_data_df), rownames(metadata_df))
+  
+  # More advanced debugging - check for case-insensitive matches or partial matches
+  if (length(samples_in_metadata_not_in_data) > 0) {
+    debug_log("Checking for case-insensitive matches for missing samples...")
+    
+    # Try case-insensitive matching
+    lower_count_names <- tolower(colnames(count_data_df))
+    for (sample in samples_in_metadata_not_in_data) {
+      matches <- grep(tolower(sample), lower_count_names, value = TRUE)
+      if (length(matches) > 0) {
+        debug_log(glue::glue("Sample '{sample}' has potential case-insensitive matches: {paste(matches, collapse=', ')}"))
+      }
+    }
+  }
+  
+  # Report results
+  if (length(samples_in_metadata_not_in_data) > 0) {
+    report_error(
+      "Missing Samples in Expression Data",
+      details = c(
+        "### Issue:",
+        "The following samples are present in the metadata but missing from the expression data:",
+        "",
+        paste(paste0("- ", samples_in_metadata_not_in_data), collapse = "\n")
+      ),
+      recommendations = c(
+        "Ensure that sample names in the metadata file match exactly those in the expression data.",
+        "Check for typos, extra spaces, or differences in letter case.",
+        "Verify that the correct expression data file was loaded."
+      )
+    )
+  }
+  
+  if (length(samples_in_data_not_in_metadata) > 0) {
+    report_error(
+      "Missing Samples in Metadata",
+      details = c(
+        "### Issue:",
+        "The following samples are present in the expression data but missing from the metadata:",
+        "",
+        paste(paste0("- ", samples_in_data_not_in_metadata), collapse = "\n")
+      ),
+      recommendations = c(
+        "Ensure that all samples in the expression data are listed in the metadata file.",
+        "Check for typos, extra spaces, or differences in letter case.",
+        "Confirm that the metadata file corresponds to the current expression dataset."
+      )
+    )
+  }
+  
+  log_message("✓ Sample consistency validation passed", "SUCCESS")
+}
+
+# Enhanced DESeq2 analysis with detailed progress reporting
+run_deseq2 <- function(countData, metadata_df, design_formula, reduced_formula, args) {
+  log_message("Starting DESeq2 analysis...", "STEP")
+  
+  # Verify input data dimensions
+  log_message(glue::glue("Count data dimensions: {nrow(countData)} genes x {ncol(countData)} samples"), "INFO")
+  log_message(glue::glue("Metadata dimensions: {nrow(metadata_df)} samples x {ncol(metadata_df)} variables"), "INFO")
+  
+  # Create DESeq2 dataset
+  log_message("Creating DESeqDataSet object...", "INFO")
+  dse <- tryCatch({
+    DESeqDataSetFromMatrix(
+      countData = countData,
+      colData = metadata_df,
+      design = design_formula
+    )
+  }, error = function(e) {
+    log_message(glue::glue("Error creating DESeqDataSet: {e$message}"), "ERROR")
+    stop(e$message)
+  })
+  
+  log_message(glue::glue("Created DESeqDataSet with {nrow(dse)} genes and {ncol(dse)} samples"), "SUCCESS")
+  
+  # Save the raw DESeqDataSet if debugging is enabled
+  if (args$save_rdata) {
+    saveRDS(dse, file = "debug_dse_raw.rds")
+    log_message("Saved raw DESeqDataSet to debug_dse_raw.rds", "DEBUG")
+  }
+  
+  # Run DESeq2 with Wald test for contrasts
+  log_message("Running DESeq2 with Wald test (this may take a while)...", "STEP")
+  start_time <- proc.time()
+  
+  dsq_wald <- tryCatch({
+    DESeq(
+      dse,
+      test = "Wald",
+      quiet = FALSE,
+      parallel = TRUE
+    )
+  }, error = function(e) {
+    log_message(glue::glue("Error in DESeq Wald test: {e$message}"), "ERROR")
+    stop(e$message)
+  })
+  
+  end_time <- proc.time() - start_time
+  log_message(glue::glue("DESeq2 Wald test completed in {round(end_time['elapsed']/60, 2)} minutes"), "SUCCESS")
+  
+  # Save Wald results if debugging
+  if (args$save_rdata) {
+    saveRDS(dsq_wald, file = "debug_dsq_wald.rds")
+    log_message("Saved Wald test results to debug_dsq_wald.rds", "DEBUG")
+  }
+  
+  # Normalize counts
+  log_message("Normalizing counts with rlog transformation...", "STEP")
+  start_time <- proc.time()
+  
+  if (args$batchcorrection == "model" && "batch" %in% colnames(metadata_df)) {
+    log_message("Applying rlog transformation and batch effect removal...", "INFO")
+    
+    rlog_transformed <- tryCatch({
+      rlog(dsq_wald, blind = FALSE)
+    }, error = function(e) {
+      log_message(glue::glue("Error in rlog transformation: {e$message}"), "ERROR")
+      stop(e$message)
+    })
+    
+    rlog_counts <- assay(rlog_transformed)
+    
+    # Prepare design matrix without 'batch' for removeBatchEffect
+    design_formula_no_batch <- as.formula(paste0("~", str_remove(as.character(dsq_wald@design)[2], " \\+ batch")))
+    design_matrix <- model.matrix(design_formula_no_batch, data = metadata_df)
+    
+    debug_log("Design matrix for batch correction:", head(design_matrix))
+    
+    # Apply removeBatchEffect
+    log_message("Removing batch effects from normalized counts...", "INFO")
+    corrected_counts <- tryCatch({
+      limma::removeBatchEffect(rlog_counts, batch = metadata_df$batch, design = design_matrix)
+    }, error = function(e) {
+      log_message(glue::glue("Error in batch effect removal: {e$message}"), "ERROR")
+      stop(e$message)
+    })
+    
+    normCounts <- corrected_counts
+    
+    # Compare before/after batch correction
+    debug_log("Before batch correction (summary):")
+    print(summary(as.vector(rlog_counts)))
+    debug_log("After batch correction (summary):")
+    print(summary(as.vector(normCounts)))
+    
+  } else {
+    log_message("Applying standard rlog transformation without batch correction...", "INFO")
+    rlog_transformed <- tryCatch({
+      rlog(dsq_wald, blind = FALSE)
+    }, error = function(e) {
+      log_message(glue::glue("Error in rlog transformation: {e$message}"), "ERROR")
+      stop(e$message)
+    })
+    
+    normCounts <- assay(rlog_transformed)
+  }
+  
+  end_time <- proc.time() - start_time
+  log_message(glue::glue("Normalization completed in {round(end_time['elapsed'], 2)} seconds"), "SUCCESS")
+  
+  # Run DESeq2 with LRT
+  log_message("Running DESeq2 with Likelihood Ratio Test...", "STEP")
+  start_time <- proc.time()
+  
+  dsq_lrt <- tryCatch({
+    DESeq(
+      dse,
+      test = "LRT",
+      reduced = reduced_formula,
+      quiet = FALSE,
+      parallel = TRUE
+    )
+  }, error = function(e) {
+    log_message(glue::glue("Error in DESeq LRT test: {e$message}"), "ERROR")
+    stop(e$message)
+  })
+  
+  end_time <- proc.time() - start_time
+  log_message(glue::glue("DESeq2 LRT test completed in {round(end_time['elapsed']/60, 2)} minutes"), "SUCCESS")
+  
+  # Save LRT results if debugging
+  if (args$save_rdata) {
+    saveRDS(dsq_lrt, file = "debug_dsq_lrt.rds")
+    log_message("Saved LRT test results to debug_dsq_lrt.rds", "DEBUG")
+  }
+  
+  # Get LRT results
+  log_message("Extracting LRT test results...", "INFO")
+  dsq_lrt_res <- tryCatch({
+    results(
+      dsq_lrt,
+      alpha = args$fdr,
+      independentFiltering = TRUE
+    )
+  }, error = function(e) {
+    log_message(glue::glue("Error extracting LRT results: {e$message}"), "ERROR")
+    stop(e$message)
+  })
+  
+  # Log summary of LRT results
+  significant_count <- sum(dsq_lrt_res$padj < args$fdr, na.rm = TRUE)
+  total_tested <- sum(!is.na(dsq_lrt_res$padj))
+  log_message(glue::glue("LRT results: {significant_count} significant genes of {total_tested} tested (FDR < {args$fdr})"), "INFO")
+  
+  # Generate contrasts if not in LRT-only mode
+  contrast_df <- data.frame()
+  if (!args$lrt_only_mode) {
+    log_message("Generating contrasts...", "STEP")
+    contrast_df <- generate_contrasts(dsq_wald, args)
+    log_message(glue::glue("Generated {nrow(contrast_df)} contrast entries"), "INFO")
+  } else {
+    log_message("Skipping contrast generation (LRT-only mode)", "INFO")
+  }
+  
+  # Return all results
+  log_message("DESeq2 analysis completed successfully", "SUCCESS")
+  return(list(
+    dsq_wald = dsq_wald,
+    dsq_lrt = dsq_lrt,
+    dsq_lrt_res = dsq_lrt_res,
+    normCounts = normCounts,
+    contrast_df = contrast_df
+  ))
+}
+
+# Function to export all results
+export_results <- function(deseq_results, expression_data_df, metadata_df, args, 
+                          batch_warning, rpkm_filtered_count) {
+  message("Exporting analysis results...")
+  output_prefix <- args$output
+  
+  # Export LRT contrasts with significant gene counts
+  contrasts_df <- generate_effect_contrasts(metadata_df, as.formula(args$design), deseq_results$dsq_lrt, args$fdr)
+  
+  # Write contrasts to TSV
+  contrasts_filename <- paste(output_prefix, "_contrasts_table.tsv", sep = "")
+  write.table(contrasts_df, file = contrasts_filename, sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
+  message(glue::glue("✓ Exported contrasts to {contrasts_filename}"))
+  
+  # Annotate expression data with LRT results
+  annotated_expression_df <- expression_data_df %>%
+    bind_cols(as.data.frame(deseq_results$dsq_lrt_res) %>% select(pvalue, padj)) %>%
+    mutate(
+      `-LOG10(pval)` = -log10(as.numeric(pvalue)),
+      `-LOG10(padj)` = -log10(as.numeric(padj))
+    )
+  
+  # Export LRT report
+  lrt_report_filename <- paste0(output_prefix, "_lrt_result.md")
+  generate_lrt_md(
+    deseq_results$dsq_lrt_res, 
+    args$design, 
+    args$reduced, 
+    lrt_report_filename, 
+    alpha = args$fdr, 
+    batch_warning = batch_warning, 
+    rpkm_filtered_count = rpkm_filtered_count
+  )
+  message(glue::glue("✓ Exported LRT markdown report to {lrt_report_filename}"))
+  
+  # Export full expression table
+  results_filename <- paste0(output_prefix, "_gene_exp_table.tsv")
+  write.table(
+    annotated_expression_df,
+    file = results_filename,
+    sep = "\t",
+    row.names = FALSE,
+    col.names = TRUE,
+    quote = FALSE
+  )
+  message(glue::glue("✓ Exported results table to {results_filename}"))
+  
+  # Clean up graphics
+  graphics.off()
+  
+  # Process sample columns for the annotations
+  sample_order <- colnames(deseq_results$dsq_lrt)
+  
+  colnames(annotated_expression_df) <- gsub(" Rpkm", "", colnames(annotated_expression_df))
+  annotated_expression_df <- annotated_expression_df %>%
+    select(-one_of(sample_order)) # remove all sample columns
+  
+  colnames(annotated_expression_df) <- gsub(" TotalReads", "", colnames(annotated_expression_df))
+  
+  annotated_expression_df <- annotated_expression_df %>%
+    select(-one_of(sample_order)) %>% # remove all sample columns
+    distinct(GeneId, .keep_all = TRUE) %>%
+    remove_rownames() %>%
+    column_to_rownames("GeneId")
+  
+  # Export charts and GCT files
+  export_charts(
+    deseq_results$dsq_lrt_res,
+    annotated_expression_df, 
+    metadata_df, 
+    deseq_results$normCounts, 
+    output_prefix, 
+    args
+  )
+  message("✓ Exported charts and GCT files")
+}
+
+# Export GCT with subset of significant genes only
+subset_significant_genes <- function(lrt_results, alpha = 0.1) {
+  log_message("=== Debugging before subsetting ===")
+  # Get genes with padj < alpha
+  sig_genes <- rownames(lrt_results)[which(lrt_results$padj < alpha)]
+  log_message(paste("Checking if all row names in row_metadata_filtered are present in normCounts:"))
+  log_message(paste("All row names present:", !is.null(sig_genes)))
+  log_message(paste("Number of rows after subsetting:", length(sig_genes)))
+  return(sig_genes)
+}
+
+# Create a function to standardize plot settings
+configure_plot_theme <- function() {
+  # Set default theme for all plots
+  ggplot2::theme_set(
+    ggplot2::theme_classic() + 
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(size = 14, face = "bold", hjust = 0.5),
+      axis.title = ggplot2::element_text(size = 12),
+      axis.text = ggplot2::element_text(size = 10),
+      legend.title = ggplot2::element_text(size = 12),
+      legend.text = ggplot2::element_text(size = 10),
+      legend.position = "right"
+    )
+  )
+}
+
+# Call this at the start of your script
+configure_plot_theme()
+
+# Main script execution with enhanced error handling
+main <- function() {
+  # Set up error handling
+  tryCatch({
+    # Parse arguments
+    args <- get_args()
+    
+    # Setup debugging and logging
+    if ("debug" %in% names(args) && args$debug) {
+      enable_debug_mode(args)
+    }
+    
+    # Configure BiocParallel
+    register(MulticoreParam(args$threads))
+    log_message(glue::glue("Using {args$threads} CPU threads for parallel processing"), "INFO")
+    
+    # Run the analysis
+    run_deseq_analysis(args)
+    
+    # Report successful completion
+    log_message("DESeq2 analysis completed successfully! ✓", "SUCCESS")
+    
+  }, error = function(e) {
+    # Capture full error information
+    error_msg <- paste("Analysis failed:", e$message)
+    error_trace <- paste(capture.output(traceback()), collapse="\n")
+    
+    log_message(error_msg, "ERROR")
+    log_message("Error traceback:", "ERROR")
+    message(error_trace)
+    
+    # Check if error_report.txt exists
+    if (file.exists("error_report.txt")) {
+      log_message("See error_report.txt for detailed error information", "ERROR")
+    } else {
+      # Create basic error report if none exists
+      writeLines(
+        paste0(
+          "# ❌ Error Report\n\n",
+          "**Timestamp:** ", format(Sys.time(), "%A, %B %d, %Y %I:%M:%S %p"), "\n\n",
+          "**Error Message:** ", e$message, "\n\n",
+          "## Error Traceback\n\n```\n", error_trace, "\n```\n"
+        ),
+        con = "error_report.txt"
+      )
+      log_message("Basic error report written to error_report.txt", "ERROR")
+    }
+    
+    # Exit with error code
+    quit(status = 1)
+  })
+}
+
+# Execute main function
+main()
