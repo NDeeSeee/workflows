@@ -159,4 +159,27 @@ report_error <- function(message, details = NULL, recommendations = NULL) {
   
   # Stop execution
   stop(message, call. = FALSE)
+}
+
+#' Check file delimiter
+#' 
+#' Determines whether a file uses comma or tab as a delimiter by analyzing the first few lines.
+#' 
+#' @param file_path Path to the file to check
+#' @return Character string indicating the delimiter ("\t" or ",")
+#' @export
+check_file_delimiter <- function(file_path) {
+  # Read first few lines to determine delimiter
+  first_lines <- readLines(file_path, n = 5)
+  
+  # Count occurrences of common delimiters
+  comma_count <- sum(stringr::str_count(first_lines, ","))
+  tab_count <- sum(stringr::str_count(first_lines, "\t"))
+  
+  # Return appropriate delimiter
+  if (tab_count > comma_count) {
+    return("\t")
+  } else {
+    return(",")
+  }
 } 
