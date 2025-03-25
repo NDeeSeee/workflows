@@ -16,16 +16,51 @@ on:
         options:
           - bmicluster
           - bmicluster-compute
+  workflow_run:
+    workflows: ["Build and Push Docker Image"]
+    types:
+      - completed
+    branches:
+      - master
+      - main
 
 jobs:
   deploy:
     name: Deploy to HPC
     runs-on: self-hosted
-    environment: production
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      
+      - name: Get Docker tag from previous workflow
+        if: ${{ github.event_name == 'workflow_run' }}
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: docker-build.yml
+          run_id: ${{ github.event.workflow_run.id }}
+          name: docker_tag_artifact
+          path: ./artifacts
+      
+      - name: Set Docker tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "DOCKER_TAG=${{ github.event.inputs.docker_tag }}" >> $GITHUB_ENV
+          else
+            # Read the Docker tag from the downloaded artifact
+            DOCKER_TAG=$(cat ./artifacts/docker_tag.txt)
+            echo "DOCKER_TAG=${DOCKER_TAG}" >> $GITHUB_ENV
+          fi
+          
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "TARGET_HOST=${{ github.event.inputs.target_host }}" >> $GITHUB_ENV
+          else
+            echo "TARGET_HOST=bmicluster-compute" >> $GITHUB_ENV
+          fi
+          
+          echo "Using Docker tag: ${DOCKER_TAG}"
+          echo "Using target host: ${TARGET_HOST}"
       
       - name: Setup SSH key
         env:
@@ -148,16 +183,15 @@ jobs:
       
       - name: Deploy to HPC
         run: |
-          # Set environment variables
-          export DOCKER_TAG=${{ inputs.docker_tag }}
-          export TARGET_HOST=${{ inputs.target_host }}
+          # Use environment variables set in earlier step
+          echo "Deploying docker tag: $DOCKER_TAG to host: $TARGET_HOST"
           
           # Deploy using the deployment script
           ./deploy.sh
           
           # Verify deployment
           echo "Verifying deployment..."
-          ssh ${{ inputs.target_host }} "docker ps | grep ${{ inputs.docker_tag }}" || {
+          ssh $TARGET_HOST "docker ps | grep $DOCKER_TAG" || {
             echo "ERROR: Container not running"
             exit 1
           }
