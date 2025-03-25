@@ -182,4 +182,27 @@ check_file_delimiter <- function(file_path) {
   } else {
     return(",")
   }
+}
+
+#' Get file type based on extension
+#' 
+#' Determines whether a file is CSV or TSV based on its extension.
+#' 
+#' @param file_path Path to the file
+#' @return Character string indicating the file type ("csv" or "tsv")
+#' @export
+get_file_type <- function(file_path) {
+  # Get file extension
+  ext <- tolower(tools::file_ext(file_path))
+  
+  # Determine file type
+  if (ext == "csv") {
+    return("csv")
+  } else if (ext == "tsv" || ext == "txt") {
+    return("tsv")
+  } else {
+    # Default to CSV if extension is unknown
+    warning(paste("Unknown file extension:", ext, "defaulting to CSV"))
+    return("csv")
+  }
 } 

@@ -162,7 +162,7 @@
 
 # Base Image
 # FROM r-base:4.4.0
-FROM biowardrobe2/scidap-deseq:v0.0.29
+FROM biowardrobe2/scidap-deseq:v0.0.30
 LABEL maintainer="pavlvalera3301@gmail.com"
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -171,23 +171,23 @@ ENV DEBIAN_FRONTEND=noninteractive
 #WORKDIR /tmp
 
 # Copying scripts
-#COPY ./scripts/install_from_source.R /tmp/install_from_source.R
-#COPY ./scripts/run_deseq.R /usr/local/bin/run_deseq.R
+# COPY ./scripts/install_from_source.R /tmp/install_from_source.R
+# COPY ./scripts/run_deseq.R /usr/local/bin/run_deseq.R
 COPY scripts/run_deseq_lrt_step_1.R /usr/local/bin/run_deseq_lrt_step_1.R
 COPY scripts/run_deseq_lrt_step_2.R /usr/local/bin/run_deseq_lrt_step_2.R
-#COPY ./scripts/get_gene_n_tss.R /usr/local/bin/get_gene_n_tss.R
+# COPY ./scripts/get_gene_n_tss.R /usr/local/bin/get_gene_n_tss.R
 
 
 # Copy function directories
 COPY scripts/functions/ /usr/local/bin/functions/
 
 ## Update the sources list to use the Debian Bullseye repository
-#RUN echo "deb http://deb.debian.org/debian bullseye main" > /etc/apt/sources.list
+# RUN echo "deb http://deb.debian.org/debian bullseye main" > /etc/apt/sources.list
 
 # Installing python3, pip3 and argparse and other dependencies
-#RUN apt-get update --fix-missing && apt-get install -f -y
-#
-#RUN apt-get install -y -f python3 python3-pip \
+# RUN apt-get update --fix-missing && apt-get install -f -y
+
+# RUN apt-get install -y -f python3 python3-pip \
 #                          build-essential \
 #                          pandoc && \
 #                          libcurl4-openssl-dev \
@@ -207,7 +207,7 @@ COPY scripts/functions/ /usr/local/bin/functions/
 #    Rscript /tmp/scidap-deseq-R-packages.R
 
 # Install required R packages
-RUN Rscript /usr/local/bin/functions/common/packages_installation.R
+# RUN Rscript /usr/local/bin/functions/common/packages_installation.R
 
 # Setting permissions to make scripts executable
 RUN chmod +x /usr/local/bin/run_deseq.R && \

@@ -5,12 +5,14 @@ on:
     inputs:
       docker_tag:
         description: 'Docker tag to deploy'
-        required: true
+        required: false
         type: string
+        default: 'v0.0.31'
       target_host:
         description: 'Target HPC host'
-        required: true
+        required: false
         type: choice
+        default: 'bmicluster-compute'
         options:
           - bmicluster
           - bmicluster-compute

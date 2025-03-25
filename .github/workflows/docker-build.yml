@@ -22,7 +22,7 @@ on:
       docker_tag:
         description: 'Docker image tag to build'
         required: false
-        default: 'v0.0.30'
+        default: 'v0.0.31'
         type: string
 
 jobs:
@@ -48,7 +48,7 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.docker_tag }}" != "" ]; then
             DOCKER_TAG="${{ github.event.inputs.docker_tag }}"
           else
-            DOCKER_TAG="v0.0.30"
+            DOCKER_TAG="v0.0.31"
           fi
           echo "docker_tag=${DOCKER_TAG}" >> $GITHUB_OUTPUT
           echo "Using Docker tag: ${DOCKER_TAG}"
