@@ -6,7 +6,7 @@
 # Likelihood Ratio Test (LRT). It's been refactored for better maintainability
 # with functions organized into separate files.
 #
-# Version: 0.1.1
+# Version: 0.1.3
 
 # Set options
 options(warn = -1)
@@ -27,34 +27,30 @@ options(gc.aggressiveness = 0)  # Default GC behavior
 
 # Load required libraries
 suppressMessages({
-  # For argument parsing
+  # Core packages
   library(argparse)
-  
-  # For parallel processing
   library(BiocParallel)
-  
-  # For DESeq2 analysis
   library(DESeq2)
   
-  # For data manipulation
+  # Data manipulation
   library(tidyverse)
   library(data.table)
   
-  # For batch correction
+  # Batch correction
   library(limma)
   
-  # For visualization
+  # Visualization
   library(pheatmap)
   library(RColorBrewer)
-  library(gridExtra)
   library(ggplot2)
   library(ggrepel)
   library(plotly)
   
-  # For GCT export
+  # GCT export
   library(cmapR)
   
-  # For utilities
+  # Utilities
+  library(pryr)        # For memory usage tracking
   library(rlang)
   library(stringr)
   library(glue)
@@ -70,47 +66,22 @@ select <- dplyr::select
 `%>%` <- magrittr::`%>%`
 `%in%` <- base::`%in%`
 
-# Memory usage tracking function
-report_memory_usage <- function(label = "") {
-  gc(verbose = FALSE)
-  mem_used <- pryr::mem_used()
-  message(paste0("[Memory] ", label, ": ", round(mem_used / 1024^2, 1), " MB"))
+# Source utility functions from common directory
+# First try Docker standard path, then fall back to relative path
+if (file.exists("/usr/local/bin/functions/common/utilities.R")) {
+  source("/usr/local/bin/functions/common/utilities.R")
+} else if (file.exists("functions/common/utilities.R")) {
+  source("functions/common/utilities.R")
+} else {
+  stop("Could not find utilities.R file")
 }
 
-# Helper function to source files with fallback paths
-source_with_fallback <- function(filepath, absolute_path = NULL) {
-  # Try absolute path first if provided
-  if (!is.null(absolute_path) && file.exists(absolute_path)) {
-    message(paste("Sourcing from absolute path:", absolute_path))
-    return(source(absolute_path))
-  }
-  
-  # Try relative path
-  if (file.exists(filepath)) {
-    message(paste("Sourcing from relative path:", filepath))
-    return(source(filepath))
-  }
-  
-  # If we get here, try a standard Docker path
-  docker_path <- file.path("/usr/local/bin", filepath)
-  if (file.exists(docker_path)) {
-    message(paste("Sourcing from Docker path:", docker_path))
-    return(source(docker_path))
-  }
-  
-  # If all fails, error
-  stop(paste("Could not find file to source:", filepath))
-}
+# Source all required function files
+report_memory_usage("Before loading function files")
 
-# Source utility functions
-report_memory_usage("Before loading common utilities")
-source_with_fallback("functions/common/utilities.R", "/usr/local/bin/functions/common/utilities.R")
-report_memory_usage("After loading common utilities")
-
-# Source common visualization and export functions
+# Source common functions
 source_with_fallback("functions/common/visualization.R", "/usr/local/bin/functions/common/visualization.R")
 source_with_fallback("functions/common/export_functions.R", "/usr/local/bin/functions/common/export_functions.R")
-report_memory_usage("After loading common visualization and export functions")
 
 # Source DESeq2 LRT Step 1 specific functions
 source_with_fallback("functions/deseq2_lrt_step_1/cli_args.R", "/usr/local/bin/functions/deseq2_lrt_step_1/cli_args.R")
@@ -119,38 +90,10 @@ source_with_fallback("functions/deseq2_lrt_step_1/deseq2_analysis.R", "/usr/loca
 source_with_fallback("functions/deseq2_lrt_step_1/contrast_generation.R", "/usr/local/bin/functions/deseq2_lrt_step_1/contrast_generation.R")
 source_with_fallback("functions/deseq2_lrt_step_1/workflow.R", "/usr/local/bin/functions/deseq2_lrt_step_1/workflow.R")
 
+report_memory_usage("After loading function files")
+
 # Configure plot theme
 configure_plot_theme()
 
-# Wrapper function with memory management
-main_with_memory_management <- function() {
-  # Start timing
-  start_time <- Sys.time()
-  message(glue::glue("DESeq2 LRT Step 1 started at {format(start_time, '%Y-%m-%d %H:%M:%S')}"))
-  
-  # Get command line arguments
-  args <- get_args()
-  
-  # Configure parallel processing
-  if (args$threads > 1) {
-    message(paste("Setting up parallel execution with", args$threads, "threads"))
-    register(MulticoreParam(args$threads))
-  } else {
-    message("Running in single-threaded mode")
-  }
-  
-  # Run the main workflow with validated args
-  main(args)
-  
-  # Report end time and duration
-  end_time <- Sys.time()
-  duration <- difftime(end_time, start_time, units = "secs")
-  message(glue::glue("DESeq2 LRT Step 1 completed at {format(end_time, '%Y-%m-%d %H:%M:%S')}"))
-  message(glue::glue("Total execution time: {round(as.numeric(duration), 2)} seconds"))
-  
-  # Final memory report
-  report_memory_usage("Final")
-}
-
-# Execute main function with memory management
+# Execute main function with memory management from workflow.R
 main_with_memory_management()

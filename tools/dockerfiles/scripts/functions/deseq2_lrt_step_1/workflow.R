@@ -195,6 +195,35 @@ validate_analysis_params <- function(args) {
   return(args)
 }
 
+# Main wrapper function with memory management
+main_with_memory_management <- function() {
+  # Start timing
+  start_time <- Sys.time()
+  log_message("DESeq2 LRT Step 1 started", "START")
+  
+  # Get command line arguments
+  args <- get_args()
+  
+  # Configure parallel processing
+  if (args$threads > 1) {
+    log_message(paste("Setting up parallel execution with", args$threads, "threads"), "CONFIG")
+    register(MulticoreParam(args$threads))
+  } else {
+    log_message("Running in single-threaded mode", "CONFIG")
+  }
+  
+  # Run the main workflow with validated args
+  main(args)
+  
+  # Report end time and duration
+  end_time <- Sys.time()
+  duration <- difftime(end_time, start_time, units = "secs")
+  log_message(glue::glue("Total execution time: {round(as.numeric(duration), 2)} seconds"), "DONE")
+  
+  # Final memory report
+  report_memory_usage("Final")
+}
+
 # Main script execution with enhanced error handling
 main <- function(args = NULL) {
   # Set up error handling
