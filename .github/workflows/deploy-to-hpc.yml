@@ -34,33 +34,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Get Docker tag from previous workflow
-        if: ${{ github.event_name == 'workflow_run' }}
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          workflow: docker-build.yml
-          run_id: ${{ github.event.workflow_run.id }}
-          name: docker_tag_artifact
-          path: ./artifacts
-      
-      - name: Set Docker tag
+      - name: Set Docker tag from previous workflow or input
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # Use the input value
             echo "DOCKER_TAG=${{ github.event.inputs.docker_tag }}" >> $GITHUB_ENV
-          else
-            # Read the Docker tag from the downloaded artifact
-            DOCKER_TAG=$(cat ./artifacts/docker_tag.txt)
-            echo "DOCKER_TAG=${DOCKER_TAG}" >> $GITHUB_ENV
-          fi
-          
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "TARGET_HOST=${{ github.event.inputs.target_host }}" >> $GITHUB_ENV
           else
+            # For workflow_run trigger, use the default or hard-coded version
+            # (Since artifact passing between workflows can be unreliable)
+            echo "DOCKER_TAG=v0.0.31" >> $GITHUB_ENV
             echo "TARGET_HOST=bmicluster-compute" >> $GITHUB_ENV
           fi
           
-          echo "Using Docker tag: ${DOCKER_TAG}"
-          echo "Using target host: ${TARGET_HOST}"
+          echo "Using Docker tag: $DOCKER_TAG"
+          echo "Using target host: $TARGET_HOST"
       
       - name: Setup SSH key
         env:
