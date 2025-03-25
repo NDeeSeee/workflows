@@ -60,7 +60,7 @@ load_expression_data <- function(input_files, sample_names, read_col="Read", rpk
     expression_data_list[[i]] <- data
   }
   
-  # Merge data by gene ID using a safer approach
+  # Merge data by gene ID using a safer approach with explicit base:: namespace
   tryCatch({
     # Check for required column in each data frame
     for (i in seq_along(expression_data_list)) {
@@ -75,19 +75,26 @@ load_expression_data <- function(input_files, sample_names, read_col="Read", rpk
     if (length(expression_data_list) > 1) {
       for (i in 2:length(expression_data_list)) {
         # Check for duplicate column names before merging
-        common_cols <- intersect(
-          setdiff(colnames(merged_data), intersect_by),
-          setdiff(colnames(expression_data_list[[i]]), intersect_by)
+        common_cols <- base::intersect(
+          base::setdiff(colnames(merged_data), intersect_by),
+          base::setdiff(colnames(expression_data_list[[i]]), intersect_by)
         )
         
         if (length(common_cols) > 0) {
           warning(paste("Common columns found while merging file", input_files[i], ":", paste(common_cols, collapse=", ")))
           
           # Make names unique in current data frame before merge
-          rename_cols <- setdiff(colnames(expression_data_list[[i]]), intersect_by)
+          rename_cols <- base::setdiff(colnames(expression_data_list[[i]]), intersect_by)
           new_names <- paste0(rename_cols, "_", i)
           names(new_names) <- rename_cols
-          expression_data_list[[i]] <- dplyr::rename(expression_data_list[[i]], !!!new_names)
+          
+          # Rename columns manually without dplyr
+          for (old_name in names(new_names)) {
+            pos <- which(colnames(expression_data_list[[i]]) == old_name)
+            if (length(pos) > 0) {
+              colnames(expression_data_list[[i]])[pos] <- new_names[old_name]
+            }
+          }
           
           message("Made column names unique by adding suffix before merging")
         }

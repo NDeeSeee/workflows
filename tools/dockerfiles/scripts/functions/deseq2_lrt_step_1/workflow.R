@@ -122,9 +122,14 @@ load_and_validate_expression_data <- function(args, metadata_df) {
     colnames(read_counts_subset) <- temp_colnames
     
     # Now convert GeneId to row names
-    read_counts_data_df <- read_counts_subset %>%
-      dplyr::mutate_at(INTERSECT_BY, toupper) %>%
-      dplyr::distinct(!!as.name(INTERSECT_BY), .keep_all = TRUE)
+    # Clone the data frame
+    read_counts_data_df <- read_counts_subset
+    
+    # Convert GeneId column to uppercase
+    read_counts_data_df[[INTERSECT_BY]] <- toupper(read_counts_data_df[[INTERSECT_BY]])
+    
+    # Keep only first instance of each GeneId
+    read_counts_data_df <- read_counts_data_df[!duplicated(read_counts_data_df[[INTERSECT_BY]]), ]
     
     # Check for duplicated gene IDs again after toupper conversion
     if (any(duplicated(read_counts_data_df[[INTERSECT_BY]]))) {

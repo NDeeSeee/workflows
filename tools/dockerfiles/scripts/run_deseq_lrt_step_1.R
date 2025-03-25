@@ -69,6 +69,19 @@ conflicted::conflict_prefer("arrange", "dplyr")
 conflicted::conflict_prefer("%>%", "magrittr")
 conflicted::conflict_prefer("%in%", "base")
 
+# Additional conflict resolutions
+conflicted::conflict_prefer("intersect", "base")
+conflicted::conflict_prefer("setdiff", "base")
+conflicted::conflict_prefer("union", "base")
+conflicted::conflict_prefer("as.data.frame", "base")
+conflicted::conflict_prefer("lag", "stats")
+conflicted::conflict_prefer("filter", "dplyr")
+conflicted::conflict_prefer("first", "dplyr")
+conflicted::conflict_prefer("last", "dplyr")
+conflicted::conflict_prefer("layout", "graphics")
+conflicted::conflict_prefer("plot", "graphics")
+conflicted::conflict_prefer("desc", "dplyr")
+
 # Source utility functions from common directory
 # First try Docker standard path, then fall back to relative path
 if (file.exists("/usr/local/bin/functions/common/utilities.R")) {

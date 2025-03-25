@@ -297,13 +297,13 @@ validate_sample_consistency <- function(metadata_df, counts_df) {
   count_samples <- colnames(counts_df)
   
   # Check if all metadata samples are in count data
-  missing_in_counts <- setdiff(metadata_samples, count_samples)
+  missing_in_counts <- base::setdiff(metadata_samples, count_samples)
   if (length(missing_in_counts) > 0) {
     stop(paste("Samples in metadata but not in count data:", paste(missing_in_counts, collapse=", ")))
   }
   
   # Check if all count data samples are in metadata
-  missing_in_metadata <- setdiff(count_samples, metadata_samples)
+  missing_in_metadata <- base::setdiff(count_samples, metadata_samples)
   if (length(missing_in_metadata) > 0) {
     stop(paste("Samples in count data but not in metadata:", paste(missing_in_metadata, collapse=", ")))
   }

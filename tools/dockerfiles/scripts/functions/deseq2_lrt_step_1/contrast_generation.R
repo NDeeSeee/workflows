@@ -269,4 +269,92 @@ generate_interaction_effect_contrasts <- function(dds, result_names) {
   
   log_message(glue::glue("Completed interaction effect contrast generation with {nrow(interaction_effect_contrasts)} contrasts"), "INFO")
   return(interaction_effect_contrasts)
+}
+
+# Find best matching contrast name based on pattern
+find_contrast_name <- function(result_names, factor_name, level) {
+  # Try a few different naming patterns
+  patterns <- c(
+    paste0("^", factor_name, level, "$"),               # Exact match (factorLevel)
+    paste0("^", factor_name, "_", level, "$"),          # With underscore (factor_level)
+    paste0("^", tolower(factor_name), level, "$"),      # Lowercase factor (factorLevel)
+    paste0("^", factor_name, ".", level, "$"),          # With dot (factor.level)
+    paste0("^", level, "$")                             # Just the level
+  )
+  
+  # Check each pattern
+  for (pattern in patterns) {
+    matched <- grep(pattern, result_names, value = TRUE)
+    if (length(matched) == 1) {
+      return(matched)
+    }
+  }
+  
+  # Check for partial matches as a fallback
+  matches <- grep(level, result_names, value = TRUE)
+  if (length(matches) == 1) {
+    return(matches)
+  }
+  
+  # Nothing found
+  return(NULL)
+}
+
+# Generate a contrast matrix for multi-factor analysis
+generate_contrast_matrix <- function(dds, main_contrasts, interaction_contrasts = NULL) {
+  # Get coefficient names from the model matrix
+  coef_names <- resultsNames(dds)
+  
+  # Check if we have any contrasts available
+  if (nrow(main_contrasts) == 0 && (is.null(interaction_contrasts) || nrow(interaction_contrasts) == 0)) {
+    warning("No valid contrasts found for matrix generation")
+    return(NULL)
+  }
+  
+  # Create a matrix of contrasts
+  total_contrasts <- nrow(main_contrasts) + ifelse(is.null(interaction_contrasts), 0, nrow(interaction_contrasts))
+  contrast_matrix <- matrix(0, nrow = length(coef_names), ncol = total_contrasts)
+  rownames(contrast_matrix) <- coef_names
+  
+  # Add column names
+  colnames_list <- character(total_contrasts)
+  
+  # Fill in main effect contrasts
+  for (i in 1:nrow(main_contrasts)) {
+    # Get contrast information
+    contrast_name <- main_contrasts$contrast_name[i]
+    
+    # Set the corresponding coefficient to 1
+    if (contrast_name %in% coef_names) {
+      contrast_matrix[contrast_name, i] <- 1
+      colnames_list[i] <- paste0(main_contrasts$factor[i], "_", 
+                                main_contrasts$numerator[i], "_vs_", 
+                                main_contrasts$denominator[i])
+    } else {
+      warning(paste("Contrast name not found in coefficients:", contrast_name))
+    }
+  }
+  
+  # Add interaction contrasts if provided
+  if (!is.null(interaction_contrasts) && nrow(interaction_contrasts) > 0) {
+    for (i in 1:nrow(interaction_contrasts)) {
+      # Get contrast information
+      contrast_name <- interaction_contrasts$contrast_name[i]
+      contrast_idx <- nrow(main_contrasts) + i
+      
+      # Set the corresponding coefficient to 1
+      if (contrast_name %in% coef_names) {
+        contrast_matrix[contrast_name, contrast_idx] <- 1
+        colnames_list[contrast_idx] <- paste0("interaction_", 
+                                           base::gsub(":", "_x_", contrast_name))
+      } else {
+        warning(paste("Interaction contrast name not found in coefficients:", contrast_name))
+      }
+    }
+  }
+  
+  # Add column names to the matrix
+  colnames(contrast_matrix) <- colnames_list
+  
+  return(contrast_matrix)
 } 
