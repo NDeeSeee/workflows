@@ -6,13 +6,13 @@
 load_and_validate_metadata <- function(args) {
   message("Loading metadata...")
   
-  # Check if metadata file is formatted correctly
-  check_file_delimiter(args$meta)
+  # Get the file delimiter
+  delimiter <- check_file_delimiter(args$meta)
   
   # Load metadata
   metadata_df <- read.table(
     args$meta,
-    sep = get_file_type(args$meta),
+    sep = delimiter,
     header = TRUE,
     stringsAsFactors = FALSE,
     row.names = 1

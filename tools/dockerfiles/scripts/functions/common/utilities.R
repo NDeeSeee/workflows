@@ -184,25 +184,25 @@ check_file_delimiter <- function(file_path) {
   }
 }
 
-#' Get file type based on extension
+#' Get file type separator
 #' 
-#' Determines whether a file is CSV or TSV based on its extension.
+#' Determines the separator character based on file extension.
 #' 
 #' @param file_path Path to the file
-#' @return Character string indicating the file type ("csv" or "tsv")
+#' @return Character string containing the separator character ("," or "\t")
 #' @export
 get_file_type <- function(file_path) {
   # Get file extension
   ext <- tolower(tools::file_ext(file_path))
   
-  # Determine file type
+  # Determine separator based on extension
   if (ext == "csv") {
-    return("csv")
+    return(",")
   } else if (ext == "tsv" || ext == "txt") {
-    return("tsv")
+    return("\t")
   } else {
-    # Default to CSV if extension is unknown
-    warning(paste("Unknown file extension:", ext, "defaulting to CSV"))
-    return("csv")
+    # Default to comma with a warning for unknown extensions
+    warning(paste("Unknown file extension:", ext, "defaulting to comma separator"))
+    return(",")
   }
 } 
