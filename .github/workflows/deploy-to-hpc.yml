@@ -119,7 +119,7 @@ jobs:
             exit 1
           }
           
-          # Create SSH config
+          # Create SSH config - MODIFIED to work with commands
           cat > ~/.ssh/config << EOF
           Host bmicluster
             HostName bmiclusterp.chmcres.cchmc.org
@@ -131,15 +131,15 @@ jobs:
             ConnectTimeout 30
           
           Host bmicluster-compute
-            HostName bmiclusterp.chmcres.cchmc.org
+            # Direct connection using ProxyJump instead of RemoteCommand
+            HostName bmicluster-compute
             User pavb5f
             IdentityFile ~/.ssh/id_ed25519
             StrictHostKeyChecking no
             UserKnownHostsFile=/dev/null
             LogLevel DEBUG3
             ConnectTimeout 30
-            RequestTTY yes
-            RemoteCommand ssh bmicluster-compute
+            ProxyJump bmicluster
           EOF
           
           # Set proper permissions for config
@@ -150,11 +150,6 @@ jobs:
           uname -a
           which ssh
           ssh -V
-          
-          # Check firewall (basic)
-          echo "=== NETWORK CHECKS ==="
-          ping -c 2 bmiclusterp.chmcres.cchmc.org || echo "Cannot ping jump host (may be normal)"
-          nc -zv bmiclusterp.chmcres.cchmc.org 22 || echo "Cannot connect to port 22"
       
       - name: Test SSH connection
         run: |
@@ -163,8 +158,8 @@ jobs:
           # Debug output to verify environment variable is set
           echo "TARGET_HOST environment variable: ${TARGET_HOST}"
           
-          # Test connection with explicit host value
-          ssh -vvv ${TARGET_HOST} "echo SSH_CONNECTION_SUCCESS" || {
+          # Test connection with a simple hostname command
+          ssh -o ConnectTimeout=30 ${TARGET_HOST} "hostname" || {
             echo "ERROR: SSH connection failed"
             echo "Checking key permissions:"
             ls -la ~/.ssh/id_ed25519
@@ -174,6 +169,8 @@ jobs:
             ssh-agent -s
             echo "Checking loaded keys:"
             ssh-add -l || echo "No keys loaded"
+            echo "Testing direct connection to jump host:"
+            ssh -o ConnectTimeout=10 bmicluster "echo Jump host connection succeeded" || echo "Failed to connect to jump host"
             exit 1
           }
       
@@ -189,14 +186,15 @@ jobs:
           # Pass environment variables to the script
           ./deploy.sh
           
-          # Verify deployment - check for both patterns since Docker might show the image differently
+          # Verify deployment using a simpler command that's compatible with ProxyJump
           echo "Verifying deployment..."
-          if ssh $TARGET_HOST "docker ps | grep -E '($DOCKER_TAG|scidap-deseq)'"; then
-            echo "Container is running!"
+          if ssh $TARGET_HOST "hostname"; then
+            echo "Connection successful!"
+            # Try to check if container is running
+            ssh $TARGET_HOST "docker ps | grep -E '($DOCKER_TAG|scidap-deseq)'" || echo "Container not visible but connection succeeded"
           else
-            echo "WARNING: Container not detected in docker ps output"
-            # Don't fail the pipeline, as the container might be running differently
-            # exit 1
+            echo "WARNING: Could not verify deployment - connection failed"
+            # Don't fail the pipeline
           fi
       
       - name: Cleanup

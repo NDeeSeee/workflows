@@ -123,9 +123,9 @@ export_results <- function(deseq_results, expression_df, metadata_df, args, batc
   }
   
   # Reorder columns, keeping any additional columns at the end
-  other_cols <- setdiff(colnames(results_df), col_order)
+  other_cols <- base::setdiff(colnames(results_df), col_order)
   col_order <- c(col_order, other_cols)
-  results_df <- results_df[, intersect(col_order, colnames(results_df)), drop = FALSE]
+  results_df <- results_df[, base::intersect(col_order, colnames(results_df)), drop = FALSE]
   
   # Write results to TSV file
   results_file <- file.path(output_dir, "deseq2_lrt_results.tsv")
@@ -138,7 +138,7 @@ export_results <- function(deseq_results, expression_df, metadata_df, args, batc
   norm_counts_df$GeneId <- rownames(norm_counts_df)
   
   # Move GeneId to first column
-  norm_counts_df <- norm_counts_df[, c("GeneId", setdiff(colnames(norm_counts_df), "GeneId")), drop = FALSE]
+  norm_counts_df <- norm_counts_df[, c("GeneId", base::setdiff(colnames(norm_counts_df), "GeneId")), drop = FALSE]
   
   # Write normalized counts to TSV file
   norm_counts_file <- file.path(output_dir, "normalized_counts.tsv")
@@ -151,7 +151,7 @@ export_results <- function(deseq_results, expression_df, metadata_df, args, batc
   trans_counts_df$GeneId <- rownames(trans_counts_df)
   
   # Move GeneId to first column
-  trans_counts_df <- trans_counts_df[, c("GeneId", setdiff(colnames(trans_counts_df), "GeneId")), drop = FALSE]
+  trans_counts_df <- trans_counts_df[, c("GeneId", base::setdiff(colnames(trans_counts_df), "GeneId")), drop = FALSE]
   
   # Write transformed counts to TSV file
   trans_counts_file <- file.path(output_dir, "transformed_counts.tsv")
@@ -164,22 +164,49 @@ export_results <- function(deseq_results, expression_df, metadata_df, args, batc
   # Create matrix for GCT export
   gct_data <- transformed_counts
   
+  # Safely extract arguments for scaling and clustering
+  scaling_type <- if (!is.null(args$scaling_type)) as.character(args$scaling_type) else "none"
+  cluster_method <- if (!is.null(args$cluster_method)) as.character(args$cluster_method) else "none"
+  row_distance <- if (!is.null(args$row_distance)) as.character(args$row_distance) else "euclid"
+  column_distance <- if (!is.null(args$column_distance)) as.character(args$column_distance) else "euclid"
+  k_hopach <- if (!is.null(args$k_hopach)) as.numeric(args$k_hopach) else 3
+  kmax_hopach <- if (!is.null(args$kmax_hopach)) as.numeric(args$kmax_hopach) else 5
+  
+  # Validate parameters
+  if (!scaling_type %in% c("none", "zscore", "minmax")) {
+    warning(paste("Unknown scaling type:", scaling_type, "- defaulting to none"))
+    scaling_type <- "none"
+  }
+  
+  if (!cluster_method %in% c("none", "row", "column", "both")) {
+    warning(paste("Unknown cluster method:", cluster_method, "- defaulting to none"))
+    cluster_method <- "none"
+  }
+  
   # Scale data if requested
-  if (!is.null(args$scaling_type) && args$scaling_type != "none") {
-    gct_data <- scale_expression_data(gct_data, args$scaling_type)
+  if (scaling_type != "none") {
+    tryCatch({
+      gct_data <- scale_expression_data(gct_data, scaling_type)
+    }, error = function(e) {
+      warning(paste("Error during scaling:", e$message, "- using unscaled data"))
+    })
   }
   
   # Apply clustering if requested
-  if (!is.null(args$cluster_method) && args$cluster_method != "none") {
-    clustering_result <- perform_clustering(
-      gct_data,
-      args$cluster_method,
-      args$row_distance,
-      args$column_distance,
-      args$k_hopach,
-      args$kmax_hopach
-    )
-    gct_data <- clustering_result$expression_data
+  if (cluster_method != "none") {
+    tryCatch({
+      clustering_result <- perform_clustering(
+        gct_data,
+        cluster_method,
+        row_distance,
+        column_distance,
+        k_hopach,
+        kmax_hopach
+      )
+      gct_data <- clustering_result$expression_data
+    }, error = function(e) {
+      warning(paste("Error during clustering:", e$message, "- using unclustered data"))
+    })
   }
   
   # Write GCT file

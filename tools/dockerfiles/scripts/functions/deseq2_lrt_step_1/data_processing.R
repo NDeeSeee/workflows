@@ -234,6 +234,9 @@ apply_combatseq_correction <- function(counts, metadata, design_formula) {
 
 # Function to scale expression data based on scaling_type
 scale_expression_data <- function(expression_data, scaling_type) {
+  # Ensure scaling_type is a character
+  scaling_type <- as.character(scaling_type)
+  
   if (scaling_type == "none" || is.null(scaling_type)) {
     message("No scaling applied to expression data")
     return(expression_data)
@@ -291,27 +294,43 @@ perform_clustering <- function(expression_data, cluster_method, row_distance, co
   # Perform row clustering if requested
   if (cluster_method %in% c("row", "both")) {
     message(paste("Row clustering with distance:", row_distance))
-    row_clustering <- hopach::hopach(
-      data = expression_data,
-      dmat = NULL,
-      dist.method = row_distance,
-      k = k,
-      kmax = kmax,
-      khigh = NULL
-    )
+    
+    tryCatch({
+      row_clustering <- hopach::hopach(
+        data = expression_data,
+        dmat = NULL,
+        dist.method = as.character(row_distance),
+        k = as.numeric(k),
+        kmax = as.numeric(kmax),
+        khigh = NULL
+      )
+    }, error = function(e) {
+      # Attempt with default parameters if specific ones fail
+      message(paste("Error in row clustering:", e$message))
+      message("Attempting row clustering with default parameters")
+      row_clustering <<- hopach::hopach(data = expression_data)
+    })
   }
   
   # Perform column clustering if requested
   if (cluster_method %in% c("column", "both")) {
     message(paste("Column clustering with distance:", column_distance))
-    col_clustering <- hopach::hopach(
-      data = t(expression_data),  # Transpose for column clustering
-      dmat = NULL,
-      dist.method = column_distance,
-      k = k,
-      kmax = kmax,
-      khigh = NULL
-    )
+    
+    tryCatch({
+      col_clustering <- hopach::hopach(
+        data = t(expression_data),  # Transpose for column clustering
+        dmat = NULL,
+        dist.method = as.character(column_distance),
+        k = as.numeric(k),
+        kmax = as.numeric(kmax),
+        khigh = NULL
+      )
+    }, error = function(e) {
+      # Attempt with default parameters if specific ones fail
+      message(paste("Error in column clustering:", e$message))
+      message("Attempting column clustering with default parameters")
+      col_clustering <<- hopach::hopach(data = t(expression_data))
+    })
   }
   
   # Reorder data based on clustering

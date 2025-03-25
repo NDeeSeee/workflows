@@ -42,65 +42,73 @@ configure_plot_theme <- function() {
   }
 }
 
-# Function to write data in GCT format
-write_gct <- function(expression_data, output_file) {
-  # Check if cmapR is available, otherwise use our own implementation
-  if (requireNamespace("cmapR", quietly = TRUE)) {
-    # Create a GCT object
-    gct_obj <- cmapR::new.gct(expression_data)
-    # Write the GCT file
-    cmapR::write.gct(gct_obj, output_file)
+#' Write matrix to GCT file
+#' 
+#' @param data Matrix of expression data
+#' @param file_path Path to the output GCT file
+#' @export
+write_gct <- function(data, file_path) {
+  # Check if data is a matrix or data frame
+  if (is.data.frame(data)) {
+    data_matrix <- as.matrix(data)
   } else {
-    # Fallback implementation
-    write_gct_fallback(expression_data, output_file)
-  }
-}
-
-# Fallback function to write GCT files when cmapR is not available
-write_gct_fallback <- function(expression_data, output_file) {
-  # Make sure we have rownames and colnames
-  if (is.null(rownames(expression_data))) {
-    rownames(expression_data) <- paste0("gene_", 1:nrow(expression_data))
-  }
-  if (is.null(colnames(expression_data))) {
-    colnames(expression_data) <- paste0("sample_", 1:ncol(expression_data))
+    data_matrix <- data
   }
   
-  # Create row descriptions (using row names as a placeholder)
-  row_descriptions <- rownames(expression_data)
+  # Extract dimensions
+  n_rows <- nrow(data_matrix)
+  n_cols <- ncol(data_matrix)
   
-  # Create header
-  header <- c(
-    paste("#1.2"),
-    paste(nrow(expression_data), ncol(expression_data), sep="\t")
-  )
-  
-  # Create column names line
-  col_header <- c("NAME", "Description", colnames(expression_data))
-  
-  # Open the file for writing
-  con <- file(output_file, "w")
-  
-  # Write header
-  writeLines(header, con)
-  
-  # Write column names
-  writeLines(paste(col_header, collapse="\t"), con)
-  
-  # Write data rows
-  for (i in 1:nrow(expression_data)) {
-    row_data <- c(
-      rownames(expression_data)[i],
-      row_descriptions[i],
-      expression_data[i, ]
-    )
-    writeLines(paste(row_data, collapse="\t"), con)
+  # Ensure row and column names exist
+  if (is.null(rownames(data_matrix))) {
+    rownames(data_matrix) <- paste0("GENE_", 1:n_rows)
   }
   
-  # Close the file
-  close(con)
+  if (is.null(colnames(data_matrix))) {
+    colnames(data_matrix) <- paste0("SAMPLE_", 1:n_cols)
+  }
   
-  message(paste("GCT file written to:", output_file))
+  # Create GCT file format
+  tryCatch({
+    # Open the file for writing
+    con <- file(file_path, "w")
+    
+    # Write header
+    writeLines("#1.2", con)
+    writeLines(paste(n_rows, n_cols, sep = "\t"), con)
+    
+    # Write column headers
+    writeLines(paste(c("NAME", "Description", colnames(data_matrix)), collapse = "\t"), con)
+    
+    # Write data
+    for (i in 1:n_rows) {
+      # Replace NA with "na" for GCT format
+      row_data <- data_matrix[i, ]
+      row_data[is.na(row_data)] <- "na"
+      
+      # Convert to character and format
+      row_data_str <- paste(as.character(row_data), collapse = "\t")
+      
+      # Write row with name and description
+      writeLines(paste(rownames(data_matrix)[i], "na", row_data_str, sep = "\t"), con)
+    }
+    
+    # Close file
+    close(con)
+    
+    message(paste("GCT file written successfully to:", file_path))
+    
+  }, error = function(e) {
+    message(paste("Error writing GCT file:", e$message))
+    
+    # Ensure file is closed
+    if (exists("con") && isOpen(con)) {
+      close(con)
+    }
+    
+    # Rethrow error
+    stop(e)
+  })
 }
 
 # Function to format p-values with scientific notation
