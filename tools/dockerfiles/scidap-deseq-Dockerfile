@@ -176,8 +176,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 COPY scripts/run_deseq_lrt_step_1.R /usr/local/bin/run_deseq_lrt_step_1.R
 COPY scripts/run_deseq_lrt_step_2.R /usr/local/bin/run_deseq_lrt_step_2.R
 #COPY ./scripts/get_gene_n_tss.R /usr/local/bin/get_gene_n_tss.R
-# Copy the install_packages.R script into the Docker image
-COPY ./scripts/docker_R_packages_installation/scidap-deseq-R-packages.R /tmp/scidap-deseq-R-packages.R
+
 
 # Copy function directories
 COPY scripts/functions/ /usr/local/bin/functions/
@@ -208,7 +207,7 @@ COPY scripts/functions/ /usr/local/bin/functions/
 #    Rscript /tmp/scidap-deseq-R-packages.R
 
 # Install required R packages
-RUN Rscript /tmp/scidap-deseq-R-packages.R
+RUN Rscript /usr/local/bin/functions/common/packages_installation.R
 
 # Setting permissions to make scripts executable
 RUN chmod +x /usr/local/bin/run_deseq.R && \
