@@ -158,20 +158,22 @@ jobs:
       
       - name: Test SSH connection
         run: |
-          echo "Testing SSH connection to ${{ inputs.target_host }}..."
-          ssh -vvv ${{ inputs.target_host }} "echo SSH_CONNECTION_SUCCESS" || {
+          # Use the environment variable explicitly
+          echo "Testing SSH connection to ${TARGET_HOST}..."
+          # Debug output to verify environment variable is set
+          echo "TARGET_HOST environment variable: ${TARGET_HOST}"
+          
+          # Test connection with explicit host value
+          ssh -vvv ${TARGET_HOST} "echo SSH_CONNECTION_SUCCESS" || {
             echo "ERROR: SSH connection failed"
             echo "Checking key permissions:"
             ls -la ~/.ssh/id_ed25519
             echo "Checking config permissions:"
             ls -la ~/.ssh/config
             echo "Checking SSH agent:"
-            ssh-agent
+            ssh-agent -s
             echo "Checking loaded keys:"
             ssh-add -l || echo "No keys loaded"
-            echo "Checking key file content:"
-            head -n 1 ~/.ssh/id_ed25519
-            tail -n 1 ~/.ssh/id_ed25519
             exit 1
           }
       
