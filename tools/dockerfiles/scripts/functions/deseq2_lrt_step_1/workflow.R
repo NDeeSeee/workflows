@@ -79,19 +79,82 @@ load_and_validate_expression_data <- function(args, metadata_df) {
     ignore.case = TRUE
   )
   
-  read_counts_data_df <- expression_data_df %>%
-    dplyr::mutate_at("GeneId", toupper) %>%
-    dplyr::distinct(GeneId, .keep_all = TRUE) %>%
-    remove_rownames() %>%
-    column_to_rownames("GeneId")
+  message(glue::glue("Found {length(read_counts_columns)} read count columns"))
   
-  read_counts_data_df <- read_counts_data_df[read_counts_columns]
+  # Check if GeneId column exists
+  if (!INTERSECT_BY %in% colnames(expression_data_df)) {
+    stop(paste("Required column", INTERSECT_BY, "not found in expression data"))
+  }
   
-  # Clean count data column names
-  colnames(read_counts_data_df) <- lapply(colnames(read_counts_data_df), function(s) {
-    paste(head(unlist(strsplit(s, " ", fixed = TRUE)), -1), collapse = " ")
+  # Check for duplicate GeneId values
+  if (any(duplicated(expression_data_df[[INTERSECT_BY]]))) {
+    dup_genes <- expression_data_df[[INTERSECT_BY]][duplicated(expression_data_df[[INTERSECT_BY]])]
+    message(glue::glue("Warning: Found {length(dup_genes)} duplicate gene identifiers"))
+    message(glue::glue("First few duplicates: {paste(head(dup_genes), collapse=', ')}"))
+    
+    # Make gene IDs unique
+    expression_data_df[[INTERSECT_BY]] <- make.unique(as.character(expression_data_df[[INTERSECT_BY]]))
+    message("Made gene identifiers unique")
+  }
+  
+  # Extract read count data with safer approach
+  tryCatch({
+    # First extract only needed columns
+    read_counts_subset <- expression_data_df[, c(INTERSECT_BY, read_counts_columns)]
+    
+    # Check for duplicate column names
+    if (any(duplicated(colnames(read_counts_subset)))) {
+      dup_cols <- colnames(read_counts_subset)[duplicated(colnames(read_counts_subset))]
+      stop(paste("Duplicate column names in read count data:", paste(dup_cols, collapse=", ")))
+    }
+    
+    # Make column names clean for downstream processing
+    temp_colnames <- colnames(read_counts_subset)
+    temp_colnames[-1] <- lapply(temp_colnames[-1], function(s) {
+      # Extract the sample name (before the space)
+      parts <- unlist(strsplit(s, " ", fixed = TRUE))
+      if (length(parts) > 1) {
+        return(parts[1])
+      } else {
+        return(s)
+      }
+    })
+    colnames(read_counts_subset) <- temp_colnames
+    
+    # Now convert GeneId to row names
+    read_counts_data_df <- read_counts_subset %>%
+      dplyr::mutate_at(INTERSECT_BY, toupper) %>%
+      dplyr::distinct(!!as.name(INTERSECT_BY), .keep_all = TRUE)
+    
+    # Check for duplicated gene IDs again after toupper conversion
+    if (any(duplicated(read_counts_data_df[[INTERSECT_BY]]))) {
+      dup_genes <- read_counts_data_df[[INTERSECT_BY]][duplicated(read_counts_data_df[[INTERSECT_BY]])]
+      stop(paste("Duplicate gene IDs after uppercase conversion:", paste(head(dup_genes), collapse=", ")))
+    }
+    
+    # Set row names safely
+    rownames(read_counts_data_df) <- read_counts_data_df[[INTERSECT_BY]]
+    read_counts_data_df <- read_counts_data_df[, -1, drop = FALSE] # Remove GeneId column
+    
+  }, error = function(e) {
+    stop(paste("Error processing count data:", e$message))
   })
-  colnames(read_counts_data_df) <- clean_sample_names(colnames(read_counts_data_df))
+  
+  # Clean count data column names with improved method
+  cleaned_colnames <- clean_sample_names(colnames(read_counts_data_df))
+  
+  # Check for duplicates in cleaned column names
+  if (any(duplicated(cleaned_colnames))) {
+    dup_cols <- cleaned_colnames[duplicated(cleaned_colnames)]
+    message(paste("Warning: Duplicate column names after cleaning:", paste(dup_cols, collapse=", ")))
+    
+    # Make column names unique
+    cleaned_colnames <- make.unique(cleaned_colnames)
+    message("Made column names unique")
+  }
+  
+  # Apply cleaned column names
+  colnames(read_counts_data_df) <- cleaned_colnames
   
   # Verify sample name consistency between metadata and counts
   validate_sample_consistency(metadata_df, read_counts_data_df)
@@ -268,30 +331,50 @@ main <- function(args = NULL) {
     log_message("DESeq2 analysis completed successfully! ✓", "SUCCESS")
     
   }, error = function(e) {
-    # Capture full error information
+    # Get detailed error information
     error_msg <- paste("Analysis failed:", e$message)
+    
+    # Set up detailed traceback capture
+    options(rlang_backtrace_on_error = "full")
+    
+    # Get call stack information
+    call_stack <- sys.calls()
+    call_stack_formatted <- paste(format(call_stack), collapse = "\n")
+    
+    # Get traceback
     error_trace <- paste(capture.output(traceback()), collapse="\n")
     
-    log_message(error_msg, "ERROR")
-    log_message("Error traceback:", "ERROR")
-    message(error_trace)
+    # Get session information
+    session_info <- paste(capture.output(sessionInfo()), collapse="\n")
     
-    # Check if error_report.txt exists
-    if (file.exists("error_report.txt")) {
-      log_message("See error_report.txt for detailed error information", "ERROR")
-    } else {
-      # Create basic error report if none exists
-      writeLines(
-        paste0(
-          "# ❌ Error Report\n\n",
-          "**Timestamp:** ", format(Sys.time(), "%A, %B %d, %Y %I:%M:%S %p"), "\n\n",
-          "**Error Message:** ", e$message, "\n\n",
-          "## Error Traceback\n\n```\n", error_trace, "\n```\n"
-        ),
-        con = "error_report.txt"
-      )
-      log_message("Basic error report written to error_report.txt", "ERROR")
-    }
+    # Log detailed error
+    log_message(error_msg, "ERROR")
+    log_message("Error occurred in call:", "ERROR")
+    log_message(deparse(e$call), "ERROR")
+    
+    # Write detailed error report
+    error_report_file <- file.path(getwd(), "deseq_lrt_error_report.txt")
+    writeLines(
+      paste0(
+        "# DESeq2 LRT Analysis Error Report\n\n",
+        "## Error Details\n\n",
+        "**Timestamp:** ", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n\n",
+        "**Error Message:** ", e$message, "\n\n",
+        "**Error Call:** ", deparse(e$call), "\n\n",
+        
+        "## Stack Trace\n\n```r\n", call_stack_formatted, "\n```\n\n",
+        
+        "## Error Traceback\n\n```\n", error_trace, "\n```\n\n",
+        
+        "## Session Information\n\n```\n", session_info, "\n```\n"
+      ),
+      con = error_report_file
+    )
+    
+    log_message(paste("Detailed error report written to:", error_report_file), "ERROR")
+    
+    # Output simple error message to stderr for script integration
+    message(error_msg)
     
     # Exit with error code
     quit(status = 1)

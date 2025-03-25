@@ -22,15 +22,20 @@ load_expression_data <- function(input_files, sample_names, read_col="Read", rpk
     # Load data
     message(paste("Loading file:", input_file))
     
-    data <- read.table(
-      input_file, 
-      sep = delimiter,
-      header = TRUE, 
-      quote = "",
-      stringsAsFactors = FALSE,
-      check.names = FALSE,
-      comment.char = "#"
-    )
+    # Use tryCatch to handle errors in file reading
+    data <- tryCatch({
+      read.table(
+        input_file, 
+        sep = delimiter,
+        header = TRUE, 
+        quote = "",
+        stringsAsFactors = FALSE,
+        check.names = FALSE,
+        comment.char = "#"
+      )
+    }, error = function(e) {
+      stop(paste("Error reading file", input_file, ":", e$message))
+    })
     
     # Rename columns to include sample name
     data_cols <- colnames(data)
@@ -42,13 +47,75 @@ load_expression_data <- function(input_files, sample_names, read_col="Read", rpk
       }
     }
     
+    # Check for duplicate column names
+    if (any(duplicated(colnames(data)))) {
+      dup_cols <- colnames(data)[duplicated(colnames(data))]
+      warning(paste("Duplicate column names found in file", input_file, ":", paste(dup_cols, collapse=", ")))
+      
+      # Make column names unique
+      colnames(data) <- make.unique(colnames(data))
+      message("Column names made unique using make.unique()")
+    }
+    
     expression_data_list[[i]] <- data
   }
   
-  # Merge data by gene ID
-  merged_data <- Reduce(function(x, y) {
-    merge(x, y, by = intersect_by, all = TRUE, sort = FALSE)
-  }, expression_data_list)
+  # Merge data by gene ID using a safer approach
+  tryCatch({
+    # Check for required column in each data frame
+    for (i in seq_along(expression_data_list)) {
+      if (!intersect_by %in% colnames(expression_data_list[[i]])) {
+        stop(paste("Column", intersect_by, "not found in file", input_files[i]))
+      }
+    }
+    
+    # Merge data frames one by one
+    merged_data <- expression_data_list[[1]]
+    
+    if (length(expression_data_list) > 1) {
+      for (i in 2:length(expression_data_list)) {
+        # Check for duplicate column names before merging
+        common_cols <- intersect(
+          setdiff(colnames(merged_data), intersect_by),
+          setdiff(colnames(expression_data_list[[i]]), intersect_by)
+        )
+        
+        if (length(common_cols) > 0) {
+          warning(paste("Common columns found while merging file", input_files[i], ":", paste(common_cols, collapse=", ")))
+          
+          # Make names unique in current data frame before merge
+          rename_cols <- setdiff(colnames(expression_data_list[[i]]), intersect_by)
+          new_names <- paste0(rename_cols, "_", i)
+          names(new_names) <- rename_cols
+          expression_data_list[[i]] <- dplyr::rename(expression_data_list[[i]], !!!new_names)
+          
+          message("Made column names unique by adding suffix before merging")
+        }
+        
+        merged_data <- merge(
+          merged_data, 
+          expression_data_list[[i]], 
+          by = intersect_by, 
+          all = TRUE, 
+          sort = FALSE,
+          suffixes = c("", paste0("_", i))
+        )
+      }
+    }
+    
+    # Final check for duplicate column names in merged data
+    if (any(duplicated(colnames(merged_data)))) {
+      dup_cols <- colnames(merged_data)[duplicated(colnames(merged_data))]
+      warning(paste("Duplicate column names in final merged data:", paste(dup_cols, collapse=", ")))
+      
+      # Make all column names unique
+      colnames(merged_data) <- make.unique(colnames(merged_data))
+      message("Final merged data column names made unique")
+    }
+    
+  }, error = function(e) {
+    stop(paste("Error merging expression data:", e$message))
+  })
   
   # Replace NA values with 0
   merged_data[is.na(merged_data)] <- 0
