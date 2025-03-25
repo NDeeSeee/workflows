@@ -35,6 +35,7 @@ suppressMessages({
   # Data manipulation
   library(tidyverse)
   library(data.table)
+  library(conflicted)  # For resolving namespace conflicts
   
   # Batch correction
   library(limma)
@@ -56,15 +57,17 @@ suppressMessages({
   library(glue)
 })
 
-# Use dplyr functions with proper namespace to avoid conflicts
-mutate <- dplyr::mutate
-filter <- dplyr::filter
-group_by <- dplyr::group_by
-slice <- dplyr::slice
-rename <- dplyr::rename
-select <- dplyr::select
-`%>%` <- magrittr::`%>%`
-`%in%` <- base::`%in%`
+# Resolve namespace conflicts explicitly
+conflicted::conflict_prefer("filter", "dplyr")
+conflicted::conflict_prefer("select", "dplyr")
+conflicted::conflict_prefer("rename", "dplyr")
+conflicted::conflict_prefer("slice", "dplyr")
+conflicted::conflict_prefer("mutate", "dplyr")
+conflicted::conflict_prefer("group_by", "dplyr")
+conflicted::conflict_prefer("summarize", "dplyr")
+conflicted::conflict_prefer("arrange", "dplyr")
+conflicted::conflict_prefer("%>%", "magrittr")
+conflicted::conflict_prefer("%in%", "base")
 
 # Source utility functions from common directory
 # First try Docker standard path, then fall back to relative path
