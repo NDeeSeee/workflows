@@ -205,4 +205,109 @@ get_file_type <- function(file_path) {
     warning(paste("Unknown file extension:", ext, "defaulting to comma separator"))
     return(",")
   }
+}
+
+#' Clean sample names 
+#' 
+#' Standardizes sample names by removing special characters and spaces
+#' 
+#' @param sample_names Vector of sample names to clean
+#' @return Vector of cleaned sample names
+#' @export
+clean_sample_names <- function(sample_names) {
+  # Replace spaces with underscores
+  sample_names <- gsub(" ", "_", sample_names)
+  
+  # Remove special characters except underscores and alphanumeric
+  sample_names <- gsub("[^a-zA-Z0-9_]", "", sample_names)
+  
+  # Ensure names are unique
+  if (any(duplicated(sample_names))) {
+    warning("Duplicate sample names found after cleaning. Adding unique suffixes.")
+    dupes <- which(duplicated(sample_names))
+    for (i in dupes) {
+      sample_names[i] <- paste0(sample_names[i], "_", i)
+    }
+  }
+  
+  return(sample_names)
+}
+
+#' Validate metadata
+#' 
+#' Checks that metadata contains required columns and correct data types
+#' 
+#' @param metadata_df Data frame containing sample metadata
+#' @param batchcorrection Batch correction method to use
+#' @param design_formula Design formula for DESeq2
+#' @return Validated metadata data frame
+#' @export
+validate_metadata <- function(metadata_df, batchcorrection = "none", design_formula = NULL) {
+  # Check if metadata has any rows
+  if (nrow(metadata_df) == 0) {
+    stop("Metadata has no rows")
+  }
+  
+  # Check for batch correction requirements
+  if (batchcorrection != "none") {
+    if (!"batch" %in% colnames(metadata_df)) {
+      warning("Batch correction requested but 'batch' column not found in metadata. Batch correction will be disabled.")
+    } else {
+      # Convert batch to numeric if it's not already
+      if (!is.numeric(metadata_df$batch)) {
+        warning("Converting 'batch' column to numeric")
+        metadata_df$batch <- as.numeric(as.factor(metadata_df$batch))
+      }
+    }
+  }
+  
+  # If design formula is provided, validate factors referenced in it
+  if (!is.null(design_formula)) {
+    formula_vars <- all.vars(design_formula)
+    missing_vars <- formula_vars[!formula_vars %in% colnames(metadata_df)]
+    
+    if (length(missing_vars) > 0) {
+      stop(paste("Design formula variables not found in metadata:", paste(missing_vars, collapse=", ")))
+    }
+    
+    # Convert character columns used in design to factors
+    for (var in formula_vars) {
+      if (is.character(metadata_df[[var]])) {
+        metadata_df[[var]] <- as.factor(metadata_df[[var]])
+        message(paste("Converted", var, "to factor"))
+      }
+    }
+  }
+  
+  # Return the validated and possibly modified metadata
+  return(metadata_df)
+}
+
+#' Validate sample consistency
+#' 
+#' Checks that sample names in metadata and count data match
+#' 
+#' @param metadata_df Data frame containing sample metadata
+#' @param counts_df Data frame containing count data
+#' @return Nothing, stops execution if inconsistencies are found
+#' @export
+validate_sample_consistency <- function(metadata_df, counts_df) {
+  # Get sample names from both dataframes
+  metadata_samples <- rownames(metadata_df)
+  count_samples <- colnames(counts_df)
+  
+  # Check if all metadata samples are in count data
+  missing_in_counts <- setdiff(metadata_samples, count_samples)
+  if (length(missing_in_counts) > 0) {
+    stop(paste("Samples in metadata but not in count data:", paste(missing_in_counts, collapse=", ")))
+  }
+  
+  # Check if all count data samples are in metadata
+  missing_in_metadata <- setdiff(count_samples, metadata_samples)
+  if (length(missing_in_metadata) > 0) {
+    stop(paste("Samples in count data but not in metadata:", paste(missing_in_metadata, collapse=", ")))
+  }
+  
+  # If we got this far, samples are consistent
+  message(paste("Sample consistency check passed for", length(metadata_samples), "samples"))
 } 

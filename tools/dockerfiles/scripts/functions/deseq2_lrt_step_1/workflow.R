@@ -187,9 +187,22 @@ validate_analysis_params <- function(args) {
   }
   
   # Validate batch correction parameter
-  if (args$batchcorrection != "none" && !"batch" %in% colnames(read.table(args$meta, sep=get_file_type(args$meta), header=TRUE))) {
-    warning("Batch correction requested but 'batch' column not found in metadata. Batch correction will be disabled.")
-    args$batchcorrection <- "none"
+  if (args$batchcorrection != "none") {
+    # Check if metadata file exists
+    if (!file.exists(args$meta)) {
+      stop("Metadata file does not exist")
+    }
+    
+    # Get the file delimiter
+    delimiter <- check_file_delimiter(args$meta)
+    
+    # Read metadata to check for batch column
+    metadata <- read.table(args$meta, sep=delimiter, header=TRUE)
+    
+    if (!"batch" %in% colnames(metadata)) {
+      warning("Batch correction requested but 'batch' column not found in metadata. Batch correction will be disabled.")
+      args$batchcorrection <- "none"
+    }
   }
   
   return(args)

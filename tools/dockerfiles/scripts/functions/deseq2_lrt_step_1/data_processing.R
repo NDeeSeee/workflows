@@ -2,7 +2,163 @@
 
 # --- Data processing functions ---
 
-# Function to scale data based on scaling_type
+# Constants for column name patterns
+READ_COL <- "Read"
+RPKM_COL <- "Rpkm"
+INTERSECT_BY <- "GeneId"
+
+# Function to load expression data from multiple files
+load_expression_data <- function(input_files, sample_names, read_col="Read", rpkm_col="Rpkm", intersect_by="GeneId") {
+  # Process each input file
+  expression_data_list <- list()
+  
+  for (i in 1:length(input_files)) {
+    input_file <- input_files[i]
+    sample_name <- sample_names[i]
+    
+    # Determine file type
+    delimiter <- check_file_delimiter(input_file)
+    
+    # Load data
+    message(paste("Loading file:", input_file))
+    
+    data <- read.table(
+      input_file, 
+      sep = delimiter,
+      header = TRUE, 
+      quote = "",
+      stringsAsFactors = FALSE,
+      check.names = FALSE,
+      comment.char = "#"
+    )
+    
+    # Rename columns to include sample name
+    data_cols <- colnames(data)
+    for (col in data_cols) {
+      if (grepl(read_col, col, ignore.case = TRUE) || grepl(rpkm_col, col, ignore.case = TRUE)) {
+        # Rename to include sample name
+        new_col <- paste(sample_name, col, sep = " ")
+        colnames(data)[colnames(data) == col] <- new_col
+      }
+    }
+    
+    expression_data_list[[i]] <- data
+  }
+  
+  # Merge data by gene ID
+  merged_data <- Reduce(function(x, y) {
+    merge(x, y, by = intersect_by, all = TRUE, sort = FALSE)
+  }, expression_data_list)
+  
+  # Replace NA values with 0
+  merged_data[is.na(merged_data)] <- 0
+  
+  return(merged_data)
+}
+
+# Function to filter expression data based on RPKM values
+filter_rpkm <- function(expression_data, rpkm_cutoff) {
+  if (is.null(rpkm_cutoff) || rpkm_cutoff <= 0) {
+    message("No RPKM filtering applied")
+    return(expression_data)
+  }
+  
+  message(paste("Filtering data with RPKM cutoff:", rpkm_cutoff))
+  
+  # Get RPKM columns
+  rpkm_cols <- grep(RPKM_COL, colnames(expression_data), ignore.case = TRUE, value = TRUE)
+  
+  if (length(rpkm_cols) == 0) {
+    warning("No RPKM columns found, skipping RPKM filtering")
+    return(expression_data)
+  }
+  
+  # Keep rows where any RPKM value exceeds cutoff
+  keep_rows <- apply(expression_data[, rpkm_cols, drop = FALSE], 1, function(x) {
+    any(x > rpkm_cutoff, na.rm = TRUE)
+  })
+  
+  filtered_data <- expression_data[keep_rows, , drop = FALSE]
+  
+  message(paste("RPKM filtering: removed", sum(!keep_rows), "rows, kept", sum(keep_rows), "rows"))
+  
+  return(filtered_data)
+}
+
+# Function to process count data and apply batch correction
+process_count_data <- function(args, counts, metadata, design_formula) {
+  message("Processing count data...")
+  
+  # Set up variables for batch correction result
+  batch_warning <- NULL
+  countData <- counts
+  
+  # Apply batch correction if requested
+  if (args$batchcorrection != "none") {
+    message(paste("Applying batch correction method:", args$batchcorrection))
+    
+    if (!"batch" %in% colnames(metadata)) {
+      batch_warning <- "Batch correction requested but no 'batch' column found in metadata. Batch correction skipped."
+      warning(batch_warning)
+    } else {
+      # Check batch correction method
+      if (args$batchcorrection == "combatseq") {
+        # Apply ComBat-Seq batch correction
+        countData <- apply_combatseq_correction(counts, metadata, design_formula)
+      } else if (args$batchcorrection == "model") {
+        # Include batch in model (no data modification needed)
+        design_formula <- update(design_formula, ~ . + batch)
+        message("Added batch to design formula: ", deparse(design_formula))
+      } else {
+        batch_warning <- paste("Unknown batch correction method:", args$batchcorrection, ". Batch correction skipped.")
+        warning(batch_warning)
+      }
+    }
+  }
+  
+  # Return processed data
+  return(list(
+    countData = countData,
+    design_formula = design_formula,
+    batch_warning = batch_warning
+  ))
+}
+
+# Helper function for ComBat-Seq batch correction
+apply_combatseq_correction <- function(counts, metadata, design_formula) {
+  if (!requireNamespace("sva", quietly = TRUE)) {
+    warning("Package 'sva' is required for ComBat-Seq batch correction but not available. Skipping batch correction.")
+    return(counts)
+  }
+  
+  message("Applying ComBat-Seq batch correction...")
+  
+  # Extract batch information
+  batch <- metadata$batch
+  
+  # Get model matrix from design formula
+  mod <- model.matrix(design_formula, data = metadata)
+  
+  # Apply ComBat-Seq
+  corrected_counts <- sva::ComBat_seq(
+    counts = as.matrix(counts),
+    batch = batch,
+    group = mod
+  )
+  
+  # Convert back to data frame
+  corrected_counts <- as.data.frame(corrected_counts)
+  
+  # Ensure row and column names are preserved
+  rownames(corrected_counts) <- rownames(counts)
+  colnames(corrected_counts) <- colnames(counts)
+  
+  message("Batch correction applied successfully")
+  
+  return(corrected_counts)
+}
+
+# Function to scale expression data based on scaling_type
 scale_expression_data <- function(expression_data, scaling_type) {
   if (scaling_type == "none" || is.null(scaling_type)) {
     message("No scaling applied to expression data")
