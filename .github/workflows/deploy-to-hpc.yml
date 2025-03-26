@@ -70,49 +70,49 @@ jobs:
           fi
           
           # Create the SSH key with proper format
-          printf "%s\n" "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf "%s\n" "$SSH_PRIVATE_KEY" > ~/.ssh/github_action_key
           
           # Debug: Check key file content
           echo "Checking key file content..."
-          if [ ! -s ~/.ssh/id_ed25519 ]; then
+          if [ ! -s ~/.ssh/github_action_key ]; then
             echo "ERROR: Key file is empty"
             exit 1
           fi
           
           # Verify the key format
-          if ! grep -q "BEGIN OPENSSH PRIVATE KEY" ~/.ssh/id_ed25519; then
+          if ! grep -q "BEGIN OPENSSH PRIVATE KEY" ~/.ssh/github_action_key; then
             echo "ERROR: Key does not contain proper OpenSSH format"
             echo "First line of key:"
-            head -n 1 ~/.ssh/id_ed25519
+            head -n 1 ~/.ssh/github_action_key
             echo "Last line of key:"
-            tail -n 1 ~/.ssh/id_ed25519
+            tail -n 1 ~/.ssh/github_action_key
             echo "Key file size:"
-            ls -l ~/.ssh/id_ed25519
+            ls -l ~/.ssh/github_action_key
             exit 1
           fi
           
           # Set proper permissions
-          chmod 600 ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/github_action_key
           
           # Check key format validity
           echo "Key fingerprint:"
-          ssh-keygen -l -f ~/.ssh/id_ed25519 || {
+          ssh-keygen -l -f ~/.ssh/github_action_key || {
             echo "ERROR: Invalid key format"
             echo "Key contents (first line):"
-            head -n 1 ~/.ssh/id_ed25519
+            head -n 1 ~/.ssh/github_action_key
             echo "Key file size:"
-            ls -l ~/.ssh/id_ed25519
+            ls -l ~/.ssh/github_action_key
             exit 1
           }
           
           # Start SSH agent
           eval $(ssh-agent -s)
-          ssh-add -v ~/.ssh/id_ed25519 || {
+          ssh-add -v ~/.ssh/github_action_key || {
             echo "ERROR: Failed to add key to SSH agent"
             echo "SSH agent status:"
             ssh-agent
             echo "Key file permissions:"
-            ls -l ~/.ssh/id_ed25519
+            ls -l ~/.ssh/github_action_key
             exit 1
           }
           
@@ -121,7 +121,7 @@ jobs:
           Host bmicluster
             HostName bmiclusterp.chmcres.cchmc.org
             User pavb5f
-            IdentityFile ~/.ssh/id_ed25519
+            IdentityFile ~/.ssh/github_action_key
             IdentitiesOnly yes
             StrictHostKeyChecking no
             UserKnownHostsFile=/dev/null
@@ -129,11 +129,11 @@ jobs:
           Host bmicluster-compute
             User pavb5f
             HostName bmi-460g10-04.chmcres.cchmc.org
-            IdentityFile ~/.ssh/id_ed25519
+            IdentityFile ~/.ssh/github_action_key
             IdentitiesOnly yes
             StrictHostKeyChecking no
             UserKnownHostsFile=/dev/null
-            ProxyJump bmicluster
+            ProxyCommand ssh -i ~/.ssh/github_action_key -W %h:%p bmicluster
           EOF
           
           # Set proper permissions for config
@@ -147,18 +147,24 @@ jobs:
       
       - name: Test SSH connection
         run: |
-          # Test direct connection to compute node via ProxyJump
+          # Test direct connection to compute node via ProxyCommand
           echo "Testing SSH connection to bmicluster-compute..."
           
           # Make sure SSH agent is running
           eval $(ssh-agent -s)
-          ssh-add ~/.ssh/id_ed25519
+          ssh-add ~/.ssh/github_action_key
           
-          # Test connection to compute node directly using ProxyJump
-          ssh -v bmicluster-compute "hostname && echo SSH_CONNECTION_SUCCESS" || {
+          # Test connection to jump host first
+          echo "Testing connection to jump host..."
+          ssh -i ~/.ssh/github_action_key -v bmicluster "echo Jump host connection succeeded" || {
+            echo "ERROR: SSH connection to jump host failed"
+            exit 1
+          }
+          
+          # Now test connection to compute node
+          echo "Testing connection to compute node..."
+          ssh -i ~/.ssh/github_action_key -v bmicluster-compute "hostname && echo SSH_CONNECTION_SUCCESS" || {
             echo "ERROR: SSH connection to compute node failed"
-            echo "Testing direct connection to jump host:"
-            ssh -v bmicluster "echo Jump host connection succeeded"
             exit 1
           }
       
@@ -174,12 +180,12 @@ jobs:
           # Pass environment variables to the script
           ./deploy.sh
           
-          # Verify deployment using ProxyJump
+          # Verify deployment using explicit key file
           echo "Verifying deployment..."
-          if ssh bmicluster-compute "hostname"; then
+          if ssh -i ~/.ssh/github_action_key bmicluster-compute "hostname"; then
             echo "Connection successful!"
             # Try to check if container is running
-            ssh bmicluster-compute "docker ps | grep -E \"($DOCKER_TAG|scidap-deseq)\"" || echo "Container not visible but connection succeeded"
+            ssh -i ~/.ssh/github_action_key bmicluster-compute "docker ps | grep -E \"($DOCKER_TAG|scidap-deseq)\"" || echo "Container not visible but connection succeeded"
           else
             echo "WARNING: Could not verify deployment - connection failed"
             # Don't fail the pipeline
@@ -188,4 +194,4 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          rm -f ~/.ssh/id_ed25519 ~/.ssh/config 
+          rm -f ~/.ssh/github_action_key ~/.ssh/config 
