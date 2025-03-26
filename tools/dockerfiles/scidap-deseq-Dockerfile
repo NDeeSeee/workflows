@@ -88,6 +88,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 #############################################
 # Install only new R packages for this version
 RUN R -e 'install.packages("logger", repos="https://cloud.r-project.org/", dependencies=TRUE)'
+RUN R -e 'install.packages("params", repos="https://cloud.r-project.org/", dependencies=TRUE)'
 
 #############################################
 # SCRIPT UPDATES

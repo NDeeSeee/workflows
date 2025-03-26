@@ -7,7 +7,7 @@ cran_packages <- c(
   "pheatmap", "ggrepel", "htmlwidgets", "devtools", "kableExtra",
   "systemfonts", "svglite", "gridExtra", "rlang", "stringr", 
   "RColorBrewer", "glue", "pryr", "plotly", "ggplot2", "future",
-  "jsonlite", "magrittr", "reshape2", "conflicted", "logger"
+  "jsonlite", "magrittr", "reshape2", "conflicted", "logger", "params"
 )
 
 # List of Bioconductor packages to install
