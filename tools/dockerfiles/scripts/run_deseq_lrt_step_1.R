@@ -28,7 +28,8 @@ if (file.exists("functions/common/utilities.R")) {
 }
 
 # Source the workflow file
-if (!source_with_fallback("functions/deseq2_lrt_step_1/workflow.R", "/usr/local/bin/functions/deseq2_lrt_step_1/workflow.R")) {
+result <- source_with_fallback("functions/deseq2_lrt_step_1/workflow.R", "/usr/local/bin/functions/deseq2_lrt_step_1/workflow.R")
+if (!result) {
   stop("Could not find workflow.R file")
 }
 

@@ -23,29 +23,33 @@ report_memory_usage <- function(label = "") {
 #' 
 #' @param filepath Relative path to file
 #' @param absolute_path Absolute path to file (fallback)
-#' @return Result of source() call
+#' @return TRUE if source was successful, FALSE otherwise
 source_with_fallback <- function(filepath, absolute_path = NULL) {
   # Try absolute path first if provided
   if (!is.null(absolute_path) && file.exists(absolute_path)) {
     message(paste("Sourcing from absolute path:", absolute_path))
-    return(source(absolute_path))
+    source(absolute_path)
+    return(TRUE)
   }
   
   # Try relative path
   if (file.exists(filepath)) {
     message(paste("Sourcing from relative path:", filepath))
-    return(source(filepath))
+    source(filepath)
+    return(TRUE)
   }
   
   # Try a standard Docker path
   docker_path <- file.path("/usr/local/bin", filepath)
   if (file.exists(docker_path)) {
     message(paste("Sourcing from Docker path:", docker_path))
-    return(source(docker_path))
+    source(docker_path)
+    return(TRUE)
   }
   
-  # If all fails, error
-  stop(paste("Could not find file to source:", filepath))
+  # If all fails, return FALSE
+  message(paste("Could not find file to source:", filepath))
+  return(FALSE)
 }
 
 #' Configure standard plotting theme
