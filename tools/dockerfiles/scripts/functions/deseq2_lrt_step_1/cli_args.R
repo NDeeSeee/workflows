@@ -157,33 +157,97 @@ get_args <- function() {
     args <- parser$parse_args()
   }, error = function(e) {
     # Check for unrecognized arguments error
-    if (grepl("unrecognized arguments:", e$message)) {
-      message("Warning: Encountered unrecognized arguments. Attempting to parse required arguments only.")
+    if (grepl("unrecognized arguments:", e$message) || grepl("expected one argument", e$message)) {
+      message("Warning: Argument parsing error. Attempting to handle arguments manually.")
       
-      # Parse just the required arguments, ignoring unknown ones
-      args <- parser$parse_args(args = commandArgs(trailingOnly = TRUE)[
-        grepl("^--(meta|design|reduced)", commandArgs(trailingOnly = TRUE))
-      ])
-      
-      # Extract input files and sample names from remaining arguments
+      # Get all command line arguments
       all_args <- commandArgs(trailingOnly = TRUE)
       
-      # Try to identify file paths and sample names
-      file_pattern <- "\\.(tsv|csv)$"
-      input_files <- all_args[grepl(file_pattern, all_args)]
+      # Initialize an empty list for our parsed arguments
+      args <- list()
       
-      # Sample names might be the remaining non-flag arguments
-      potential_names <- all_args[!grepl("^--", all_args) & !grepl(file_pattern, all_args)]
-      potential_names <- potential_names[!potential_names %in% 
-                                        unlist(lapply(names(args), function(x) args[[x]]))]
-      
-      # Set input files and names if found
-      if (length(input_files) > 0) {
-        args$input <- input_files
+      # Process all arguments manually
+      i <- 1
+      while (i <= length(all_args)) {
+        current_arg <- all_args[i]
+        
+        # Check if this is a flag argument (starts with --)
+        if (grepl("^--", current_arg)) {
+          arg_name <- sub("^--", "", current_arg)
+          
+          # Check if the next item exists and is not a flag
+          if (i < length(all_args) && !grepl("^--", all_args[i + 1])) {
+            # This is a flag with a value
+            arg_value <- all_args[i + 1]
+            args[[arg_name]] <- arg_value
+            i <- i + 2  # Skip the value
+          } else {
+            # This is a boolean flag
+            args[[arg_name]] <- TRUE
+            i <- i + 1
+          }
+        } else {
+          # This is a positional argument, classify it as input file or sample name
+          if (grepl("\\.(tsv|csv)$", current_arg)) {
+            # This looks like a file path, add to inputs
+            args$input <- c(args$input, current_arg)
+          } else {
+            # This looks like a sample name
+            args$name <- c(args$name, current_arg)
+          }
+          i <- i + 1
+        }
       }
       
-      if (length(potential_names) > 0) {
-        args$name <- potential_names
+      # Parse numeric values
+      for (arg_name in c("fdr", "lfcthreshold", "rpkm_cutoff", "k_hopach", "kmax_hopach", "threads")) {
+        if (!is.null(args[[arg_name]]) && is.character(args[[arg_name]])) {
+          if (grepl("^[0-9.]+$", args[[arg_name]])) {
+            args[[arg_name]] <- as.numeric(args[[arg_name]])
+          }
+        }
+      }
+      
+      # Convert boolean string values
+      for (arg_name in c("use_lfc_thresh", "lrt_only_mode", "test_mode")) {
+        if (!is.null(args[[arg_name]]) && is.character(args[[arg_name]])) {
+          if (tolower(args[[arg_name]]) %in% c("true", "t", "yes", "y", "1")) {
+            args[[arg_name]] <- TRUE
+          } else if (tolower(args[[arg_name]]) %in% c("false", "f", "no", "n", "0")) {
+            args[[arg_name]] <- FALSE
+          }
+        }
+      }
+      
+      # Set up parameter aliases for compatibility
+      if (!is.null(args$k)) {
+        args$k_hopach <- args$k
+      }
+      if (!is.null(args$kmax)) {
+        args$kmax_hopach <- args$kmax
+      }
+      if (!is.null(args$cluster)) {
+        args$cluster_method <- args$cluster
+      }
+      if (!is.null(args$rowdist)) {
+        args$row_distance <- args$rowdist
+      }
+      if (!is.null(args$columndist)) {
+        args$column_distance <- args$columndist
+      }
+      if (!is.null(args$output)) {
+        args$output_prefix <- args$output
+      }
+      
+      # Show what we parsed
+      message("Manually parsed arguments:")
+      for (arg_name in names(args)) {
+        if (length(args[[arg_name]]) > 1) {
+          message(paste0("  ", arg_name, ": [", paste(head(args[[arg_name]], 3), collapse=", "), 
+                        if(length(args[[arg_name]]) > 3) "..." else "", "] (", length(args[[arg_name]]), " items)"))
+        } else {
+          message(paste0("  ", arg_name, ": ", args[[arg_name]]))
+        }
       }
       
       return(args)
@@ -208,19 +272,34 @@ handle_parameter_compatibility <- function(args) {
 
 # Function to validate command line arguments
 assert_args <- function(args) {
+  # Check for required arguments
+  required_args <- c("meta", "design", "reduced")
+  missing_required <- required_args[!required_args %in% names(args)]
+  
+  if (length(missing_required) > 0) {
+    message(paste("Error: Missing required arguments:", paste(missing_required, collapse=", ")))
+    quit(save = "no", status = 1, runLast = FALSE)
+  }
+  
+  # Create empty arrays for input/name if they don't exist
+  if (is.null(args$input)) args$input <- character(0)
+  if (is.null(args$name)) args$name <- character(0)
+  
   # Validate input and name parameters
-  if (is.null(args$input) || is.null(args$name)) {
-    print("Exiting: --input and --name parameters are required")
+  if (length(args$input) == 0 || length(args$name) == 0) {
+    message("Error: --input and --name parameters are required")
+    message("Input files found: ", length(args$input))
+    message("Sample names found: ", length(args$name))
     quit(save = "no", status = 1, runLast = FALSE)
   }
   
   if (length(args$input) != length(args$name)) {
-    print("Exiting: --input and --name have different number of values")
-    print(paste("Number of input files:", length(args$input)))
-    print(paste("Number of sample names:", length(args$name)))
-    print("Input files:")
+    message("Error: --input and --name have different number of values")
+    message(paste("Number of input files:", length(args$input)))
+    message(paste("Number of sample names:", length(args$name)))
+    message("Input files:")
     print(args$input)
-    print("Sample names:")
+    message("Sample names:")
     print(args$name)
     quit(save = "no", status = 1, runLast = FALSE)
   }
@@ -232,7 +311,7 @@ assert_args <- function(args) {
       design_formula <- as.formula(args$design)
     },
     error = function(e) {
-      print(paste0("Exiting: failed to load --design ", args$design, " as formula"))
+      message(paste0("Error: failed to load --design ", args$design, " as formula"))
       quit(save = "no", status = 1, runLast = FALSE)
     }
   )
@@ -244,20 +323,20 @@ assert_args <- function(args) {
       reduced_formula <- as.formula(args$reduced)
     },
     error = function(e) {
-      print(paste0("Exiting: failed to load --reduced ", args$reduced, " as formula"))
+      message(paste0("Error: failed to load --reduced ", args$reduced, " as formula"))
       quit(save = "no", status = 1, runLast = FALSE)
     }
   )
   
+  # Check if metadata file exists
+  if (!file.exists(args$meta)) {
+    message(paste("Error: Metadata file does not exist:", args$meta))
+    quit(save = "no", status = 1, runLast = FALSE)
+  }
+  
   # Validate batch correction
   if (!is.null(args$batchcorrection) && args$batchcorrection != "none") {
-    # Check if metadata file exists
-    if (!file.exists(args$meta)) {
-      print("Exiting: metadata file does not exist")
-      quit(save = "no", status = 1, runLast = FALSE)
-    }
-    
-    # Check if 'batch' column exists in metadata
+    # Try to read the metadata file
     meta_data <- tryCatch(
       {
         # Try to read the file
@@ -271,18 +350,18 @@ assert_args <- function(args) {
         }
       },
       error = function(e) {
-        print(paste0("Exiting: failed to read metadata file: ", e$message))
+        message(paste0("Error: failed to read metadata file: ", e$message))
         quit(save = "no", status = 1, runLast = FALSE)
       }
     )
     
     if (!"batch" %in% colnames(meta_data)) {
-      print("Warning: batch correction requested but 'batch' column not found in metadata file")
-      print("Proceeding without batch correction")
+      message("Warning: batch correction requested but 'batch' column not found in metadata file")
+      message("Proceeding without batch correction")
       args$batchcorrection <- "none"
     } else if (!is.numeric(meta_data$batch)) {
-      print("Warning: 'batch' column in metadata file is not numeric")
-      print("Converting batch to numeric values")
+      message("Warning: 'batch' column in metadata file is not numeric")
+      message("Converting batch to numeric values")
       # No need to quit here, we'll handle conversion elsewhere
     }
   }
@@ -290,26 +369,26 @@ assert_args <- function(args) {
   # Validate rpkm_cutoff (if provided)
   if (!is.null(args$rpkm_cutoff)) {
     if (!is.numeric(args$rpkm_cutoff) || args$rpkm_cutoff < 0) {
-      print("Warning: --rpkm_cutoff must be a non-negative integer, using default NULL")
+      message("Warning: --rpkm_cutoff must be a non-negative integer, using default NULL")
       args$rpkm_cutoff <- NULL
     }
   }
   
   # Validate k_hopach parameter (1-15)
   if (!is.null(args$k_hopach) && (args$k_hopach < 1 || args$k_hopach > 15)) {
-    print("Warning: --k_hopach must be between 1 and 15, using default value 3")
+    message("Warning: --k_hopach must be between 1 and 15, using default value 3")
     args$k_hopach <- 3
   }
   
   # Validate kmax_hopach parameter (2-9)
   if (!is.null(args$kmax_hopach) && (args$kmax_hopach < 2 || args$kmax_hopach > 9)) {
-    print("Warning: --kmax_hopach must be between 2 and 9, using default value 5")
+    message("Warning: --kmax_hopach must be between 2 and 9, using default value 5")
     args$kmax_hopach <- 5
   }
   
   # Validate fdr parameter
   if (!is.null(args$fdr) && (args$fdr < 0 || args$fdr > 1)) {
-    print("Warning: --fdr must be between 0 and 1, using default value 0.1")
+    message("Warning: --fdr must be between 0 and 1, using default value 0.1")
     args$fdr <- 0.1
   }
   
