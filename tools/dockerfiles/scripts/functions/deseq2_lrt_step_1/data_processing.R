@@ -291,24 +291,52 @@ perform_clustering <- function(expression_data, cluster_method, row_distance, co
   row_clustering <- NULL
   col_clustering <- NULL
   
+  # Check what parameters are accepted by hopach in this version
+  hopach_args <- names(formals(hopach::hopach))
+  message("Available hopach parameters: ", paste(hopach_args, collapse=", "))
+  
   # Perform row clustering if requested
   if (cluster_method %in% c("row", "both")) {
     message(paste("Row clustering with distance:", row_distance))
     
     tryCatch({
-      row_clustering <- hopach::hopach(
-        data = expression_data,
-        dmat = NULL,
-        dist.method = as.character(row_distance),
-        k = as.numeric(k),
-        kmax = as.numeric(kmax),
-        khigh = NULL
-      )
+      # Try modern parameter names first
+      if ("distmethod" %in% hopach_args) {
+        row_clustering <- hopach::hopach(
+          data = expression_data,
+          diss = NULL,
+          distmethod = as.character(row_distance),
+          K = as.numeric(k),
+          kmax = as.numeric(kmax)
+        )
+      } 
+      # Fall back to old parameter names
+      else if ("dist.method" %in% hopach_args) {
+        row_clustering <- hopach::hopach(
+          data = expression_data,
+          dmat = NULL,
+          dist.method = as.character(row_distance),
+          k = as.numeric(k),
+          kmax = as.numeric(kmax),
+          khigh = NULL
+        )
+      }
+      # If neither works, use minimal parameters
+      else {
+        row_clustering <- hopach::hopach(
+          data = expression_data
+        )
+      }
     }, error = function(e) {
       # Attempt with default parameters if specific ones fail
       message(paste("Error in row clustering:", e$message))
       message("Attempting row clustering with default parameters")
-      row_clustering <<- hopach::hopach(data = expression_data)
+      tryCatch({
+        row_clustering <<- hopach::hopach(data = expression_data)
+      }, error = function(e2) {
+        message(paste("Error in basic row clustering:", e2$message))
+        message("Skipping row clustering")
+      })
     })
   }
   
@@ -317,26 +345,66 @@ perform_clustering <- function(expression_data, cluster_method, row_distance, co
     message(paste("Column clustering with distance:", column_distance))
     
     tryCatch({
-      col_clustering <- hopach::hopach(
-        data = t(expression_data),  # Transpose for column clustering
-        dmat = NULL,
-        dist.method = as.character(column_distance),
-        k = as.numeric(k),
-        kmax = as.numeric(kmax),
-        khigh = NULL
-      )
+      # Try modern parameter names first
+      if ("distmethod" %in% hopach_args) {
+        col_clustering <- hopach::hopach(
+          data = t(expression_data),  # Transpose for column clustering
+          diss = NULL,
+          distmethod = as.character(column_distance),
+          K = as.numeric(k),
+          kmax = as.numeric(kmax)
+        )
+      } 
+      # Fall back to old parameter names
+      else if ("dist.method" %in% hopach_args) {
+        col_clustering <- hopach::hopach(
+          data = t(expression_data),  # Transpose for column clustering
+          dmat = NULL,
+          dist.method = as.character(column_distance),
+          k = as.numeric(k),
+          kmax = as.numeric(kmax),
+          khigh = NULL
+        )
+      }
+      # If neither works, use minimal parameters
+      else {
+        col_clustering <- hopach::hopach(
+          data = t(expression_data)  # Transpose for column clustering
+        )
+      }
     }, error = function(e) {
       # Attempt with default parameters if specific ones fail
       message(paste("Error in column clustering:", e$message))
       message("Attempting column clustering with default parameters")
-      col_clustering <<- hopach::hopach(data = t(expression_data))
+      tryCatch({
+        col_clustering <<- hopach::hopach(data = t(expression_data))
+      }, error = function(e2) {
+        message(paste("Error in basic column clustering:", e2$message))
+        message("Skipping column clustering")
+      })
     })
   }
   
-  # Reorder data based on clustering
-  row_order <- if (!is.null(row_clustering)) row_clustering$final$order else 1:nrow(expression_data)
-  col_order <- if (!is.null(col_clustering)) col_clustering$final$order else 1:ncol(expression_data)
+  # Handle the case where clustering fails completely
+  if (is.null(row_clustering) && cluster_method %in% c("row", "both")) {
+    message("Row clustering failed, using original row order")
+    row_order <- 1:nrow(expression_data)
+  } else if (!is.null(row_clustering)) {
+    row_order <- row_clustering$final$order
+  } else {
+    row_order <- 1:nrow(expression_data)
+  }
   
+  if (is.null(col_clustering) && cluster_method %in% c("column", "both")) {
+    message("Column clustering failed, using original column order")
+    col_order <- 1:ncol(expression_data)
+  } else if (!is.null(col_clustering)) {
+    col_order <- col_clustering$final$order
+  } else {
+    col_order <- 1:ncol(expression_data)
+  }
+  
+  # Reorder data based on clustering
   ordered_data <- expression_data[row_order, col_order]
   
   return(list(
