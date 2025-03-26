@@ -96,7 +96,7 @@ jobs:
       
       - name: Upload Docker tag artifact
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: docker-tag
           path: docker_tag.txt
