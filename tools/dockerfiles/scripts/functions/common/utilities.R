@@ -223,6 +223,9 @@ get_file_type <- function(file_path) {
 #' @return Vector of cleaned sample names
 #' @export
 clean_sample_names <- function(sample_names) {
+  # First trim any leading or trailing whitespace
+  sample_names <- trimws(sample_names)
+  
   # Replace spaces with underscores
   sample_names <- gsub(" ", "_", sample_names)
   
@@ -331,4 +334,55 @@ print_all_args <- function(args) {
   
   # Format as a string with newlines
   return(paste(args_str, collapse = "\n"))
+}
+
+#' Set logger to verbose level
+#' 
+#' Configures the logger package to use verbose logging level
+#' 
+#' @return Nothing, modifies global logger settings
+#' @export
+set_log_level_verbose <- function() {
+  if (requireNamespace("logger", quietly = TRUE)) {
+    logger::log_threshold(logger::DEBUG)
+    message("Logger configured for verbose output")
+  } else {
+    message("Warning: logger package not available, using base message() function")
+  }
+}
+
+#' Log debug level message
+#' 
+#' @param ... Arguments passed to logger::log_debug or message
+#' @export
+log_debug <- function(...) {
+  if (requireNamespace("logger", quietly = TRUE)) {
+    logger::log_debug(...)
+  } else {
+    message("[DEBUG] ", ...)
+  }
+}
+
+#' Log info level message
+#' 
+#' @param ... Arguments passed to logger::log_info or message
+#' @export
+log_info <- function(...) {
+  if (requireNamespace("logger", quietly = TRUE)) {
+    logger::log_info(...)
+  } else {
+    message("[INFO] ", ...)
+  }
+}
+
+#' Log error level message
+#' 
+#' @param ... Arguments passed to logger::log_error or message
+#' @export
+log_error <- function(...) {
+  if (requireNamespace("logger", quietly = TRUE)) {
+    logger::log_error(...)
+  } else {
+    message("[ERROR] ", ...)
+  }
 } 

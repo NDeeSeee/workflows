@@ -314,6 +314,9 @@ load_and_validate_expression_data <- function(args, metadata_df) {
   # Clean sample names for consistency
   clean_names <- clean_sample_names(args$name)
   
+  # Trim any trailing whitespace which can cause issues
+  clean_names <- trimws(clean_names)
+  
   # Load expression data
   expression_data_df <- load_expression_data(args$input, clean_names, READ_COL, RPKM_COL, INTERSECT_BY)
   message(glue::glue("Loaded expression data for {nrow(expression_data_df)} genes from {length(args$input)} files"))

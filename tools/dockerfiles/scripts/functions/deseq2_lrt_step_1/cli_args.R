@@ -311,6 +311,12 @@ get_args <- function() {
   # Validate arguments
   args <- assert_args(args)
   
+  # Trim whitespace from name values
+  if (!is.null(args$name) && length(args$name) > 0) {
+    args$name <- trimws(args$name)
+    message("Trimmed whitespace from sample names")
+  }
+  
   # Final check for required arguments before returning
   required_args <- c("meta", "design", "reduced")
   for (req_arg in required_args) {
