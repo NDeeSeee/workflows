@@ -99,11 +99,20 @@ jobs:
           echo "Loading Singularity module..."
           module load singularity/3.7.0 || { echo "Failed to load Singularity module"; exit 1; }
           
-          echo "Pulling Docker image..."
-          singularity pull --force /data/barskilab/scidap_server/singularity_images/scidap-deseq_${DOCKER_TAG}.sif docker://biowardrobe2/scidap-deseq:${DOCKER_TAG} || { echo "Failed to pull image"; exit 1; }
+          # Define image names
+          IMAGE_NAME="scidap-deseq"
+          DOCKER_REPO="biowardrobe2"
+          TEMP_IMAGE_NAME="${IMAGE_NAME}_${DOCKER_TAG}.sif"
+          FINAL_IMAGE_NAME="biowardrobe2_${IMAGE_NAME}:${DOCKER_TAG}.sif"
+          
+          echo "Pulling Docker image to temporary file..."
+          singularity pull --force "${TEMP_IMAGE_NAME}" docker://${DOCKER_REPO}/${IMAGE_NAME}:${DOCKER_TAG} || { echo "Failed to pull image"; exit 1; }
+          
+          echo "Moving to final destination with correct naming..."
+          mv "${TEMP_IMAGE_NAME}" "/data/barskilab/scidap_server/singularity_images/${FINAL_IMAGE_NAME}" || { echo "Failed to move image"; exit 1; }
           
           echo "Setting permissions..."
-          chmod 644 /data/barskilab/scidap_server/singularity_images/scidap-deseq_${DOCKER_TAG}.sif
+          chmod 644 "/data/barskilab/scidap_server/singularity_images/${FINAL_IMAGE_NAME}"
           
           echo "Deployment completed successfully"
-          echo "Image available at: /data/barskilab/scidap_server/singularity_images/scidap-deseq_${DOCKER_TAG}.sif"
+          echo "Image available at: /data/barskilab/scidap_server/singularity_images/${FINAL_IMAGE_NAME}"
