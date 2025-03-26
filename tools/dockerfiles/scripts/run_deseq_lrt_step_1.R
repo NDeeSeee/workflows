@@ -111,5 +111,29 @@ report_memory_usage("After loading function files")
 # Configure plot theme
 configure_plot_theme()
 
-# Execute main function with memory management from workflow.R
+# Main execution with memory management and error handling
+main_with_memory_management <- function() {
+  log_message("DESeq2 LRT Step 1 started", "START")
+  
+  tryCatch({
+    # Get and parse command line arguments
+    args <- get_args()
+    
+    # Run the main analysis pipeline
+    run_deseq_analysis(args)
+    
+    log_message("DESeq2 LRT Step 1 completed successfully", "SUCCESS")
+  }, error = function(e) {
+    log_message(paste("ERROR:", conditionMessage(e)), "ERROR")
+    log_message(paste("See traceback for details:", deparse(e$call)), "ERROR")
+    print(rlang::last_trace())
+    # Exit with error code
+    quit(save = "no", status = 1, runLast = FALSE)
+  }, finally = {
+    # Clean up
+    gc()
+  })
+}
+
+# Execute main function
 main_with_memory_management()

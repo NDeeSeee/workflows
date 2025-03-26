@@ -67,34 +67,7 @@ export_cls <- function(categories, location) {
 export_results <- function(deseq_results, expression_df, metadata_df, args, batch_warning, rpkm_filtered_count) {
   log_message("Exporting results and visualizations...", "STEP")
   
-  # Handle parameter naming consistency
-  # Ensure we have both old and new parameter names available
-  if (!exists("harmonize_parameters")) {
-    # Define the function locally if not available
-    harmonize_parameters <- function(args) {
-      param_mapping <- list(
-        cluster_method = "cluster",
-        row_distance = "rowdist", 
-        column_distance = "columndist",
-        k_hopach = "k",
-        kmax_hopach = "kmax",
-        output_prefix = "output"
-      )
-      
-      for (new_param in names(param_mapping)) {
-        old_param <- param_mapping[[new_param]]
-        if (!is.null(args[[new_param]])) {
-          args[[old_param]] <- args[[new_param]]
-        } else if (!is.null(args[[old_param]])) {
-          args[[new_param]] <- args[[old_param]]
-        }
-      }
-      return(args)
-    }
-  }
-  
-  # Harmonize parameters
-  args <- harmonize_parameters(args)
+  # No need to harmonize parameters as they're already handled in the ArgumentParser
   
   # Create output directory if it doesn't exist
   output_dir <- dirname(args$output_prefix)

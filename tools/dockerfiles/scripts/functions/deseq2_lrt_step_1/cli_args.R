@@ -81,37 +81,43 @@ get_args <- function() {
     help = "Integer cutoff for filtering rows in the expression data"
   )
   
-  # Renamed to match CWL parameter names
+  # Keep original CWL parameter names but store in the new parameter names
+  # This avoids the ambiguous option error
   parser$add_argument(
-    "--cluster_method",
+    "--cluster",
+    dest = "cluster_method",
     default = "none",
     choices = c("row", "column", "both", "none"),
     help = "Hopach clustering method to be run on normalized read counts"
   )
   
   parser$add_argument(
-    "--row_distance",
+    "--rowdist",
+    dest = "row_distance",
     default = "cosangle",
     choices = c("cosangle", "abscosangle", "euclid", "cor", "abscor"),
     help = "Distance metric for HOPACH row clustering"
   )
   
   parser$add_argument(
-    "--column_distance",
+    "--columndist",
+    dest = "column_distance",
     default = "euclid",
     choices = c("cosangle", "abscosangle", "euclid", "cor", "abscor"),
     help = "Distance metric for HOPACH column clustering"
   )
   
   parser$add_argument(
-    "--k_hopach",
+    "--k",
+    dest = "k_hopach",
     type = "integer",
     default = 3,
     help = "Number of levels (depth) for Hopach clustering: min - 1, max - 15"
   )
   
   parser$add_argument(
-    "--kmax_hopach",
+    "--kmax",
+    dest = "kmax_hopach",
     type = "integer",
     default = 5,
     help = "Maximum number of clusters at each level for Hopach clustering: min - 2, max - 9"
@@ -119,7 +125,8 @@ get_args <- function() {
   
   # Output arguments
   parser$add_argument(
-    "--output_prefix",
+    "--output",
+    dest = "output_prefix",
     default = "./deseq_lrt_step_1",
     help = "Output prefix for generated files"
   )
@@ -151,39 +158,14 @@ get_args <- function() {
   # Validate arguments
   args <- assert_args(args)
   
-  # Convert legacy parameter names to new ones for backward compatibility
-  args <- handle_parameter_compatibility(args)
-  
   return(args)
 }
 
 # Function to handle parameter naming compatibility
 handle_parameter_compatibility <- function(args) {
-  # Mapping old parameter names to new ones
-  param_mapping <- list(
-    cluster = "cluster_method",
-    rowdist = "row_distance",
-    columndist = "column_distance",
-    k = "k_hopach",
-    kmax = "kmax_hopach",
-    output = "output_prefix"
-  )
-  
-  # Create a new args list
-  new_args <- args
-  
-  # For each old parameter, check if it exists and new one doesn't
-  for (old_param in names(param_mapping)) {
-    new_param <- param_mapping[[old_param]]
-    
-    # If the old parameter exists but the new one doesn't
-    if (!is.null(args[[old_param]]) && is.null(args[[new_param]])) {
-      new_args[[new_param]] <- args[[old_param]]
-      message(paste0("Using legacy parameter --", old_param, " as --", new_param))
-    }
-  }
-  
-  return(new_args)
+  # NOTE: This function is no longer needed as we're handling parameter compatibility
+  # directly in the ArgumentParser using the 'dest' parameter
+  return(args)
 }
 
 # Function to validate command line arguments

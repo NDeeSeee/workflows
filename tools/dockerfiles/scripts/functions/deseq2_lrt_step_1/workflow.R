@@ -216,31 +216,9 @@ run_deseq_analysis <- function(args) {
 
 # Harmonize parameter names for compatibility
 harmonize_parameters <- function(args) {
-  # Map renamed parameters to their original names for backwards compatibility
-  param_mapping <- list(
-    cluster_method = "cluster",
-    row_distance = "rowdist", 
-    column_distance = "columndist",
-    k_hopach = "k",
-    kmax_hopach = "kmax",
-    output_prefix = "output"
-  )
-  
-  # For each parameter, ensure we have a consistent name
-  for (new_param in names(param_mapping)) {
-    old_param <- param_mapping[[new_param]]
-    
-    # If the new parameter exists, use it
-    if (!is.null(args[[new_param]])) {
-      # Copy to old parameter name for functions that might use it
-      args[[old_param]] <- args[[new_param]]
-    } 
-    # If only the old parameter exists, copy it to the new name
-    else if (!is.null(args[[old_param]])) {
-      args[[new_param]] <- args[[old_param]]
-    }
-  }
-  
+  # This function is retained for backward compatibility with any code
+  # that might still expect the old parameter names
+  # No action needed since we've handled parameter mapping in ArgumentParser
   return(args)
 }
 
