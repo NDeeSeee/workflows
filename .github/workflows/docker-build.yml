@@ -88,3 +88,16 @@ jobs:
             ${{ env.DOCKER_HUB_REPO }}/${{ env.DOCKER_IMAGE_NAME }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      
+      - name: Save Docker tag as artifact
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "${{ steps.set-tag.outputs.docker_tag }}" > docker_tag.txt
+      
+      - name: Upload Docker tag artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v3
+        with:
+          name: docker-tag
+          path: docker_tag.txt
+          retention-days: 1

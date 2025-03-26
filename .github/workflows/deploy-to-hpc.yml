@@ -33,23 +33,58 @@ jobs:
         with:
           fetch-depth: 0  # Fetch all history to extract the correct tag
       
+      - name: Download artifacts if workflow_run triggered
+        if: ${{ github.event_name == 'workflow_run' }}
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: ${{ github.event.workflow_run.id }}
+            });
+            
+            const matchArtifact = artifacts.data.artifacts.find(artifact => {
+              return artifact.name == "docker-tag"
+            });
+            
+            if (matchArtifact) {
+              const download = await github.rest.actions.downloadArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: matchArtifact.id,
+                archive_format: 'zip'
+              });
+              
+              const fs = require('fs');
+              fs.writeFileSync('docker-tag.zip', Buffer.from(download.data));
+              console.log('Artifact downloaded');
+              
+              const { execSync } = require('child_process');
+              execSync('unzip docker-tag.zip');
+              const dockerTag = fs.readFileSync('docker_tag.txt', 'utf8').trim();
+              console.log(`Using Docker tag from previous workflow: ${dockerTag}`);
+              
+              // Set output for use in later steps
+              core.exportVariable('DOCKER_TAG', dockerTag);
+            } else {
+              console.log('No docker-tag artifact found, using default tag');
+              core.exportVariable('DOCKER_TAG', 'v0.0.31');
+            }
+            core.exportVariable('TARGET_HOST', 'bmicluster-compute');
+      
       - name: Set Docker tag from git or input
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            # Use the input value
-            echo "DOCKER_TAG=${{ github.event.inputs.docker_tag }}" >> $GITHUB_ENV
-            echo "TARGET_HOST=${{ github.event.inputs.target_host }}" >> $GITHUB_ENV
-          else
-            # For workflow_run trigger, read the default tag from the docker-build.yml file
-            DOCKER_TAG=$(grep -oP 'DOCKER_TAG="v\d+\.\d+\.\d+"' tools/dockerfiles/scidap-deseq-Dockerfile || echo "v0.0.31")
-            # If tag not found, use the default
-            if [ -z "$DOCKER_TAG" ]; then
-              DOCKER_TAG="v0.0.31"
-            fi
-            echo "DOCKER_TAG=${DOCKER_TAG}" >> $GITHUB_ENV
-            echo "TARGET_HOST=bmicluster-compute" >> $GITHUB_ENV
-          fi
+          # Use the input value
+          echo "DOCKER_TAG=${{ github.event.inputs.docker_tag }}" >> $GITHUB_ENV
+          echo "TARGET_HOST=${{ github.event.inputs.target_host }}" >> $GITHUB_ENV
           
+          echo "Using Docker tag: ${{ github.event.inputs.docker_tag }}"
+          echo "Using target host: ${{ github.event.inputs.target_host }}"
+      
+      - name: Display active settings
+        run: |
           echo "Using Docker tag: $DOCKER_TAG"
           echo "Using target host: $TARGET_HOST"
       
@@ -173,19 +208,29 @@ jobs:
           # Use environment variables
           echo "Deploying docker tag: $DOCKER_TAG to bmicluster-compute..."
           
-          # Deploy using the deployment script
-          # Ensure script has execute permissions
-          chmod +x ./deploy.sh
+          # First, verify SSH connection
+          if ! ssh -i ~/.ssh/github_action_key bmicluster-compute "hostname"; then
+            echo "ERROR: Cannot connect to compute node for deployment"
+            exit 1
+          fi
           
-          # Pass environment variables to the script
-          ./deploy.sh
+          # Pull the Docker image on the compute node
+          echo "Pulling Docker image biowardrobe2/scidap-deseq:$DOCKER_TAG on compute node..."
+          ssh -i ~/.ssh/github_action_key bmicluster-compute "docker pull biowardrobe2/scidap-deseq:$DOCKER_TAG" || {
+            echo "ERROR: Failed to pull Docker image"
+            exit 1
+          }
           
-          # Verify deployment using explicit key file
+          # Verify deployment
           echo "Verifying deployment..."
           if ssh -i ~/.ssh/github_action_key bmicluster-compute "hostname"; then
             echo "Connection successful!"
-            # Try to check if container is running
-            ssh -i ~/.ssh/github_action_key bmicluster-compute "docker ps | grep -E \"($DOCKER_TAG|scidap-deseq)\"" || echo "Container not visible but connection succeeded"
+            # Check if container image exists
+            ssh -i ~/.ssh/github_action_key bmicluster-compute "docker images | grep -E 'biowardrobe2/scidap-deseq.*$DOCKER_TAG'" || {
+              echo "WARNING: Could not find Docker image, but connection succeeded"
+            }
+            
+            echo "✅ Deployment of Docker image biowardrobe2/scidap-deseq:$DOCKER_TAG completed successfully!"
           else
             echo "WARNING: Could not verify deployment - connection failed"
             # Don't fail the pipeline
