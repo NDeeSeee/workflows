@@ -127,19 +127,20 @@ jobs:
             IdentityFile ~/.ssh/id_ed25519
             StrictHostKeyChecking no
             UserKnownHostsFile=/dev/null
-            LogLevel DEBUG3
             ConnectTimeout 30
+            ServerAliveInterval 30
+            ServerAliveCountMax 3
           
           Host bmicluster-compute
-            # Direct connection using ProxyJump instead of RemoteCommand
             HostName bmicluster-compute
             User pavb5f
             IdentityFile ~/.ssh/id_ed25519
             StrictHostKeyChecking no
             UserKnownHostsFile=/dev/null
-            LogLevel DEBUG3
-            ConnectTimeout 30
-            ProxyJump bmicluster
+            ConnectTimeout 60
+            ProxyCommand ssh -W %h:%p bmicluster
+            ServerAliveInterval 30
+            ServerAliveCountMax 3
           EOF
           
           # Set proper permissions for config
@@ -153,24 +154,26 @@ jobs:
       
       - name: Test SSH connection
         run: |
-          # Use the environment variable explicitly
-          echo "Testing SSH connection to ${TARGET_HOST}..."
-          # Debug output to verify environment variable is set
-          echo "TARGET_HOST environment variable: ${TARGET_HOST}"
+          # Use the environment variable explicitly with proper debugging
+          echo "Testing SSH connection to $TARGET_HOST..."
           
-          # Test connection with a simple hostname command
-          ssh -o ConnectTimeout=30 ${TARGET_HOST} "hostname" || {
+          # Make sure SSH agent is running
+          eval $(ssh-agent -s)
+          ssh-add ~/.ssh/id_ed25519
+          
+          # Test connection with timeout and detailed debugging
+          timeout 60s ssh -v $TARGET_HOST "hostname" || {
             echo "ERROR: SSH connection failed"
             echo "Checking key permissions:"
             ls -la ~/.ssh/id_ed25519
             echo "Checking config permissions:"
             ls -la ~/.ssh/config
-            echo "Checking SSH agent:"
-            ssh-agent -s
+            echo "Checking SSH config:"
+            cat ~/.ssh/config
             echo "Checking loaded keys:"
             ssh-add -l || echo "No keys loaded"
             echo "Testing direct connection to jump host:"
-            ssh -o ConnectTimeout=10 bmicluster "echo Jump host connection succeeded" || echo "Failed to connect to jump host"
+            timeout 30s ssh -v bmicluster "echo Jump host connection succeeded" || echo "Failed to connect to jump host"
             exit 1
           }
       
