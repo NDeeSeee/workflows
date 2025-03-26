@@ -249,235 +249,119 @@ run_workflow <- function(args) {
       paste0(args$output, "_summary.md")
     )
     
-    # Export MA plot
-    export_ma_plot(
-      deseq_results$res, 
-      paste(args$output, "_ma_plot", sep = "")
+    # Create summary plots
+    create_summary_plots(
+      deseq_results$dds,
+      deseq_results$res,
+      args$output,
+      args$vst,
+      args$pval,
+      args$lfc
     )
     
-    # Export PCA plot
-    export_pca_plot(
-      deseq_results$vst, 
-      paste(args$output, "_pca_plot", sep = ""),
-      deseq_results$pca_intgroup
+    # Export data in various formats
+    export_data(
+      deseq_results$res,
+      deseq_results$norm_counts,
+      collected_isoforms,
+      args
     )
     
-    # Export MDS plot
-    export_mds_html_plot(
-      norm_counts_data = deseq_results$vst,
-      location = paste(args$output, "mds_plot.html", sep = "_")
-    )
+    # Generate additional visualizations
+    generate_visualizations(deseq_results, args)
     
-    # Prepare matrix for heatmap
-    vsd <- DESeq2::assay(deseq_results$vst)
-    rownames(vsd) <- collected_isoforms[, c("GeneId")]
-    mat <- get_top_expressed_genes(deseq_results$vst, deseq_results$norm_counts, column_data)
+    report_memory_usage("After DESeq2 analysis")
     
-    # Process DESeq2 results
-    DESeqRes <- process_deseq_results(
-      deseq_results, 
-      collected_isoforms, 
-      read_count_cols, 
-      args$digits
-    )
-    
-    # Set normCounts for GCT export
-    normCounts <- deseq_results$norm_counts
-    rownames(normCounts) <- toupper(collected_isoforms[, c("GeneId")])
+    # Return results
+    return(deseq_results)
     
   } else {
-    log_message("ERROR: Not enough replicates to run DESeq2 analysis")
-    log_message("DESeq2 requires at least two replicates per condition")
-    return(NULL)
+    log_message("Running DESeq analysis with EdgeR (single replicate mode)")
+    
+    # Run EdgeR-based analysis for single replicate mode
+    deseq_results <- run_edger_analysis(
+      count_data = count_data,
+      col_data = column_data,
+      condition_names = c(condition1 = args$uname, condition2 = args$tname),
+      args = args
+    )
+    
+    # Export data in various formats
+    export_data(
+      deseq_results$res,
+      deseq_results$norm_counts,
+      collected_isoforms,
+      args
+    )
+    
+    # Return results
+    return(deseq_results)
   }
-  
-  report_memory_usage("After DESeq2 analysis")
-  
-  # Export expression heatmap
-  export_heatmap(
-    mat,
-    column_data,
-    paste(args$output, "_expression_heatmap", sep = "")
-  )
-  
-  # Export DESeq results to TSV file
-  results_filename <- paste(args$output, "_report.tsv", sep = "")
-  write.table(
-    DESeqRes,
-    file = results_filename,
-    sep = "\t",
-    row.names = FALSE,
-    col.names = TRUE,
-    quote = FALSE
-  )
-  log_message(paste("Exported DESeq report to", results_filename))
-  
-  # Process data for GCT export
-  log_message("Preparing data for GCT export")
-  
-  # Prepare row metadata for GCT
-  row_metadata <- DESeqRes %>%
-    dplyr::mutate_at("GeneId", toupper) %>%
-    dplyr::distinct(GeneId, .keep_all = TRUE) %>%
-    dplyr::remove_rownames() %>%
-    dplyr::column_to_rownames("GeneId") %>%
-    dplyr::select(log2FoldChange, pvalue, padj) %>%
-    dplyr::arrange(desc(log2FoldChange))
-  
-  # Prepare column metadata for GCT
-  col_metadata <- column_data %>%
-    dplyr::mutate_at(colnames(.), as.vector)
-  
-  # Export normalized counts to GCT format
-  export_gct(
-    counts_mat = normCounts,
-    row_metadata = row_metadata,
-    col_metadata = col_metadata,
-    location = paste(args$output, "_counts_all.gct", sep = "")
-  )
-  
-  # Get size of matrix before filtering
-  read_count_matrix_all_size <- dim(normCounts)
-  log_message(paste("Size of normalized counts matrix before filtering:", 
-                    read_count_matrix_all_size[1], "rows by", 
-                    read_count_matrix_all_size[2], "columns"))
-  
-  # Filter by significance
-  log_message(paste("Filtering normalized counts to include only features with padj <=", args$fdr))
-  row_metadata <- row_metadata %>%
-    dplyr::filter(.$padj <= args$fdr)
-  
-  # Apply log2FoldChange threshold if needed
-  if (args$lfcthreshold > 0) {
-    log_message(paste("Applying log2FoldChange threshold of", args$lfcthreshold))
-    
-    if (args$regulation == "up") {
-      row_metadata <- row_metadata %>%
-        dplyr::filter(.$log2FoldChange >= args$lfcthreshold)
-    } else if (args$regulation == "down") {
-      row_metadata <- row_metadata %>%
-        dplyr::filter(.$log2FoldChange <= -args$lfcthreshold)
-    } else {
-      row_metadata <- row_metadata %>%
-        dplyr::filter(abs(.$log2FoldChange) >= args$lfcthreshold)
-    }
-  }
-  
-  # Subset normCounts based on filtering
-  normCounts <- normCounts[as.vector(rownames(row_metadata)), , drop = FALSE]
-  log_message(paste("Size of normalized counts matrix after filtering:", 
-                    nrow(normCounts), "rows by", 
-                    ncol(normCounts), "columns"))
-  
-  # Perform clustering if requested
-  if (!is.null(args$cluster)) {
-    log_message(paste("Performing", args$cluster, "clustering"))
-    
-    k <- args$k
-    kmax <- args$kmax
-    
-    # Column clustering if requested
-    if (args$cluster == "column" || args$cluster == "both") {
-      log_message("Clustering columns")
-      clustered_data_cols <- get_clustered_data(
-        normCounts, 
-        by = "col", 
-        k = k, 
-        kmax = kmax, 
-        scaling_type = args$scaling_type, 
-        dist = args$columndist
-      )
-      normCounts <- normCounts[, clustered_data_cols$order, drop = FALSE]
-      col_metadata <- col_metadata[clustered_data_cols$order, , drop = FALSE]
-      col_metadata <- cbind(col_metadata, clustered_data_cols$clusters)
-    }
-    
-    # Row clustering if requested
-    if (args$cluster == "row" || args$cluster == "both") {
-      log_message("Clustering rows")
-      clustered_data_rows <- get_clustered_data(
-        normCounts, 
-        by = "row", 
-        k = k, 
-        kmax = kmax, 
-        scaling_type = args$scaling_type, 
-        dist = args$rowdist
-      )
-      normCounts <- clustered_data_rows$expression[clustered_data_rows$order, , drop = FALSE]
-      row_metadata <- row_metadata[clustered_data_rows$order, , drop = FALSE]
-      row_metadata <- cbind(row_metadata, clustered_data_rows$clusters)
-    }
-  }
-  
-  # Export filtered normalized counts to GCT format
-  log_message("Exporting filtered normalized counts to GCT format")
-  export_gct(
-    counts_mat = normCounts,
-    row_metadata = row_metadata,
-    col_metadata = col_metadata,
-    location = paste(args$output, "_counts_filtered.gct", sep = "")
-  )
-  
-  # Export CLS phenotype data
-  log_message("Exporting CLS phenotype data")
-  export_cls(
-    categories = col_metadata[, "conditions"], 
-    paste(args$output, "_phenotypes.cls", sep = "")
-  )
-  
-  report_memory_usage("End of workflow")
-  log_message("DESeq workflow completed successfully")
-  
-  # Return results
-  return(list(
-    DESeqRes = DESeqRes,
-    normCounts = normCounts,
-    row_metadata = row_metadata,
-    col_metadata = col_metadata
-  ))
 }
 
-#' Main function with memory management
+#' Generate and save visualizations from DESeq2 results
+#'
+#' @param deseq_results Results from DESeq2 analysis
+#' @param args Command line arguments
+#' @return None
+generate_visualizations <- function(deseq_results, args) {
+  log_message("Generating visualizations")
+  
+  # Extract components from results
+  dds <- deseq_results$dds
+  res <- deseq_results$res
+  
+  # Create MA plot
+  pdf(paste0(args$output, "_ma_plot.pdf"), width = 8, height = 6)
+  DESeq2::plotMA(res, main = "MA Plot", ylim = c(-5, 5))
+  dev.off()
+  
+  # Create dispersion plot
+  pdf(paste0(args$output, "_dispersion_plot.pdf"), width = 8, height = 6)
+  DESeq2::plotDispEsts(dds, main = "Dispersion Estimates")
+  dev.off()
+  
+  # Create PCA plot if transformed data is available
+  if (!is.null(deseq_results$vst_data)) {
+    vst_data <- deseq_results$vst_data
+    
+    pdf(paste0(args$output, "_pca_plot.pdf"), width = 10, height = 8)
+    DESeq2::plotPCA(vst_data, intgroup = "conditions") +
+      ggtitle("PCA Plot") +
+      theme(plot.title = element_text(hjust = 0.5))
+    dev.off()
+  }
+  
+  log_message("Visualizations saved successfully")
+}
+
+#' Wrapper function with memory management
 #'
 #' @return Result of workflow execution
 main_with_memory_management <- function() {
   # Start timing
   start_time <- Sys.time()
-  log_message(sprintf("DESeq analysis started at %s", format(start_time, "%Y-%m-%d %H:%M:%S")))
+  log_message(paste("DESeq analysis started at", format(start_time, "%Y-%m-%d %H:%M:%S")))
   
   # Get command line arguments
-  args <- with_error_handling({
-    get_args()
-  })
+  args <- get_args()
   
-  if (is.null(args)) {
-    log_error("Failed to parse command line arguments")
-    stop("Failed to parse command line arguments")
-  }
-  
-  # Configure parallel processing
-  if (args$threads > 1) {
+  # Configure parallel processing if requested
+  if (!is.null(args$threads) && args$threads > 1) {
     log_message(paste("Setting up parallel execution with", args$threads, "threads"))
-    BiocParallel::register(BiocParallel::MulticoreParam(args$threads))
+    register(MulticoreParam(args$threads))
   } else {
     log_message("Running in single-threaded mode")
   }
   
   # Run the main workflow
-  results <- with_error_handling({
-    run_workflow(args)
-  })
-  
-  if (is.null(results)) {
-    log_error("Workflow execution failed")
-    quit(save = "no", status = 1, runLast = FALSE)
-  }
+  results <- run_workflow(args)
   
   # Report end time and duration
   end_time <- Sys.time()
   duration <- difftime(end_time, start_time, units = "mins")
-  log_message(sprintf("DESeq analysis completed at %s", format(end_time, "%Y-%m-%d %H:%M:%S")))
-  log_message(sprintf("Total execution time: %.2f minutes", round(as.numeric(duration), 2)))
+  log_message(paste("DESeq analysis completed at", format(end_time, "%Y-%m-%d %H:%M:%S")))
+  log_message(paste("Total execution time:", round(as.numeric(duration), 2), "minutes"))
   
   # Clean up large objects to free memory
   rm(results)
@@ -486,5 +370,5 @@ main_with_memory_management <- function() {
   # Final memory report
   report_memory_usage("Final")
   
-  return(TRUE)
+  log_message("DESeq analysis completed successfully")
 } 

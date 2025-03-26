@@ -1,15 +1,29 @@
 #!/usr/bin/env Rscript
 
-# --- Utility functions ---
+# --- Common Utility Functions ---
+# This file contains utility functions used across multiple DESeq analysis scripts.
+# These functions should be generic and not specific to any particular analysis workflow.
 
-# Function to track memory usage
+#' Track memory usage during script execution
+#' 
+#' @param label Label for the memory usage report
+#' @return None, prints memory usage message
 report_memory_usage <- function(label = "") {
   gc(verbose = FALSE)
-  mem_used <- pryr::mem_used()
-  message(paste0("[Memory] ", label, ": ", round(mem_used / 1024^2, 1), " MB"))
+  
+  if (requireNamespace("pryr", quietly = TRUE)) {
+    mem_used <- pryr::mem_used()
+    message(paste0("[Memory] ", label, ": ", round(mem_used / 1024^2, 1), " MB"))
+  } else {
+    message(paste0("[Memory] ", label, ": Not available (pryr package not installed)"))
+  }
 }
 
-# Helper function to source files with fallback paths
+#' Source a file with fallback paths
+#' 
+#' @param filepath Relative path to file
+#' @param absolute_path Absolute path to file (fallback)
+#' @return Result of source() call
 source_with_fallback <- function(filepath, absolute_path = NULL) {
   # Try absolute path first if provided
   if (!is.null(absolute_path) && file.exists(absolute_path)) {
@@ -23,7 +37,7 @@ source_with_fallback <- function(filepath, absolute_path = NULL) {
     return(source(filepath))
   }
   
-  # If we get here, try a standard Docker path
+  # Try a standard Docker path
   docker_path <- file.path("/usr/local/bin", filepath)
   if (file.exists(docker_path)) {
     message(paste("Sourcing from Docker path:", docker_path))
@@ -34,11 +48,20 @@ source_with_fallback <- function(filepath, absolute_path = NULL) {
   stop(paste("Could not find file to source:", filepath))
 }
 
-# Configure standard plotting theme
+#' Configure standard plotting theme
+#' 
+#' @return None, sets global ggplot2 theme
 configure_plot_theme <- function() {
   # Set default ggplot2 theme if ggplot2 is loaded
   if (requireNamespace("ggplot2", quietly = TRUE)) {
-    ggplot2::theme_set(ggplot2::theme_bw())
+    ggplot2::theme_set(ggplot2::theme_bw() + 
+                      ggplot2::theme(text = ggplot2::element_text(size = 12),
+                            axis.text = ggplot2::element_text(size = 10),
+                            plot.title = ggplot2::element_text(size = 14, face = "bold", hjust = 0.5),
+                            legend.title = ggplot2::element_text(size = 12),
+                            legend.text = ggplot2::element_text(size = 10),
+                            strip.background = ggplot2::element_rect(fill = "lightgray"),
+                            strip.text = ggplot2::element_text(face = "bold")))
   }
 }
 
@@ -111,7 +134,11 @@ write_gct <- function(data, file_path) {
   })
 }
 
-# Function to format p-values with scientific notation
+#' Format p-values with scientific notation
+#' 
+#' @param pvals Vector of p-values
+#' @param sig_digits Number of significant digits
+#' @return Formatted p-values as character vector
 format_pval <- function(pvals, sig_digits = 3) {
   return(
     ifelse(
@@ -126,14 +153,20 @@ format_pval <- function(pvals, sig_digits = 3) {
   )
 }
 
-# Safe version of log2 that handles zeros and negatives
+#' Safe version of log2 that handles zeros and negatives
+#' 
+#' @param x Numeric vector
+#' @return log2 transformed values
 safe_log2 <- function(x) {
   # Set small values or zeros to a very small number
   x[x <= 0] <- 1e-10
   return(log2(x))
 }
 
-# Function to safely create a directory
+#' Safely create a directory
+#' 
+#' @param path Directory path to create
+#' @return Created path
 safe_mkdir <- function(path) {
   if (!dir.exists(path)) {
     dir.create(path, recursive = TRUE, showWarnings = FALSE)
@@ -141,14 +174,23 @@ safe_mkdir <- function(path) {
   return(path)
 }
 
-# Function to log messages with timestamps and categories
+#' Log messages with timestamps and categories
+#' 
+#' @param message Message to log
+#' @param category Log category/level (INFO, WARNING, ERROR)
+#' @return None, prints formatted message
 log_message <- function(message, category = "INFO") {
   timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
   formatted_message <- sprintf("[%s] [%s] %s", timestamp, category, message)
   message(formatted_message)
 }
 
-# Function to report an error with details
+#' Report an error with details and recommendations
+#' 
+#' @param message Error message
+#' @param details Optional error details
+#' @param recommendations Optional recommendations to resolve error
+#' @return None, reports error and stops execution
 report_error <- function(message, details = NULL, recommendations = NULL) {
   log_message(paste("ERROR:", message), "ERROR")
   
@@ -175,7 +217,6 @@ report_error <- function(message, details = NULL, recommendations = NULL) {
 #' 
 #' @param file_path Path to the file to check
 #' @return Character string indicating the delimiter ("\t" or ",")
-#' @export
 check_file_delimiter <- function(file_path) {
   # Read first few lines to determine delimiter
   first_lines <- readLines(file_path, n = 5)
@@ -198,50 +239,93 @@ check_file_delimiter <- function(file_path) {
 #' 
 #' @param file_path Path to the file
 #' @return Character string containing the separator character ("," or "\t")
-#' @export
-get_file_type <- function(file_path) {
-  # Get file extension
-  ext <- tolower(tools::file_ext(file_path))
-  
-  # Determine separator based on extension
-  if (ext == "csv") {
+get_file_separator <- function(file_path) {
+  # Determine separator based on file extension
+  if (grepl("\\.csv$", file_path, ignore.case = TRUE)) {
     return(",")
-  } else if (ext == "tsv" || ext == "txt") {
+  } else if (grepl("\\.tsv$", file_path, ignore.case = TRUE)) {
     return("\t")
   } else {
-    # Default to comma with a warning for unknown extensions
-    warning(paste("Unknown file extension:", ext, "defaulting to comma separator"))
-    return(",")
+    # Auto-detect for other file types
+    return(check_file_delimiter(file_path))
   }
 }
 
-#' Clean sample names 
+#' Error handling wrapper
 #' 
-#' Standardizes sample names by removing special characters and spaces
+#' Function to handle errors in a standardized way
 #' 
-#' @param sample_names Vector of sample names to clean
-#' @return Vector of cleaned sample names
-#' @export
-clean_sample_names <- function(sample_names) {
-  # First trim any leading or trailing whitespace
-  sample_names <- trimws(sample_names)
+#' @param expr Expression to evaluate
+#' @return Result of expression if successful, NULL otherwise
+with_error_handling <- function(expr) {
+  tryCatch({
+    expr
+  }, error = function(e) {
+    message(paste("ERROR:", e$message))
+    message("Stack trace:")
+    message(paste(capture.output(print(sys.calls())), collapse = "\n"))
+    NULL
+  }, warning = function(w) {
+    message(paste("WARNING:", w$message))
+    NULL
+  })
+}
+
+#' Load and validate required libraries
+#' 
+#' @param required_pkgs Vector of package names
+#' @param stop_on_missing Whether to stop execution if packages are missing
+#' @return Logical indicating whether all packages were loaded
+load_required_packages <- function(required_pkgs, stop_on_missing = TRUE) {
+  missing_pkgs <- c()
   
-  # Replace spaces with underscores
-  sample_names <- gsub(" ", "_", sample_names)
-  
-  # Remove special characters except underscores and alphanumeric
-  sample_names <- gsub("[^a-zA-Z0-9_]", "", sample_names)
-  
-  # Ensure names are unique
-  if (any(duplicated(sample_names))) {
-    warning("Duplicate sample names found after cleaning. Adding unique suffixes.")
-    dupes <- which(duplicated(sample_names))
-    for (i in dupes) {
-      sample_names[i] <- paste0(sample_names[i], "_", i)
+  for (pkg in required_pkgs) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      missing_pkgs <- c(missing_pkgs, pkg)
+    } else {
+      suppressPackageStartupMessages(library(pkg, character.only = TRUE))
     }
   }
   
-  return(sample_names)
+  if (length(missing_pkgs) > 0) {
+    err_msg <- paste("Missing required packages:", paste(missing_pkgs, collapse = ", "))
+    if (stop_on_missing) {
+      stop(err_msg)
+    } else {
+      warning(err_msg)
+      return(FALSE)
+    }
+  }
+  
+  return(TRUE)
+}
+
+#' Remove file extension from filename
+#' 
+#' @param filename Filename with extension
+#' @return Filename without extension
+remove_extension <- function(filename) {
+  sub("\\.[^.]*$", "", filename)
+}
+
+#' Fix column names to make them compatible with R
+#' 
+#' @param x Vector of column names
+#' @return Vector of cleaned column names
+fix_colnames <- function(x) {
+  # Replace spaces and special characters
+  x <- gsub("[^a-zA-Z0-9_]", "_", x)
+  
+  # Ensure it starts with a letter or underscore
+  x <- gsub("^([0-9])", "X\\1", x)
+  
+  # Make unique if duplicates exist
+  if (any(duplicated(x))) {
+    message("Warning: Duplicate column names detected and made unique")
+    x <- make.unique(x)
+  }
+  
+  return(x)
 }
 
 #' Validate metadata
