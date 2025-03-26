@@ -160,6 +160,11 @@ jobs:
             IdentitiesOnly yes
             StrictHostKeyChecking no
             UserKnownHostsFile=/dev/null
+            LogLevel ERROR
+            PreferredAuthentications publickey
+            BatchMode yes
+            ServerAliveInterval 60
+            ServerAliveCountMax 3
 
           Host bmicluster-compute
             User pavb5f
@@ -168,6 +173,11 @@ jobs:
             IdentitiesOnly yes
             StrictHostKeyChecking no
             UserKnownHostsFile=/dev/null
+            LogLevel ERROR
+            PreferredAuthentications publickey
+            BatchMode yes
+            ServerAliveInterval 60
+            ServerAliveCountMax 3
             ProxyCommand ssh -i ~/.ssh/github_action_key -W %h:%p bmicluster
           EOF
           
