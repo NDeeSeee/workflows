@@ -166,7 +166,13 @@ get_args <- function() {
       # Initialize an empty list for our parsed arguments
       args <- list()
       
-      # Process all arguments manually
+      # Initialize arrays for multi-value arguments
+      array_args <- c("input", "name")
+      for (arg in array_args) {
+        args[[arg]] <- character(0)
+      }
+      
+      # First pass: process all flags with values
       i <- 1
       while (i <= length(all_args)) {
         current_arg <- all_args[i]
@@ -177,9 +183,16 @@ get_args <- function() {
           
           # Check if the next item exists and is not a flag
           if (i < length(all_args) && !grepl("^--", all_args[i + 1])) {
-            # This is a flag with a value
             arg_value <- all_args[i + 1]
-            args[[arg_name]] <- arg_value
+            
+            # Handle array arguments - we need to append values
+            if (arg_name %in% array_args) {
+              args[[arg_name]] <- c(args[[arg_name]], arg_value)
+            } else {
+              # For scalar arguments, just set the value
+              args[[arg_name]] <- arg_value
+            }
+            
             i <- i + 2  # Skip the value
           } else {
             # This is a boolean flag
@@ -187,15 +200,39 @@ get_args <- function() {
             i <- i + 1
           }
         } else {
-          # This is a positional argument, classify it as input file or sample name
-          if (grepl("\\.(tsv|csv)$", current_arg)) {
-            # This looks like a file path, add to inputs
-            args$input <- c(args$input, current_arg)
-          } else {
-            # This looks like a sample name
-            args$name <- c(args$name, current_arg)
-          }
+          # This is a positional argument, classify it later
           i <- i + 1
+        }
+      }
+      
+      # Second pass: Find any positional arguments
+      positional_args <- all_args[!grepl("^--", all_args) & !grepl("^-[a-zA-Z]", all_args)]
+      
+      # Remove positional args that are values of flags
+      flag_indices <- which(grepl("^--", all_args) | grepl("^-[a-zA-Z]", all_args))
+      value_indices <- flag_indices + 1
+      value_indices <- value_indices[value_indices <= length(all_args)]
+      flag_values <- all_args[value_indices]
+      positional_args <- setdiff(positional_args, flag_values)
+      
+      # Classify remaining positional arguments
+      if (length(positional_args) > 0) {
+        message(paste("Found", length(positional_args), "unclassified positional arguments"))
+        
+        # Detect file paths and sample names
+        file_pattern <- "\\.(tsv|csv)$"
+        file_args <- positional_args[grepl(file_pattern, positional_args)]
+        name_args <- positional_args[!grepl(file_pattern, positional_args)]
+        
+        # Add to array arguments
+        if (length(file_args) > 0) {
+          args$input <- c(args$input, file_args)
+          message(paste("Added", length(file_args), "file paths to --input"))
+        }
+        
+        if (length(name_args) > 0) {
+          args$name <- c(args$name, name_args)
+          message(paste("Added", length(name_args), "sample names to --name"))
         }
       }
       
@@ -237,6 +274,32 @@ get_args <- function() {
       }
       if (!is.null(args$output)) {
         args$output_prefix <- args$output
+      }
+      
+      # Make sure we have the required arguments
+      # Try to extract key arguments in case they were missed
+      if (is.null(args$meta)) {
+        meta_idx <- grep("--meta", all_args)
+        if (length(meta_idx) > 0 && meta_idx[1] < length(all_args)) {
+          args$meta <- all_args[meta_idx[1] + 1]
+          message(paste("Extracted meta file:", args$meta))
+        }
+      }
+      
+      if (is.null(args$design)) {
+        design_idx <- grep("--design", all_args)
+        if (length(design_idx) > 0 && design_idx[1] < length(all_args)) {
+          args$design <- all_args[design_idx[1] + 1]
+          message(paste("Extracted design formula:", args$design))
+        }
+      }
+      
+      if (is.null(args$reduced)) {
+        reduced_idx <- grep("--reduced", all_args)
+        if (length(reduced_idx) > 0 && reduced_idx[1] < length(all_args)) {
+          args$reduced <- all_args[reduced_idx[1] + 1]
+          message(paste("Extracted reduced formula:", args$reduced))
+        }
       }
       
       # Show what we parsed
