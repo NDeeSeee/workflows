@@ -226,74 +226,76 @@ jobs:
           
           # Check if Singularity is available on the compute node (via module)
           echo "Setting up Singularity on compute node..."
-          ssh -i ~/.ssh/github_action_key -q bmicluster-compute "bash --noprofile --norc -c 'export TERM=dumb && module load singularity/3.7.0 >/dev/null 2>&1 || echo \"Failed to load singularity module\"'" || {
+          ssh -i ~/.ssh/github_action_key -q bmicluster-compute "bash --noprofile --norc -c 'export TERM=dumb && export LANG=C && export LC_ALL=C && module load singularity/3.7.0 >/dev/null 2>&1 || echo \"Failed to load singularity module\"'" || {
             echo "ERROR: Failed to set up environment on compute node"
             exit 1
           }
           
           # Create the singularity script content
-          echo '#!/bin/bash' > singularity_deploy.sh
-          echo '' >> singularity_deploy.sh
-          echo '# Exit on error' >> singularity_deploy.sh
-          echo 'set -e' >> singularity_deploy.sh
-          echo '' >> singularity_deploy.sh
-          echo '# Set environment variables' >> singularity_deploy.sh
-          echo 'export TERM=dumb' >> singularity_deploy.sh
-          echo '' >> singularity_deploy.sh
-          echo '# Configuration' >> singularity_deploy.sh
-          echo 'IMAGES_DIR="/data/barskilab/scidap_server/singularity_images"' >> singularity_deploy.sh
-          echo 'SINGULARITY_MODULE="singularity/3.7.0"' >> singularity_deploy.sh
-          echo 'LOG_FILE="${IMAGES_DIR}/update_images.log"' >> singularity_deploy.sh
-          echo 'DOCKER_TAG="$1"' >> singularity_deploy.sh
-          echo '' >> singularity_deploy.sh
-          echo '# Logging function' >> singularity_deploy.sh
-          echo 'log() {' >> singularity_deploy.sh
-          echo '    echo "[$(date '\''+%Y-%m-%d %H:%M:%S'\'')]" $1 | tee -a "$LOG_FILE"' >> singularity_deploy.sh
-          echo '}' >> singularity_deploy.sh
-          echo '' >> singularity_deploy.sh
-          echo '# Error handling function' >> singularity_deploy.sh
-          echo 'handle_error() {' >> singularity_deploy.sh
-          echo '    log "ERROR: $1"' >> singularity_deploy.sh
-          echo '    exit 1' >> singularity_deploy.sh
-          echo '}' >> singularity_deploy.sh
-          echo '' >> singularity_deploy.sh
-          echo 'log "Starting deployment of biowardrobe2/scidap-deseq:${DOCKER_TAG}"' >> singularity_deploy.sh
-          echo '' >> singularity_deploy.sh
-          echo '# Check if required module is available and load it' >> singularity_deploy.sh
-          echo 'log "Loading module $SINGULARITY_MODULE"' >> singularity_deploy.sh
-          echo 'module load "$SINGULARITY_MODULE" >/dev/null 2>&1 || handle_error "Failed to load module $SINGULARITY_MODULE"' >> singularity_deploy.sh
-          echo '' >> singularity_deploy.sh
-          echo '# Create images directory if it doesn'\''t exist' >> singularity_deploy.sh
-          echo 'mkdir -p "$IMAGES_DIR" || handle_error "Failed to create directory $IMAGES_DIR"' >> singularity_deploy.sh
-          echo '' >> singularity_deploy.sh
-          echo '# Process image' >> singularity_deploy.sh
-          echo 'full_image_name="biowardrobe2/scidap-deseq"' >> singularity_deploy.sh
-          echo 'version="${DOCKER_TAG}"' >> singularity_deploy.sh
-          echo 'image_name=$(basename "$full_image_name")' >> singularity_deploy.sh
-          echo 'target_name="biowardrobe2_${image_name}"' >> singularity_deploy.sh
-          echo 'old_image="${target_name}:${version}.sif"' >> singularity_deploy.sh
-          echo 'new_image="${image_name}_${version}.sif"' >> singularity_deploy.sh
-          echo 'docker_image="${full_image_name}:${version}"' >> singularity_deploy.sh
-          echo '' >> singularity_deploy.sh
-          echo 'log "Processing image: $docker_image"' >> singularity_deploy.sh
-          echo '' >> singularity_deploy.sh
-          echo '# Remove old image if it exists' >> singularity_deploy.sh
-          echo 'if [ -f "$IMAGES_DIR/$old_image" ]; then' >> singularity_deploy.sh
-          echo '    log "Removing old image: $old_image"' >> singularity_deploy.sh
-          echo '    rm "$IMAGES_DIR/$old_image" || handle_error "Failed to remove old image $old_image"' >> singularity_deploy.sh
-          echo 'fi' >> singularity_deploy.sh
-          echo '' >> singularity_deploy.sh
-          echo '# Pull new image' >> singularity_deploy.sh
-          echo 'log "Pulling new image: $docker_image"' >> singularity_deploy.sh
-          echo 'cd /tmp' >> singularity_deploy.sh
-          echo 'singularity pull "docker://$docker_image" || handle_error "Failed to pull image $docker_image"' >> singularity_deploy.sh
-          echo '' >> singularity_deploy.sh
-          echo '# Move and rename the image' >> singularity_deploy.sh
-          echo 'log "Moving and renaming image: $new_image -> $old_image"' >> singularity_deploy.sh
-          echo 'mv "$new_image" "$IMAGES_DIR/$old_image" || handle_error "Failed to move image $new_image"' >> singularity_deploy.sh
-          echo '' >> singularity_deploy.sh
-          echo 'log "Successfully updated $docker_image"' >> singularity_deploy.sh
-          echo 'echo "SINGULARITY_DEPLOYMENT_SUCCESS"' >> singularity_deploy.sh
+          cat > singularity_deploy.sh << 'EOFMARK'
+#!/bin/bash
+set -e
+
+# Set environment variables
+export TERM=dumb
+export LANG=C
+export LC_ALL=C
+
+# Configuration
+IMAGES_DIR="/data/barskilab/scidap_server/singularity_images"
+SINGULARITY_MODULE="singularity/3.7.0"
+LOG_FILE="${IMAGES_DIR}/update_images.log"
+DOCKER_TAG="$1"
+
+# Logging function
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')]" "$1" | tee -a "$LOG_FILE"
+}
+
+# Error handling function
+handle_error() {
+    log "ERROR: $1"
+    exit 1
+}
+
+log "Starting deployment of biowardrobe2/scidap-deseq:${DOCKER_TAG}"
+
+# Check if required module is available and load it
+log "Loading module $SINGULARITY_MODULE"
+module load "$SINGULARITY_MODULE" >/dev/null 2>&1 || handle_error "Failed to load module $SINGULARITY_MODULE"
+
+# Create images directory if it doesn't exist
+mkdir -p "$IMAGES_DIR" || handle_error "Failed to create directory $IMAGES_DIR"
+
+# Process image
+full_image_name="biowardrobe2/scidap-deseq"
+version="${DOCKER_TAG}"
+image_name=$(basename "$full_image_name")
+target_name="biowardrobe2_${image_name}"
+old_image="${target_name}:${version}.sif"
+new_image="${image_name}_${version}.sif"
+docker_image="${full_image_name}:${version}"
+
+log "Processing image: $docker_image"
+
+# Remove old image if it exists
+if [ -f "$IMAGES_DIR/$old_image" ]; then
+    log "Removing old image: $old_image"
+    rm "$IMAGES_DIR/$old_image" || handle_error "Failed to remove old image $old_image"
+fi
+
+# Pull new image
+log "Pulling new image: $docker_image"
+cd /tmp
+singularity pull "docker://$docker_image" || handle_error "Failed to pull image $docker_image"
+
+# Move and rename the image
+log "Moving and renaming image: $new_image -> $old_image"
+mv "$new_image" "$IMAGES_DIR/$old_image" || handle_error "Failed to move image $new_image"
+
+log "Successfully updated $docker_image"
+echo "SINGULARITY_DEPLOYMENT_SUCCESS"
+EOFMARK
           
           # Upload the script to the compute node
           chmod +x singularity_deploy.sh
@@ -301,14 +303,14 @@ jobs:
           
           # Execute the script on the compute node (suppress output)
           echo "Deploying Singularity image for biowardrobe2/scidap-deseq:$DOCKER_TAG"
-          ssh -i ~/.ssh/github_action_key -q bmicluster-compute "bash --noprofile --norc -c 'cd /tmp && chmod +x singularity_deploy.sh && ./singularity_deploy.sh \"$DOCKER_TAG\"'" || {
+          ssh -i ~/.ssh/github_action_key -q bmicluster-compute "bash --noprofile --norc -c 'cd /tmp && chmod +x singularity_deploy.sh && TERM=dumb LANG=C LC_ALL=C ./singularity_deploy.sh \"$DOCKER_TAG\"'" || {
             echo "ERROR: Failed to deploy Singularity image"
             exit 1
           }
           
           # Verify deployment (suppress output)
           echo "Verifying deployment..."
-          VERIFY_DEPLOY=$(ssh -i ~/.ssh/github_action_key -q bmicluster-compute "bash --noprofile --norc -c 'export TERM=dumb && ls -la /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:$DOCKER_TAG.sif 2>/dev/null || echo \"Not found\"'")
+          VERIFY_DEPLOY=$(ssh -i ~/.ssh/github_action_key -q bmicluster-compute "bash --noprofile --norc -c 'TERM=dumb LANG=C LC_ALL=C ls -la /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:$DOCKER_TAG.sif 2>/dev/null || echo \"Not found\"'")
           
           if [[ $VERIFY_DEPLOY != *"Not found"* ]]; then
             echo "✅ Deployment successful!"
