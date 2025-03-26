@@ -4,6 +4,9 @@
 
 # Function to parse command line arguments
 get_args <- function() {
+  # Get raw command line args for backup
+  raw_args <- commandArgs(trailingOnly = TRUE)
+  
   parser <- argparse::ArgumentParser(
     description = "Run DESeq2 analysis with Likelihood Ratio Test (LRT)",
     formatter_class = "argparse.ArgumentDefaultsHelpFormatter"
@@ -172,6 +175,17 @@ get_args <- function() {
         args[[arg]] <- character(0)
       }
       
+      # Make sure to explicitly extract required arguments first
+      required_args <- c("meta", "design", "reduced")
+      for (req_arg in required_args) {
+        req_flag <- paste0("--", req_arg)
+        arg_idx <- which(all_args == req_flag)
+        if (length(arg_idx) > 0 && arg_idx[1] < length(all_args)) {
+          args[[req_arg]] <- all_args[arg_idx[1] + 1]
+          message(paste("Directly extracted required argument:", req_arg, "=", args[[req_arg]]))
+        }
+      }
+      
       # First pass: process all flags with values
       i <- 1
       while (i <= length(all_args)) {
@@ -276,32 +290,6 @@ get_args <- function() {
         args$output_prefix <- args$output
       }
       
-      # Make sure we have the required arguments
-      # Try to extract key arguments in case they were missed
-      if (is.null(args$meta)) {
-        meta_idx <- grep("--meta", all_args)
-        if (length(meta_idx) > 0 && meta_idx[1] < length(all_args)) {
-          args$meta <- all_args[meta_idx[1] + 1]
-          message(paste("Extracted meta file:", args$meta))
-        }
-      }
-      
-      if (is.null(args$design)) {
-        design_idx <- grep("--design", all_args)
-        if (length(design_idx) > 0 && design_idx[1] < length(all_args)) {
-          args$design <- all_args[design_idx[1] + 1]
-          message(paste("Extracted design formula:", args$design))
-        }
-      }
-      
-      if (is.null(args$reduced)) {
-        reduced_idx <- grep("--reduced", all_args)
-        if (length(reduced_idx) > 0 && reduced_idx[1] < length(all_args)) {
-          args$reduced <- all_args[reduced_idx[1] + 1]
-          message(paste("Extracted reduced formula:", args$reduced))
-        }
-      }
-      
       # Show what we parsed
       message("Manually parsed arguments:")
       for (arg_name in names(args)) {
@@ -323,6 +311,23 @@ get_args <- function() {
   # Validate arguments
   args <- assert_args(args)
   
+  # Final check for required arguments before returning
+  required_args <- c("meta", "design", "reduced")
+  for (req_arg in required_args) {
+    if (is.null(args[[req_arg]]) || !req_arg %in% names(args)) {
+      # One last attempt to recover from raw command line arguments
+      raw_args <- commandArgs(trailingOnly = TRUE)
+      arg_flag <- paste0("--", req_arg)
+      arg_idx <- which(raw_args == arg_flag)
+      if (length(arg_idx) > 0 && arg_idx[1] < length(raw_args)) {
+        args[[req_arg]] <- raw_args[arg_idx[1] + 1]
+        message(paste("Final recovery of required argument:", req_arg, "=", args[[req_arg]]))
+      } else {
+        message(paste("Error: Could not recover required argument:", req_arg))
+      }
+    }
+  }
+  
   return(args)
 }
 
@@ -340,8 +345,27 @@ assert_args <- function(args) {
   missing_required <- required_args[!required_args %in% names(args)]
   
   if (length(missing_required) > 0) {
-    message(paste("Error: Missing required arguments:", paste(missing_required, collapse=", ")))
-    quit(save = "no", status = 1, runLast = FALSE)
+    # Before failing, check if any required arguments may have been parsed 
+    # correctly but are not accessible due to variable scope issues
+    # Try to extract these from the original command arguments if possible
+    all_args <- commandArgs(trailingOnly = TRUE)
+    
+    for (missing_arg in missing_required) {
+      arg_flag <- paste0("--", missing_arg)
+      arg_idx <- which(all_args == arg_flag)
+      if (length(arg_idx) > 0 && arg_idx[1] < length(all_args)) {
+        args[[missing_arg]] <- all_args[arg_idx[1] + 1]
+        message(paste("Recovered missing required argument:", missing_arg, "=", args[[missing_arg]]))
+        # Remove from missing list
+        missing_required <- setdiff(missing_required, missing_arg)
+      }
+    }
+    
+    # If we still have missing arguments, abort
+    if (length(missing_required) > 0) {
+      message(paste("Error: Missing required arguments:", paste(missing_required, collapse=", ")))
+      quit(save = "no", status = 1, runLast = FALSE)
+    }
   }
   
   # Create empty arrays for input/name if they don't exist
@@ -491,7 +515,24 @@ params$assert_args <- function(args) {
   missing_args <- required_args[!required_args %in% names(args)]
   
   if (length(missing_args) > 0) {
-    stop(paste("Missing required arguments:", paste(missing_args, collapse=", ")))
+    # Before failing, try to recover missing arguments from command line
+    all_args <- commandArgs(trailingOnly = TRUE)
+    
+    for (missing_arg in missing_args) {
+      arg_flag <- paste0("--", missing_arg)
+      arg_idx <- which(all_args == arg_flag)
+      if (length(arg_idx) > 0 && arg_idx[1] < length(all_args)) {
+        args[[missing_arg]] <- all_args[arg_idx[1] + 1]
+        message(paste("Recovered missing required argument:", missing_arg, "=", args[[missing_arg]]))
+        # Remove from missing list
+        missing_args <- setdiff(missing_args, missing_arg)
+      }
+    }
+    
+    # If we still have missing arguments, stop
+    if (length(missing_args) > 0) {
+      stop(paste("Missing required arguments:", paste(missing_args, collapse=", ")))
+    }
   }
   
   # Check that input files exist

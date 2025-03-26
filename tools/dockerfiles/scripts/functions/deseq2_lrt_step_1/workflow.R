@@ -136,7 +136,9 @@ preprocess_args <- function() {
   for (req_arg in required_args) {
     arg_index <- which(all_args == req_arg)
     if (length(arg_index) > 0 && arg_index[1] < length(all_args)) {
-      required_values[[req_arg]] <- all_args[arg_index[1] + 1]
+      arg_name <- sub("^--", "", req_arg)
+      required_values[[arg_name]] <- all_args[arg_index[1] + 1]
+      message(paste("Extracted required argument:", arg_name, "=", required_values[[arg_name]]))
     }
   }
   
@@ -210,10 +212,10 @@ preprocess_args <- function() {
   }
   
   # Add required args if found
-  for (req_arg in required_args) {
-    if (req_arg %in% names(required_values)) {
-      new_args <- c(new_args, req_arg, required_values[[req_arg]])
-    }
+  for (req_arg in names(required_values)) {
+    arg_flag <- paste0("--", req_arg)
+    new_args <- c(new_args, arg_flag, required_values[[req_arg]])
+    message(paste("Adding required arg to new_args:", arg_flag, required_values[[req_arg]]))
   }
   
   # Add array args
