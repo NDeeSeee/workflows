@@ -109,17 +109,17 @@ jobs:
           # Remove existing image if it exists
           if [ -f "$FINAL_PATH" ]; then
             echo "Removing existing image: $FINAL_PATH"
-            rm "$FINAL_PATH" || { echo "Failed to remove existing image"; exit 1; }
+            rm -f "$FINAL_PATH" || { echo "Warning: Failed to remove existing image, will try to overwrite"; }
           fi
           
           echo "Pulling Docker image to temporary file..."
           singularity pull --force "${TEMP_IMAGE_NAME}" docker://${DOCKER_REPO}/${IMAGE_NAME}:${DOCKER_TAG} || { echo "Failed to pull image"; exit 1; }
           
           echo "Moving to final destination with correct naming..."
-          mv "${TEMP_IMAGE_NAME}" "$FINAL_PATH" || { echo "Failed to move image"; exit 1; }
+          mv -f "${TEMP_IMAGE_NAME}" "$FINAL_PATH" || { echo "Failed to move image"; exit 1; }
           
           echo "Setting permissions..."
-          chmod 644 "$FINAL_PATH"
+          chmod 644 "$FINAL_PATH" || { echo "Warning: Failed to set permissions"; }
           
           echo "Deployment completed successfully"
           echo "Image available at: $FINAL_PATH"
