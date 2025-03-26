@@ -82,6 +82,65 @@ conflicted::conflict_prefer("layout", "graphics")
 conflicted::conflict_prefer("plot", "graphics")
 conflicted::conflict_prefer("desc", "dplyr")
 
+# Pre-process command line arguments to handle unexpected positional arguments
+preprocess_args <- function() {
+  # Get all arguments
+  all_args <- commandArgs(trailingOnly = TRUE)
+  
+  # Check if there are any arguments without -- prefix
+  has_positional <- any(!grepl("^--", all_args))
+  
+  if (has_positional) {
+    # Extract positional arguments
+    positional_args <- all_args[!grepl("^--", all_args) & !grepl("^-", all_args)]
+    
+    # Separate positional arguments into names and inputs based on file path pattern
+    file_pattern <- "\\.(tsv|csv)$"
+    input_files <- positional_args[grepl(file_pattern, positional_args)]
+    sample_names <- positional_args[!grepl(file_pattern, positional_args)]
+    
+    # If we have both names and inputs, filter out these positional arguments and add them with proper flags
+    if (length(input_files) > 0 && length(sample_names) > 0) {
+      # Remove all positional arguments
+      flag_args <- all_args[grepl("^--", all_args) | grepl("^-", all_args)]
+      flag_values <- all_args[which(grepl("^--", all_args) | grepl("^-", all_args)) + 1]
+      flag_values <- flag_values[!grepl("^--", flag_values) & !grepl("^-", flag_values)]
+      
+      # Combine flags with their values
+      flag_pairs <- c()
+      flag_index <- 1
+      for (i in 1:length(flag_args)) {
+        flag_pairs <- c(flag_pairs, flag_args[i])
+        if (flag_index <= length(flag_values) && 
+            !grepl("^--", flag_values[flag_index]) && 
+            !grepl("^-", flag_values[flag_index])) {
+          flag_pairs <- c(flag_pairs, flag_values[flag_index])
+          flag_index <- flag_index + 1
+        }
+      }
+      
+      # Create new argument vector with proper flags
+      new_args <- flag_pairs
+      
+      # Add input files with proper flags
+      for (file in input_files) {
+        new_args <- c(new_args, "--input", file)
+      }
+      
+      # Add sample names with proper flags
+      for (name in sample_names) {
+        new_args <- c(new_args, "--name", name)
+      }
+      
+      # Replace command line arguments
+      return(new_args)
+    }
+  }
+  
+  # Return original arguments if no preprocessing needed
+  return(all_args)
+}
+
 # Source utility functions from common directory
 # First try Docker standard path, then fall back to relative path
 if (file.exists("/usr/local/bin/functions/common/utilities.R")) {
@@ -116,6 +175,30 @@ main_with_memory_management <- function() {
   log_message("DESeq2 LRT Step 1 started", "START")
   
   tryCatch({
+    # Pre-process command line arguments to handle unexpected formats
+    processed_args <- preprocess_args()
+    
+    # Override command line arguments with processed ones
+    # This is a hack to make the argparse parser work with our processed arguments
+    if (!identical(processed_args, commandArgs(trailingOnly = TRUE))) {
+      message("Command line arguments have been preprocessed for compatibility")
+      
+      # Temporarily save the processed arguments to a file and source it
+      temp_args_file <- tempfile(pattern = "args_", fileext = ".R")
+      on.exit(unlink(temp_args_file), add = TRUE)
+      
+      cat("commandArgs_original <- commandArgs\n", file = temp_args_file)
+      cat("commandArgs <- function(trailingOnly = FALSE) {\n", file = temp_args_file, append = TRUE)
+      cat("  if (trailingOnly) {\n", file = temp_args_file, append = TRUE)
+      cat("    return(c(", paste0("\"", processed_args, "\"", collapse = ", "), "))\n", file = temp_args_file, append = TRUE)
+      cat("  } else {\n", file = temp_args_file, append = TRUE)
+      cat("    return(commandArgs_original(FALSE))\n", file = temp_args_file, append = TRUE)
+      cat("  }\n", file = temp_args_file, append = TRUE)
+      cat("}\n", file = temp_args_file, append = TRUE)
+      
+      source(temp_args_file)
+    }
+    
     # Get and parse command line arguments
     args <- get_args()
     
