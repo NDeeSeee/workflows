@@ -8,20 +8,27 @@
 #
 # Version: 0.1.0
 
-# Source only the workflow.R file which handles all other dependencies
-source_file <- function(file_path, fallback_path) {
-  if (file.exists(file_path)) {
-    source(file_path)
-    return(TRUE)
-  } else if (!is.null(fallback_path) && file.exists(fallback_path)) {
-    source(fallback_path)
-    return(TRUE)
+# First load the utilities module which contains the source_with_fallback function
+if (file.exists("functions/common/utilities.R")) {
+  source("functions/common/utilities.R")
+} else if (file.exists("/usr/local/bin/functions/common/utilities.R")) {
+  source("/usr/local/bin/functions/common/utilities.R")
+} else {
+  # If we can't find utilities, define source_with_fallback function minimally to continue
+  source_with_fallback <- function(file_path, fallback_path) {
+    if (file.exists(file_path)) {
+      source(file_path)
+      return(TRUE)
+    } else if (!is.null(fallback_path) && file.exists(fallback_path)) {
+      source(fallback_path)
+      return(TRUE)
+    }
+    return(FALSE)
   }
-  return(FALSE)
 }
 
 # Source the workflow file
-if (!source_file("functions/deseq/workflow.R", "/usr/local/bin/functions/deseq/workflow.R")) {
+if (!source_with_fallback("functions/deseq/workflow.R", "/usr/local/bin/functions/deseq/workflow.R")) {
   stop("Could not find workflow.R file")
 }
 

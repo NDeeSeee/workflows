@@ -74,48 +74,26 @@ distinct <- dplyr::distinct
 `%/%` <- base::`%/%`
 `%%` <- base::`%%`
 
-# Memory usage tracking function
-report_memory_usage <- function(label = "") {
-  gc(verbose = FALSE)
-  mem_used <- pryr::mem_used()
-  message(paste0("[Memory] ", label, ": ", round(mem_used / 1024^2, 1), " MB"))
+# Source the utilities file first (needed for source_with_fallback function)
+if (file.exists("/usr/local/bin/functions/common/utilities.R")) {
+  source("/usr/local/bin/functions/common/utilities.R")
+} else if (file.exists("functions/common/utilities.R")) {
+  source("functions/common/utilities.R")
+} else {
+  stop("Could not find utilities.R file")
 }
 
-# Helper function to source files with fallback paths
-source_with_fallback <- function(filepath, absolute_path = NULL) {
-  # Try absolute path first if provided
-  if (!is.null(absolute_path) && file.exists(absolute_path)) {
-    message(paste("Sourcing from absolute path:", absolute_path))
-    return(source(absolute_path))
-  }
-  
-  # Try relative path
-  if (file.exists(filepath)) {
-    message(paste("Sourcing from relative path:", filepath))
-    return(source(filepath))
-  }
-  
-  # If we get here, try a standard Docker path
-  docker_path <- file.path("/usr/local/bin", filepath)
-  if (file.exists(docker_path)) {
-    message(paste("Sourcing from Docker path:", docker_path))
-    return(source(docker_path))
-  }
-  
-  # If all fails, error
-  stop(paste("Could not find file to source:", filepath))
-}
+# Now we can use report_memory_usage and source_with_fallback from utilities.R
+report_memory_usage("Before loading common functions")
 
-# Source utility functions
-report_memory_usage("Before loading common utilities")
-source_with_fallback("functions/common/utilities.R", "/usr/local/bin/functions/common/utilities.R")
-report_memory_usage("After loading common utilities")
-
-# Source common visualization, clustering and export functions
+# Source common additional function modules
+source_with_fallback("functions/common/constants.R", "/usr/local/bin/functions/common/constants.R")
+source_with_fallback("functions/common/error_handling.R", "/usr/local/bin/functions/common/error_handling.R")
+source_with_fallback("functions/common/logging.R", "/usr/local/bin/functions/common/logging.R")
 source_with_fallback("functions/common/visualization.R", "/usr/local/bin/functions/common/visualization.R")
 source_with_fallback("functions/common/clustering.R", "/usr/local/bin/functions/common/clustering.R")
 source_with_fallback("functions/common/export_functions.R", "/usr/local/bin/functions/common/export_functions.R")
-report_memory_usage("After loading common visualization and export functions")
+report_memory_usage("After loading common functions")
 
 # Source DESeq2 LRT Step 2 specific functions
 source_with_fallback("functions/deseq2_lrt_step_2/cli_args.R", "/usr/local/bin/functions/deseq2_lrt_step_2/cli_args.R")
@@ -130,7 +108,7 @@ configure_plot_theme()
 main_with_memory_management <- function() {
   # Start timing
   start_time <- Sys.time()
-  message(glue::glue("DESeq2 LRT Step 2 started at {format(start_time, '%Y-%m-%d %H:%M:%S')}"))
+  log_message(paste("DESeq2 LRT Step 2 started at", format(start_time, "%Y-%m-%d %H:%M:%S")))
   
   # Get command line arguments
   args <- with_error_handling({
@@ -138,6 +116,7 @@ main_with_memory_management <- function() {
   })
   
   if (is.null(args)) {
+    log_error("Failed to parse command line arguments")
     stop("Failed to parse command line arguments")
   }
   
@@ -162,8 +141,8 @@ main_with_memory_management <- function() {
   # Report end time and duration
   end_time <- Sys.time()
   duration <- difftime(end_time, start_time, units = "mins")
-  message(glue::glue("DESeq2 LRT Step 2 completed at {format(end_time, '%Y-%m-%d %H:%M:%S')}"))
-  message(glue::glue("Total execution time: {round(as.numeric(duration), 2)} minutes"))
+  log_message(paste("DESeq2 LRT Step 2 completed at", format(end_time, "%Y-%m-%d %H:%M:%S")))
+  log_message(paste("Total execution time:", round(as.numeric(duration), 2), "minutes"))
   
   # Clean up large objects to free memory
   rm(results)

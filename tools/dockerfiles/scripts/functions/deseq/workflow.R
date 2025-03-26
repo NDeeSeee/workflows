@@ -29,10 +29,19 @@ initialize_environment <- function() {
   gcinfo(FALSE)  # Disable GC messages by default
   options(gc.aggressiveness = 0)  # Default GC behavior
   
+  # First load utilities which has source_with_fallback
+  if (file.exists("functions/common/utilities.R")) {
+    source("functions/common/utilities.R")
+  } else if (file.exists("/usr/local/bin/functions/common/utilities.R")) {
+    source("/usr/local/bin/functions/common/utilities.R")
+  } else {
+    stop("Could not find common utilities.R file, which is required")
+  }
+  
   # Source common utility functions
+  source_with_fallback("functions/common/constants.R", "/usr/local/bin/functions/common/constants.R")
   source_with_fallback("functions/common/error_handling.R", "/usr/local/bin/functions/common/error_handling.R")
   source_with_fallback("functions/common/logging.R", "/usr/local/bin/functions/common/logging.R")
-  source_with_fallback("functions/common/utilities.R", "/usr/local/bin/functions/common/utilities.R")
   
   # Source common visualization and export functions
   source_with_fallback("functions/common/visualization.R", "/usr/local/bin/functions/common/visualization.R")
@@ -117,50 +126,6 @@ configure_plot_theme <- function() {
                   legend.text = element_text(size = 10),
                   strip.background = element_rect(fill = "lightgray"),
                   strip.text = element_text(face = "bold")))
-}
-
-#' Helper function to source files with fallback paths
-#'
-#' @param filepath Relative path to file
-#' @param absolute_path Absolute path to file (fallback)
-#' @return Result of source() call
-source_with_fallback <- function(filepath, absolute_path = NULL) {
-  # Try absolute path first if provided
-  if (!is.null(absolute_path) && file.exists(absolute_path)) {
-    log_message(paste("Sourcing from absolute path:", absolute_path))
-    return(source(absolute_path))
-  }
-  
-  # Try relative path
-  if (file.exists(filepath)) {
-    log_message(paste("Sourcing from relative path:", filepath))
-    return(source(filepath))
-  }
-  
-  # Try a standard Docker path
-  docker_path <- file.path("/usr/local/bin", filepath)
-  if (file.exists(docker_path)) {
-    log_message(paste("Sourcing from Docker path:", docker_path))
-    return(source(docker_path))
-  }
-  
-  # If all fails, error
-  log_error(paste("Could not find file to source:", filepath))
-  stop(paste("Could not find file to source:", filepath))
-}
-
-#' Report current memory usage
-#'
-#' @param label Label for the memory usage report
-report_memory_usage <- function(label = "") {
-  gc(verbose = FALSE)
-  
-  if (requireNamespace("pryr", quietly = TRUE)) {
-    mem_used <- pryr::mem_used()
-    log_message(paste0("[Memory] ", label, ": ", round(mem_used / 1024^2, 1), " MB"))
-  } else {
-    log_message(paste0("[Memory] ", label, ": Not available (pryr package not installed)"))
-  }
 }
 
 #' Main workflow function

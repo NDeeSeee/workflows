@@ -469,4 +469,33 @@ log_error <- function(...) {
   } else {
     message("[ERROR] ", ...)
   }
+}
+
+#' Clean sample names 
+#' 
+#' Standardizes sample names by removing special characters and spaces
+#' 
+#' @param sample_names Vector of sample names to clean
+#' @return Vector of cleaned sample names
+#' @export
+clean_sample_names <- function(sample_names) {
+  # First trim any leading or trailing whitespace
+  sample_names <- trimws(sample_names)
+  
+  # Replace spaces with underscores
+  sample_names <- gsub(" ", "_", sample_names)
+  
+  # Remove special characters except underscores and alphanumeric
+  sample_names <- gsub("[^a-zA-Z0-9_]", "", sample_names)
+  
+  # Ensure names are unique
+  if (any(duplicated(sample_names))) {
+    warning("Duplicate sample names found after cleaning. Adding unique suffixes.")
+    dupes <- which(duplicated(sample_names))
+    for (i in dupes) {
+      sample_names[i] <- paste0(sample_names[i], "_", i)
+    }
+  }
+  
+  return(sample_names)
 } 
