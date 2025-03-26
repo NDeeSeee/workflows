@@ -189,16 +189,16 @@ jobs:
           eval $(ssh-agent -s)
           ssh-add ~/.ssh/github_action_key
           
-          # Test connection to jump host first
+          # Test connection to jump host first (suppress output)
           echo "Testing connection to jump host..."
-          ssh -i ~/.ssh/github_action_key -v bmicluster "echo Jump host connection succeeded" || {
+          ssh -i ~/.ssh/github_action_key -q bmicluster "echo 'Jump host connection succeeded'" || {
             echo "ERROR: SSH connection to jump host failed"
             exit 1
           }
           
-          # Now test connection to compute node
+          # Now test connection to compute node (suppress output)
           echo "Testing connection to compute node..."
-          ssh -i ~/.ssh/github_action_key -v bmicluster-compute "hostname && echo SSH_CONNECTION_SUCCESS" || {
+          ssh -i ~/.ssh/github_action_key -q bmicluster-compute "hostname >/dev/null 2>&1 && echo 'SSH_CONNECTION_SUCCESS'" || {
             echo "ERROR: SSH connection to compute node failed"
             exit 1
           }
@@ -208,15 +208,15 @@ jobs:
           # Use environment variables
           echo "Deploying docker tag: $DOCKER_TAG to bmicluster-compute..."
           
-          # First, verify SSH connection
-          if ! ssh -i ~/.ssh/github_action_key bmicluster-compute "hostname"; then
+          # First, verify SSH connection (suppress output)
+          if ! ssh -i ~/.ssh/github_action_key -q bmicluster-compute "hostname >/dev/null 2>&1"; then
             echo "ERROR: Cannot connect to compute node for deployment"
             exit 1
           fi
           
           # Check if Singularity is available on the compute node (via module)
           echo "Setting up Singularity on compute node..."
-          ssh -i ~/.ssh/github_action_key bmicluster-compute "module load singularity/3.7.0 || echo 'Failed to load singularity module'" || {
+          ssh -i ~/.ssh/github_action_key -q bmicluster-compute "module load singularity/3.7.0 >/dev/null 2>&1 || echo 'Failed to load singularity module'" || {
             echo "ERROR: Failed to set up environment on compute node"
             exit 1
           }
@@ -284,18 +284,18 @@ jobs:
           
           # Upload the script to the compute node
           chmod +x singularity_deploy.sh
-          scp -i ~/.ssh/github_action_key singularity_deploy.sh bmicluster-compute:/tmp/singularity_deploy.sh
+          scp -i ~/.ssh/github_action_key -q singularity_deploy.sh bmicluster-compute:/tmp/singularity_deploy.sh
           
-          # Execute the script on the compute node
+          # Execute the script on the compute node (suppress output)
           echo "Deploying Singularity image for biowardrobe2/scidap-deseq:$DOCKER_TAG"
-          ssh -i ~/.ssh/github_action_key bmicluster-compute "cd /tmp && chmod +x singularity_deploy.sh && ./singularity_deploy.sh '$DOCKER_TAG'" || {
+          ssh -i ~/.ssh/github_action_key -q bmicluster-compute "cd /tmp && chmod +x singularity_deploy.sh && ./singularity_deploy.sh '$DOCKER_TAG'" || {
             echo "ERROR: Failed to deploy Singularity image"
             exit 1
           }
           
-          # Verify deployment
+          # Verify deployment (suppress output)
           echo "Verifying deployment..."
-          VERIFY_DEPLOY=$(ssh -i ~/.ssh/github_action_key bmicluster-compute "ls -la /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:$DOCKER_TAG.sif 2>/dev/null || echo 'Not found'")
+          VERIFY_DEPLOY=$(ssh -i ~/.ssh/github_action_key -q bmicluster-compute "ls -la /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:$DOCKER_TAG.sif 2>/dev/null || echo 'Not found'")
           
           if [[ $VERIFY_DEPLOY != *"Not found"* ]]; then
             echo "✅ Deployment successful!"
