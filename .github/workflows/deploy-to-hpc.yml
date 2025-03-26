@@ -11,11 +11,8 @@ on:
       target_host:
         description: 'Target HPC host'
         required: false
-        type: choice
+        type: string
         default: 'bmicluster-compute'
-        options:
-          - bmicluster
-          - bmicluster-compute
   workflow_run:
     workflows: ["Build and Push Docker Image"]
     types:
@@ -138,7 +135,6 @@ jobs:
             StrictHostKeyChecking no
             UserKnownHostsFile=/dev/null
             ConnectTimeout 60
-            ProxyCommand ssh -W %h:%p bmicluster
             ServerAliveInterval 30
             ServerAliveCountMax 3
           EOF
@@ -154,26 +150,19 @@ jobs:
       
       - name: Test SSH connection
         run: |
-          # Use the environment variable explicitly with proper debugging
-          echo "Testing SSH connection to $TARGET_HOST..."
+          # Use direct connection via jumphost
+          echo "Testing SSH connection to bmicluster-compute..."
           
           # Make sure SSH agent is running
           eval $(ssh-agent -s)
           ssh-add ~/.ssh/id_ed25519
           
-          # Test connection with timeout and detailed debugging
-          timeout 60s ssh -v $TARGET_HOST "hostname" || {
-            echo "ERROR: SSH connection failed"
-            echo "Checking key permissions:"
-            ls -la ~/.ssh/id_ed25519
-            echo "Checking config permissions:"
-            ls -la ~/.ssh/config
-            echo "Checking SSH config:"
-            cat ~/.ssh/config
-            echo "Checking loaded keys:"
-            ssh-add -l || echo "No keys loaded"
+          # For compute nodes, use direct SSH from jumphost
+          echo "Testing connection via jumphost..."
+          ssh -v bmicluster "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null bmicluster-compute hostname" || {
+            echo "ERROR: SSH connection to compute failed"
             echo "Testing direct connection to jump host:"
-            timeout 30s ssh -v bmicluster "echo Jump host connection succeeded" || echo "Failed to connect to jump host"
+            ssh -v bmicluster "echo Jump host connection succeeded"
             exit 1
           }
       
