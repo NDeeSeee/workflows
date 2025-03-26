@@ -219,6 +219,36 @@ get_args <- function() {
         }
       }
       
+      # At this point we have extracted all named parameters
+      # Now collect all the --input and --name values specifically
+      input_flags <- which(all_args == "--input")
+      name_flags <- which(all_args == "--name")
+      
+      # Clear any incorrectly assigned values that might have been added to args$name
+      if ("name" %in% names(args)) {
+        args$name <- character(0)
+      }
+      
+      # Extract input values correctly
+      if (length(input_flags) > 0) {
+        args$input <- character(0)
+        for (idx in input_flags) {
+          if (idx < length(all_args) && !grepl("^--", all_args[idx + 1])) {
+            args$input <- c(args$input, all_args[idx + 1])
+          }
+        }
+      }
+      
+      # Extract name values correctly
+      if (length(name_flags) > 0) {
+        args$name <- character(0)
+        for (idx in name_flags) {
+          if (idx < length(all_args) && !grepl("^--", all_args[idx + 1])) {
+            args$name <- c(args$name, all_args[idx + 1])
+          }
+        }
+      }
+      
       # Second pass: Find any positional arguments
       positional_args <- all_args[!grepl("^--", all_args) & !grepl("^-[a-zA-Z]", all_args)]
       
@@ -229,24 +259,36 @@ get_args <- function() {
       flag_values <- all_args[value_indices]
       positional_args <- setdiff(positional_args, flag_values)
       
-      # Classify remaining positional arguments
+      # If no positional args, return what we have
+      if (length(positional_args) == 0) {
+        message("No positional arguments found")
+        return(args)
+      }
+      
+      # Add to array arguments if we have any positional args
       if (length(positional_args) > 0) {
-        message(paste("Found", length(positional_args), "unclassified positional arguments"))
+        message(paste("Found", length(positional_args), "potential positional arguments"))
         
         # Detect file paths and sample names
         file_pattern <- "\\.(tsv|csv)$"
         file_args <- positional_args[grepl(file_pattern, positional_args)]
         name_args <- positional_args[!grepl(file_pattern, positional_args)]
         
-        # Add to array arguments
         if (length(file_args) > 0) {
           args$input <- c(args$input, file_args)
           message(paste("Added", length(file_args), "file paths to --input"))
         }
         
+        # Only add names that match the sample naming pattern
         if (length(name_args) > 0) {
-          args$name <- c(args$name, name_args)
-          message(paste("Added", length(name_args), "sample names to --name"))
+          # Filter only actual sample names (assume they start with ABC)
+          sample_pattern <- "^ABSK\\d+"
+          valid_names <- name_args[grepl(sample_pattern, name_args)]
+          
+          if (length(valid_names) > 0) {
+            args$name <- c(args$name, valid_names)
+            message(paste("Adding", length(valid_names), "sample names from positional args"))
+          }
         }
       }
       

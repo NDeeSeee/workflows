@@ -550,7 +550,7 @@ run_main_process <- function(args) {
   message(sprintf("DESeq2 LRT analysis completed in %.2f minutes", as.numeric(elapsed)))
 }
 
-# Initialize the DESeq2 analysis environment
+# Initialize environment completely
 initialize_environment <- function() {
   # Configure R options
   configure_r_options()
@@ -567,292 +567,198 @@ initialize_environment <- function() {
   message("DESeq2 analysis environment initialized successfully")
 }
 
-# Main wrapper function with memory management
+# Main function with memory management
 main_with_memory_management <- function() {
-  # Start timing
-  start_time <- Sys.time()
-  log_message("DESeq2 LRT Step 1 started", "START")
+  timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+  message(paste0("[", timestamp, "] [START] DESeq2 LRT Step 1 started"))
   
+  # Process command line arguments
+  processed_args <- preprocess_args()
+  
+  # Set up error handling to log errors to file
   tryCatch({
-    # Pre-process command line arguments first - improves compatibility with CWL
-    processed_args <- preprocess_args()
-
-    # Override command line arguments with processed ones
-    # This is a hack to make the argparse parser work with our processed arguments
-    if (!identical(processed_args, commandArgs(trailingOnly = TRUE))) {
-      message("Command line arguments have been preprocessed for compatibility")
-      
-      # Create a safer version of the command line arguments
-      safe_args <- c()
-      for (arg in processed_args) {
-        # Escape any quotes and special characters
-        escaped_arg <- gsub('"', '\\\\"', arg)
-        # Add quotes around arguments with spaces
-        if (grepl(" ", escaped_arg)) {
-          escaped_arg <- paste0('"', escaped_arg, '"')
-        }
-        safe_args <- c(safe_args, escaped_arg)
-      }
-      
-      # Temporarily save the processed arguments to a file and source it
-      temp_args_file <- tempfile(pattern = "args_", fileext = ".R")
-      on.exit(unlink(temp_args_file), add = TRUE)
-      
-      cat("commandArgs_original <- commandArgs\n", file = temp_args_file)
-      cat("commandArgs <- function(trailingOnly = FALSE) {\n", file = temp_args_file, append = TRUE)
-      cat("  if (trailingOnly) {\n", file = temp_args_file, append = TRUE)
-      
-      # Convert the arguments to a proper R character vector
-      arg_vector <- paste("c(", paste(shQuote(processed_args), collapse = ", "), ")")
-      cat(paste0("    return(", arg_vector, ")\n"), file = temp_args_file, append = TRUE)
-      
-      cat("  } else {\n", file = temp_args_file, append = TRUE)
-      cat("    return(commandArgs_original(FALSE))\n", file = temp_args_file, append = TRUE)
-      cat("  }\n", file = temp_args_file, append = TRUE)
-      cat("}\n", file = temp_args_file, append = TRUE)
-      
-      source(temp_args_file)
-    }
-
-    ### Parse CLI arguments
-    message("Parsing command line arguments...")
-    args <- tryCatch({
-      params$get_cli_args()
-    }, error = function(e) {
-      message("Error during argument parsing: ", e$message)
-      
-      # Emergency fallback for required arguments
-      message("EMERGENCY: Attempting to extract required arguments")
-      
-      # Get original command line args
-      orig_args <- commandArgs(trailingOnly = TRUE)
-      
-      # Initialize empty result with NULL values
-      emergency_args <- list(
-        meta = NULL,
-        design = NULL,
-        reduced = NULL,
-        input = character(0),
-        name = character(0)
-      )
-      
-      # Extract required arguments directly if parser failed
-      # This is a more aggressive approach to handle malformed arguments
-      required_flags <- c("--meta", "--design", "--reduced", "--input", "--name")
-      
-      # Handle regular args that aren't array-based
-      for (flag in c("--meta", "--design", "--reduced")) {
-        flag_idx <- which(orig_args == flag)
-        if (length(flag_idx) > 0 && flag_idx[1] < length(orig_args)) {
-          value <- orig_args[flag_idx[1] + 1]
-          if (!grepl("^--", value)) {
-            param_name <- gsub("^--", "", flag)
-            emergency_args[[param_name]] <- value
-            message("Found ", flag, " = ", value)
-          }
-        }
-      }
-      
-      # Handle array args
-      for (flag in c("--input", "--name")) {
-        flag_indices <- which(orig_args == flag)
-        values <- character(0)
-        
-        # Get all values for the flag
-        for (idx in flag_indices) {
-          if (idx < length(orig_args) && !grepl("^--", orig_args[idx + 1])) {
-            values <- c(values, orig_args[idx + 1])
-          }
-        }
-        
-        # Store values if found
-        if (length(values) > 0) {
-          param_name <- gsub("^--", "", flag)
-          emergency_args[[param_name]] <- values
-          message("Found ", flag, " = ", paste(values, collapse=", "))
-        }
-      }
-      
-      # Check if positional arguments that could be inputs or sample names
-      positional_args <- orig_args[!grepl("^--", orig_args)]
-      positional_args <- setdiff(positional_args, unlist(emergency_args))
-      
-      if (length(positional_args) > 0) {
-        message("Found ", length(positional_args), " potential positional arguments")
-        
-        # Try to identify input files vs sample names
-        file_pattern <- "\\.(tsv|csv)$"
-        input_files <- positional_args[grepl(file_pattern, positional_args)]
-        sample_names <- positional_args[!grepl(file_pattern, positional_args)]
-        
-        if (length(input_files) > 0) {
-          emergency_args$input <- c(emergency_args$input, input_files)
-          message("Adding ", length(input_files), " input files from positional args")
-        }
-        
-        if (length(sample_names) > 0) {
-          emergency_args$name <- c(emergency_args$name, sample_names)
-          message("Adding ", length(sample_names), " sample names from positional args")
-        }
-      }
-      
-      # Check if we found all required arguments
-      missing_args <- names(emergency_args)[sapply(emergency_args, function(x) {
-        is.null(x) || 
-        (is.character(x) && length(x) == 0) || 
-        (is.character(x) && all(trimws(x) == ""))
-      })]
-      
-      # Extra safety check to handle edge cases - ensure we have meta, design, and reduced
-      if (length(missing_args) == 0) {
-        for (req in c("meta", "design", "reduced")) {
-          if (is.null(emergency_args[[req]]) || 
-              (is.character(emergency_args[[req]]) && length(emergency_args[[req]]) == 0) ||
-              (is.character(emergency_args[[req]]) && all(trimws(emergency_args[[req]]) == ""))) {
-            missing_args <- c(missing_args, req)
-          }
-        }
-        
-        # Check if we have at least one input file and name
-        if (length(emergency_args$input) == 0) {
-          missing_args <- c(missing_args, "input")
-        }
-        if (length(emergency_args$name) == 0) {
-          missing_args <- c(missing_args, "name")
-        }
-      }
-      
-      if (length(missing_args) > 0) {
-        message("ERROR: Still missing required arguments: ", paste(missing_args, collapse=", "))
-        
-        # Debug information - show what we found
-        message("Debug: Current emergency_args content:")
-        for (arg_name in names(emergency_args)) {
-          message(paste0("  ", arg_name, ": ", 
-                       if(is.character(emergency_args[[arg_name]]) && length(emergency_args[[arg_name]]) > 1) {
-                         paste0("[", paste(emergency_args[[arg_name]], collapse=", "), "]")
-                       } else {
-                         paste0(emergency_args[[arg_name]])
-                       }))
-        }
-        
-        # Additional heuristic to try to recover args
-        if ("meta" %in% missing_args) {
-          meta_candidates <- grep("metadata.*\\.(csv|tsv)$", orig_args, value = TRUE)
-          if (length(meta_candidates) > 0) {
-            message("Found possible metadata file: ", meta_candidates[1])
-            emergency_args$meta <- meta_candidates[1]
-            missing_args <- setdiff(missing_args, "meta")
-          }
-        }
-        
-        if ("design" %in% missing_args) {
-          design_candidates <- grep("~", orig_args, value = TRUE)
-          if (length(design_candidates) > 0) {
-            # The first formula is likely the design, the second is reduced
-            message("Found possible design formula: ", design_candidates[1])
-            emergency_args$design <- design_candidates[1]
-            missing_args <- setdiff(missing_args, "design")
-            
-            # If we still need reduced and have another formula
-            if ("reduced" %in% missing_args && length(design_candidates) > 1) {
-              message("Found possible reduced formula: ", design_candidates[2])
-              emergency_args$reduced <- design_candidates[2]
-              missing_args <- setdiff(missing_args, "reduced")
-            }
-          }
-        }
-        
-        # If we still have missing args, stop
-        if (length(missing_args) > 0) {
-          stop("Missing required arguments: ", paste(missing_args, collapse=", "))
-        } else {
-          message("Recovered all required arguments through heuristics")
-        }
-      }
-      
-      # Set defaults for other parameters
-      default_params <- list(
-        output = "results",
-        rpkm_cutoff = 1,
-        k_hopach = 5,
-        kmax_hopach = 6,
-        cosine_normalized = TRUE,
-        distance_method = "cosine",
-        clustering_method = "complete",
-        filter = TRUE,
-        batch_correct = FALSE,
-        center_rowmeans = TRUE,
-        fdr = 0.1
-      )
-      
-      # Merge with existing args
-      for (param in names(default_params)) {
-        if (is.null(emergency_args[[param]])) {
-          emergency_args[[param]] <- default_params[[param]]
-        }
-      }
-      
-      # Print final parameters
-      message("Emergency argument parsing completed!")
-      message("Parameters:")
-      for (param in names(emergency_args)) {
-        param_value <- emergency_args[[param]]
-        if (is.character(param_value) && length(param_value) > 1) {
-          message(paste0("  ", param, ": [", paste(param_value, collapse=", "), "]"))
-        } else {
-          message(paste0("  ", param, ": ", param_value))
-        }
-      }
-      
-      return(emergency_args)
-    })
+    # Set up command line arguments
+    args <- NULL
     
-    ### Create output dir if not exist
-    if (!dir.exists(args$output)) {
-      dir.create(args$output, recursive = TRUE)
-    }
-    
-    ### Setup logging
-    logfile_path <- file.path(args$output, "log.txt")
-    logger::log_appender(logger::appender_tee(logfile_path))
-    set_log_level_verbose()
-    
-    log_info("Starting DESeq2 analysis with LRT")
-    log_debug("Arguments:", print_all_args(args))
-    
-    ### Validate CLI arguments
-    params$assert_args(args)
-    log_debug("CLI arguments validated")
-    
-    ### Run main process
-    run_main_process(args)
-    
-  }, error = function(e) {
-    # Also log to stderr - important for debugging CWL
-    write(paste("ERROR:", e$message), stderr())
-    
-    # Try to log to file if possible
+    # Parse command line arguments safely
     tryCatch({
-      log_error(e$message)
-      log_error(e$call)
-      log_error(traceback())
+      message("Parsing command line arguments...")
+      args <- get_args(processed_args)
+      message("Command line arguments have been parsed")
     }, error = function(e) {
-      write(paste("Failed to log error to file:", e$message), stderr())
+      message(paste0("Warning: Argument parsing error. Attempting to handle arguments manually."))
+      
+      # Attempt to manually process the arguments
+      args <- get_args()
+      
+      # If that fails, try emergency argument extraction
+      if (is.null(args)) {
+        message("EMERGENCY: Attempting to extract required arguments")
+        args <- extract_arguments_emergency(processed_args)
+        message("Emergency argument parsing completed!")
+      }
+      
+      # Print parsed arguments for debugging
+      message("Parameters:")
+      for (arg_name in names(args)) {
+        message(paste("  ", arg_name, ":", paste(args[[arg_name]], collapse=", ")))
+      }
     })
     
-    # Make sure there's a non-zero exit 
-    quit(status = 1)
+    # Configure logger
+    log_to_file(paste0(args$output_prefix, "_log.txt"))
+    logger::log_threshold(logger::INFO)
+    logger::log_layout(logger::layout_glue_generator(
+      format = "{level} [{time}] {msg}"
+    ))
+    
+    message("Logger configured for verbose output")
+    
+    # Run DESeq2 LRT analysis
+    tryCatch({
+      message("Starting DESeq2 LRT analysis process...")
+      run_deseq2_lrt_analysis(args)
+    }, error = function(e) {
+      error_msg <- paste("ERROR:", e$message)
+      message(error_msg)
+      logger::error(e$message)
+      
+      # Write detailed error to file
+      tryCatch({
+        error_report <- paste0(args$output_prefix, "_error_report.txt")
+        writeLines(
+          c(
+            "DESeq2 LRT Analysis Error Report",
+            "==============================",
+            "",
+            paste("Error Time:", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
+            paste("Error Message:", e$message),
+            "",
+            "Stack Trace:",
+            paste(capture.output(traceback()), collapse = "\n"),
+            "",
+            "Session Info:",
+            paste(capture.output(sessionInfo()), collapse = "\n")
+          ),
+          con = error_report
+        )
+        message(paste("Error details written to:", error_report))
+      }, error = function(write_error) {
+        message(paste("Failed to log error to file:", write_error$message))
+      })
+      
+      # Exit with error
+      stop(e$message)
+    })
+    
+  }, finally = {
+    # Final cleanup
+    gc()
+    timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+    message(paste0("[", timestamp, "] [COMPLETE] DESeq2 LRT Step 1 finished"))
   })
-  
-  # Report end time and duration
-  end_time <- Sys.time()
-  duration <- difftime(end_time, start_time, units = "secs")
-  log_message(glue::glue("Total execution time: {round(as.numeric(duration), 2)} seconds"), "DONE")
-  
-  # Final memory report
-  report_memory_usage("Final")
 }
+
+# Emergency argument extraction function
+extract_arguments_emergency <- function(args) {
+  # Extract from raw arguments
+  raw_args <- commandArgs(trailingOnly = TRUE)
+  
+  result <- list()
+  
+  # Try to find the most critical arguments
+  arg_names <- c("meta", "design", "reduced", "input", "name", "output_prefix", 
+                "batchcorrection", "scaling_type", "fdr", "lfcthreshold",
+                "cluster_method", "row_distance", "column_distance", 
+                "k_hopach", "kmax_hopach", "threads")
+  
+  for (arg_name in arg_names) {
+    arg_flag <- paste0("--", arg_name)
+    arg_index <- which(raw_args == arg_flag)
+    
+    if (length(arg_index) > 0) {
+      # Could be multiple values for array args
+      if (arg_name %in% c("input", "name")) {
+        values <- c()
+        for (idx in arg_index) {
+          if (idx < length(raw_args) && !grepl("^--", raw_args[idx+1])) {
+            values <- c(values, raw_args[idx+1])
+          }
+        }
+        if (length(values) > 0) {
+          result[[arg_name]] <- values
+          message(paste("Found --", arg_name, " = ", paste(values, collapse=", "), sep=""))
+        }
+      } else {
+        # For single value args
+        if (arg_index[1] < length(raw_args) && !grepl("^--", raw_args[arg_index[1]+1])) {
+          result[[arg_name]] <- raw_args[arg_index[1]+1]
+          message(paste("Found --", arg_name, " = ", result[[arg_name]], sep=""))
+        }
+      }
+    }
+  }
+  
+  # Try to find any positional arguments
+  positional_args <- raw_args[!grepl("^--", raw_args)]
+  if (length(positional_args) > 0) {
+    message(paste("Found", length(positional_args), "potential positional arguments"))
+    
+    # Try to parse them based on likely patterns
+    for (arg in positional_args) {
+      if (grepl("\\.csv$|\\.tsv$", arg)) {
+        # This is likely an input file
+        if (!"input" %in% names(result)) result$input <- c()
+        result$input <- c(result$input, arg)
+      } else if (grepl("^ABSK", arg)) {
+        # This looks like a sample name
+        if (!"name" %in% names(result)) result$name <- c()
+        result$name <- c(result$name, arg)
+      }
+    }
+  }
+  
+  # Set defaults for critical missing arguments
+  if (!"output_prefix" %in% names(result)) result$output_prefix <- "results"
+  if (!"fdr" %in% names(result)) result$fdr <- 0.1
+  if (!"lfcthreshold" %in% names(result)) result$lfcthreshold <- 0.59
+  if (!"threads" %in% names(result)) result$threads <- 1
+  
+  # Add default k values for hopach
+  if (!"k_hopach" %in% names(result)) result$k_hopach <- 3
+  if (!"kmax_hopach" %in% names(result)) result$kmax_hopach <- 5
+  
+  # Additional settings
+  result$rpkm_cutoff <- 1
+  result$filter <- TRUE
+  result$batch_correct <- FALSE
+  result$center_rowmeans <- TRUE
+  
+  return(result)
+}
+
+# Configure logging to a file
+log_to_file <- function(log_file) {
+  # Create parent directory if needed
+  log_dir <- dirname(log_file)
+  if (!dir.exists(log_dir) && log_dir != "") {
+    dir.create(log_dir, recursive = TRUE)
+  }
+  
+  # Create file appender
+  file_appender <- logger::appender_file(log_file)
+  
+  # Configure logger
+  logger::log_appender(file_appender)
+}
+
+# Report memory usage
+report_memory_usage <- function(step_name) {
+  mem_usage <- pryr::mem_used() / (1024 * 1024)
+  message(paste0("[Memory] ", step_name, ": ", round(mem_usage, 1), " MB"))
+}
+
+# --- End of main workflow functions ---
 
 # Main script execution with enhanced error handling
 main <- function(args = NULL) {

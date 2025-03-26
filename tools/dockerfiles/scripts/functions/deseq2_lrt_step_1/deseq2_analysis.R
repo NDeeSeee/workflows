@@ -3,247 +3,164 @@
 # --- DESeq2 analysis functions ---
 
 # Main function to run DESeq2 analysis
-run_deseq2 <- function(count_data, sample_metadata, design_formula, reduced_formula, args) {
-  message("Running DESeq2 analysis...")
+run_deseq2 <- function(count_data, metadata, design_formula, reduced_formula, args) {
+  logger::info("Running DESeq2 analysis with LRT")
   
-  # Set up parallel processing if requested
-  if (args$threads > 1) {
-    message(paste("Using", args$threads, "threads for parallel processing"))
-    BiocParallel::register(BiocParallel::MulticoreParam(args$threads))
-  }
-  
-  # Create DESeqDataSet
-  message("Creating DESeqDataSet object")
-  dds <- DESeqDataSetFromMatrix(
+  # Create DESeqDataSet object
+  dds <- try(DESeqDataSetFromMatrix(
     countData = count_data,
-    colData = sample_metadata,
+    colData = metadata,
     design = design_formula
-  )
+  ))
   
-  # Filter low count genes if requested
-  if (!is.null(args$filter_low_counts) && args$filter_low_counts > 0) {
-    message(paste("Filtering genes with fewer than", args$filter_low_counts, "counts"))
-    keep <- rowSums(counts(dds)) >= args$filter_low_counts
-    dds <- dds[keep,]
-    message(paste("Retained", sum(keep), "of", length(keep), "genes after filtering"))
+  if (inherits(dds, "try-error")) {
+    stop("Failed to create DESeqDataSet from matrix")
   }
   
-  # Run DESeq2 with LRT test
-  message("Running DESeq with LRT test")
-  message(paste("Design formula:", deparse(design_formula)))
-  message(paste("Reduced formula:", deparse(as.formula(reduced_formula))))
+  # Run DESeq with LRT
+  logger::info(paste("Running DESeq with full model:", deparse(design_formula)))
+  logger::info(paste("Reduced model:", deparse(reduced_formula)))
   
-  dds <- DESeq(
+  dds <- try(DESeq(
     dds,
     test = "LRT",
-    reduced = as.formula(reduced_formula),
+    reduced = reduced_formula,
     parallel = (args$threads > 1),
-    quiet = FALSE
-  )
+    BPPARAM = MulticoreParam(args$threads)
+  ))
   
-  # Extract results
-  message("Extracting results")
-  res <- results(
-    dds,
-    alpha = args$fdr,
-    pAdjustMethod = "BH"
-  )
-  
-  # Sort results by p-value
-  ordered_res <- res[order(res$pvalue),]
-  
-  # Annotate with normalized counts
-  normalized_counts <- counts(dds, normalized = TRUE)
-  
-  # Apply transformation based on data size
-  if (ncol(dds) >= 30) {
-    # Use VST for larger datasets (faster)
-    message("Applying variance stabilizing transformation (VST)")
-    vst_data <- vst(dds, blind = FALSE)
-    transformed_counts <- assay(vst_data)
-  } else {
-    # Use rlog for smaller datasets (more accurate)
-    message("Applying regularized log transformation (rlog)")
-    rlog_data <- rlog(dds, blind = FALSE)
-    transformed_counts <- assay(rlog_data)
+  if (inherits(dds, "try-error")) {
+    stop("DESeq2 analysis failed")
   }
   
-  # Return results
+  # Extract results with FDR threshold
+  results <- try(results(
+    dds,
+    alpha = args$fdr,
+    lfcThreshold = args$lfcthreshold
+  ))
+  
+  if (inherits(results, "try-error")) {
+    stop("Failed to extract results from DESeq2 analysis")
+  }
+  
+  # Sort results by p-value
+  results <- results[order(results$pvalue), ]
+  
+  # Get normalized counts
+  normalized_counts <- counts(dds, normalized = TRUE)
+  
+  # Get VST transformed data
+  vst_data <- try(vst(dds, blind = FALSE))
+  
+  if (inherits(vst_data, "try-error")) {
+    logger::warn("VST transformation failed, will attempt to use rlog instead")
+    vst_data <- try(rlog(dds, blind = FALSE))
+    
+    if (inherits(vst_data, "try-error")) {
+      logger::error("Both VST and rlog transformations failed")
+      vst_data <- NULL
+    }
+  }
+  
   return(list(
     dds = dds,
-    res = res,
-    ordered_res = ordered_res,
+    results = results,
     normalized_counts = normalized_counts,
-    transformed_counts = transformed_counts
+    vst_data = vst_data
   ))
 }
 
-# Function to export DESeq2 results
-export_results <- function(deseq_results, expression_df, metadata_df, args, batch_warning = NULL, filtered_count = NULL) {
-  message("Exporting DESeq2 results...")
+# Function to export results from DESeq2 analysis
+export_results <- function(deseq_results, expression_data, metadata, args) {
+  logger::info("Exporting DESeq2 results")
   
   # Create output directory if it doesn't exist
-  output_dir <- args$output_prefix
-  if (!dir.exists(output_dir)) {
-    dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+  output_dir <- dirname(args$output_prefix)
+  if (!dir.exists(output_dir) && output_dir != "") {
+    dir.create(output_dir, recursive = TRUE)
   }
   
-  # Get results components
+  # Extract result components
   dds <- deseq_results$dds
-  res <- deseq_results$res
-  ordered_res <- deseq_results$ordered_res
+  results <- deseq_results$results
   normalized_counts <- deseq_results$normalized_counts
-  transformed_counts <- deseq_results$transformed_counts
+  vst_data <- deseq_results$vst_data
   
-  # 1. Export detailed results table with annotations
-  message("Exporting detailed DESeq2 results table")
+  # Export DESeq2 results table
+  results_df <- as.data.frame(results)
+  results_df$GeneId <- row.names(results_df)
   
-  # Convert results to data frame and add gene information
-  results_df <- as.data.frame(ordered_res)
-  results_df$GeneId <- rownames(results_df)
-  
-  # Add gene annotations from expression data if available
-  if ("GeneSymbol" %in% colnames(expression_df)) {
-    gene_info <- expression_df[, c("GeneId", "GeneSymbol"), drop = FALSE]
-    gene_info <- gene_info[!duplicated(gene_info$GeneId), ]
-    results_df <- merge(results_df, gene_info, by = "GeneId", all.x = TRUE, sort = FALSE)
-  }
-  
-  # Add log10 transformed p-values for better visualization
-  results_df$log10_pvalue <- -log10(results_df$pvalue)
-  results_df$log10_padj <- -log10(results_df$padj)
-  
-  # Reorder columns for better readability
-  if ("GeneSymbol" %in% colnames(results_df)) {
-    col_order <- c("GeneId", "GeneSymbol", "baseMean", "log2FoldChange", "lfcSE", 
-                  "stat", "pvalue", "padj", "log10_pvalue", "log10_padj")
-  } else {
-    col_order <- c("GeneId", "baseMean", "log2FoldChange", "lfcSE", 
-                  "stat", "pvalue", "padj", "log10_pvalue", "log10_padj")
-  }
-  
-  # Reorder columns, keeping any additional columns at the end
-  other_cols <- base::setdiff(colnames(results_df), col_order)
-  col_order <- c(col_order, other_cols)
-  results_df <- results_df[, base::intersect(col_order, colnames(results_df)), drop = FALSE]
+  # Reorder columns to put GeneId first
+  results_df <- results_df[, c("GeneId", setdiff(colnames(results_df), "GeneId"))]
   
   # Write results to TSV file
-  results_file <- file.path(output_dir, "deseq2_lrt_results.tsv")
-  write.table(results_df, file = results_file, sep = "\t", row.names = FALSE, quote = FALSE)
-  message(paste("Wrote results to:", results_file))
-  
-  # 2. Export normalized counts
-  message("Exporting normalized counts")
-  norm_counts_df <- as.data.frame(normalized_counts)
-  norm_counts_df$GeneId <- rownames(norm_counts_df)
-  
-  # Move GeneId to first column
-  norm_counts_df <- norm_counts_df[, c("GeneId", base::setdiff(colnames(norm_counts_df), "GeneId")), drop = FALSE]
-  
-  # Write normalized counts to TSV file
-  norm_counts_file <- file.path(output_dir, "normalized_counts.tsv")
-  write.table(norm_counts_df, file = norm_counts_file, sep = "\t", row.names = FALSE, quote = FALSE)
-  message(paste("Wrote normalized counts to:", norm_counts_file))
-  
-  # 3. Export transformed counts
-  message("Exporting transformed counts")
-  trans_counts_df <- as.data.frame(transformed_counts)
-  trans_counts_df$GeneId <- rownames(trans_counts_df)
-  
-  # Move GeneId to first column
-  trans_counts_df <- trans_counts_df[, c("GeneId", base::setdiff(colnames(trans_counts_df), "GeneId")), drop = FALSE]
-  
-  # Write transformed counts to TSV file
-  trans_counts_file <- file.path(output_dir, "transformed_counts.tsv")
-  write.table(trans_counts_df, file = trans_counts_file, sep = "\t", row.names = FALSE, quote = FALSE)
-  message(paste("Wrote transformed counts to:", trans_counts_file))
-  
-  # 4. Export GCT file for downstream analysis
-  message("Exporting GCT file for downstream analysis")
-  
-  # Create matrix for GCT export
-  gct_data <- transformed_counts
-  
-  # Safely extract arguments for scaling and clustering
-  scaling_type <- if (!is.null(args$scaling_type)) as.character(args$scaling_type) else "none"
-  cluster_method <- if (!is.null(args$cluster_method)) as.character(args$cluster_method) else "none"
-  row_distance <- if (!is.null(args$row_distance)) as.character(args$row_distance) else "euclid"
-  column_distance <- if (!is.null(args$column_distance)) as.character(args$column_distance) else "euclid"
-  k_hopach <- if (!is.null(args$k_hopach)) as.numeric(args$k_hopach) else 3
-  kmax_hopach <- if (!is.null(args$kmax_hopach)) as.numeric(args$kmax_hopach) else 5
-  
-  # Validate parameters
-  if (!scaling_type %in% c("none", "zscore", "minmax")) {
-    warning(paste("Unknown scaling type:", scaling_type, "- defaulting to none"))
-    scaling_type <- "none"
-  }
-  
-  if (!cluster_method %in% c("none", "row", "column", "both")) {
-    warning(paste("Unknown cluster method:", cluster_method, "- defaulting to none"))
-    cluster_method <- "none"
-  }
-  
-  # Scale data if requested
-  if (scaling_type != "none") {
-    tryCatch({
-      gct_data <- scale_expression_data(gct_data, scaling_type)
-    }, error = function(e) {
-      warning(paste("Error during scaling:", e$message, "- using unscaled data"))
-    })
-  }
-  
-  # Apply clustering if requested
-  if (cluster_method != "none") {
-    tryCatch({
-      clustering_result <- perform_clustering(
-        gct_data,
-        cluster_method,
-        row_distance,
-        column_distance,
-        k_hopach,
-        kmax_hopach
-      )
-      gct_data <- clustering_result$expression_data
-    }, error = function(e) {
-      warning(paste("Error during clustering:", e$message, "- using unclustered data"))
-    })
-  }
-  
-  # Write GCT file
-  gct_file <- file.path(output_dir, "deseq2_transformed_data.gct")
-  write_gct(gct_data, gct_file)
-  message(paste("Wrote GCT file to:", gct_file))
-  
-  # 5. Export summary report
-  message("Generating summary report")
-  summary_file <- file.path(output_dir, "analysis_summary.txt")
-  
-  # Count significant genes
-  sig_genes <- sum(!is.na(res$padj) & res$padj < args$fdr, na.rm = TRUE)
-  
-  # Write summary to file
-  writeLines(
-    c(
-      "DESeq2 LRT Analysis Summary",
-      "==========================",
-      "",
-      paste("Analysis Date:", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
-      paste("Design Formula:", deparse(design(dds))),
-      paste("Reduced Formula:", args$reduced),
-      paste("FDR Threshold:", args$fdr),
-      paste("LFC Threshold:", args$lfcthreshold),
-      "",
-      paste("Total Genes Analyzed:", nrow(dds)),
-      paste("Significant Genes (FDR <", args$fdr, "):", sig_genes),
-      paste("Filtering:", if(!is.null(filtered_count)) paste(filtered_count, "genes removed by RPKM filtering") else "No RPKM filtering applied"),
-      paste("Batch Correction:", if(!is.null(args$batchcorrection)) args$batchcorrection else "none"),
-      if(!is.null(batch_warning)) c("", paste("Warning:", batch_warning)) else character(0)
-    ),
-    con = summary_file
+  write.table(
+    results_df,
+    file = paste0(args$output_prefix, ".deseq2_lrt_results.tsv"),
+    sep = "\t",
+    quote = FALSE,
+    row.names = FALSE
   )
-  message(paste("Wrote summary report to:", summary_file))
   
-  message("Results export completed")
+  # Export normalized counts
+  norm_counts_df <- as.data.frame(normalized_counts)
+  norm_counts_df$GeneId <- row.names(norm_counts_df)
+  norm_counts_df <- norm_counts_df[, c("GeneId", setdiff(colnames(norm_counts_df), "GeneId"))]
+  
+  write.table(
+    norm_counts_df,
+    file = paste0(args$output_prefix, ".normalized_counts.tsv"),
+    sep = "\t",
+    quote = FALSE,
+    row.names = FALSE
+  )
+  
+  # Export VST data if available
+  if (!is.null(vst_data)) {
+    vst_df <- as.data.frame(assay(vst_data))
+    vst_df$GeneId <- row.names(vst_df)
+    vst_df <- vst_df[, c("GeneId", setdiff(colnames(vst_df), "GeneId"))]
+    
+    write.table(
+      vst_df,
+      file = paste0(args$output_prefix, ".vst_transformed.tsv"),
+      sep = "\t",
+      quote = FALSE,
+      row.names = FALSE
+    )
+  }
+  
+  # Create basic plots
+  # PCA plot
+  if (!is.null(vst_data)) {
+    pdf(paste0(args$output_prefix, ".pca_plot.pdf"), width = 10, height = 8)
+    plotPCA(vst_data, intgroup = c("treatment", "cond"))
+    dev.off()
+  }
+  
+  # MA plot
+  pdf(paste0(args$output_prefix, ".ma_plot.pdf"), width = 10, height = 8)
+  plotMA(results)
+  dev.off()
+  
+  # Volcano plot
+  pdf(paste0(args$output_prefix, ".volcano_plot.pdf"), width = 10, height = 8)
+  with(results_df, {
+    plot(
+      log2FoldChange, 
+      -log10(pvalue),
+      pch = 20,
+      main = "Volcano Plot",
+      xlab = "log2 Fold Change",
+      ylab = "-log10 p-value"
+    )
+    significant <- padj < args$fdr & abs(log2FoldChange) > args$lfcthreshold
+    points(log2FoldChange[significant], -log10(pvalue[significant]), pch = 20, col = "red")
+  })
+  dev.off()
+  
+  logger::info("Results exported successfully")
 }
 
 # Function to run DESeq2 LRT analysis
@@ -425,4 +342,124 @@ apply_limma_batch_correction <- function(dds, sample_metadata) {
   )
   
   return(corrected_counts)
+}
+
+# Function to validate essential arguments
+validate_essential_args <- function(args) {
+  # Check if args is a valid list
+  if (!is.list(args)) {
+    stop("Arguments must be provided as a list")
+  }
+  
+  # Check essential arguments
+  essential_args <- c("meta", "design", "reduced", "input", "name")
+  missing_args <- essential_args[!essential_args %in% names(args)]
+  
+  if (length(missing_args) > 0) {
+    stop(paste("Missing essential arguments:", paste(missing_args, collapse=", ")))
+  }
+  
+  # Check if any essential arguments are NULL or empty
+  empty_args <- c()
+  for (arg in essential_args) {
+    if (is.null(args[[arg]]) || (is.character(args[[arg]]) && length(args[[arg]]) == 0)) {
+      empty_args <- c(empty_args, arg)
+    }
+  }
+  
+  if (length(empty_args) > 0) {
+    stop(paste("These essential arguments are empty:", paste(empty_args, collapse=", ")))
+  }
+  
+  # Check that input and name have equal lengths
+  if (length(args$input) != length(args$name)) {
+    logger::warn(paste("Mismatch between number of input files (", length(args$input), 
+                        ") and sample names (", length(args$name), ")"))
+    
+    # If more samples than inputs, trim sample names
+    if (length(args$name) > length(args$input)) {
+      logger::warn("Trimming extra sample names to match input files")
+      args$name <- args$name[1:length(args$input)]
+    }
+    
+    # If more inputs than samples, trim input files
+    if (length(args$input) > length(args$name)) {
+      logger::warn("Trimming extra input files to match sample names")
+      args$input <- args$input[1:length(args$name)]
+    }
+  }
+  
+  logger::info("Essential arguments validated successfully")
+  return(args)
+}
+
+# Main function to perform DESeq2 LRT analysis
+run_deseq2_lrt_analysis <- function(args) {
+  # Log the start of the analysis
+  logger::info("Starting DESeq2 analysis with LRT")
+  logger::debug("Arguments:", args)
+  
+  # Validate essential arguments
+  validate_essential_args(args)
+  
+  # Load the metadata file
+  metadata <- load_metadata(args$meta)
+  
+  # Load expression data
+  if (is.null(args$input) || length(args$input) == 0) {
+    stop("No input expression files provided")
+  }
+  
+  if (is.null(args$name) || length(args$name) == 0) {
+    stop("No sample names provided")
+  }
+  
+  # Make sure name doesn't contain non-sample names
+  if (length(args$name) > length(args$input)) {
+    logger::warn("More sample names than input files provided. Trimming extra names.")
+    args$name <- args$name[1:length(args$input)]
+  }
+  
+  # Now proceed with loading the data
+  expression_data <- load_expression_data(args$input, args$name)
+  
+  # Extract read counts
+  counts_cols <- grep(READ_COL, colnames(expression_data), ignore.case = TRUE, value = TRUE)
+  if (length(counts_cols) == 0) {
+    stop("No count columns found in expression data")
+  }
+  
+  count_data <- expression_data[, c(INTERSECT_BY, counts_cols)]
+  
+  # Set gene IDs as row names
+  row.names(count_data) <- count_data[[INTERSECT_BY]]
+  count_data[[INTERSECT_BY]] <- NULL
+  
+  # Check if there are any zero rows
+  zero_rows <- rowSums(count_data) == 0
+  if (any(zero_rows)) {
+    logger::info(paste("Removing", sum(zero_rows), "rows with zero counts"))
+    count_data <- count_data[!zero_rows, , drop = FALSE]
+  }
+  
+  # Set up DESeq2 design from formula string
+  if (is.null(args$design) || args$design == "") {
+    stop("No valid design formula provided")
+  }
+  design_formula <- as.formula(args$design)
+  
+  # Set up reduced design for LRT
+  if (is.null(args$reduced) || args$reduced == "") {
+    stop("No valid reduced design formula provided")
+  }
+  reduced_formula <- as.formula(args$reduced)
+  
+  # Prepare metadata and ensure it matches count data samples
+  metadata <- prepare_metadata_for_deseq(metadata, colnames(count_data))
+  
+  # Run DESeq2 analysis
+  deseq_results <- run_deseq2(count_data, metadata, design_formula, reduced_formula, args)
+  
+  # Export results
+  export_results(deseq_results, expression_data, metadata, args)
 } 

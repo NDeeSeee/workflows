@@ -7,6 +7,33 @@ READ_COL <- "Read"
 RPKM_COL <- "Rpkm"
 INTERSECT_BY <- "GeneId"
 
+# Function to check the delimiter used in a file
+check_file_delimiter <- function(file_path) {
+  # Default to tab delimiter
+  delimiter <- "\t"
+  
+  # Check file extension
+  if (grepl("\\.csv$", file_path, ignore.case = TRUE)) {
+    delimiter <- ","
+  } else if (grepl("\\.tsv$", file_path, ignore.case = TRUE)) {
+    delimiter <- "\t"
+  } else {
+    # Try to detect delimiter from file content
+    first_line <- readLines(file_path, n = 1)
+    
+    if (grepl(",", first_line)) {
+      delimiter <- ","
+    } else if (grepl("\t", first_line)) {
+      delimiter <- "\t"
+    } else if (grepl(";", first_line)) {
+      delimiter <- ";"
+    }
+  }
+  
+  message(paste("Detected delimiter for file", file_path, ":", delimiter))
+  return(delimiter)
+}
+
 # Function to load expression data from multiple files
 load_expression_data <- function(input_files, sample_names, read_col="Read", rpkm_col="Rpkm", intersect_by="GeneId") {
   # Process each input file
@@ -441,4 +468,85 @@ filter_by_rpkm <- function(expression_data, sample_metadata, rpkm_cutoff) {
   message(paste("Filtered out", sum(!keep_rows), "of", nrow(expression_data), "rows"))
   
   return(expression_data[keep_rows, ])
+}
+
+# Function to load and validate metadata file
+load_metadata <- function(metadata_file) {
+  if (!file.exists(metadata_file)) {
+    stop(paste("Metadata file not found:", metadata_file))
+  }
+  
+  # Determine file type
+  delimiter <- check_file_delimiter(metadata_file)
+  
+  # Load metadata
+  metadata <- tryCatch({
+    read.table(
+      metadata_file, 
+      sep = delimiter,
+      header = TRUE, 
+      stringsAsFactors = FALSE,
+      check.names = FALSE,
+      comment.char = "#"
+    )
+  }, error = function(e) {
+    stop(paste("Error reading metadata file:", e$message))
+  })
+  
+  # Check if metadata has required columns
+  required_cols <- c("sample", "treatment", "cond")
+  missing_cols <- required_cols[!required_cols %in% colnames(metadata)]
+  
+  if (length(missing_cols) > 0) {
+    logger::warn(paste("Metadata is missing these expected columns:", paste(missing_cols, collapse=", ")))
+  }
+  
+  # Ensure sample column exists and is unique
+  if ("sample" %in% colnames(metadata)) {
+    if (length(unique(metadata$sample)) != nrow(metadata)) {
+      stop("Metadata sample column contains duplicate values")
+    }
+  } else {
+    stop("Metadata must contain a 'sample' column")
+  }
+  
+  # Set row names to sample names for easier indexing
+  row.names(metadata) <- metadata$sample
+  
+  return(metadata)
+}
+
+# Function to prepare metadata for DESeq2
+prepare_metadata_for_deseq <- function(metadata, count_colnames) {
+  # Extract sample names from count data column names
+  sample_pattern <- "^([^\\s]+)\\s.*$"
+  sample_names <- gsub(sample_pattern, "\\1", count_colnames)
+  
+  # Ensure all samples in count data have metadata
+  missing_samples <- sample_names[!sample_names %in% metadata$sample]
+  
+  if (length(missing_samples) > 0) {
+    stop(paste("Metadata missing for samples:", paste(missing_samples, collapse=", ")))
+  }
+  
+  # Subset metadata to only include samples in count data
+  metadata_subset <- metadata[metadata$sample %in% sample_names, , drop = FALSE]
+  
+  # Ensure order matches count data
+  metadata_subset <- metadata_subset[match(sample_names, metadata_subset$sample), , drop = FALSE]
+  
+  # Ensure column order matches count data
+  if (!identical(metadata_subset$sample, sample_names)) {
+    logger::warn("Metadata sample order doesn't match count data. Reordering.")
+    metadata_subset <- metadata_subset[match(sample_names, metadata_subset$sample), , drop = FALSE]
+  }
+  
+  # Convert character columns to factors for DESeq2
+  for (col in colnames(metadata_subset)) {
+    if (is.character(metadata_subset[[col]])) {
+      metadata_subset[[col]] <- as.factor(metadata_subset[[col]])
+    }
+  }
+  
+  return(metadata_subset)
 } 
