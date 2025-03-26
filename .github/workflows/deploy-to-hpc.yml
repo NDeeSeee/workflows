@@ -215,23 +215,26 @@ jobs:
       
       - name: Deploy to HPC
         run: |
+          set -x  # Debug mode to show all commands
+          
           # Use environment variables
           echo "Deploying docker tag: $DOCKER_TAG to bmicluster-compute..."
           
-          # First, verify SSH connection (suppress output)
-          if ! ssh -i ~/.ssh/github_action_key -q bmicluster-compute "bash --noprofile --norc -c 'hostname >/dev/null 2>&1'"; then
+          # First, verify SSH connection with verbose output
+          echo "Testing SSH connection before deployment..."
+          if ! ssh -i ~/.ssh/github_action_key -q bmicluster-compute "bash --noprofile --norc -c 'hostname && echo \"SSH connection verified\"'"; then
             echo "ERROR: Cannot connect to compute node for deployment"
             exit 1
           fi
           
-          # Check if Singularity is available on the compute node (via module)
+          # Check if Singularity is available on the compute node (via module) with more verbose output
           echo "Setting up Singularity on compute node..."
-          ssh -i ~/.ssh/github_action_key -q bmicluster-compute "bash --noprofile --norc -c 'export TERM=dumb && export LANG=C && export LC_ALL=C && module load singularity/3.7.0 >/dev/null 2>&1 || echo \"Failed to load singularity module\"'" || {
+          ssh -i ~/.ssh/github_action_key -q bmicluster-compute "bash --noprofile --norc -c 'export TERM=dumb && export LANG=C && export LC_ALL=C && module list && module avail singularity && module load singularity/3.7.0 && which singularity && singularity --version'" || {
             echo "ERROR: Failed to set up environment on compute node"
             exit 1
           }
           
-          # Create deployment script
+          # Create deployment script with debug information
           cat > singularity_deploy.sh << 'EOFMARK'
           #!/bin/bash
           set -e
@@ -247,9 +250,10 @@ jobs:
           LOG_FILE="${IMAGES_DIR}/update_images.log"
           DOCKER_TAG="$1"
           
-          # Logging function
+          # Logging function with timestamp and echo to stdout
           log() {
-              echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+              echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+              echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
           }
           
           # Error handling function
@@ -259,49 +263,89 @@ jobs:
           }
           
           # Start deployment
-          log "Starting deployment of biowardrobe2/scidap-deseq:${DOCKER_TAG}"
+          log "Starting deployment script for biowardrobe2/scidap-deseq:${DOCKER_TAG}"
           
-          # Load Singularity module
-          if ! module load "$SINGULARITY_MODULE" >/dev/null 2>&1; then
+          # Print debug information
+          log "Current user: $(whoami)"
+          log "Current directory: $(pwd)"
+          log "Module system status:"
+          module list 2>&1 | while read line; do log "  $line"; done
+          
+          # Load Singularity module with verbose logging
+          log "Loading Singularity module: $SINGULARITY_MODULE"
+          if ! module load "$SINGULARITY_MODULE" 2>&1; then
               handle_error "Failed to load Singularity module"
           fi
           
+          # Verify Singularity is available
+          if ! which singularity > /dev/null 2>&1; then
+              handle_error "Singularity command not found in PATH after loading module"
+          fi
+          
+          log "Singularity version: $(singularity --version)"
+          
           # Create images directory if it doesn't exist
-          mkdir -p "$IMAGES_DIR"
+          log "Creating/verifying images directory: $IMAGES_DIR"
+          mkdir -p "$IMAGES_DIR" || handle_error "Failed to create directory: $IMAGES_DIR"
           
           # Pull the Docker image
-          log "Pulling Docker image..."
-          if ! singularity pull --force "$IMAGES_DIR/scidap-deseq_${DOCKER_TAG}.sif" "docker://biowardrobe2/scidap-deseq:${DOCKER_TAG}"; then
+          log "Pulling Docker image: biowardrobe2/scidap-deseq:${DOCKER_TAG}"
+          if ! singularity pull --force "$IMAGES_DIR/scidap-deseq_${DOCKER_TAG}.sif" "docker://biowardrobe2/scidap-deseq:${DOCKER_TAG}" 2>&1; then
               handle_error "Failed to pull Docker image"
           fi
           
           # Verify the image was created
+          log "Verifying image was created"
           if [ ! -f "$IMAGES_DIR/scidap-deseq_${DOCKER_TAG}.sif" ]; then
               handle_error "Singularity image was not created"
           fi
           
           # Set proper permissions
-          chmod 644 "$IMAGES_DIR/scidap-deseq_${DOCKER_TAG}.sif"
+          log "Setting permissions on image file"
+          chmod 644 "$IMAGES_DIR/scidap-deseq_${DOCKER_TAG}.sif" || handle_error "Failed to set permissions"
           
           log "Deployment completed successfully"
+          log "Image available at: $IMAGES_DIR/scidap-deseq_${DOCKER_TAG}.sif"
+          echo "SINGULARITY_DEPLOYMENT_SUCCESS"
           EOFMARK
+          
+          # Print script content for debugging
+          echo "=== DEPLOYMENT SCRIPT CONTENT ==="
+          cat singularity_deploy.sh
+          echo "=== END OF SCRIPT CONTENT ==="
           
           # Make the script executable
           chmod +x singularity_deploy.sh
           
           # Copy the script to the compute node
-          scp -i ~/.ssh/github_action_key -q singularity_deploy.sh bmicluster-compute:/tmp/
+          echo "Copying script to compute node..."
+          scp -i ~/.ssh/github_action_key -q singularity_deploy.sh bmicluster-compute:/tmp/ || {
+            echo "ERROR: Failed to copy deployment script to compute node"
+            exit 1
+          }
           
-          # Execute the script on the compute node
-          ssh -i ~/.ssh/github_action_key -q bmicluster-compute "bash --noprofile --norc -c 'export TERM=dumb && export LANG=C && export LC_ALL=C && /tmp/singularity_deploy.sh $DOCKER_TAG'" || {
+          # Execute the script on the compute node with more verbose output
+          echo "Executing deployment script on compute node..."
+          ssh -i ~/.ssh/github_action_key bmicluster-compute "bash --noprofile --norc -c 'export TERM=dumb && export LANG=C && export LC_ALL=C && cd /tmp && chmod +x singularity_deploy.sh && ./singularity_deploy.sh $DOCKER_TAG'" || {
             echo "ERROR: Deployment failed"
             exit 1
           }
           
+          # Verify deployment by checking if the file exists
+          echo "Verifying deployment..."
+          VERIFY_CMD="ls -la /data/barskilab/scidap_server/singularity_images/scidap-deseq_${DOCKER_TAG}.sif"
+          if ssh -i ~/.ssh/github_action_key -q bmicluster-compute "bash --noprofile --norc -c '$VERIFY_CMD'"; then
+            echo "✅ Deployment verified! Image exists on target system."
+          else
+            echo "⚠️ WARNING: Could not verify deployment - image not found"
+            echo "Manual verification may be required"
+          fi
+          
           # Clean up
+          echo "Cleaning up temporary files..."
           ssh -i ~/.ssh/github_action_key -q bmicluster-compute "rm -f /tmp/singularity_deploy.sh"
           
-          echo "Deployment completed successfully"
+          echo "Deployment workflow completed"
       
       - name: Cleanup
         if: always()
