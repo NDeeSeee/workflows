@@ -471,4 +471,51 @@ assert_args <- function(args) {
   if (is.null(args$test_mode)) args$test_mode <- FALSE
   
   return(args)
-} 
+}
+
+# This namespace contains exported parameter handling functions
+params <- new.env()
+
+#' Get command line arguments with standard parsing
+#' @export
+params$get_cli_args <- function() {
+  return(get_args())
+}
+
+#' Assert that required arguments are present and valid
+#' @param args List of arguments to validate
+#' @export
+params$assert_args <- function(args) {
+  # Check required arguments are present
+  required_args <- c("meta", "design", "reduced", "input")
+  missing_args <- required_args[!required_args %in% names(args)]
+  
+  if (length(missing_args) > 0) {
+    stop(paste("Missing required arguments:", paste(missing_args, collapse=", ")))
+  }
+  
+  # Check that input files exist
+  for (input_file in args$input) {
+    if (!file.exists(input_file)) {
+      stop(paste("Input file does not exist:", input_file))
+    }
+  }
+  
+  # Check that metadata file exists
+  if (!file.exists(args$meta)) {
+    stop(paste("Metadata file does not exist:", args$meta))
+  }
+  
+  # Validate design formulas
+  tryCatch({
+    as.formula(args$design)
+    as.formula(args$reduced)
+  }, error = function(e) {
+    stop(paste("Invalid formula:", e$message))
+  })
+  
+  return(invisible(TRUE))
+}
+
+# Export the params namespace
+assign("params", params, envir = .GlobalEnv) 

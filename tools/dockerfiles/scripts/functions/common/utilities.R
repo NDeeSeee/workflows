@@ -318,4 +318,17 @@ validate_sample_consistency <- function(metadata_df, counts_df) {
   
   # If we got this far, samples are consistent
   message(paste("Sample consistency check passed for", length(metadata_samples), "samples"))
+}
+
+#' Format and print all arguments for logging
+#' 
+#' @param args List of arguments to format
+#' @return Formatted string with all arguments
+#' @export
+print_all_args <- function(args) {
+  # Convert arguments to a character vector for printing
+  args_str <- capture.output(print(args))
+  
+  # Format as a string with newlines
+  return(paste(args_str, collapse = "\n"))
 } 

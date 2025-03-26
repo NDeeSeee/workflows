@@ -177,4 +177,55 @@ debug_log <- function(message, data = NULL) {
       }
     }
   }
+}
+
+#' Set logger level to verbose for more detailed logging
+#'
+#' @export
+set_log_level_verbose <- function() {
+  # Set the logger package's log level to DEBUG (most verbose)
+  if (requireNamespace("logger", quietly = TRUE)) {
+    logger::log_threshold(logger::DEBUG)
+    logger::log_info("Verbose logging enabled (log level set to DEBUG)")
+  } else {
+    message("INFO: Verbose logging enabled")
+  }
+}
+
+#' Log info level message
+#'
+#' @param ... Message and additional parameters to pass to logger::log_info
+#' @export
+log_info <- function(...) {
+  if (requireNamespace("logger", quietly = TRUE)) {
+    logger::log_info(...)
+  } else {
+    message(paste0("INFO: ", paste0(..., collapse = " ")))
+  }
+}
+
+#' Log debug level message
+#'
+#' @param ... Message and additional parameters to pass to logger::log_debug
+#' @export
+log_debug <- function(...) {
+  if (requireNamespace("logger", quietly = TRUE)) {
+    logger::log_debug(...)
+  } else {
+    if (exists("DEBUG_MODE") && DEBUG_MODE) {
+      message(paste0("DEBUG: ", paste0(..., collapse = " ")))
+    }
+  }
+}
+
+#' Log error level message
+#'
+#' @param ... Message and additional parameters to pass to logger::log_error
+#' @export
+log_error <- function(...) {
+  if (requireNamespace("logger", quietly = TRUE)) {
+    logger::log_error(...)
+  } else {
+    message(paste0("ERROR: ", paste0(..., collapse = " ")), file = stderr())
+  }
 } 
