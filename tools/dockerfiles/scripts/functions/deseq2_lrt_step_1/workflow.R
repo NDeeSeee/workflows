@@ -612,7 +612,7 @@ main_with_memory_management <- function() {
     ### Parse CLI arguments
     message("Parsing command line arguments...")
     args <- tryCatch({
-      params::get_cli_args()
+      params$get_cli_args()
     }, error = function(e) {
       message("Error during argument parsing: ", e$message)
       
@@ -749,7 +749,7 @@ main_with_memory_management <- function() {
     log_debug("Arguments:", print_all_args(args))
     
     ### Validate CLI arguments
-    params::assert_args(args)
+    params$assert_args(args)
     log_debug("CLI arguments validated")
     
     ### Run main process
