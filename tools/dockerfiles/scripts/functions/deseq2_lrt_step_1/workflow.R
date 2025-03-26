@@ -668,7 +668,7 @@ main_with_memory_management <- function() {
         }
       }
       
-      # Check for positional arguments that could be inputs or sample names
+      # Check if positional arguments that could be inputs or sample names
       positional_args <- orig_args[!grepl("^--", orig_args)]
       positional_args <- setdiff(positional_args, unlist(emergency_args))
       
@@ -692,10 +692,78 @@ main_with_memory_management <- function() {
       }
       
       # Check if we found all required arguments
-      missing_args <- names(emergency_args)[sapply(emergency_args, function(x) is.null(x) || (is.character(x) && length(x) == 0))]
+      missing_args <- names(emergency_args)[sapply(emergency_args, function(x) {
+        is.null(x) || 
+        (is.character(x) && length(x) == 0) || 
+        (is.character(x) && all(trimws(x) == ""))
+      })]
+      
+      # Extra safety check to handle edge cases - ensure we have meta, design, and reduced
+      if (length(missing_args) == 0) {
+        for (req in c("meta", "design", "reduced")) {
+          if (is.null(emergency_args[[req]]) || 
+              (is.character(emergency_args[[req]]) && length(emergency_args[[req]]) == 0) ||
+              (is.character(emergency_args[[req]]) && all(trimws(emergency_args[[req]]) == ""))) {
+            missing_args <- c(missing_args, req)
+          }
+        }
+        
+        # Check if we have at least one input file and name
+        if (length(emergency_args$input) == 0) {
+          missing_args <- c(missing_args, "input")
+        }
+        if (length(emergency_args$name) == 0) {
+          missing_args <- c(missing_args, "name")
+        }
+      }
+      
       if (length(missing_args) > 0) {
         message("ERROR: Still missing required arguments: ", paste(missing_args, collapse=", "))
-        stop("Missing required arguments: ", paste(missing_args, collapse=", "))
+        
+        # Debug information - show what we found
+        message("Debug: Current emergency_args content:")
+        for (arg_name in names(emergency_args)) {
+          message(paste0("  ", arg_name, ": ", 
+                       if(is.character(emergency_args[[arg_name]]) && length(emergency_args[[arg_name]]) > 1) {
+                         paste0("[", paste(emergency_args[[arg_name]], collapse=", "), "]")
+                       } else {
+                         paste0(emergency_args[[arg_name]])
+                       }))
+        }
+        
+        # Additional heuristic to try to recover args
+        if ("meta" %in% missing_args) {
+          meta_candidates <- grep("metadata.*\\.(csv|tsv)$", orig_args, value = TRUE)
+          if (length(meta_candidates) > 0) {
+            message("Found possible metadata file: ", meta_candidates[1])
+            emergency_args$meta <- meta_candidates[1]
+            missing_args <- setdiff(missing_args, "meta")
+          }
+        }
+        
+        if ("design" %in% missing_args) {
+          design_candidates <- grep("~", orig_args, value = TRUE)
+          if (length(design_candidates) > 0) {
+            # The first formula is likely the design, the second is reduced
+            message("Found possible design formula: ", design_candidates[1])
+            emergency_args$design <- design_candidates[1]
+            missing_args <- setdiff(missing_args, "design")
+            
+            # If we still need reduced and have another formula
+            if ("reduced" %in% missing_args && length(design_candidates) > 1) {
+              message("Found possible reduced formula: ", design_candidates[2])
+              emergency_args$reduced <- design_candidates[2]
+              missing_args <- setdiff(missing_args, "reduced")
+            }
+          }
+        }
+        
+        # If we still have missing args, stop
+        if (length(missing_args) > 0) {
+          stop("Missing required arguments: ", paste(missing_args, collapse=", "))
+        } else {
+          message("Recovered all required arguments through heuristics")
+        }
       }
       
       # Set defaults for other parameters
