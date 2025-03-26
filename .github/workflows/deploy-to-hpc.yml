@@ -119,7 +119,7 @@ jobs:
           mv -f "${TEMP_IMAGE_NAME}" "$FINAL_PATH" || { echo "Failed to move image"; exit 1; }
           
           echo "Setting permissions..."
-          chmod 644 "$FINAL_PATH" || { echo "Warning: Failed to set permissions"; }
+          chmod 755 "$FINAL_PATH" || { echo "Warning: Failed to set permissions"; }
           
           echo "Deployment completed successfully"
           echo "Image available at: $FINAL_PATH"
