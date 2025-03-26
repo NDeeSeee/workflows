@@ -33,6 +33,7 @@ load_required_libraries <- function() {
     library(rlang)
     library(stringr)
     library(glue)
+    library(logger)
   })
   
   message("All required libraries loaded successfully")

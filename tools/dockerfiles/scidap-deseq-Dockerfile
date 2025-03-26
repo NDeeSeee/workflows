@@ -2,7 +2,7 @@
 # Dockerfile - DESeq/DESeq2 Analysis Container
 #
 # Software:         BioWardrobe DESeq/DESeq2 script
-# Software Version: v0.0.33
+# Software Version: v0.0.32
 # Description:      Dockerized version of DESeq/DESeq2 script from BioWardrobe
 # Website:          https://github.com/Barski-lab/workflows
 #
@@ -46,11 +46,11 @@
 # VERSION HISTORY
 #################################################################
 #
-# v0.0.33
+# v0.0.32
 # - Reorganized Dockerfile structure for better maintenance
 # - Added logger R package for improved logging capabilities
 #
-# v0.0.32
+# v0.0.31
 # - Updated R scripts for LRT analysis
 #
 # v0.0.28
@@ -79,7 +79,7 @@
 # BASE IMAGE SELECTION
 #############################################
 # Incremental build from previous version
-FROM biowardrobe2/scidap-deseq:v0.0.32
+FROM biowardrobe2/scidap-deseq:v0.0.31
 LABEL maintainer="pavlvalera3301@gmail.com"
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -95,6 +95,10 @@ RUN R -e 'install.packages("logger", repos="https://cloud.r-project.org/", depen
 # Copy updated script files
 COPY scripts/run_deseq_lrt_step_1.R /usr/local/bin/run_deseq_lrt_step_1.R
 COPY scripts/run_deseq_lrt_step_2.R /usr/local/bin/run_deseq_lrt_step_2.R
+COPY scripts/get_gene_n_tss.R /usr/local/bin/get_gene_n_tss.R
+COPY scripts/run_deseq.R /usr/local/bin/run_deseq.R
+COPY scripts/install_from_source.R /tmp/install_from_source.R
+
 
 # Copy function directories
 COPY scripts/functions/ /usr/local/bin/functions/
@@ -147,6 +151,5 @@ RUN chmod +x /usr/local/bin/run_deseq.R && \
 #                         libgit2-dev && \
 #    pip3 install --break-system-packages argparse
 
-# R package installation
-# COPY ./scripts/install_from_source.R /tmp/install_from_source.R
-# RUN Rscript /tmp/install_from_source.R
+# R packages installation
+# RUN Rscript /usr/local/bin/functions/common/packages_installation.R
