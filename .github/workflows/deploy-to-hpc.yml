@@ -5,12 +5,12 @@ on:
     inputs:
       docker_tag:
         description: 'Docker tag to deploy'
-        required: false
+        required: true
         type: string
         default: 'v0.0.31'
       target_host:
         description: 'Target HPC host'
-        required: false
+        required: true
         type: string
         default: 'bmicluster-compute'
   workflow_run:
@@ -231,94 +231,77 @@ jobs:
             exit 1
           }
           
-          # Create the singularity script content
+          # Create deployment script
           cat > singularity_deploy.sh << 'EOFMARK'
-#!/bin/bash
-set -e
-
-# Set environment variables
-export TERM=dumb
-export LANG=C
-export LC_ALL=C
-
-# Configuration
-IMAGES_DIR="/data/barskilab/scidap_server/singularity_images"
-SINGULARITY_MODULE="singularity/3.7.0"
-LOG_FILE="${IMAGES_DIR}/update_images.log"
-DOCKER_TAG="$1"
-
-# Logging function
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')]" "$1" | tee -a "$LOG_FILE"
-}
-
-# Error handling function
-handle_error() {
-    log "ERROR: $1"
-    exit 1
-}
-
-log "Starting deployment of biowardrobe2/scidap-deseq:${DOCKER_TAG}"
-
-# Check if required module is available and load it
-log "Loading module $SINGULARITY_MODULE"
-module load "$SINGULARITY_MODULE" >/dev/null 2>&1 || handle_error "Failed to load module $SINGULARITY_MODULE"
-
-# Create images directory if it doesn't exist
-mkdir -p "$IMAGES_DIR" || handle_error "Failed to create directory $IMAGES_DIR"
-
-# Process image
-full_image_name="biowardrobe2/scidap-deseq"
-version="${DOCKER_TAG}"
-image_name=$(basename "$full_image_name")
-target_name="biowardrobe2_${image_name}"
-old_image="${target_name}:${version}.sif"
-new_image="${image_name}_${version}.sif"
-docker_image="${full_image_name}:${version}"
-
-log "Processing image: $docker_image"
-
-# Remove old image if it exists
-if [ -f "$IMAGES_DIR/$old_image" ]; then
-    log "Removing old image: $old_image"
-    rm "$IMAGES_DIR/$old_image" || handle_error "Failed to remove old image $old_image"
-fi
-
-# Pull new image
-log "Pulling new image: $docker_image"
-cd /tmp
-singularity pull "docker://$docker_image" || handle_error "Failed to pull image $docker_image"
-
-# Move and rename the image
-log "Moving and renaming image: $new_image -> $old_image"
-mv "$new_image" "$IMAGES_DIR/$old_image" || handle_error "Failed to move image $new_image"
-
-log "Successfully updated $docker_image"
-echo "SINGULARITY_DEPLOYMENT_SUCCESS"
-EOFMARK
+          #!/bin/bash
+          set -e
           
-          # Upload the script to the compute node
+          # Set environment variables
+          export TERM=dumb
+          export LANG=C
+          export LC_ALL=C
+          
+          # Configuration
+          IMAGES_DIR="/data/barskilab/scidap_server/singularity_images"
+          SINGULARITY_MODULE="singularity/3.7.0"
+          LOG_FILE="${IMAGES_DIR}/update_images.log"
+          DOCKER_TAG="$1"
+          
+          # Logging function
+          log() {
+              echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+          }
+          
+          # Error handling function
+          handle_error() {
+              log "ERROR: $1"
+              exit 1
+          }
+          
+          # Start deployment
+          log "Starting deployment of biowardrobe2/scidap-deseq:${DOCKER_TAG}"
+          
+          # Load Singularity module
+          if ! module load "$SINGULARITY_MODULE" >/dev/null 2>&1; then
+              handle_error "Failed to load Singularity module"
+          fi
+          
+          # Create images directory if it doesn't exist
+          mkdir -p "$IMAGES_DIR"
+          
+          # Pull the Docker image
+          log "Pulling Docker image..."
+          if ! singularity pull --force "$IMAGES_DIR/scidap-deseq_${DOCKER_TAG}.sif" "docker://biowardrobe2/scidap-deseq:${DOCKER_TAG}"; then
+              handle_error "Failed to pull Docker image"
+          fi
+          
+          # Verify the image was created
+          if [ ! -f "$IMAGES_DIR/scidap-deseq_${DOCKER_TAG}.sif" ]; then
+              handle_error "Singularity image was not created"
+          fi
+          
+          # Set proper permissions
+          chmod 644 "$IMAGES_DIR/scidap-deseq_${DOCKER_TAG}.sif"
+          
+          log "Deployment completed successfully"
+          EOFMARK
+          
+          # Make the script executable
           chmod +x singularity_deploy.sh
-          scp -i ~/.ssh/github_action_key -q singularity_deploy.sh bmicluster-compute:/tmp/singularity_deploy.sh
           
-          # Execute the script on the compute node (suppress output)
-          echo "Deploying Singularity image for biowardrobe2/scidap-deseq:$DOCKER_TAG"
-          ssh -i ~/.ssh/github_action_key -q bmicluster-compute "bash --noprofile --norc -c 'cd /tmp && chmod +x singularity_deploy.sh && TERM=dumb LANG=C LC_ALL=C ./singularity_deploy.sh \"$DOCKER_TAG\"'" || {
-            echo "ERROR: Failed to deploy Singularity image"
+          # Copy the script to the compute node
+          scp -i ~/.ssh/github_action_key -q singularity_deploy.sh bmicluster-compute:/tmp/
+          
+          # Execute the script on the compute node
+          ssh -i ~/.ssh/github_action_key -q bmicluster-compute "bash --noprofile --norc -c 'export TERM=dumb && export LANG=C && export LC_ALL=C && /tmp/singularity_deploy.sh $DOCKER_TAG'" || {
+            echo "ERROR: Deployment failed"
             exit 1
           }
           
-          # Verify deployment (suppress output)
-          echo "Verifying deployment..."
-          VERIFY_DEPLOY=$(ssh -i ~/.ssh/github_action_key -q bmicluster-compute "bash --noprofile --norc -c 'TERM=dumb LANG=C LC_ALL=C ls -la /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:$DOCKER_TAG.sif 2>/dev/null || echo \"Not found\"'")
+          # Clean up
+          ssh -i ~/.ssh/github_action_key -q bmicluster-compute "rm -f /tmp/singularity_deploy.sh"
           
-          if [[ $VERIFY_DEPLOY != *"Not found"* ]]; then
-            echo "✅ Deployment successful!"
-            echo "Singularity image deployed to: /data/barskilab/scidap_server/singularity_images/biowardrobe2_scidap-deseq:$DOCKER_TAG.sif"
-          else
-            echo "⚠️ WARNING: Could not verify deployment - image not found"
-            echo "Manual verification may be required"
-          fi
+          echo "Deployment completed successfully"
       
       - name: Cleanup
         if: always()
