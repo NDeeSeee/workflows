@@ -116,27 +116,24 @@ jobs:
             exit 1
           }
           
-          # Create SSH config - MODIFIED to work with commands
+          # Create SSH config with the exact configuration needed
           cat > ~/.ssh/config << EOF
           Host bmicluster
             HostName bmiclusterp.chmcres.cchmc.org
             User pavb5f
             IdentityFile ~/.ssh/id_ed25519
+            IdentitiesOnly yes
             StrictHostKeyChecking no
             UserKnownHostsFile=/dev/null
-            ConnectTimeout 30
-            ServerAliveInterval 30
-            ServerAliveCountMax 3
-          
+
           Host bmicluster-compute
-            HostName bmicluster-compute
             User pavb5f
+            HostName bmi-460g10-04.chmcres.cchmc.org
             IdentityFile ~/.ssh/id_ed25519
+            IdentitiesOnly yes
             StrictHostKeyChecking no
             UserKnownHostsFile=/dev/null
-            ConnectTimeout 60
-            ServerAliveInterval 30
-            ServerAliveCountMax 3
+            ProxyJump bmicluster
           EOF
           
           # Set proper permissions for config
@@ -150,17 +147,16 @@ jobs:
       
       - name: Test SSH connection
         run: |
-          # Use direct connection via jumphost
+          # Test direct connection to compute node via ProxyJump
           echo "Testing SSH connection to bmicluster-compute..."
           
           # Make sure SSH agent is running
           eval $(ssh-agent -s)
           ssh-add ~/.ssh/id_ed25519
           
-          # For compute nodes, use direct SSH from jumphost
-          echo "Testing connection via jumphost..."
-          ssh -v bmicluster "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null bmicluster-compute hostname" || {
-            echo "ERROR: SSH connection to compute failed"
+          # Test connection to compute node directly using ProxyJump
+          ssh -v bmicluster-compute "hostname && echo SSH_CONNECTION_SUCCESS" || {
+            echo "ERROR: SSH connection to compute node failed"
             echo "Testing direct connection to jump host:"
             ssh -v bmicluster "echo Jump host connection succeeded"
             exit 1
@@ -169,7 +165,7 @@ jobs:
       - name: Deploy to HPC
         run: |
           # Use environment variables
-          echo "Deploying docker tag: $DOCKER_TAG to host: $TARGET_HOST"
+          echo "Deploying docker tag: $DOCKER_TAG to bmicluster-compute..."
           
           # Deploy using the deployment script
           # Ensure script has execute permissions
@@ -178,12 +174,12 @@ jobs:
           # Pass environment variables to the script
           ./deploy.sh
           
-          # Verify deployment using a simpler command that's compatible with ProxyJump
+          # Verify deployment using ProxyJump
           echo "Verifying deployment..."
-          if ssh $TARGET_HOST "hostname"; then
+          if ssh bmicluster-compute "hostname"; then
             echo "Connection successful!"
             # Try to check if container is running
-            ssh $TARGET_HOST "docker ps | grep -E '($DOCKER_TAG|scidap-deseq)'" || echo "Container not visible but connection succeeded"
+            ssh bmicluster-compute "docker ps | grep -E \"($DOCKER_TAG|scidap-deseq)\"" || echo "Container not visible but connection succeeded"
           else
             echo "WARNING: Could not verify deployment - connection failed"
             # Don't fail the pipeline
