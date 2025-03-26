@@ -531,7 +531,7 @@ run_main_process <- function(args) {
   # Configure parallel processing based on thread count
   if (args$threads > 1) {
     log_message(paste("Setting up parallel execution with", args$threads, "threads"), "CONFIG")
-    register(MulticoreParam(args$threads))
+    BiocParallel::register(BiocParallel::MulticoreParam(args$threads))
   } else {
     log_message("Running in single-threaded mode", "CONFIG")
   }
@@ -802,7 +802,7 @@ main <- function(args = NULL) {
     }
     
     # Configure BiocParallel
-    register(MulticoreParam(args$threads))
+    BiocParallel::register(BiocParallel::MulticoreParam(args$threads))
     log_message(glue::glue("Using {args$threads} CPU threads for parallel processing"), "INFO")
     
     # Run the analysis
