@@ -77,81 +77,183 @@ export_results <- function(deseq_results, expression_data, metadata, args, batch
   
   # Ensure output directory exists
   output_dir <- dirname(args$output_prefix)
-  if (!dir.exists(output_dir) && output_dir != "" && output_dir != ".") {
-    dir.create(output_dir, recursive = TRUE)
+  if (!is.null(output_dir) && output_dir != "" && output_dir != ".") {
+    if (!dir.exists(output_dir)) {
+      dir.create(output_dir, recursive = TRUE)
+    }
   }
   
-  # Extract result components
-  dds <- deseq_results$dds
-  lrt_res <- deseq_results$lrt_res
-  norm_counts <- deseq_results$normCounts
-  vst_data <- deseq_results$vst_data
-  contrasts <- deseq_results$contrasts
+  # Check if output_prefix is missing, use output as fallback
+  if (is.null(args$output_prefix)) {
+    log_message("output_prefix is NULL, using output instead", "WARNING")
+    args$output_prefix <- args$output
+  }
   
-  # Save DESeq2 dataset and results as RDS files
-  export_deseq_object(dds, args$output_prefix, "dds")
-  export_deseq_object(deseq_results, args$output_prefix, "contrasts")
+  # Check if deseq_results is NULL
+  if (is.null(deseq_results)) {
+    log_message("DESeq2 results object is NULL, unable to export results", "ERROR")
+    return(NULL)
+  }
   
-  # Export contrasts table
-  export_deseq_results(contrasts, args$output_prefix, output_name="contrasts_table")
+  # Safely extract result components
+  dds <- if (is.list(deseq_results) && !is.null(deseq_results$dds)) deseq_results$dds else NULL
+  lrt_res <- if (is.list(deseq_results)) {
+    if (!is.null(deseq_results$lrt_res)) {
+      deseq_results$lrt_res
+    } else if (!is.null(deseq_results$results)) {
+      deseq_results$results  # Backward compatibility
+    } else {
+      NULL
+    }
+  } else {
+    NULL
+  }
   
-  # Export LRT results
-  export_deseq_results(lrt_res, args$output_prefix, output_name="gene_exp_table")
+  # Safely extract other components
+  norm_counts <- if (is.list(deseq_results)) {
+    if (!is.null(deseq_results$normCounts)) {
+      deseq_results$normCounts
+    } else if (!is.null(deseq_results$normalized_counts)) {
+      deseq_results$normalized_counts  # Backward compatibility
+    } else if (!is.null(dds)) {
+      counts(dds, normalized = TRUE)
+    } else {
+      NULL
+    }
+  } else {
+    NULL
+  }
   
-  # Export normalized counts in GCT format
-  export_normalized_counts(dds, args$output_prefix, threshold=args$rpkm_cutoff)
+  vst_data <- if (is.list(deseq_results) && !is.null(deseq_results$vst_data)) deseq_results$vst_data else NULL
+  contrasts <- if (is.list(deseq_results) && !is.null(deseq_results$contrasts)) deseq_results$contrasts else NULL
   
-  # Generate MDS plot HTML
-  generate_mds_plot_html(
-    assay(vst_data), 
-    get_output_filename(args$output_prefix, "mds_plot", "html"),
-    metadata=metadata, 
-    color_by="condition"
-  )
+  design_formula <- if (is.list(deseq_results) && !is.null(deseq_results$design_formula)) {
+    deseq_results$design_formula
+  } else if (!is.null(dds)) {
+    design(dds)
+  } else {
+    NULL
+  }
   
-  # If batch correction was applied, create batch-corrected MDS plot
-  if (args$batchcorrection != "none" && "batch" %in% colnames(metadata)) {
-    log_message("Generating batch-corrected MDS plot", "INFO")
-    # Use the corrected VST data if available
-    if (!is.null(deseq_results$vst_data_corrected)) {
+  reduced_formula <- if (is.list(deseq_results) && !is.null(deseq_results$reduced_formula)) {
+    deseq_results$reduced_formula
+  } else {
+    NULL
+  }
+  
+  # Save DESeq2 dataset and results as RDS files if available
+  if (!is.null(dds)) {
+    export_deseq_object(dds, args$output_prefix, "dds")
+  }
+  
+  if (!is.null(deseq_results)) {
+    export_deseq_object(deseq_results, args$output_prefix, "contrasts")
+  }
+  
+  # Export contrasts table if available
+  if (!is.null(contrasts)) {
+    export_deseq_results(contrasts, args$output_prefix, output_name="contrasts_table")
+  }
+  
+  # Export LRT results if available
+  if (!is.null(lrt_res)) {
+    export_deseq_results(lrt_res, args$output_prefix, output_name="gene_exp_table")
+  }
+  
+  # Export normalized counts in GCT format if available
+  if (!is.null(dds)) {
+    export_normalized_counts(dds, args$output_prefix, threshold=args$rpkm_cutoff)
+  } else if (!is.null(norm_counts)) {
+    # If dds is not available but we have normalized counts
+    write_gct_file(norm_counts, get_output_filename(args$output_prefix, "counts_all", "gct"))
+    
+    # Apply filtering if threshold is provided
+    if (!is.null(args$rpkm_cutoff)) {
+      # Filter by row means
+      row_means <- rowMeans(norm_counts)
+      filtered_counts <- norm_counts[row_means >= args$rpkm_cutoff, , drop = FALSE]
+      write_gct_file(filtered_counts, get_output_filename(args$output_prefix, "counts_filtered", "gct"))
+    }
+  }
+  
+  # Generate MDS plot HTML if vst_data is available
+  if (!is.null(vst_data) && is.object(vst_data)) {
+    # Check if we can extract the assay data
+    vst_matrix <- try(assay(vst_data), silent = TRUE)
+    if (!inherits(vst_matrix, "try-error") && !is.null(vst_matrix)) {
       generate_mds_plot_html(
-        assay(deseq_results$vst_data_corrected),
-        get_output_filename(args$output_prefix, "mds_plot_corrected", "html"),
-        metadata=metadata,
-        color_by="condition"
+        vst_matrix, 
+        get_output_filename(args$output_prefix, "mds_plot", "html"),
+        metadata = metadata, 
+        color_by = if ("condition" %in% colnames(metadata)) "condition" else names(metadata)[1]
       )
     }
   }
   
-  # Generate summary markdown
-  generate_deseq_summary(
-    lrt_res, 
-    get_output_filename(args$output_prefix, "lrt_result", "md"),
-    title = "DESeq2 LRT Analysis Summary",
-    parameters = list(
-      "Design formula" = deparse(deseq_results$design_formula),
-      "Reduced formula" = deparse(deseq_results$reduced_formula),
-      "Batch correction" = args$batchcorrection,
-      "RPKM cutoff" = args$rpkm_cutoff,
-      "Filtered genes" = rpkm_filtered_count
+  # If batch correction was applied, create batch-corrected MDS plot
+  if (!is.null(args$batchcorrection) && args$batchcorrection != "none" && 
+      !is.null(metadata) && is.data.frame(metadata) && "batch" %in% colnames(metadata)) {
+    log_message("Generating batch-corrected MDS plot", "INFO")
+    # Use the corrected VST data if available
+    if (is.list(deseq_results) && !is.null(deseq_results$vst_data_corrected)) {
+      vst_corrected_matrix <- try(assay(deseq_results$vst_data_corrected), silent = TRUE)
+      if (!inherits(vst_corrected_matrix, "try-error") && !is.null(vst_corrected_matrix)) {
+        generate_mds_plot_html(
+          vst_corrected_matrix,
+          get_output_filename(args$output_prefix, "mds_plot_corrected", "html"),
+          metadata = metadata,
+          color_by = if ("condition" %in% colnames(metadata)) "condition" else names(metadata)[1]
+        )
+      }
+    }
+  }
+  
+  # Generate summary markdown if lrt_res is available
+  if (!is.null(lrt_res)) {
+    design_formula_text <- if (!is.null(design_formula)) {
+      if (is.language(design_formula)) deparse(design_formula) else as.character(design_formula)
+    } else {
+      "Not available"
+    }
+    
+    reduced_formula_text <- if (!is.null(reduced_formula)) {
+      if (is.language(reduced_formula)) deparse(reduced_formula) else as.character(reduced_formula)
+    } else {
+      "Not available"
+    }
+    
+    generate_deseq_summary(
+      lrt_res, 
+      get_output_filename(args$output_prefix, "lrt_result", "md"),
+      title = "DESeq2 LRT Analysis Summary",
+      parameters = list(
+        "Design formula" = design_formula_text,
+        "Reduced formula" = reduced_formula_text,
+        "Batch correction" = args$batchcorrection,
+        "RPKM cutoff" = args$rpkm_cutoff,
+        "Filtered genes" = rpkm_filtered_count
+      )
     )
-  )
+  }
   
-  # Create visualizations
-  export_visualizations(
-    dds, 
-    lrt_res, 
-    args$output_prefix,
-    transformed_counts = vst_data,
-    metadata = metadata,
-    color_by = "condition"
-  )
+  # Create visualizations if dds and lrt_res are available
+  if (!is.null(dds) && !is.null(lrt_res)) {
+    export_visualizations(
+      dds, 
+      lrt_res, 
+      args$output_prefix,
+      transformed_counts = vst_data,
+      metadata = metadata,
+      color_by = if (!is.null(metadata) && "condition" %in% colnames(metadata)) 
+        "condition" else NULL
+    )
+  }
   
-  # Create alignment stats barchart
-  if (requireNamespace("ggplot2", quietly = TRUE)) {
+  # Create alignment stats barchart if dds is available
+  if (!is.null(dds) && requireNamespace("ggplot2", quietly = TRUE)) {
     # Generate alignment stats from metadata and counts
     alignment_stats <- data.frame(
-      sample = colnames(norm_counts),
+      sample = colnames(counts(dds)),
       read_count = colSums(counts(dds))
     )
     
@@ -174,6 +276,7 @@ export_results <- function(deseq_results, expression_data, metadata, args, batch
   }
   
   log_message("Results exported successfully", "SUCCESS")
+  return(TRUE)
 }
 
 # Function to run DESeq2 LRT analysis

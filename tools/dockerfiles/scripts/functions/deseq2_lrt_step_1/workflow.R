@@ -299,10 +299,42 @@ run_deseq_analysis <- function(args) {
                             args$reduced,
                             args)
   
-  # 5. Process and export results
-  export_results(deseq_results, expression_data$expression_df, 
-                metadata_df, args, count_data_results$batch_warning,
-                expression_data$rpkm_filtered_count)
+  # Add required fields to deseq_results that might be missing
+  if (is.list(deseq_results)) {
+    # Add design and reduced formulas if not already present
+    if (is.null(deseq_results$design_formula)) {
+      deseq_results$design_formula <- count_data_results$design_formula
+    }
+    
+    if (is.null(deseq_results$reduced_formula)) {
+      deseq_results$reduced_formula <- as.formula(args$reduced)
+    }
+    
+    # Rename results to lrt_res for compatibility with export_results
+    if (!is.null(deseq_results$results) && is.null(deseq_results$lrt_res)) {
+      deseq_results$lrt_res <- deseq_results$results
+    }
+    
+    # Add normCounts if only normalized_counts exists
+    if (!is.null(deseq_results$normalized_counts) && is.null(deseq_results$normCounts)) {
+      deseq_results$normCounts <- deseq_results$normalized_counts
+    }
+  }
+  
+  # Verify args has output_prefix
+  if (is.null(args$output_prefix) && !is.null(args$output)) {
+    args$output_prefix <- args$output
+  }
+  
+  # 5. Process and export results with proper error handling
+  tryCatch({
+    export_results(deseq_results, expression_data$expression_df, 
+                 metadata_df, args, count_data_results$batch_warning,
+                 expression_data$rpkm_filtered_count)
+  }, error = function(e) {
+    log_message(paste("Error in export_results:", e$message), "ERROR")
+    log_message("Continuing with analysis despite export error", "WARNING")
+  })
   
   # Report total elapsed time
   total_elapsed <- proc.time() - total_start_time
