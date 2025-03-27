@@ -115,6 +115,7 @@ resolve_namespace_conflicts <- function() {
   conflicted::conflict_prefer("count", "dplyr")
   conflicted::conflict_prefer("group_by", "dplyr")
   conflicted::conflict_prefer("ungroup", "dplyr")
+  conflicted::conflict_prefer("setdiff", "dplyr")  # Add setdiff conflict resolution
   
   # Define frequently used operators for clarity
   `%>%` <- magrittr::`%>%`
