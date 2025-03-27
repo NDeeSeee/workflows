@@ -233,37 +233,36 @@ generate_visualizations <- function(deseq_results, args) {
   dds <- deseq_results$dds
   res <- deseq_results$res
   
-  # Create MA plot
-  pdf(paste0(args$output, "_ma_plot.pdf"), width = 8, height = 6)
-  DESeq2::plotMA(res, main = "MA Plot", ylim = c(-5, 5))
-  dev.off()
-  
-  # Also create PNG version
-  png(paste0(args$output, "_ma_plot.png"), width = 8, height = 6, units = "in", res = 300)
-  DESeq2::plotMA(res, main = "MA Plot", ylim = c(-5, 5))
-  dev.off()
+  # Create and save MA plot
+  ma_plot <- function() {
+    DESeq2::plotMA(res, main = "MA Plot", ylim = c(-5, 5))
+  }
+  save_plot(ma_plot, args$output, "ma_plot")
   
   # Create dispersion plot
-  pdf(paste0(args$output, "_dispersion_plot.pdf"), width = 8, height = 6)
-  DESeq2::plotDispEsts(dds, main = "Dispersion Estimates")
-  dev.off()
+  dispersion_plot <- function() {
+    DESeq2::plotDispEsts(dds, main = "Dispersion Estimates")
+  }
+  save_plot(dispersion_plot, args$output, "dispersion_plot")
   
   # Create PCA plot if transformed data is available
   if (!is.null(deseq_results$vst_data)) {
     vst_data <- deseq_results$vst_data
     
-    pdf(paste0(args$output, "_pca_plot.pdf"), width = 10, height = 8)
-    DESeq2::plotPCA(vst_data, intgroup = "conditions") +
-      ggtitle("PCA Plot") +
-      theme(plot.title = element_text(hjust = 0.5))
-    dev.off()
+    # Create PCA plot
+    pca_plot <- DESeq2::plotPCA(vst_data, intgroup = "conditions") +
+      ggplot2::ggtitle("PCA Plot") +
+      ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5))
     
-    # Also create PNG version
-    png(paste0(args$output, "_pca_plot.png"), width = 10, height = 8, units = "in", res = 300)
-    DESeq2::plotPCA(vst_data, intgroup = "conditions") +
-      ggtitle("PCA Plot") +
-      theme(plot.title = element_text(hjust = 0.5))
-    dev.off()
+    # Save PCA plot
+    save_plot(pca_plot, args$output, "pca_plot")
+    
+    # Create interactive MDS plot
+    generate_mds_plot_html(
+      assay(vst_data),
+      get_output_filename(args$output, "mds_plot", "html"),
+      title = "MDS Plot of Samples"
+    )
   }
   
   log_message("Visualizations saved successfully")
@@ -281,7 +280,6 @@ generate_visualizations <- function(deseq_results, args) {
 create_summary_plots <- function(dds, res, output_prefix, vst_transform = TRUE, 
                                 pval_threshold = 0.1, lfc_threshold = 1) {
   log_message("Creating summary plots for DESeq2 analysis")
-  output_files <- list()
   
   # Create MA plot (log fold change vs mean expression)
   log_message("Creating MA plot")
@@ -289,9 +287,8 @@ create_summary_plots <- function(dds, res, output_prefix, vst_transform = TRUE,
     DESeq2::plotMA(res, main = "MA Plot", ylim = c(-5, 5), alpha = pval_threshold)
   }
   
-  # Save both PNG and PDF versions
-  ma_files <- save_plot_png_pdf(ma_plot, output_prefix, "ma_plot", width = 8, height = 6)
-  output_files$ma_plot <- ma_files
+  # Save plot using consolidated function
+  save_plot(ma_plot, output_prefix, "ma_plot")
   
   # Create PCA plot if data is available
   if (!is.null(dds)) {
@@ -306,12 +303,11 @@ create_summary_plots <- function(dds, res, output_prefix, vst_transform = TRUE,
     
     # Create PCA plot
     pca_plot <- DESeq2::plotPCA(transformed_data, intgroup = "conditions") +
-      ggtitle("PCA Plot") +
-      theme(plot.title = element_text(hjust = 0.5))
+      ggplot2::ggtitle("PCA Plot") +
+      ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5))
     
-    # Save both PNG and PDF versions
-    pca_files <- save_plot_png_pdf(pca_plot, output_prefix, "pca_plot", width = 10, height = 8)
-    output_files$pca_plot <- pca_files
+    # Save plot using consolidated function
+    save_plot(pca_plot, output_prefix, "pca_plot")
     
     # Create expression heatmap of top differentially expressed genes
     log_message("Creating expression heatmap")
@@ -344,31 +340,78 @@ create_summary_plots <- function(dds, res, output_prefix, vst_transform = TRUE,
         )
       }
       
-      # Save both PNG and PDF versions
-      heatmap_files <- save_plot_png_pdf(heatmap_plot, output_prefix, "expression_heatmap", 
-                                       width = 10, height = 12)
-      output_files$heatmap <- heatmap_files
+      # Save plot using consolidated function
+      save_plot(heatmap_plot, output_prefix, "expression_heatmap")
     } else {
       log_message("Not enough significant genes for heatmap", "WARNING")
     }
   }
   
-  # Ensure all expected output files exist
-  expected_files <- c(
-    paste0(output_prefix, "_ma_plot.png"),
-    paste0(output_prefix, "_ma_plot.pdf"),
-    paste0(output_prefix, "_pca_plot.png"),
-    paste0(output_prefix, "_pca_plot.pdf"),
-    paste0(output_prefix, "_expression_heatmap.png"),
-    paste0(output_prefix, "_expression_heatmap.pdf")
-  )
-  
-  # Check outputs (don't stop on missing as some might not be generated
-  # if there aren't enough significant genes)
-  check_outputs(expected_files, stop_on_missing = FALSE)
+  # Verify expected output files with our consolidated function
+  verify_outputs(output_prefix, "deseq", fail_on_missing = FALSE)
   
   log_message("Summary plots created successfully")
-  return(output_files)
+}
+
+#' Export analysis results in various formats
+#'
+#' @param deseq_results DESeq2 results object 
+#' @param norm_counts Normalized counts matrix
+#' @param expression_data Full expression data 
+#' @param args Command line arguments
+#' @return Paths to exported files
+#' @export
+export_data <- function(deseq_results, norm_counts, expression_data, args) {
+  log_message("Exporting data in various formats", "STEP")
+  
+  # Export DESeq2 results to TSV
+  results_file <- export_deseq_results(deseq_results, args$output, output_name = "report")
+  
+  # Generate summary markdown
+  summary_file <- generate_deseq_summary(
+    deseq_results, 
+    get_output_filename(args$output, "summary", "md"),
+    parameters = list(
+      "Condition 1" = args$uname,
+      "Condition 2" = args$tname,
+      "Batch correction" = args$batchcorrection
+    )
+  )
+  
+  # Export normalized counts in GCT format
+  count_files <- export_normalized_counts(
+    norm_counts, 
+    args$output, 
+    threshold = args$rpkm_cutoff
+  )
+  
+  # Create CLS file for GSEA
+  sample_classes <- rep(c(args$uname, args$tname), c(length(args$untreated), length(args$treated)))
+  cls_file <- write_cls_file(sample_classes, get_output_filename(args$output, "phenotypes", "cls"))
+  
+  # Create plots with the export_visualizations function
+  viz_files <- export_visualizations(
+    NULL,  # We don't need the dds object here
+    deseq_results, 
+    args$output,
+    metadata = data.frame(
+      condition = sample_classes,
+      row.names = colnames(norm_counts)
+    )
+  )
+  
+  # Verify all outputs were created
+  verify_outputs(args$output, "deseq", fail_on_missing = FALSE)
+  
+  log_message("Data exported successfully", "SUCCESS")
+  
+  return(list(
+    results = results_file,
+    summary = summary_file,
+    counts = count_files,
+    cls = cls_file,
+    viz = viz_files
+  ))
 }
 
 #' Wrapper function with memory management

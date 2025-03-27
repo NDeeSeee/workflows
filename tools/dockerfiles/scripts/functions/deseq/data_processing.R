@@ -211,12 +211,22 @@ load_isoform_set <- function(input_files, sample_aliases, read_column, rpkm_colu
 #' @return None
 generate_md <- function(batchcorrection, batchfile, deseq_results, output_file) {
   # Initialize the markdown content
-  md_content <- ""
+  md_lines <- c("# DESeq2 Summary\n")
 
   # Add warning message if applicable
   if (!is.null(batchcorrection) && (batchcorrection == "combatseq" || batchcorrection == "model") && is.null(batchfile)) {
-    warning_message <- "# Warning!\n\n---\n\n**You provided a batch-correction method, but not a batch-file.**\n\nThe chosen parameter was ignored.\n\nPlease ensure that you provide a batch file when using the following batch correction methods:\n\n- **combatseq**\n- **model**\n\nIf you do not need batch correction, set the method to 'none'.\n\n---\n\n"
-    md_content <- paste0(md_content, warning_message)
+    warning_lines <- c(
+      "# Warning!\n",
+      "---\n",
+      "**You provided a batch-correction method, but not a batch-file.**\n",
+      "The chosen parameter was ignored.\n",
+      "Please ensure that you provide a batch file when using the following batch correction methods:\n",
+      "- **combatseq**", 
+      "- **model**\n",
+      "If you do not need batch correction, set the method to 'none'.\n",
+      "---\n"
+    )
+    md_lines <- c(md_lines, warning_lines)
   }
 
   # Add DESeq results summary if provided
@@ -232,116 +242,55 @@ generate_md <- function(batchcorrection, batchfile, deseq_results, output_file) 
     # Extract counts
     res_nonzero <- deseq_results[!is.na(deseq_results$baseMean) & deseq_results$baseMean > 0,]
 
-    # Upregulated genes
+    # Calculate stats
     lfc_up <- sum(
       res_nonzero$log2FoldChange > lfc_threshold &
         res_nonzero$padj < p_adj_threshold,
       na.rm = TRUE
     )
-
-    # Downregulated genes
     lfc_down <- sum(
       res_nonzero$log2FoldChange < -lfc_threshold &
         res_nonzero$padj < p_adj_threshold,
       na.rm = TRUE
     )
-
-    # Outliers
     outliers <- sum(
       is.na(res_nonzero$pvalue) & !is.na(res_nonzero$baseMean),
       na.rm = TRUE
     )
-
-    # Low counts (independent filtering)
     low_counts <- sum(
       is.na(res_nonzero$padj) & is.na(res_nonzero$pvalue),
       na.rm = TRUE
     )
-
-    # Mean count threshold (from independent filtering)
     mean_count <- if (!is.null(metadata_res$filterThreshold)) {
       round(metadata_res$filterThreshold, 2)
     } else {
       "-"
     }
 
-    # Calculate percentages
-    percent_total <- 100
-    percent_up <- if (total_genes > 0) round((lfc_up / total_genes) * 100, 2) else NA
-    percent_down <- if (total_genes > 0) round((lfc_down / total_genes) * 100, 2) else NA
-    percent_outliers <- if (total_genes > 0) round((outliers / total_genes) * 100, 2) else NA
-    percent_low_counts <- if (total_genes > 0) round((low_counts / total_genes) * 100, 2) else NA
-
-    # Create data frame
-    summary_df <- data.frame(
-      Metric = c(
-        "Total Expressed (Non-Zero Read Count)",
-        paste0("Upregulated ", "\u2191", " (LFC > ", lfc_threshold, ")"),
-        paste0("Downregulated ", "\u2193", " (LFC < ", -lfc_threshold, ")"),
-        "Outliers<sup>1</sup>",
-        if (mean_count != "-") {
-          paste0("Low Counts<sup>2</sup> (Mean Count < ", mean_count, ")")
-        } else {
-          "Low Counts<sup>2</sup>"
-        }
-      ),
-      `Gene Count` = c(
-        total_genes,
-        lfc_up,
-        lfc_down,
-        outliers,
-        low_counts
-      ),
-      `% of Total` = c(
-        percent_total,
-        percent_up,
-        percent_down,
-        percent_outliers,
-        percent_low_counts
-      ),
-      stringsAsFactors = FALSE,
-      check.names = FALSE
+    # Add results summary
+    md_lines <- c(md_lines, 
+      "\n## Analysis Results\n",
+      paste("* Total genes with non-zero counts:", total_genes),
+      paste("* Significant genes (FDR <", p_adj_threshold, "):", lfc_up + lfc_down),
+      paste("* Up-regulated genes (LFC >", lfc_threshold, "):", lfc_up, 
+            sprintf("(%.1f%%)", ifelse(total_genes > 0, (lfc_up / total_genes) * 100, 0))),
+      paste("* Down-regulated genes (LFC < -", lfc_threshold, "):", lfc_down,
+            sprintf("(%.1f%%)", ifelse(total_genes > 0, (lfc_down / total_genes) * 100, 0))),
+      paste("* Outliers with high Cook's distance:", outliers),
+      paste("* Genes filtered due to low counts:", low_counts),
+      if (mean_count != "-") {
+        paste("* Mean count threshold:", mean_count)
+      }
     )
-
-    # Convert the data frame to markdown format
-    # Check if kableExtra is available, otherwise use basic formatting
-    if (requireNamespace("kableExtra", quietly = TRUE)) {
-      summary_output_md <- paste0(
-        "# DESeq2 Summary\n\n",
-        kableExtra::kable(
-          summary_df,
-          format = "html",
-          escape = FALSE,
-          align = c("l", "c", "c")
-        ) %>%
-          kableExtra::kable_styling(
-            bootstrap_options = c("striped", "hover", "condensed"),
-            full_width = FALSE
-          ),
-        "\n\nArguments of ?DESeq2::results():\n\n",
-        "<sup>1</sup> Outliers are genes with high Cook's distance (see [cooksCutoff](https://www.bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#outlier)).\n\n",
-        "<sup>2</sup> Low counts are genes filtered out due to low mean counts (see [independentFiltering](https://www.bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#independent-filtering-of-results)).\n\n---\n\n"
-      )
-    } else {
-      # Basic markdown table without kableExtra
-      table_header <- "| Metric | Gene Count | % of Total |\n|--------|------------|------------|\n"
-      table_rows <- apply(summary_df, 1, function(row) {
-        paste0("| ", row[1], " | ", row[2], " | ", row[3], " |")
-      })
-      
-      summary_output_md <- paste0(
-        "# DESeq2 Summary\n\n",
-        table_header,
-        paste(table_rows, collapse = "\n"),
-        "\n\nArguments of ?DESeq2::results():\n\n",
-        "<sup>1</sup> Outliers are genes with high Cook's distance (see cooksCutoff).\n\n",
-        "<sup>2</sup> Low counts are genes filtered out due to low mean counts (see independentFiltering).\n\n---\n\n"
-      )
-    }
-
-    md_content <- paste0(md_content, summary_output_md)
+    
+    # Add footnotes
+    md_lines <- c(md_lines,
+      "\n## Notes\n",
+      "1. Outliers are genes with high Cook's distance (see [cooksCutoff](https://www.bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#outlier)).",
+      "2. Low counts are genes filtered out due to low mean counts (see [independentFiltering](https://www.bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#independent-filtering-of-results))."
+    )
   }
 
-  # Write the content to the output file
-  writeLines(md_content, con = output_file)
+  # Write the content to the output file using our consolidated function
+  write_markdown_summary(md_lines, output_file)
 } 

@@ -211,25 +211,74 @@ run_workflow <- function(args) {
   }
   
   # Export reports
-  log_message("Exporting reports")
+  log_message("Exporting reports and visualizations", "STEP")
   
   # Export gene expression table
-  export_deseq_report(expDataDf, args$output)
+  gene_exp_file <- export_deseq_results(expDataDf, args$output, output_name="gene_exp_table")
+  log_message(paste("Exported gene expression table to", gene_exp_file), "INFO")
   
-  # Export GCT data for visualization
-  row_metadata <- expDataDf
-  # Ensure gene_id is used as row names if present
-  if ("gene_id" %in% colnames(row_metadata)) {
-    rownames(row_metadata) <- row_metadata$gene_id
-  } else if ("GeneId" %in% colnames(row_metadata)) {
-    rownames(row_metadata) <- row_metadata$GeneId
+  # Export normalized counts in GCT format
+  count_files <- export_normalized_counts(normCounts, args$output, threshold=args$rpkm_cutoff)
+  log_message(paste("Exported normalized counts to", count_files$all_counts), "INFO")
+  
+  # Create interactive MDS plot
+  mds_file <- get_output_filename(args$output, "mds_plot", "html")
+  generate_mds_plot_html(
+    normCounts, 
+    mds_file,
+    metadata=col_data,
+    color_by=factor_names[1],  # Use first factor for coloring
+    title="MDS Plot of Samples"
+  )
+  log_message(paste("Created interactive MDS plot at", mds_file), "INFO")
+  
+  # Create visualizations for each contrast
+  for (contrast_name in names(results_list)) {
+    contrast_results <- results_list[[contrast_name]]
+    contrast_prefix <- paste0(args$output, "_", make.names(contrast_name))
+    
+    # Create MA plot for this contrast
+    ma_plot <- function() {
+      DESeq2::plotMA(contrast_results, main=paste("MA Plot -", contrast_name))
+    }
+    ma_files <- save_plot(ma_plot, contrast_prefix, "ma_plot")
+    log_message(paste("Created MA plot for", contrast_name), "INFO")
+    
+    # Create volcano plot for this contrast
+    if (requireNamespace("ggplot2", quietly = TRUE)) {
+      results_df <- as.data.frame(contrast_results)
+      results_df$significance <- ifelse(
+        results_df$padj < args$fdr & abs(results_df$log2FoldChange) > args$lfcthreshold,
+        "Significant", 
+        "Not Significant"
+      )
+      
+      volcano_plot <- ggplot2::ggplot(
+        results_df, 
+        ggplot2::aes(
+          x = log2FoldChange, 
+          y = -log10(pvalue),
+          color = significance
+        )
+      ) +
+        ggplot2::geom_point(alpha = 0.6) +
+        ggplot2::scale_color_manual(values = c("Significant" = "red", "Not Significant" = "gray")) +
+        ggplot2::labs(
+          title = paste("Volcano Plot -", contrast_name),
+          x = "log2 Fold Change",
+          y = "-log10(p-value)"
+        ) +
+        ggplot2::theme_minimal()
+      
+      volcano_files <- save_plot(volcano_plot, contrast_prefix, "volcano_plot")
+      log_message(paste("Created volcano plot for", contrast_name), "INFO")
+    }
   }
   
-  col_metadata <- col_data
+  # Verify output files
+  verify_outputs(args$output, "lrt_step2", fail_on_missing=FALSE)
   
-  export_gct_data(normCounts, row_metadata, col_metadata, args)
-  
-  log_message("DESeq2 LRT Step 2 workflow completed successfully")
+  log_message("DESeq2 LRT Step 2 workflow completed successfully", "SUCCESS")
   
   return(final_results)
 } 

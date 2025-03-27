@@ -72,95 +72,108 @@ run_deseq2 <- function(count_data, metadata, design_formula, reduced_formula, ar
 }
 
 # Function to export results from DESeq2 analysis
-export_results <- function(deseq_results, expression_data, metadata, args) {
-  logger::info("Exporting DESeq2 results")
+export_results <- function(deseq_results, expression_data, metadata, args, batch_warning = NULL, rpkm_filtered_count = NULL) {
+  log_message("Exporting DESeq2 LRT Step 1 results", "STEP")
   
-  # Create output directory if it doesn't exist
+  # Ensure output directory exists
   output_dir <- dirname(args$output_prefix)
-  if (!dir.exists(output_dir) && output_dir != "") {
+  if (!dir.exists(output_dir) && output_dir != "" && output_dir != ".") {
     dir.create(output_dir, recursive = TRUE)
   }
   
   # Extract result components
   dds <- deseq_results$dds
-  results <- deseq_results$results
-  normalized_counts <- deseq_results$normalized_counts
+  lrt_res <- deseq_results$lrt_res
+  norm_counts <- deseq_results$normCounts
   vst_data <- deseq_results$vst_data
+  contrasts <- deseq_results$contrasts
   
-  # Export DESeq2 results table
-  results_df <- as.data.frame(results)
-  results_df$GeneId <- row.names(results_df)
+  # Save DESeq2 dataset and results as RDS files
+  export_deseq_object(dds, args$output_prefix, "dds")
+  export_deseq_object(deseq_results, args$output_prefix, "contrasts")
   
-  # Reorder columns to put GeneId first
-  results_df <- results_df[, c("GeneId", base::setdiff(colnames(results_df), "GeneId"))]
+  # Export contrasts table
+  export_deseq_results(contrasts, args$output_prefix, output_name="contrasts_table")
   
-  # Write results to TSV file
-  write.table(
-    results_df,
-    file = paste0(args$output_prefix, ".deseq2_lrt_results.tsv"),
-    sep = "\t",
-    quote = FALSE,
-    row.names = FALSE
+  # Export LRT results
+  export_deseq_results(lrt_res, args$output_prefix, output_name="gene_exp_table")
+  
+  # Export normalized counts in GCT format
+  export_normalized_counts(dds, args$output_prefix, threshold=args$rpkm_cutoff)
+  
+  # Generate MDS plot HTML
+  generate_mds_plot_html(
+    assay(vst_data), 
+    get_output_filename(args$output_prefix, "mds_plot", "html"),
+    metadata=metadata, 
+    color_by="condition"
   )
   
-  # Export normalized counts
-  norm_counts_df <- as.data.frame(normalized_counts)
-  norm_counts_df$GeneId <- row.names(norm_counts_df)
-  norm_counts_df <- norm_counts_df[, c("GeneId", base::setdiff(colnames(norm_counts_df), "GeneId"))]
+  # If batch correction was applied, create batch-corrected MDS plot
+  if (args$batchcorrection != "none" && "batch" %in% colnames(metadata)) {
+    log_message("Generating batch-corrected MDS plot", "INFO")
+    # Use the corrected VST data if available
+    if (!is.null(deseq_results$vst_data_corrected)) {
+      generate_mds_plot_html(
+        assay(deseq_results$vst_data_corrected),
+        get_output_filename(args$output_prefix, "mds_plot_corrected", "html"),
+        metadata=metadata,
+        color_by="condition"
+      )
+    }
+  }
   
-  write.table(
-    norm_counts_df,
-    file = paste0(args$output_prefix, ".normalized_counts.tsv"),
-    sep = "\t",
-    quote = FALSE,
-    row.names = FALSE
+  # Generate summary markdown
+  generate_deseq_summary(
+    lrt_res, 
+    get_output_filename(args$output_prefix, "lrt_result", "md"),
+    title = "DESeq2 LRT Analysis Summary",
+    parameters = list(
+      "Design formula" = deparse(deseq_results$design_formula),
+      "Reduced formula" = deparse(deseq_results$reduced_formula),
+      "Batch correction" = args$batchcorrection,
+      "RPKM cutoff" = args$rpkm_cutoff,
+      "Filtered genes" = rpkm_filtered_count
+    )
   )
   
-  # Export VST data if available
-  if (!is.null(vst_data)) {
-    vst_df <- as.data.frame(assay(vst_data))
-    vst_df$GeneId <- row.names(vst_df)
-    vst_df <- vst_df[, c("GeneId", base::setdiff(colnames(vst_df), "GeneId"))]
+  # Create visualizations
+  export_visualizations(
+    dds, 
+    lrt_res, 
+    args$output_prefix,
+    transformed_counts = vst_data,
+    metadata = metadata,
+    color_by = "condition"
+  )
+  
+  # Create alignment stats barchart
+  if (requireNamespace("ggplot2", quietly = TRUE)) {
+    # Generate alignment stats from metadata and counts
+    alignment_stats <- data.frame(
+      sample = colnames(norm_counts),
+      read_count = colSums(counts(dds))
+    )
     
-    write.table(
-      vst_df,
-      file = paste0(args$output_prefix, ".vst_transformed.tsv"),
-      sep = "\t",
-      quote = FALSE,
-      row.names = FALSE
-    )
+    # Create the plot
+    alignment_plot <- ggplot2::ggplot(
+      alignment_stats, 
+      ggplot2::aes(x = sample, y = read_count)
+    ) +
+      ggplot2::geom_bar(stat = "identity", fill = "steelblue") +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
+      ggplot2::labs(
+        title = "Alignment Statistics",
+        x = "Sample",
+        y = "Read Count"
+      )
+    
+    # Save plot
+    save_plot(alignment_plot, "", "alignment_stats_barchart", formats = "png")
   }
   
-  # Create basic plots
-  # PCA plot
-  if (!is.null(vst_data)) {
-    pdf(paste0(args$output_prefix, ".pca_plot.pdf"), width = 10, height = 8)
-    plotPCA(vst_data, intgroup = c("treatment", "cond"))
-    dev.off()
-  }
-  
-  # MA plot
-  pdf(paste0(args$output_prefix, ".ma_plot.pdf"), width = 10, height = 8)
-  plotMA(results)
-  dev.off()
-  
-  # Volcano plot
-  pdf(paste0(args$output_prefix, ".volcano_plot.pdf"), width = 10, height = 8)
-  with(results_df, {
-    plot(
-      log2FoldChange, 
-      -log10(pvalue),
-      pch = 20,
-      main = "Volcano Plot",
-      xlab = "log2 Fold Change",
-      ylab = "-log10 p-value"
-    )
-    significant <- padj < args$fdr & abs(log2FoldChange) > args$lfcthreshold
-    points(log2FoldChange[significant], -log10(pvalue[significant]), pch = 20, col = "red")
-  })
-  dev.off()
-  
-  logger::info("Results exported successfully")
+  log_message("Results exported successfully", "SUCCESS")
 }
 
 # Function to run DESeq2 LRT analysis

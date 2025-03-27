@@ -1,20 +1,26 @@
 #!/usr/bin/env Rscript
 #
-# Output utility functions for DESeq2 workflows
-# Contains minimal functions needed to ensure proper output formats
+# Streamlined output utility functions for DESeq2 workflows
+# This file contains consolidated output functions to reduce redundancy
 #
 
-#' Create the exact file name expected by CWL
+#' Create standardized filename for output
 #'
-#' @param prefix User-provided output prefix
-#' @param stem Middle part of the filename
-#' @param extension File extension (without the dot)
-#' @return Full filename
+#' @param prefix Output prefix specified by the user
+#' @param stem Type of output (e.g., "ma_plot", "gene_exp_table") 
+#' @param extension File extension without the dot (e.g., "png", "pdf")
+#' @return Standardized filename string
 #' @export
 get_output_filename <- function(prefix, stem, extension) {
-  # Clean prefix (remove trailing slashes)
-  prefix <- gsub("/*$", "", prefix)
+  # Clean prefix (remove trailing slashes and dots)
+  prefix <- gsub("[/\\.]$", "", prefix)
   
+  # Special cases based on CWL expected outputs
+  if (stem == "alignment_stats_barchart" && extension == "png") {
+    return("alignment_stats_barchart.png")
+  } 
+  
+  # Normal case: prefix_stem.extension
   if (stem == "") {
     return(paste0(prefix, ".", extension))
   } else {
@@ -22,62 +28,56 @@ get_output_filename <- function(prefix, stem, extension) {
   }
 }
 
-#' Save a plot in both PNG and PDF formats
+#' Save a plot in multiple formats
 #'
 #' @param plot A ggplot2 object or function that creates a plot
 #' @param prefix Output prefix
 #' @param stem Middle part of the filename
+#' @param formats Vector of formats to save (default: c("png", "pdf"))
 #' @param width Plot width in inches
 #' @param height Plot height in inches
+#' @param ... Additional parameters passed to plot device
 #' @return List of created filenames
 #' @export
-save_plot_png_pdf <- function(plot, prefix, stem, width = 8, height = 6) {
+save_plot <- function(plot, prefix, stem, formats = c("png", "pdf"), 
+                      width = 8, height = 6, ...) {
   results <- list()
   
-  # PNG output
-  png_file <- get_output_filename(prefix, stem, "png")
-  pdf_file <- get_output_filename(prefix, stem, "pdf")
-  
-  # For ggplot2 plots
-  if (inherits(plot, "ggplot")) {
-    # Save PNG
-    ggplot2::ggsave(
-      filename = png_file,
-      plot = plot,
-      width = width,
-      height = height,
-      dpi = 300,
-      units = "in"
-    )
+  for (format in formats) {
+    file_path <- get_output_filename(prefix, stem, format)
     
-    # Save PDF
-    ggplot2::ggsave(
-      filename = pdf_file,
-      plot = plot,
-      width = width,
-      height = height,
-      device = cairo_pdf
-    )
-  } else {
-    # For base R plots or function calls
-    # PNG
-    png(png_file, width = width, height = height, units = "in", res = 300)
-    if (is.function(plot)) plot() else print(plot)
-    dev.off()
+    # For ggplot2 plots
+    if (inherits(plot, "ggplot")) {
+      ggplot2::ggsave(
+        filename = file_path,
+        plot = plot,
+        width = width,
+        height = height,
+        dpi = 300,
+        units = "in",
+        device = if(format == "pdf") cairo_pdf else NULL,
+        ...
+      )
+    } else {
+      # For base R plots or function calls
+      if (format == "png") {
+        png(file_path, width = width, height = height, units = "in", res = 300)
+      } else if (format == "pdf") {
+        pdf(file_path, width = width, height = height)
+      }
+      
+      if (is.function(plot)) plot() else print(plot)
+      dev.off()
+    }
     
-    # PDF
-    pdf(pdf_file, width = width, height = height)
-    if (is.function(plot)) plot() else print(plot)
-    dev.off()
+    results[[format]] <- file_path
+    message(paste("Saved", format, "plot to", file_path))
   }
-  
-  results$png <- png_file
-  results$pdf <- pdf_file
   
   return(results)
 }
 
-#' Write a GCT file for GSEA
+#' Write data to a GCT file for GSEA
 #'
 #' @param data Expression data matrix or data frame (genes in rows, samples in columns)
 #' @param file_path Output file path
@@ -92,6 +92,11 @@ write_gct_file <- function(data, file_path) {
   # Extract dimensions
   n_rows <- nrow(data)
   n_cols <- ncol(data)
+  
+  # Ensure we have row names
+  if (is.null(rownames(data))) {
+    rownames(data) <- paste0("GENE_", 1:n_rows)
+  }
   
   # Open connection to file
   con <- file(file_path, "w")
@@ -126,7 +131,7 @@ write_gct_file <- function(data, file_path) {
 
 #' Create a CLS file for GSEA
 #'
-#' @param sample_classes Vector of sample class labels (must match order of columns in expression data)
+#' @param sample_classes Vector of sample class labels 
 #' @param file_path Output file path
 #' @return The path to the created file
 #' @export
@@ -142,17 +147,45 @@ write_cls_file <- function(sample_classes, file_path) {
   # Create class names line
   class_names <- paste("#", paste(unique_classes, collapse = " "))
   
-  # Create sample assignments line
-  # Convert each class to its index (0-based)
-  class_indices <- sapply(sample_classes, function(x) {
-    which(unique_classes == x) - 1
-  })
-  
+  # Create sample assignments line (0-based indices)
+  class_indices <- sapply(sample_classes, function(x) which(unique_classes == x) - 1)
   assignments <- paste(class_indices, collapse = " ")
   
   # Write to file
   writeLines(c(header, class_names, assignments), file_path)
   message(paste("Created CLS file:", file_path))
+  
+  return(file_path)
+}
+
+#' Write DESeq2 results to a TSV file
+#'
+#' @param results DESeq2 results object or data frame
+#' @param file_path Output file path
+#' @param add_rank Whether to add a rank column (log2FC * -log10(pvalue))
+#' @return The path to the created file
+#' @export
+write_deseq_results <- function(results, file_path, add_rank = TRUE) {
+  # Convert to data frame if needed
+  if (!is.data.frame(results)) {
+    results_df <- as.data.frame(results)
+  } else {
+    results_df <- results
+  }
+  
+  # Add rank column for GSEA if requested
+  if (add_rank && "log2FoldChange" %in% colnames(results_df) && "pvalue" %in% colnames(results_df)) {
+    results_df$rank <- sign(results_df$log2FoldChange) * -log10(results_df$pvalue)
+  }
+  
+  # Sort by adjusted p-value if available
+  if ("padj" %in% colnames(results_df)) {
+    results_df <- results_df[order(results_df$padj), ]
+  }
+  
+  # Write to TSV file
+  write.table(results_df, file = file_path, sep = "\t", quote = FALSE, row.names = TRUE)
+  message(paste("Created results TSV file:", file_path))
   
   return(file_path)
 }
@@ -170,48 +203,148 @@ write_markdown_summary <- function(content, file_path) {
   return(file_path)
 }
 
-#' Check if all expected outputs exist
+#' Generate a standard summary markdown for DESeq2 results
 #'
-#' @param expected_files List of filenames that should exist
-#' @param stop_on_missing Whether to stop execution if files are missing
-#' @return Logical indicating if all files exist
+#' @param deseq_results DESeq2 results object
+#' @param file_path Output file path 
+#' @param title Title for the summary
+#' @param parameters List of parameters to include
+#' @param fdr_cutoff FDR cutoff for counting significant genes
+#' @return Path to the created markdown file
 #' @export
-check_outputs <- function(expected_files, stop_on_missing = TRUE) {
-  missing_files <- character(0)
+generate_deseq_summary <- function(deseq_results, file_path, title = "DESeq2 Analysis Summary",
+                                 parameters = list(), fdr_cutoff = 0.1) {
+  # Initialize content
+  lines <- c(
+    paste("#", title),
+    "",
+    paste("Analysis performed on", Sys.Date()),
+    "",
+    "## Parameters",
+    ""
+  )
   
-  for (file in expected_files) {
-    if (!file.exists(file)) {
-      missing_files <- c(missing_files, file)
-    }
+  # Add parameters
+  for (name in names(parameters)) {
+    lines <- c(lines, paste("*", name, ":", parameters[[name]]))
   }
   
-  if (length(missing_files) > 0) {
-    msg <- paste0("Missing expected output files: ", 
-                 paste(missing_files, collapse = ", "))
+  # Get summary statistics
+  if (is.data.frame(deseq_results)) {
+    res_df <- deseq_results
+  } else {
+    res_df <- as.data.frame(deseq_results)
+  }
+  
+  total_genes <- nrow(res_df)
+  sig_genes <- sum(res_df$padj < fdr_cutoff, na.rm = TRUE)
+  
+  # Add up/down regulation if log2FoldChange exists
+  if ("log2FoldChange" %in% colnames(res_df)) {
+    up_genes <- sum(res_df$padj < fdr_cutoff & res_df$log2FoldChange > 0, na.rm = TRUE)
+    down_genes <- sum(res_df$padj < fdr_cutoff & res_df$log2FoldChange < 0, na.rm = TRUE)
     
-    if (stop_on_missing) {
-      stop(msg)
-    } else {
-      warning(msg)
-      return(FALSE)
-    }
+    # Add result summary
+    lines <- c(lines,
+      "",
+      "## Results",
+      "",
+      paste("* Total genes analyzed:", total_genes),
+      paste("* Significant genes (FDR <", fdr_cutoff, "):", sig_genes),
+      paste("* Up-regulated genes:", up_genes),
+      paste("* Down-regulated genes:", down_genes)
+    )
+  } else {
+    # LRT or other test without fold change
+    lines <- c(lines,
+      "",
+      "## Results",
+      "",
+      paste("* Total genes analyzed:", total_genes),
+      paste("* Significant genes (FDR <", fdr_cutoff, "):", sig_genes)
+    )
   }
   
-  return(TRUE)
+  # Write to file
+  write_markdown_summary(lines, file_path)
+  
+  return(file_path)
 }
 
-#' Get list of expected outputs for a specific workflow
+#' Generate interactive MDS plot HTML
 #'
-#' @param workflow_name Name of the workflow: "deseq-advanced", "lrt-step-1", or "lrt-step-2"
-#' @param prefix Output prefix
-#' @return Character vector of expected output filenames
+#' @param transformed_data Transformed count data (e.g., vst or rlog)
+#' @param file_path Output file path
+#' @param metadata Sample metadata (optional)
+#' @param color_by Column name in metadata to use for coloring (optional)
+#' @param title Plot title
+#' @return Path to created HTML file
 #' @export
-get_expected_outputs <- function(workflow_name, prefix) {
-  # Clean prefix
-  prefix <- gsub("/*$", "", prefix)
+generate_mds_plot_html <- function(transformed_data, file_path, metadata = NULL,
+                                color_by = NULL, title = "MDS Plot") {
+  # Check required packages
+  if (!requireNamespace("plotly", quietly = TRUE) || 
+      !requireNamespace("htmlwidgets", quietly = TRUE) ||
+      !requireNamespace("limma", quietly = TRUE)) {
+    warning("Cannot create MDS plot: missing required packages (plotly, htmlwidgets, or limma)")
+    return(NULL)
+  }
   
-  if (workflow_name == "deseq-advanced") {
-    return(c(
+  # Calculate MDS
+  mds_data <- limma::plotMDS(transformed_data, plot = FALSE)
+  
+  # Create data frame for plotting
+  mds_df <- data.frame(
+    x = mds_data$x,
+    y = mds_data$y,
+    sample = colnames(transformed_data)
+  )
+  
+  # Add metadata if provided
+  if (!is.null(metadata) && !is.null(color_by) && color_by %in% colnames(metadata)) {
+    # Match samples to metadata
+    if (all(mds_df$sample %in% rownames(metadata))) {
+      idx <- match(mds_df$sample, rownames(metadata))
+      mds_df$color <- metadata[idx, color_by]
+    } else {
+      warning("Sample names in transformed data don't match metadata rownames")
+    }
+  }
+  
+  # Create plotly figure
+  p <- plotly::plot_ly(mds_df, x = ~x, y = ~y, text = ~sample,
+                     mode = "markers", type = "scatter",
+                     marker = list(size = 10))
+  
+  if ("color" %in% colnames(mds_df)) {
+    p <- plotly::add_trace(p, color = ~color)
+  }
+  
+  p <- plotly::layout(p, title = title,
+                    xaxis = list(title = "Leading logFC dim 1"),
+                    yaxis = list(title = "Leading logFC dim 2"))
+  
+  # Save to HTML file
+  htmlwidgets::saveWidget(p, file_path, selfcontained = TRUE)
+  message(paste("Generated MDS plot HTML at", file_path))
+  
+  return(file_path)
+}
+
+#' Verify all outputs for a workflow exist
+#'
+#' @param output_prefix Output prefix used for files
+#' @param workflow_type Type of workflow: "deseq", "lrt_step1", or "lrt_step2"
+#' @param fail_on_missing Whether to stop if files are missing
+#' @return Logical indicating success
+#' @export
+verify_outputs <- function(output_prefix, workflow_type, fail_on_missing = FALSE) {
+  # Clean prefix
+  prefix <- gsub("[/\\.]$", "", output_prefix)
+  
+  # Define expected files based on workflow type
+  expected_files <- switch(workflow_type,
+    "deseq" = c(
       paste0(prefix, "_report.tsv"),
       paste0(prefix, "_summary.md"),
       paste0(prefix, "_counts_all.gct"),
@@ -220,31 +353,42 @@ get_expected_outputs <- function(workflow_name, prefix) {
       paste0(prefix, "_ma_plot.png"),
       paste0(prefix, "_expression_heatmap.png"),
       paste0(prefix, "_pca_plot.png"),
-      paste0(prefix, "_ma_plot.pdf"),
-      paste0(prefix, "_expression_heatmap.pdf"),
-      paste0(prefix, "_pca_plot.pdf"),
       paste0(prefix, "_mds_plot.html")
-    ))
-  } else if (workflow_name == "lrt-step-1") {
-    return(c(
+    ),
+    "lrt_step1" = c(
       paste0(prefix, "_contrasts_table.tsv"),
       paste0(prefix, "_contrasts.rds"),
       paste0(prefix, "_gene_exp_table.tsv"),
       paste0(prefix, "_mds_plot.html"),
-      paste0(prefix, "_mds_plot_corrected.html"),
       paste0(prefix, "_counts_all.gct"),
       paste0(prefix, "_counts_filtered.gct"),
       paste0(prefix, "_lrt_result.md"),
       "alignment_stats_barchart.png"
-    ))
-  } else if (workflow_name == "lrt-step-2") {
-    return(c(
+    ),
+    "lrt_step2" = c(
       paste0(prefix, "_gene_exp_table.tsv"),
-      "mds_plot.html",
-      "counts_all.gct",
-      "counts_filtered.gct"
-    ))
-  } else {
-    stop(paste("Unknown workflow:", workflow_name))
+      paste0(prefix, "_mds_plot.html"),
+      paste0(prefix, "_counts_all.gct"),
+      paste0(prefix, "_counts_filtered.gct")
+    ),
+    stop("Unknown workflow type: ", workflow_type)
+  )
+  
+  # Check for missing files
+  missing_files <- expected_files[!file.exists(expected_files)]
+  
+  # Report results
+  if (length(missing_files) > 0) {
+    msg <- paste("Missing expected output files:", 
+                paste(missing_files, collapse = ", "))
+    
+    if (fail_on_missing) {
+      stop(msg)
+    } else {
+      warning(msg)
+      return(FALSE)
+    }
   }
-} 
+  
+  message("All expected output files were created successfully")
+  return(TRUE) 

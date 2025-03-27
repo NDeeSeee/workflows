@@ -1,462 +1,307 @@
 #!/usr/bin/env Rscript
 #
-# Consolidated export functions for DESeq2 LRT analysis
+# Export functions for DESeq2 workflows
+# Focuses on specialized export functionality not covered by output_utils.R
 #
 
-#' Export DESeq2 report as a TSV file
+#' Export normalized count data in formats suitable for downstream analysis
 #'
-#' @param expression_data_df Expression data with DESeq2 results
-#' @param output_prefix Prefix for output filename
+#' @param dds DESeq2 object with normalized counts
+#' @param output_prefix Output prefix for files
+#' @param threshold Optional RPKM threshold for filtering
+#' @return List of paths to exported files
 #' @export
-export_deseq_report <- function(expression_data_df, output_prefix) {
-  expression_data_df_filename <- paste0(output_prefix, "_gene_exp_table.tsv")
-  write.table(
-    expression_data_df,
-    file = expression_data_df_filename,
-    sep = "\t",
-    row.names = FALSE,
-    col.names = TRUE,
-    quote = FALSE
-  )
-  log_message(paste("Exported DESeq report to", expression_data_df_filename))
+export_normalized_counts <- function(dds, output_prefix, threshold = NULL) {
+  # Ensure we have the DESeq2 package
+  if (!requireNamespace("DESeq2", quietly = TRUE)) {
+    stop("DESeq2 package is required for this function")
+  }
+  
+  # Get normalized counts
+  norm_counts <- DESeq2::counts(dds, normalized = TRUE)
+  
+  # File paths for all counts
+  all_counts_path <- get_output_filename(output_prefix, "counts_all", "gct")
+  
+  # Write all counts to GCT
+  write_gct_file(norm_counts, all_counts_path)
+  
+  result_paths <- list(all_counts = all_counts_path)
+  
+  # Apply threshold filtering if specified
+  if (!is.null(threshold)) {
+    # Calculate row means
+    row_means <- rowMeans(norm_counts)
+    
+    # Apply threshold
+    filtered_counts <- norm_counts[row_means >= threshold, ]
+    
+    # File path for filtered counts
+    filtered_counts_path <- get_output_filename(output_prefix, "counts_filtered", "gct")
+    
+    # Write filtered counts to GCT
+    write_gct_file(filtered_counts, filtered_counts_path)
+    
+    result_paths$filtered_counts <- filtered_counts_path
+    message(paste("Filtered counts from", nrow(norm_counts), "to", nrow(filtered_counts), "genes"))
+  }
+  
+  return(result_paths)
 }
 
-#' Export CLS file for GSEA
+#' Export DESeq2 results to various formats
 #'
-#' @param categories Factor with category labels
-#' @param location Output file location
+#' @param deseq_results DESeq2 results object
+#' @param output_prefix Output prefix for files
+#' @param gene_info Optional gene annotation data frame
+#' @param output_name Type of output (e.g., "report", "gene_exp_table")
+#' @return Path to exported results file
 #' @export
-export_cls <- function(categories, location) {
-  tryCatch(
-    expr = {
-      output_stream <- file(location, "w")
-      on.exit(close(output_stream), add = TRUE)
-      cat(
-        paste(length(categories),
-              length(levels(categories)),
-              "1",
-              sep = "\t"
-        ),
-        paste("#", paste(
-          unique(as.character(categories)),
-          collapse = "\t"
-        ), sep = "\t"),
-        paste(paste(as.character(categories),
-                    collapse = "\t"
-        ), sep = "\t"),
-        file = output_stream,
-        sep = "\n"
+export_deseq_results <- function(deseq_results, output_prefix, 
+                                gene_info = NULL, output_name = "report") {
+  # Convert to data frame if needed
+  if (!is.data.frame(deseq_results)) {
+    results_df <- as.data.frame(deseq_results)
+  } else {
+    results_df <- deseq_results
+  }
+  
+  # Add gene info if provided
+  if (!is.null(gene_info) && is.data.frame(gene_info)) {
+    # Check if rownames match
+    common_genes <- intersect(rownames(results_df), rownames(gene_info))
+    
+    if (length(common_genes) > 0) {
+      # Merge based on common genes
+      results_df <- cbind(
+        results_df[common_genes, , drop = FALSE],
+        gene_info[common_genes, , drop = FALSE]
       )
-      log_message(paste("Exported CLS data to", location))
-    },
-    error = function(e) {
-      log_error(paste("Failed to export CLS data to", location, "with error -", e$message))
-    }
-  )
-}
-
-#' Export results and visualizations for Step 1
-#'
-#' @param deseq_results Results from DESeq2 analysis
-#' @param expression_df Expression data frame
-#' @param metadata_df Metadata data frame
-#' @param args Command-line arguments
-#' @param batch_warning Any warnings from batch correction
-#' @param rpkm_filtered_count Count of genes filtered by RPKM
-#' @export
-export_results <- function(deseq_results, expression_df, metadata_df, args, batch_warning, rpkm_filtered_count) {
-  log_message("Exporting results and visualizations...", "STEP")
-  
-  # No need to harmonize parameters as they're already handled in the ArgumentParser
-  
-  # Create output directory if it doesn't exist
-  output_dir <- dirname(args$output_prefix)
-  if (!dir.exists(output_dir) && output_dir != ".") {
-    dir.create(output_dir, recursive = TRUE)
-  }
-  
-  # Set output prefix
-  output_prefix <- args$output_prefix
-  
-  # Save DESeq2 dataset and results as RDS files
-  saveRDS(deseq_results$dds, file = paste0(output_prefix, "_dds.rds"))
-  saveRDS(deseq_results$lrt_res, file = paste0(output_prefix, "_lrt_results.rds"))
-  saveRDS(expression_df, file = paste0(output_prefix, "_expression_data.rds"))
-  saveRDS(metadata_df, file = paste0(output_prefix, "_metadata.rds"))
-  saveRDS(deseq_results$contrasts, file = paste0(output_prefix, "_contrasts.rds"))
-  
-  # Save batch correction info
-  saveRDS(list(
-    applied = !is.null(args$batchcorrection) && args$batchcorrection != "none",
-    method = args$batchcorrection,
-    warning = batch_warning
-  ), file = paste0(output_prefix, "_batch_correction_info.rds"))
-  
-  # Export data table as TSV
-  export_table(
-    deseq_results$lrt_res,
-    expression_df,
-    output_prefix,
-    args
-  )
-  
-  # Export contrast information
-  export_contrasts(
-    deseq_results$contrasts,
-    output_prefix
-  )
-  
-  # Generate and export visualizations
-  export_visualizations(
-    deseq_results$dds,
-    deseq_results$lrt_res,
-    metadata_df,
-    deseq_results$normCounts, 
-    output_prefix, 
-    args
-  )
-  
-  # Export analysis parameters
-  export_parameters(
-    args, 
-    rpkm_filtered_count,
-    output_prefix
-  )
-  
-  log_message("Results exported successfully", "SUCCESS")
-}
-
-#' Export data table as TSV
-#'
-#' @param lrt_res LRT results from DESeq2
-#' @param expression_df Expression data frame
-#' @param output_prefix Output file prefix
-#' @param args Command-line arguments
-#' @export
-export_table <- function(lrt_res, expression_df, output_prefix, args) {
-  log_message("Exporting data table...", "INFO")
-  
-  # Convert DESeq2 results to data frame
-  lrt_res_df <- as.data.frame(lrt_res)
-  
-  # Add gene names as column
-  lrt_res_df$GeneId <- rownames(lrt_res_df)
-  
-  # Reorganize columns
-  lrt_res_df <- lrt_res_df %>%
-    dplyr::select(GeneId, everything())
-  
-  # Add negative log10 p-values
-  lrt_res_df <- lrt_res_df %>%
-    dplyr::mutate(
-      `-log10(pvalue)` = -log10(pvalue),
-      `-log10(padj)` = -log10(padj)
-    )
-  
-  # Save as TSV
-  write.table(
-    lrt_res_df,
-    file = paste0(output_prefix, "_results.tsv"),
-    sep = "\t",
-    quote = FALSE,
-    row.names = FALSE
-  )
-  
-  log_message(glue::glue("Exported {nrow(lrt_res_df)} rows to {output_prefix}_results.tsv"), "SUCCESS")
-}
-
-#' Export contrast information
-#'
-#' @param contrasts Contrast data frame
-#' @param output_prefix Output file prefix
-#' @export
-export_contrasts <- function(contrasts, output_prefix) {
-  log_message("Exporting contrast information...", "INFO")
-  
-  # Write contrasts to TSV
-  write.table(
-    contrasts,
-    file = paste0(output_prefix, "_contrasts.tsv"),
-    sep = "\t",
-    quote = FALSE,
-    row.names = FALSE
-  )
-  
-  log_message(glue::glue("Exported {nrow(contrasts)} contrasts to {output_prefix}_contrasts.tsv"), "SUCCESS")
-}
-
-#' Export visualizations
-#'
-#' @param dds DESeq2 dataset
-#' @param lrt_results LRT results from DESeq2
-#' @param metadata_df Metadata data frame
-#' @param norm_counts Normalized counts matrix
-#' @param output_prefix Output file prefix
-#' @param args Command-line arguments
-#' @export
-export_visualizations <- function(dds, lrt_results, metadata_df, norm_counts, output_prefix, args) {
-  log_message("Generating visualizations...", "STEP")
-  
-  # Generate MDS plot
-  mds_plot_file <- paste0(output_prefix, "_mds_plot.html")
-  create_mds_plot(
-    normCounts = norm_counts,
-    col_metadata = metadata_df,
-    output_file = mds_plot_file,
-    interactive = TRUE
-  )
-  
-  # Generate MA plot
-  if (!is.null(lrt_results)) {
-    ma_plot <- generate_ma_plot(lrt_results)
-    ggsave(paste0(output_prefix, "_ma_plot.png"), plot = ma_plot, width = 10, height = 8)
-    
-    # Generate p-value distribution
-    pval_plot <- generate_pvalue_histogram(lrt_results)
-    ggsave(paste0(output_prefix, "_pvalue_hist.png"), plot = pval_plot, width = 10, height = 6)
-  }
-  
-  log_message("Visualizations exported successfully", "SUCCESS")
-}
-
-#' Export normalized counts and filtered counts to GCT format
-#'
-#' @param normCounts Normalized counts matrix
-#' @param row_metadata Row metadata data frame
-#' @param col_metadata Column metadata data frame
-#' @param args Command-line arguments or output prefix
-#' @param output_prefix Optional output prefix (used if args doesn't contain output prefix)
-#' @export
-export_gct_data <- function(normCounts, row_metadata, col_metadata, args, output_prefix = NULL) {
-  tryCatch({
-    log_message("Exporting GCT data...", "STEP")
-    
-    # Determine filename based on args or output_prefix
-    if (is.character(args)) {
-      output_prefix <- args
-      args <- list(fdr = 0.1, lfcthreshold = 1)
-    } else if (is.null(output_prefix)) {
-      # Check for both old and new parameter names
-      if (!is.null(args$output_prefix)) {
-        output_prefix <- args$output_prefix
-      } else if (!is.null(args$output)) {
-        output_prefix <- args$output
-      }
-    }
-    
-    # Default filenames
-    all_counts_file <- "counts_all.gct"
-    filtered_counts_file <- "counts_filtered.gct"
-    
-    # Use prefix if provided
-    if (!is.null(output_prefix)) {
-      all_counts_file <- paste0(output_prefix, "_", all_counts_file)
-      filtered_counts_file <- paste0(output_prefix, "_", filtered_counts_file)
-    }
-    
-    # Ensure col_metadata columns are vectors
-    if (!is.null(col_metadata) && nrow(col_metadata) > 0) {
-      col_metadata <- col_metadata %>% dplyr::mutate_all(as.vector)
       
-      # Ensure sample ordering is consistent
-      common_cols <- intersect(colnames(normCounts), rownames(col_metadata))
-      if (length(common_cols) > 0) {
-        normCounts <- normCounts[, common_cols, drop = FALSE]
-        col_metadata <- col_metadata[common_cols, , drop = FALSE]
-      }
-    }
-    
-    # Check dimensions
-    if (nrow(normCounts) == 0 || ncol(normCounts) == 0) {
-      log_error("Cannot export empty count matrix")
-      return(NULL)
-    }
-    
-    # Fix rownames in metadata if needed
-    if ("gene_id" %in% colnames(row_metadata)) {
-      rownames(row_metadata) <- row_metadata$gene_id
-    } else if ("GeneId" %in% colnames(row_metadata)) {
-      rownames(row_metadata) <- row_metadata$GeneId
-    }
-    
-    # Create common row indices between counts and metadata
-    common_rows <- intersect(rownames(normCounts), rownames(row_metadata))
-    if (length(common_rows) == 0) {
-      log_error("No common rows between counts and metadata")
-      return(NULL)
-    }
-    
-    # Subset data to common rows
-    normCounts_common <- normCounts[common_rows, , drop = FALSE]
-    row_metadata_common <- row_metadata[common_rows, , drop = FALSE]
-    
-    # Export all counts
-    gct_data <- cmapR::GCT(
-      mat = as.matrix(normCounts_common),
-      rdesc = as.data.frame(row_metadata_common),
-      cdesc = as.data.frame(col_metadata)
-    )
-    cmapR::write_gct(gct_data, all_counts_file)
-    log_message(paste("Exported GCT (all) to", all_counts_file))
-    
-    # Filter rows by any FDR column
-    fdr_cols <- grep("_FDR$|padj", colnames(row_metadata), value = TRUE)
-    lfc_cols <- grep("_LFC$|log2FoldChange", colnames(row_metadata), value = TRUE)
-    
-    # Apply filtering if FDR columns exist
-    if (length(fdr_cols) == 0) {
-      log_warning("No FDR columns found. No filtering performed for filtered GCT.")
-      return(all_counts_file)
-    } 
-    
-    # Filter by FDR and LFC
-    row_metadata_filtered <- row_metadata %>%
-      dplyr::filter(dplyr::if_any(dplyr::all_of(fdr_cols), ~ !is.na(.) & . <= args$fdr))
-    
-    # Apply LFC filter if LFC columns exist
-    if (length(lfc_cols) > 0) {
-      row_metadata_filtered <- row_metadata_filtered %>%
-        dplyr::filter(dplyr::if_any(dplyr::all_of(lfc_cols), ~ !is.na(.) & abs(.) >= args$lfcthreshold))
-    }
-    
-    # Check if any genes passed filtering
-    if (nrow(row_metadata_filtered) == 0) {
-      log_warning(paste("No genes passed the FDR/LFC thresholds of", args$fdr, "/", args$lfcthreshold))
-      return(all_counts_file)
-    }
-    
-    log_message(paste(nrow(row_metadata_filtered), "genes passed filtering criteria"))
-    
-    # Get filtered counts
-    filtered_rows <- intersect(rownames(normCounts), rownames(row_metadata_filtered))
-    filtered_normCounts <- normCounts[filtered_rows, , drop = FALSE]
-    filtered_row_metadata <- row_metadata_filtered[filtered_rows, , drop = FALSE]
-    
-    # Cluster filtered data if possible
-    if (exists("cluster_and_reorder") && nrow(filtered_normCounts) > 1 && ncol(filtered_normCounts) > 1) {
-      # Ensure both old and new parameter names are available
-      if (!is.null(args$cluster_method)) {
-        cluster_param <- args$cluster_method
-      } else if (!is.null(args$cluster)) {
-        cluster_param <- args$cluster
-      } else {
-        cluster_param <- "none"
-      }
-      
-      # Only cluster if requested
-      if (cluster_param != "none") {
-        clustered_data <- cluster_and_reorder(filtered_normCounts, col_metadata, filtered_row_metadata, args)
-        
-        gct_data_filtered <- cmapR::GCT(
-          mat = as.matrix(clustered_data$normCounts),
-          rdesc = as.data.frame(clustered_data$row_metadata),
-          cdesc = as.data.frame(clustered_data$col_metadata)
-        )
-      } else {
-        gct_data_filtered <- cmapR::GCT(
-          mat = as.matrix(filtered_normCounts),
-          rdesc = as.data.frame(filtered_row_metadata),
-          cdesc = as.data.frame(col_metadata)
-        )
-      }
+      message(paste("Added gene annotations for", length(common_genes), "genes"))
     } else {
-      gct_data_filtered <- cmapR::GCT(
-        mat = as.matrix(filtered_normCounts),
-        rdesc = as.data.frame(filtered_row_metadata),
-        cdesc = as.data.frame(col_metadata)
-      )
+      message("No matching genes found between results and gene info")
     }
-    
-    cmapR::write_gct(gct_data_filtered, filtered_counts_file)
-    log_message(paste("Exported GCT (filtered) to", filtered_counts_file))
-    
-    return(c(all_counts_file, filtered_counts_file))
-  }, error = function(e) {
-    log_error(paste("Failed to export GCT data:", e$message))
-    return(NULL)
-  })
-}
-
-#' Export analysis parameters
-#'
-#' @param args Command-line arguments
-#' @param rpkm_filtered_count Count of genes filtered by RPKM
-#' @param output_prefix Output file prefix
-#' @export
-export_parameters <- function(args, rpkm_filtered_count, output_prefix) {
-  log_message("Exporting analysis parameters...", "INFO")
-  
-  # Create parameters list
-  params <- list(
-    timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-    input_files = if ("input" %in% names(args)) args$input else NULL,
-    sample_names = if ("name" %in% names(args)) args$name else NULL,
-    design_formula = if ("design" %in% names(args)) args$design else NULL,
-    reduced_formula = if ("reduced" %in% names(args)) args$reduced else NULL,
-    rpkm_cutoff = if ("rpkm_cutoff" %in% names(args)) args$rpkm_cutoff else NULL,
-    min_counts = if ("mincounts" %in% names(args)) args$mincounts else NULL,
-    fdr_threshold = if ("fdr" %in% names(args)) args$fdr else 0.1,
-    lfc_threshold = if ("lfcthreshold" %in% names(args)) args$lfcthreshold else 1,
-    batch_correction = if ("batchcorrection" %in% names(args)) args$batchcorrection else NULL,
-    clustering_method = if ("cluster_method" %in% names(args)) args$cluster_method else 
-                        if ("cluster" %in% names(args)) args$cluster else "none",
-    filtering_stats = list(
-      rpkm_filtered_genes = rpkm_filtered_count
-    )
-  )
-  
-  # Save as RDS and JSON
-  saveRDS(params, file = paste0(output_prefix, "_parameters.rds"))
-  
-  # Convert to JSON if jsonlite is available
-  if (requireNamespace("jsonlite", quietly = TRUE)) {
-    writeLines(
-      jsonlite::toJSON(params, pretty = TRUE, auto_unbox = TRUE),
-      paste0(output_prefix, "_parameters.json")
-    )
   }
   
-  log_message("Analysis parameters exported successfully", "SUCCESS")
+  # Create output filename
+  if (output_name == "report") {
+    output_file <- get_output_filename(output_prefix, "report", "tsv")
+  } else if (output_name == "gene_exp_table") {
+    output_file <- get_output_filename(output_prefix, "gene_exp_table", "tsv")
+  } else if (output_name == "contrasts_table") {
+    output_file <- get_output_filename(output_prefix, "contrasts_table", "tsv")
+  } else {
+    output_file <- get_output_filename(output_prefix, output_name, "tsv")
+  }
+  
+  # Export to TSV
+  write_deseq_results(results_df, output_file)
+  
+  return(output_file)
 }
 
-#' Generate MA plot for DESeq2 results
+#' Export DESeq2 results to files specifically for GSEA analysis
 #'
-#' @param lrt_results LRT results from DESeq2
-#' @return ggplot object
+#' @param deseq_results DESeq2 results object
+#' @param norm_counts Normalized count matrix
+#' @param metadata Sample metadata
+#' @param condition_col Column in metadata containing condition information
+#' @param output_prefix Output prefix for files
+#' @return List of paths to exported files
 #' @export
-generate_ma_plot <- function(lrt_results) {
-  df <- as.data.frame(lrt_results)
-  df$significant <- ifelse(!is.na(df$padj) & df$padj < 0.1, "Significant", "Not significant")
+export_for_gsea <- function(deseq_results, norm_counts, metadata, condition_col, output_prefix) {
+  result_paths <- list()
   
-  p <- ggplot2::ggplot(df, ggplot2::aes(x = log10(baseMean), y = log2FoldChange, color = significant)) +
-    ggplot2::geom_point(alpha = 0.5) +
-    ggplot2::scale_color_manual(values = c("Significant" = "red", "Not significant" = "black")) +
-    ggplot2::labs(
-      title = "MA Plot",
-      x = "log10(Mean of normalized counts)",
-      y = "log2 Fold Change"
-    ) +
-    ggplot2::theme_bw()
+  # 1. Export ranked gene list with metric
+  ranked_results <- as.data.frame(deseq_results)
   
-  return(p)
+  # Calculate ranking metric (signed -log10 p-value)
+  if ("log2FoldChange" %in% colnames(ranked_results) && "pvalue" %in% colnames(ranked_results)) {
+    ranked_results$metric <- sign(ranked_results$log2FoldChange) * -log10(ranked_results$pvalue)
+    
+    # Sort by metric for GSEA
+    ranked_results <- ranked_results[order(ranked_results$metric, decreasing = TRUE), ]
+    
+    # Export to TSV
+    ranked_file <- get_output_filename(output_prefix, "ranked_genes", "rnk")
+    write.table(
+      data.frame(
+        gene = rownames(ranked_results),
+        metric = ranked_results$metric
+      ),
+      file = ranked_file,
+      sep = "\t",
+      row.names = FALSE,
+      col.names = FALSE,
+      quote = FALSE
+    )
+    
+    result_paths$ranked_file <- ranked_file
+    message(paste("Exported ranked gene list for GSEA to", ranked_file))
+  }
+  
+  # 2. Export expression data in GCT format
+  gct_file <- get_output_filename(output_prefix, "expression", "gct")
+  write_gct_file(norm_counts, gct_file)
+  result_paths$expression_file <- gct_file
+  
+  # 3. Export phenotype data in CLS format
+  if (!is.null(metadata) && condition_col %in% colnames(metadata)) {
+    # Get conditions for samples in the same order as columns in norm_counts
+    sample_conditions <- metadata[colnames(norm_counts), condition_col]
+    
+    cls_file <- get_output_filename(output_prefix, "phenotypes", "cls")
+    write_cls_file(sample_conditions, cls_file)
+    result_paths$phenotype_file <- cls_file
+    message(paste("Exported phenotype classes for GSEA to", cls_file))
+  }
+  
+  return(result_paths)
 }
 
-#' Generate p-value histogram for DESeq2 results
+#' Export DESeq2 object to RDS file
 #'
-#' @param lrt_results LRT results from DESeq2
-#' @return ggplot object
+#' @param dds DESeq2 object
+#' @param output_prefix Output prefix
+#' @param type Type of DESeq2 object (e.g., "dds", "contrasts")
+#' @return Path to exported RDS file
 #' @export
-generate_pvalue_histogram <- function(lrt_results) {
-  df <- as.data.frame(lrt_results)
+export_deseq_object <- function(dds, output_prefix, type = "contrasts") {
+  output_file <- get_output_filename(output_prefix, type, "rds")
+  saveRDS(dds, output_file)
+  message(paste("Saved DESeq2 object to", output_file))
+  return(output_file)
+}
+
+#' Create a standard set of visualization outputs
+#'
+#' @param deseq_object DESeq2 object
+#' @param deseq_results DESeq2 results object
+#' @param output_prefix Output prefix for files
+#' @param transformed_counts Optional pre-transformed counts (VST or rlog)
+#' @param metadata Sample metadata
+#' @param color_by Column in metadata to use for coloring
+#' @param top_n_genes Number of top genes to include in heatmap
+#' @return List of paths to exported visualization files
+#' @export
+export_visualizations <- function(deseq_object, deseq_results, output_prefix,
+                                transformed_counts = NULL, metadata = NULL,
+                                color_by = NULL, top_n_genes = 50) {
+  result_paths <- list()
   
-  p <- ggplot2::ggplot(df, ggplot2::aes(x = pvalue)) +
-    ggplot2::geom_histogram(bins = 50, fill = "steelblue", color = "black") +
-    ggplot2::labs(
-      title = "P-value Distribution",
-      x = "P-value",
-      y = "Count"
+  # Ensure ggplot2 is available
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    warning("ggplot2 package is required for visualizations")
+    return(result_paths)
+  }
+  
+  # 1. MA Plot (if we have log2FoldChange)
+  if ("log2FoldChange" %in% colnames(deseq_results) && 
+      "baseMean" %in% colnames(deseq_results)) {
+      
+    # Convert results to data frame if needed
+    if (!is.data.frame(deseq_results)) {
+      results_df <- as.data.frame(deseq_results)
+    } else {
+      results_df <- deseq_results
+    }
+    
+    # Create MA plot
+    ma_plot <- ggplot2::ggplot(
+      results_df, 
+      ggplot2::aes(x = log10(baseMean), y = log2FoldChange, color = padj < 0.1)
     ) +
-    ggplot2::theme_bw()
+      ggplot2::geom_point(alpha = 0.6, size = 1) +
+      ggplot2::scale_color_manual(values = c("grey", "red"), name = "Significant") +
+      ggplot2::geom_hline(yintercept = 0, linetype = "dashed") +
+      ggplot2::xlab("log10(Mean Expression)") +
+      ggplot2::ylab("log2(Fold Change)") +
+      ggplot2::ggtitle("MA Plot: Fold Change vs Mean Expression")
+    
+    # Save plot
+    ma_files <- save_plot(ma_plot, output_prefix, "ma_plot")
+    result_paths$ma_plot <- ma_files
+  }
   
-  return(p)
+  # 2. MDS Plot as HTML interactive visualization
+  # Get transformed data if not provided
+  if (is.null(transformed_counts) && !is.null(deseq_object)) {
+    # Try to perform VST
+    if (requireNamespace("DESeq2", quietly = TRUE)) {
+      transformed_counts <- tryCatch({
+        DESeq2::vst(deseq_object, blind = TRUE)
+      }, error = function(e) {
+        message("Could not perform VST: ", e$message)
+        NULL
+      })
+    }
+  }
+  
+  if (!is.null(transformed_counts)) {
+    # Create interactive MDS plot
+    mds_file <- get_output_filename(output_prefix, "mds_plot", "html")
+    mds_path <- generate_mds_plot_html(
+      assay(transformed_counts), 
+      mds_file,
+      metadata = metadata,
+      color_by = color_by,
+      title = "MDS Plot of Samples"
+    )
+    
+    if (!is.null(mds_path)) {
+      result_paths$mds_plot <- mds_path
+    }
+    
+    # 3. Heatmap of top genes
+    if (requireNamespace("pheatmap", quietly = TRUE)) {
+      # Get top differentially expressed genes
+      if (!is.null(deseq_results) && "padj" %in% colnames(deseq_results)) {
+        top_genes <- head(rownames(deseq_results)[order(deseq_results$padj)], top_n_genes)
+        
+        if (length(top_genes) > 0) {
+          # Extract data for these genes
+          heatmap_data <- assay(transformed_counts)[top_genes, ]
+          
+          # Create annotation if metadata is available
+          if (!is.null(metadata) && !is.null(color_by) && color_by %in% colnames(metadata)) {
+            # Create annotation data frame
+            anno_df <- data.frame(
+              Condition = metadata[colnames(heatmap_data), color_by],
+              row.names = colnames(heatmap_data)
+            )
+            
+            # Create heatmap with annotation
+            heatmap_plot <- pheatmap::pheatmap(
+              heatmap_data,
+              annotation_col = anno_df,
+              scale = "row",
+              clustering_distance_rows = "correlation",
+              clustering_distance_cols = "correlation",
+              show_rownames = (nrow(heatmap_data) <= 50),
+              main = paste("Top", length(top_genes), "Differentially Expressed Genes"),
+              silent = TRUE
+            )
+          } else {
+            # Create heatmap without annotation
+            heatmap_plot <- pheatmap::pheatmap(
+              heatmap_data,
+              scale = "row",
+              clustering_distance_rows = "correlation",
+              clustering_distance_cols = "correlation",
+              show_rownames = (nrow(heatmap_data) <= 50),
+              main = paste("Top", length(top_genes), "Differentially Expressed Genes"),
+              silent = TRUE
+            )
+          }
+          
+          # Save heatmap
+          heatmap_files <- save_plot(heatmap_plot, output_prefix, "expression_heatmap")
+          result_paths$heatmap <- heatmap_files
+        }
+      }
+    }
+  }
+  
+  return(result_paths)
 } 

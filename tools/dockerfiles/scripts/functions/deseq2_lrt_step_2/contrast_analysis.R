@@ -344,4 +344,32 @@ add_metadata_to_results <- function(expression_data_df, deseq_result, contrast_n
   
   log_message(paste("Successfully merged DESeq2 results for contrast", contrast_name))
   return(expression_data_merged)
+}
+
+#' Create an MDS (Multi-Dimensional Scaling) plot
+#'
+#' @param normCounts Normalized count matrix
+#' @param col_metadata Metadata for the columns (samples)
+#' @param output_file Output file path
+#' @param interactive Whether to create an interactive HTML plot (default) or a static PDF
+#' @param dimensions Number of dimensions to use for the plot
+#' @param title Plot title
+#' @param color_by Column in metadata to use for coloring points
+#' @param shape_by Column in metadata to use for point shapes
+#' @return Output file path if successful, NULL otherwise
+#' @export
+create_mds_plot <- function(normCounts, col_metadata, output_file = "mds_plot.html", 
+                           interactive = TRUE, dimensions = 2, title = "MDS Plot",
+                           color_by = NULL, shape_by = NULL) {
+  log_message("Creating MDS plot")
+  
+  # Generate the MDS plot using our consolidated function
+  return(generate_mds_plot_html(
+    normCounts,
+    output_file,
+    metadata = col_metadata,
+    color_by = color_by,
+    shape_by = shape_by,
+    title = title
+  ))
 } 

@@ -6,17 +6,21 @@ This document outlines the consolidation of common functions across the DESeq2 L
 
 ## Consolidated Components
 
-### 1. Visualization Functions (`common/visualization.R`)
-- MDS plot creation with interactive capabilities
-- GCT file export for visualization tools
-- Common plot styling and formatting
+### 1. Output Utilities (`common/output_utils.R`)
+- Unified output filename generation
+- Multi-format plot saving (PNG, PDF, etc.)
+- GCT and CLS file creation with data validation
+- DESeq2 results export with consistent formatting
+- Markdown summary generation
+- Output verification for workflow validation
+- Interactive MDS plot HTML generation
 
 ### 2. Export Functions (`common/export_functions.R`)
-- General-purpose GCT export with robust error handling
-- DESeq2 results export in various formats (TSV, JSON)
-- CLS file generation for GSEA
-- Filtered data export based on FDR/LFC thresholds
-- Parameter exports for reproducibility
+- Specialized export functions for DESeq2 results
+- GSEA-ready exports (ranked lists, phenotype data)
+- Normalized counts export with filtering options
+- DESeq2 object persistence and retrieval
+- Visualization exports (MDS plots, heatmaps, MA plots)
 
 ### 3. Clustering Functions (`common/clustering.R`)
 - Memory-efficient HOPACH clustering
@@ -24,11 +28,13 @@ This document outlines the consolidation of common functions across the DESeq2 L
 - Multiple distance metrics with automatic fallback
 - Optimized scaling methods (z-score, min-max)
 
-### 4. Metadata Validation (`common/utilities.R`)
-- Comprehensive design formula validation
-- Batch correction validation and application
-- Sample consistency checks
-- Step consistency verification
+### 4. Utilities (`common/utilities.R`)
+- Memory usage tracking and reporting
+- Standardized error handling functions
+- Parameter validation and type conversion
+- File and path utilities (safe mkdir, extension handling)
+- Logging with timestamps and categories
+- Package management (loading, namespace conflict resolution)
 
 ## Key Improvements
 
@@ -49,21 +55,50 @@ This document outlines the consolidation of common functions across the DESeq2 L
 - Documented function parameters and return values
 - Consolidated related functionality
 - Added consistent logging throughout
+- Merged redundant output functions from multiple files
+
+### Output Management
+- Standardized output file naming conventions
+- Centralized output verification
+- Added consistent metadata inclusion in outputs
+- Improved error reporting for output generation
 
 ### Docker Compatibility
 - Added path resolution for Docker environment
 - Updated Dockerfile to include all required packages
 - Implemented fallback paths for both Docker and local execution
 
-## Removed Files
+## Removed or Deprecated Files
 
-The following redundant files were removed after consolidation:
+The following redundant files were removed or deprecated after consolidation:
 - `deseq2_lrt_step_1/export_functions.R`
 - `deseq2_lrt_step_1/visualization.R`
 - `deseq2_lrt_step_1/metadata_validation.R`
 - `deseq2_lrt_step_2/export_functions.R`
 - `deseq2_lrt_step_2/visualization.R`
 - `deseq2_lrt_step_2/clustering.R`
+- `common/output_functions.R` (deprecated in favor of output_utils.R)
+
+## Consolidated Functions Overview
+
+### Output Utilities
+- `get_output_filename()`: Generate standardized output filenames
+- `save_plot()`: Save plots in multiple formats (PNG, PDF)
+- `write_gct_file()`: Write data matrix to GCT format
+- `write_cls_file()`: Create CLS files for sample classification
+- `write_deseq_results()`: Export DESeq2 results to TSV
+- `save_deseq_rds()`: Serialize DESeq2 objects to RDS
+- `generate_mds_plot_html()`: Create interactive MDS plots
+- `verify_outputs()`: Ensure all required outputs are created
+
+### Utility Functions
+- `report_memory_usage()`: Track and log memory consumption
+- `with_error_handling()`: Standardized error handling wrapper
+- `convert_to_boolean()`: Consistent boolean conversion
+- `source_with_fallback()`: Source R files with path resolution
+- `log_message()`: Structured logging with levels and categories
+- `fix_colnames()`: Clean column names for R compatibility
+- `validate_sample_consistency()`: Check sample name consistency
 
 ## Testing
 
@@ -71,6 +106,7 @@ A test script (`test_consolidation.R`) has been created to validate the consolid
 - Verifies that all common functions can be loaded correctly
 - Checks that key functions exist and are accessible
 - Tests path resolution for both Docker and local environments
+- Validates output generation functions
 
 ## Future Recommendations
 
@@ -78,4 +114,6 @@ A test script (`test_consolidation.R`) has been created to validate the consolid
 2. **Documentation**: Add comprehensive documentation with examples
 3. **Configuration**: Make memory thresholds configurable via command line
 4. **Parallelization**: Enhance parallel processing capabilities
-5. **Progress Reporting**: Add more detailed progress reporting for long-running operations 
+5. **Progress Reporting**: Add more detailed progress reporting for long-running operations
+6. **Modularization**: Further modularize code into logical components
+7. **Interactive Dashboard**: Develop an interactive dashboard for visualizing results 

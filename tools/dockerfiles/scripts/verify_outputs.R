@@ -13,7 +13,13 @@ source_dir <- function(path) {
 }
 
 # Source common functions
-source_dir("functions/common/")
+if (file.exists("functions/common/output_utils.R")) {
+  source("functions/common/output_utils.R")
+} else if (file.exists("/usr/local/bin/functions/common/output_utils.R")) {
+  source("/usr/local/bin/functions/common/output_utils.R")
+} else {
+  stop("Could not find output_utils.R")
+}
 
 # Define CWL output specifications
 deseq_advanced_outputs <- list(
@@ -162,21 +168,19 @@ test_data <- matrix(
 test_classes <- rep(c("A", "B"), each = 5)
 
 # Test GCT file generation
-gct_file <- get_output_filename(test_prefix, "counts_all", "gct")
-write_gct_file(test_data, gct_file)
+write_gct_file(test_data, get_output_filename(test_prefix, "counts_all", "gct"))
 cat("✓ GCT file creation works\n")
 
 # Test CLS file generation
-cls_file <- get_output_filename(test_prefix, "phenotypes", "cls")
-write_cls_file(test_classes, cls_file)
+write_cls_file(test_classes, get_output_filename(test_prefix, "phenotypes", "cls"))
 cat("✓ CLS file creation works\n")
 
-# Test plot saving (basic)
+# Test plot saving
 if (requireNamespace("ggplot2", quietly = TRUE)) {
   test_plot <- ggplot2::ggplot(data.frame(x = 1:10, y = 1:10), ggplot2::aes(x, y)) +
     ggplot2::geom_point()
   
-  plot_files <- save_plot_png_pdf(test_plot, test_prefix, "test_plot")
+  plot_files <- save_plot(test_plot, test_prefix, "test_plot")
   
   if (file.exists(plot_files$png) && file.exists(plot_files$pdf)) {
     cat("✓ Plot saving in multiple formats works\n")
@@ -186,8 +190,8 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
 }
 
 # Test markdown file creation
-md_file <- get_output_filename(test_prefix, "summary", "md")
-write_markdown_summary(c("# Test Summary", "", "This is a test"), md_file)
+write_markdown_summary(c("# Test Summary", "", "This is a test"), 
+                      get_output_filename(test_prefix, "summary", "md"))
 cat("✓ Markdown file creation works\n")
 
 # Print summary of output specifications
@@ -219,14 +223,16 @@ for (name in names(lrt_step2_outputs)) {
 }
 
 # Clean up test files
-file.remove(gct_file, cls_file, plot_files$png, plot_files$pdf, md_file)
+for (file in unlist(plot_files)) {
+  if (file.exists(file)) file.remove(file)
+}
+file.remove(get_output_filename(test_prefix, "counts_all", "gct"),
+            get_output_filename(test_prefix, "phenotypes", "cls"),
+            get_output_filename(test_prefix, "summary", "md"))
 cat("\nTest files cleaned up\n")
 
 cat("\nAll output utility functions are working correctly\n")
-cat("To ensure your workflow scripts produce all the expected outputs,\n")
-cat("make sure they use these utility functions for file generation.\n")
 
-# Add automated verification function that can be called at the end of workflows
 #' Verify all required outputs for a specific workflow
 #'
 #' @param workflow_type Type of workflow ("deseq_advanced", "lrt_step1", or "lrt_step2")
@@ -261,35 +267,8 @@ verify_workflow_outputs <- function(workflow_type, output_prefix, fail_on_missin
     }
   }
   
-  # Check if files exist
-  missing_files <- character(0)
-  
-  for (name in names(expected_files)) {
-    file_path <- expected_files[[name]]
-    
-    # Check if file exists
-    if (!file.exists(file_path)) {
-      missing_files <- c(missing_files, paste0(name, ": ", file_path))
-    }
-  }
-  
-  # Report results
-  if (length(missing_files) > 0) {
-    cat("The following required outputs are missing:\n")
-    for (file in missing_files) {
-      cat(paste0("  - ", file, "\n"))
-    }
-    
-    if (fail_on_missing) {
-      stop("Missing required output files")
-    } else {
-      cat("Warning: Some required outputs are missing\n")
-      return(FALSE)
-    }
-  } else {
-    cat("All required outputs have been created successfully\n")
-    return(TRUE)
-  }
+  # Check if files exist using our consolidated verify_outputs function
+  return(verify_outputs(output_prefix, gsub("_advanced", "", workflow_type), fail_on_missing))
 }
 
 # Example of how to use the verification function at the end of a workflow:
