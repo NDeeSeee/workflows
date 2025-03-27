@@ -290,10 +290,10 @@ add_metadata_to_results <- function(expression_data_df, deseq_result, contrast_n
   available_columns <- colnames(deseq_result)
   
   # Ensure all required columns exist in the results
-  missing_columns <- setdiff(result_columns, available_columns)
+  missing_columns <- base::setdiff(result_columns, available_columns)
   if (length(missing_columns) > 0) {
     log_warning(paste("Missing expected columns in DESeq2 results:", paste(missing_columns, collapse=", ")))
-    result_columns <- intersect(result_columns, available_columns)
+    result_columns <- base::intersect(result_columns, available_columns)
   }
   
   # Create a data frame with results

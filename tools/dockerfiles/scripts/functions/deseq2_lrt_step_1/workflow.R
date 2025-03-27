@@ -6,9 +6,6 @@
 #'
 #' Loads required libraries, sources dependency files, and configures environment
 initialize_environment <- function() {
-  # Configure R options
-  configure_r_options()
-  
   # First, make sure we have the utilities module
   if (file.exists("/usr/local/bin/functions/common/utilities.R")) {
     source("/usr/local/bin/functions/common/utilities.R")
@@ -35,93 +32,14 @@ initialize_environment <- function() {
   
   # Load required libraries
   load_required_libraries()
+
+  # Configure R options
+  configure_r_options()
   
   # Configure plot theme
   configure_plot_theme()
   
   log_message("Environment initialized for DESeq2 LRT Step 1 analysis")
-}
-
-# Load all required libraries for DESeq2 LRT analysis
-load_required_libraries <- function() {
-  suppressMessages({
-    # Core packages
-    library(argparse)
-    library(BiocParallel)
-    library(DESeq2)
-    
-    # Data manipulation
-    library(tidyverse)
-    library(data.table)
-    library(conflicted)  # For resolving namespace conflicts
-    
-    # Batch correction
-    library(limma)
-    
-    # Visualization
-    library(pheatmap)
-    library(RColorBrewer)
-    library(ggplot2)
-    library(ggrepel)
-    library(plotly)
-    
-    # GCT export
-    library(cmapR)
-    
-    # Utilities
-    library(pryr)        # For memory usage tracking
-    library(rlang)
-    library(stringr)
-    library(glue)
-    library(logger)
-  })
-  
-  # Resolve namespace conflicts explicitly
-  resolve_namespace_conflicts()
-  
-  log_message("All required libraries loaded successfully")
-}
-
-# Configure R options for DESeq2 analysis
-configure_r_options <- function() {
-  # Set warning level
-  options(warn = -1)
-  options(rlang_backtrace_on_error = "full")
-  options("width" = 400)
-  options(error = function() {
-    message("An unexpected error occurred. Aborting script.")
-    quit(save = "no", status = 1, runLast = FALSE)
-  })
-
-  # Set memory management options for large datasets
-  options(future.globals.maxSize = 4000 * 1024^2)  # 4GB max for global data
-  options(expressions = 5000)  # Increase expression stack size
-
-  # Configure garbage collection behavior
-  gcinfo(FALSE)  # Disable GC messages by default
-  options(gc.aggressiveness = 0)  # Default GC behavior
-  
-  message("R options configured for DESeq2 analysis")
-}
-
-# Resolve namespace conflicts explicitly
-resolve_namespace_conflicts <- function() {
-  conflicted::conflict_prefer("filter", "dplyr")
-  conflicted::conflict_prefer("select", "dplyr")
-  conflicted::conflict_prefer("rename", "dplyr")
-  conflicted::conflict_prefer("summarize", "dplyr")
-  conflicted::conflict_prefer("mutate", "dplyr")
-  conflicted::conflict_prefer("arrange", "dplyr")
-  conflicted::conflict_prefer("count", "dplyr")
-  conflicted::conflict_prefer("group_by", "dplyr")
-  conflicted::conflict_prefer("ungroup", "dplyr")
-  conflicted::conflict_prefer("setdiff", "dplyr")  # Add setdiff conflict resolution
-  
-  # Define frequently used operators for clarity
-  `%>%` <- magrittr::`%>%`
-  `%in%` <- base::`%in%`
-  `%/%` <- base::`%/%`
-  `%%` <- base::`%%`
 }
 
 # Load and validate metadata

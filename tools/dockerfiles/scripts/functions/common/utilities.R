@@ -439,6 +439,96 @@ set_log_level_verbose <- function() {
   }
 }
 
+# Resolve namespace conflicts explicitly
+resolve_namespace_conflicts <- function() {
+  conflicted::conflict_prefer("filter", "dplyr")
+  conflicted::conflict_prefer("select", "dplyr")
+  conflicted::conflict_prefer("rename", "dplyr")
+  conflicted::conflict_prefer("slice", "dplyr")
+  conflicted::conflict_prefer("summarize", "dplyr")
+  conflicted::conflict_prefer("mutate", "dplyr")
+  conflicted::conflict_prefer("arrange", "dplyr")
+  conflicted::conflict_prefer("distinct", "dplyr")
+  conflicted::conflict_prefer("count", "dplyr")
+  conflicted::conflict_prefer("group_by", "dplyr")
+  conflicted::conflict_prefer("ungroup", "dplyr")
+  conflicted::conflict_prefer("setdiff", "base")  # Add setdiff conflict resolution
+  
+  # Define frequently used operators for clarity
+  `%>%` <- magrittr::`%>%`
+  `%in%` <- base::`%in%`
+  `%/%` <- base::`%/%`
+  `%%` <- base::`%%`
+}
+
+# Load all required libraries for DESeq2 LRT analysis
+load_required_libraries <- function() {
+  suppressMessages({
+    # Core packages
+    library(argparse)
+    library(BiocParallel)
+    library(DESeq2)
+    library(SummarizedExperiment)
+    
+    # Data manipulation
+    library(tidyverse)
+    library(data.table)
+    library(conflicted)  # For resolving namespace conflicts
+    
+    # Batch correction
+    library(limma)
+    library(Glimma)
+    library(sva)
+    
+    # Visualization
+    library(pheatmap)
+    library(RColorBrewer)
+    library(ggplot2)
+    library(ggrepel)
+    library(plotly)
+
+    # Clustering
+    library(hopach)
+    
+    # GCT export
+    library(cmapR)
+    
+    # Utilities
+    library(pryr)        # For memory usage tracking
+    library(rlang)
+    library(stringr)
+    library(glue)
+    library(logger)
+  })
+  
+  # Resolve namespace conflicts explicitly
+  resolve_namespace_conflicts()
+  
+  log_message("All required libraries loaded successfully")
+}
+
+# Configure R options for DESeq2 analysis
+configure_r_options <- function() {
+  # Set warning level
+  options(warn = -1)
+  options(rlang_backtrace_on_error = "full")
+  options("width" = 400)
+  options(error = function() {
+    message("An unexpected error occurred. Aborting script.")
+    quit(save = "no", status = 1, runLast = FALSE)
+  })
+
+  # Set memory management options for large datasets
+  options(future.globals.maxSize = 4000 * 1024^2)  # 4GB max for global data
+  options(expressions = 5000)  # Increase expression stack size
+
+  # Configure garbage collection behavior
+  gcinfo(FALSE)  # Disable GC messages by default
+  options(gc.aggressiveness = 0)  # Default GC behavior
+  
+  message("R options configured for DESeq2 analysis")
+}
+
 #' Log debug level message
 #' 
 #' @param ... Arguments passed to logger::log_debug or message
@@ -502,4 +592,67 @@ clean_sample_names <- function(sample_names) {
   }
   
   return(sample_names)
+}
+
+#' Source all R files in a directory with fallback paths
+#' 
+#' @param dir_path Relative directory path
+#' @param absolute_dir_path Absolute directory path (fallback)
+#' @param recursive Whether to source files in subdirectories recursively
+#' @return TRUE if at least one file was sourced, FALSE otherwise
+#' @export
+source_directory_with_fallback <- function(dir_path, absolute_dir_path = NULL, recursive = FALSE) {
+  files_sourced <- FALSE
+  
+  # Try sourcing files from the relative directory path
+  if (dir.exists(dir_path)) {
+    log_message(paste("Sourcing files from directory:", dir_path))
+    r_files <- list.files(dir_path, pattern = "\\.R$", full.names = TRUE, recursive = recursive)
+    
+    # Sort files to ensure consistent loading order
+    r_files <- sort(r_files)
+    
+    for (file in r_files) {
+      log_message(paste("Sourcing file:", file))
+      source(file)
+      files_sourced <- TRUE
+    }
+    return(files_sourced)
+  }
+  
+  # Try sourcing files from the absolute directory path
+  if (!is.null(absolute_dir_path) && dir.exists(absolute_dir_path)) {
+    log_message(paste("Sourcing files from absolute directory:", absolute_dir_path))
+    r_files <- list.files(absolute_dir_path, pattern = "\\.R$", full.names = TRUE, recursive = recursive)
+    
+    # Sort files to ensure consistent loading order
+    r_files <- sort(r_files)
+    
+    for (file in r_files) {
+      log_message(paste("Sourcing file:", file))
+      source(file)
+      files_sourced <- TRUE
+    }
+    return(files_sourced)
+  }
+  
+  # Try sourcing from Docker path
+  docker_path <- file.path("/usr/local/bin", dir_path)
+  if (dir.exists(docker_path)) {
+    log_message(paste("Sourcing files from Docker directory:", docker_path))
+    r_files <- list.files(docker_path, pattern = "\\.R$", full.names = TRUE, recursive = recursive)
+    
+    # Sort files to ensure consistent loading order
+    r_files <- sort(r_files)
+    
+    for (file in r_files) {
+      log_message(paste("Sourcing file:", file))
+      source(file)
+      files_sourced <- TRUE
+    }
+    return(files_sourced)
+  }
+  
+  log_message(paste("Could not find directory to source:", dir_path))
+  return(FALSE)
 } 

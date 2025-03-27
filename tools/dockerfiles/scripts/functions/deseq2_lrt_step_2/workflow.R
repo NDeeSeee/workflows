@@ -8,6 +8,44 @@
 #' @param args Command-line arguments
 #' @return Final results list containing normalized counts, expression data, and contrast results
 #' @export
+
+initialize_environment <- function() {
+  # First, make sure we have the utilities module
+  if (file.exists("/usr/local/bin/functions/common/utilities.R")) {
+    source("/usr/local/bin/functions/common/utilities.R")
+  } else if (file.exists("functions/common/utilities.R")) {
+    source("functions/common/utilities.R")
+  } else {
+    stop("Could not find utilities.R file")
+  }
+  
+  # Now we have access to source_with_fallback and other utilities
+  # Source common functions
+  source_with_fallback("functions/common/constants.R", "/usr/local/bin/functions/common/constants.R")
+  source_with_fallback("functions/common/visualization.R", "/usr/local/bin/functions/common/visualization.R")
+  source_with_fallback("functions/common/clustering.R", "/usr/local/bin/functions/common/clustering.R")
+  source_with_fallback("functions/common/export_functions.R", "/usr/local/bin/functions/common/export_functions.R")
+  source_with_fallback("functions/common/error_handling.R", "/usr/local/bin/functions/common/error_handling.R")
+  source_with_fallback("functions/common/logging.R", "/usr/local/bin/functions/common/logging.R")
+
+  # Source DESeq2 LRT Step 2 specific functions
+  source_with_fallback("functions/deseq2_lrt_step_2/cli_args.R", "/usr/local/bin/functions/deseq2_lrt_step_2/cli_args.R")
+  source_with_fallback("functions/deseq2_lrt_step_2/data_processing.R", "/usr/local/bin/functions/deseq2_lrt_step_2/data_processing.R")
+  source_with_fallback("functions/deseq2_lrt_step_2/contrast_analysis.R", "/usr/local/bin/functions/deseq2_lrt_step_2/contrast_analysis.R")
+  
+  # Load required libraries
+  load_required_libraries()
+
+  # Configure R options
+  configure_r_options()
+  
+  # Configure plot theme
+  configure_plot_theme()
+  
+  log_message("Environment initialized for DESeq2 LRT Step 2 analysis")
+}
+
+
 run_workflow <- function(args) {
   log_message("Starting DESeq2 LRT Step 2 workflow")
   

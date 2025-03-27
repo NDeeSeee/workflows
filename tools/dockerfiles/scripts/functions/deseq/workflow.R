@@ -55,77 +55,15 @@ initialize_environment <- function() {
   
   # Load required libraries
   load_required_libraries()
+
+  # Configure R options
+  configure_r_options()
   
   # Configure plot theme
   configure_plot_theme()
   
   # Log initialization
   log_message("Environment initialized for DESeq analysis")
-}
-
-#' Load all required libraries for DESeq analysis
-load_required_libraries <- function() {
-  log_message("Loading required libraries")
-  
-  suppressMessages({
-    # For argument parsing
-    library(argparse)
-    
-    # For parallel processing
-    library(BiocParallel)
-    
-    # For DESeq2 analysis
-    library(DESeq2)
-    
-    # For data manipulation
-    library(tidyverse)
-    library(data.table)
-    
-    # For batch correction
-    library(limma)
-    
-    # For clustering
-    library(hopach)
-    
-    # For visualization
-    library(pheatmap)
-    library(RColorBrewer)
-    library(gridExtra)
-    library(ggplot2)
-    library(ggrepel)
-    library(Glimma)
-    
-    # For GCT export
-    library(cmapR)
-    
-    # For memory profiling
-    if (requireNamespace("pryr", quietly = TRUE)) {
-      library(pryr)
-    }
-  })
-  
-  # Define dplyr functions with proper namespace to avoid conflicts
-  `%>%` <- magrittr::`%>%`
-  `%in%` <- base::`%in%`
-  `%/%` <- base::`%/%`
-  `%%` <- base::`%%`
-  
-  log_message("Libraries loaded successfully")
-}
-
-#' Configure plot theme for consistent visualization
-configure_plot_theme <- function() {
-  log_message("Configuring plot theme")
-  
-  # Set default theme for ggplot2
-  theme_set(theme_bw() + 
-            theme(text = element_text(size = 12),
-                  axis.text = element_text(size = 10),
-                  plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
-                  legend.title = element_text(size = 12),
-                  legend.text = element_text(size = 10),
-                  strip.background = element_rect(fill = "lightgray"),
-                  strip.text = element_text(face = "bold")))
 }
 
 #' Main workflow function

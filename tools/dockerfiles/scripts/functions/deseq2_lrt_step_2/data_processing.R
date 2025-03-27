@@ -251,11 +251,78 @@ prepare_final_data <- function(annotated_expression_combined_df, dds) {
   )
   
   # Add any remaining columns that weren't categorized
-  remaining_cols <- setdiff(colnames(annotated_expression_combined_df), final_cols)
+  remaining_cols <- base::setdiff(colnames(annotated_expression_combined_df), final_cols)
   final_cols <- c(final_cols, remaining_cols)
   
   # Reorder the columns of the data frame
   annotated_expression_combined_df <- annotated_expression_combined_df[, final_cols, drop = FALSE]
   
   return(annotated_expression_combined_df)
+}
+
+#' Verify consistency between Step 1 and Step 2 analysis
+#'
+#' @param col_data Column data from DESeq2 dataset
+#' @param design_formula Design formula from DESeq2 dataset
+#' @param args Command-line arguments
+#' @return TRUE if consistent, otherwise stops with an error
+#' @export
+verify_step_consistency <- function(col_data, design_formula, args) {
+  log_message("Verifying consistency between Step 1 and Step 2", "INFO")
+  
+  # Extract design formula as text for comparison
+  design_text <- as.character(design_formula)[2]
+  
+  # Check if design_text contains the required LRT factor
+  if (!is.null(args$lrt_factor)) {
+    if (!grepl(args$lrt_factor, design_text, fixed = TRUE)) {
+      stop(paste("LRT factor", args$lrt_factor, "not found in design formula from Step 1"))
+    }
+    log_message(paste("Verified LRT factor", args$lrt_factor, "is in design formula"))
+  }
+  
+  # Check batch correction consistency
+  if (args$batchcorrection != "none") {
+    # Check if batch column exists in the column data
+    if (!"batch" %in% colnames(col_data)) {
+      log_warning("Batch correction requested but 'batch' column not found in DESeq2 data")
+      log_warning("Batch correction will be disabled")
+      args$batchcorrection <- "none"
+    } else {
+      log_message("Verified batch column exists for batch correction")
+    }
+    
+    # For model-based batch correction, check if batch is in the design formula
+    if (args$batchcorrection == "model" && !grepl("batch", design_text, fixed = TRUE)) {
+      log_warning("Model-based batch correction requested but 'batch' not in design formula")
+      log_warning("Setting batch correction to 'limma' instead of 'model'")
+      args$batchcorrection <- "limma"
+    }
+  }
+  
+  # Check if the factors referenced in contrast_df exist in the column data
+  if (!is.null(args$contrast_df) && file.exists(args$contrast_df)) {
+    contrast_df <- read.delim(args$contrast_df, sep="\t", header=TRUE, stringsAsFactors=FALSE)
+    
+    # Extract factor names from contrast data
+    factor_names <- unique(c(
+      contrast_df$factor,
+      contrast_df$specificity_group
+    ))
+    
+    # Remove NA or empty values
+    factor_names <- factor_names[!is.na(factor_names) & factor_names != ""]
+    
+    # Check if each factor exists in column data
+    missing_factors <- factor_names[!factor_names %in% colnames(col_data)]
+    
+    if (length(missing_factors) > 0) {
+      log_warning(paste("The following factors from contrast file are not in column data:", 
+                       paste(missing_factors, collapse=", ")))
+    }
+  }
+  
+  # All checks passed
+  log_message("Step 1 and Step 2 consistency verified", "SUCCESS")
+  return(TRUE)
 } 
