@@ -30,12 +30,31 @@ initialize_environment <- function() {
   options(gc.aggressiveness = 0)  # Default GC behavior
   
   # First load utilities which has source_with_fallback
-  if (file.exists("functions/common/utilities.R")) {
-    source("functions/common/utilities.R")
-  } else if (file.exists("/usr/local/bin/functions/common/utilities.R")) {
+  if (file.exists("/usr/local/bin/functions/common/utilities.R")) {
+    message("Loading utilities from Docker path: /usr/local/bin/functions/common/utilities.R")
     source("/usr/local/bin/functions/common/utilities.R")
+  } else if (file.exists("functions/common/utilities.R")) {
+    message("Loading utilities from relative path: functions/common/utilities.R")
+    source("functions/common/utilities.R")
   } else {
-    stop("Could not find common utilities.R file, which is required")
+    # Try one more location
+    script_dir <- tryCatch({
+      dirname(sys.frame(1)$ofile)
+    }, error = function(e) {
+      NULL
+    })
+    
+    if (!is.null(script_dir)) {
+      potential_path <- file.path(script_dir, "../common/utilities.R")
+      if (file.exists(potential_path)) {
+        message(paste("Loading utilities from script relative path:", potential_path))
+        source(potential_path)
+      } else {
+        stop("Could not find common utilities.R file, which is required")
+      }
+    } else {
+      stop("Could not find common utilities.R file, which is required")
+    }
   }
   
   # Source common utility functions

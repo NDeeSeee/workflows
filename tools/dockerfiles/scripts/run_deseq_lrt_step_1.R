@@ -1,18 +1,41 @@
 #!/usr/bin/env Rscript
 #
-# DESeq2 LRT Analysis - Step 1
+# Main entry point for DESeq2 LRT Step 1 Analysis
 #
-# This script performs differential expression analysis using DESeq2 with 
-# Likelihood Ratio Test (LRT). It's been refactored for better maintainability
-# with functions organized into separate files.
-#
-# Version: 0.1.5
 
-# Load the workflow
-source("functions/deseq2_lrt_step_1/workflow.R")
+# Display startup message
+message("Starting DESeq2 LRT Step 1 Analysis")
+message("Working directory:", getwd())
 
-# Initialize the environment (loads libraries, sets options, loads source files)
-initialize_environment()
+# Docker paths
+workflow_file <- "/usr/local/bin/functions/deseq2_lrt_step_1/workflow.R"
+message("Looking for workflow file at:", workflow_file)
 
-# Execute main function
-main_with_memory_management()
+# Source the workflow file
+if (file.exists(workflow_file)) {
+  message("Found workflow file. Sourcing:", workflow_file)
+  source(workflow_file)
+  
+  # Initialize the environment
+  initialize_environment()
+  
+  # Run the main workflow
+  main_with_memory_management()
+} else {
+  message("ERROR: Workflow file not found at", workflow_file)
+  message("Checking alternative locations...")
+  
+  # Try relative path
+  relative_path <- "functions/deseq2_lrt_step_1/workflow.R"
+  if (file.exists(relative_path)) {
+    message("Found workflow file at relative path:", relative_path)
+    source(relative_path)
+    initialize_environment()
+    main_with_memory_management()
+  } else {
+    # Last resort - try to find it
+    message("Attempting to locate workflow.R file...")
+    system("find /usr/local -name workflow.R | grep deseq2_lrt_step_1", intern = FALSE)
+    stop("Could not find workflow.R file. Please verify your installation.")
+  }
+}

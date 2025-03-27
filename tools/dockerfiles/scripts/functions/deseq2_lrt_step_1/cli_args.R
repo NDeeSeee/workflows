@@ -74,7 +74,7 @@ get_args <- function() {
     "--use_lfc_thresh",
     action = "store_true",
     default = FALSE,
-    help = "How to apply LFC threshold: TRUE - use in hypothesis testing (as null), FALSE - apply as post-filtering. Note: For LRT tests, LFC threshold is not used in testing."
+    help = "Use lfcthreshold as the null hypothesis value in the results function call"
   )
   
   parser$add_argument(
@@ -84,11 +84,9 @@ get_args <- function() {
     help = "Integer cutoff for filtering rows in the expression data"
   )
   
-  # Keep original CWL parameter names but store in the new parameter names
-  # This avoids the ambiguous option error
+  # Using the names directly as in CWL
   parser$add_argument(
     "--cluster",
-    dest = "cluster_method",
     default = "none",
     choices = c("row", "column", "both", "none"),
     help = "Hopach clustering method to be run on normalized read counts"
@@ -96,7 +94,6 @@ get_args <- function() {
   
   parser$add_argument(
     "--rowdist",
-    dest = "row_distance",
     default = "cosangle",
     choices = c("cosangle", "abscosangle", "euclid", "cor", "abscor"),
     help = "Distance metric for HOPACH row clustering"
@@ -104,7 +101,6 @@ get_args <- function() {
   
   parser$add_argument(
     "--columndist",
-    dest = "column_distance",
     default = "euclid",
     choices = c("cosangle", "abscosangle", "euclid", "cor", "abscor"),
     help = "Distance metric for HOPACH column clustering"
@@ -112,7 +108,6 @@ get_args <- function() {
   
   parser$add_argument(
     "--k",
-    dest = "k_hopach",
     type = "integer",
     default = 3,
     help = "Number of levels (depth) for Hopach clustering: min - 1, max - 15"
@@ -120,7 +115,6 @@ get_args <- function() {
   
   parser$add_argument(
     "--kmax",
-    dest = "kmax_hopach",
     type = "integer",
     default = 5,
     help = "Maximum number of clusters at each level for Hopach clustering: min - 2, max - 9"
@@ -129,7 +123,6 @@ get_args <- function() {
   # Output arguments
   parser$add_argument(
     "--output",
-    dest = "output_prefix",
     default = "./deseq_lrt_step_1",
     help = "Output prefix for generated files"
   )
@@ -293,7 +286,7 @@ get_args <- function() {
       }
       
       # Parse numeric values
-      for (arg_name in c("fdr", "lfcthreshold", "rpkm_cutoff", "k_hopach", "kmax_hopach", "threads")) {
+      for (arg_name in c("fdr", "lfcthreshold", "rpkm_cutoff", "k", "kmax", "threads")) {
         if (!is.null(args[[arg_name]]) && is.character(args[[arg_name]])) {
           if (grepl("^[0-9.]+$", args[[arg_name]])) {
             args[[arg_name]] <- as.numeric(args[[arg_name]])
@@ -304,32 +297,8 @@ get_args <- function() {
       # Convert boolean string values
       for (arg_name in c("use_lfc_thresh", "lrt_only_mode", "test_mode")) {
         if (!is.null(args[[arg_name]]) && is.character(args[[arg_name]])) {
-          if (tolower(args[[arg_name]]) %in% c("true", "t", "yes", "y", "1")) {
-            args[[arg_name]] <- TRUE
-          } else if (tolower(args[[arg_name]]) %in% c("false", "f", "no", "n", "0")) {
-            args[[arg_name]] <- FALSE
-          }
+          args[[arg_name]] <- convert_to_boolean(args[[arg_name]], FALSE)
         }
-      }
-      
-      # Set up parameter aliases for compatibility
-      if (!is.null(args$k)) {
-        args$k_hopach <- args$k
-      }
-      if (!is.null(args$kmax)) {
-        args$kmax_hopach <- args$kmax
-      }
-      if (!is.null(args$cluster)) {
-        args$cluster_method <- args$cluster
-      }
-      if (!is.null(args$rowdist)) {
-        args$row_distance <- args$rowdist
-      }
-      if (!is.null(args$columndist)) {
-        args$column_distance <- args$columndist
-      }
-      if (!is.null(args$output)) {
-        args$output_prefix <- args$output
       }
       
       # Show what we parsed
@@ -359,6 +328,13 @@ get_args <- function() {
     message("Trimmed whitespace from sample names")
   }
   
+  # Convert boolean string values to actual booleans if they came as strings
+  for (arg_name in c("use_lfc_thresh", "lrt_only_mode", "test_mode")) {
+    if (!is.null(args[[arg_name]])) {
+      args[[arg_name]] <- convert_to_boolean(args[[arg_name]], FALSE)
+    }
+  }
+  
   # Final check for required arguments before returning
   required_args <- c("meta", "design", "reduced")
   for (req_arg in required_args) {
@@ -376,13 +352,6 @@ get_args <- function() {
     }
   }
   
-  return(args)
-}
-
-# Function to handle parameter naming compatibility
-handle_parameter_compatibility <- function(args) {
-  # NOTE: This function is no longer needed as we're handling parameter compatibility
-  # directly in the ArgumentParser using the 'dest' parameter
   return(args)
 }
 
@@ -509,16 +478,16 @@ assert_args <- function(args) {
     }
   }
   
-  # Validate k_hopach parameter (1-15)
-  if (!is.null(args$k_hopach) && (args$k_hopach < 1 || args$k_hopach > 15)) {
-    message("Warning: --k_hopach must be between 1 and 15, using default value 3")
-    args$k_hopach <- 3
+  # Validate k parameter (1-15)
+  if (!is.null(args$k) && (args$k < 1 || args$k > 15)) {
+    message("Warning: --k must be between 1 and 15, using default value 3")
+    args$k <- 3
   }
   
-  # Validate kmax_hopach parameter (2-9)
-  if (!is.null(args$kmax_hopach) && (args$kmax_hopach < 2 || args$kmax_hopach > 9)) {
-    message("Warning: --kmax_hopach must be between 2 and 9, using default value 5")
-    args$kmax_hopach <- 5
+  # Validate kmax parameter (2-9)
+  if (!is.null(args$kmax) && (args$kmax < 2 || args$kmax > 9)) {
+    message("Warning: --kmax must be between 2 and 9, using default value 5")
+    args$kmax <- 5
   }
   
   # Validate fdr parameter

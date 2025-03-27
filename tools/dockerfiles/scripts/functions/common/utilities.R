@@ -19,31 +19,86 @@ report_memory_usage <- function(label = "") {
   }
 }
 
+#' Convert string value to boolean 
+#'
+#' Standardized conversion of string representations to boolean values.
+#' This ensures consistent handling of boolean parameters across all scripts.
+#'
+#' @param value Value to convert (character, logical, or numeric)
+#' @param default Default value if conversion fails
+#' @return Logical TRUE/FALSE
+#' @export
+convert_to_boolean <- function(value, default = FALSE) {
+  if (is.null(value)) {
+    return(default)
+  }
+  
+  if (is.logical(value)) {
+    return(value)
+  }
+  
+  if (is.numeric(value)) {
+    return(value != 0)
+  }
+  
+  if (is.character(value)) {
+    # Standardize case
+    value <- toupper(value)
+    
+    # Check against common boolean string representations
+    if (value %in% c("TRUE", "T", "YES", "Y", "1")) {
+      return(TRUE)
+    } else if (value %in% c("FALSE", "F", "NO", "N", "0")) {
+      return(FALSE)
+    }
+  }
+  
+  # Default fallback
+  return(default)
+}
+
 #' Source a file with fallback paths
 #' 
 #' @param filepath Relative path to file
 #' @param absolute_path Absolute path to file (fallback)
 #' @return TRUE if source was successful, FALSE otherwise
 source_with_fallback <- function(filepath, absolute_path = NULL) {
-  # Try absolute path first if provided
-  if (!is.null(absolute_path) && file.exists(absolute_path)) {
-    message(paste("Sourcing from absolute path:", absolute_path))
-    source(absolute_path)
-    return(TRUE)
-  }
-  
-  # Try relative path
-  if (file.exists(filepath)) {
-    message(paste("Sourcing from relative path:", filepath))
-    source(filepath)
-    return(TRUE)
-  }
-  
-  # Try a standard Docker path
+  # In Docker environment, prioritize Docker paths
+  # Try Docker path first
   docker_path <- file.path("/usr/local/bin", filepath)
+  message(paste("Checking Docker path:", docker_path))
   if (file.exists(docker_path)) {
     message(paste("Sourcing from Docker path:", docker_path))
     source(docker_path)
+    return(TRUE)
+  }
+  
+  # Try Docker function path if not explicitly included
+  if (!grepl("^functions/", filepath)) {
+    docker_function_path <- file.path("/usr/local/bin/functions", filepath)
+    message(paste("Checking Docker function path:", docker_function_path))
+    if (file.exists(docker_function_path)) {
+      message(paste("Sourcing from Docker function path:", docker_function_path))
+      source(docker_function_path)
+      return(TRUE)
+    }
+  }
+  
+  # Try absolute path if provided
+  if (!is.null(absolute_path)) {
+    message(paste("Checking absolute path:", absolute_path))
+    if (file.exists(absolute_path)) {
+      message(paste("Sourcing from absolute path:", absolute_path))
+      source(absolute_path)
+      return(TRUE)
+    }
+  }
+  
+  # Try relative path from current directory
+  message(paste("Checking relative path:", filepath))
+  if (file.exists(filepath)) {
+    message(paste("Sourcing from relative path:", filepath))
+    source(filepath)
     return(TRUE)
   }
   
@@ -604,6 +659,44 @@ clean_sample_names <- function(sample_names) {
 source_directory_with_fallback <- function(dir_path, absolute_dir_path = NULL, recursive = FALSE) {
   files_sourced <- FALSE
   
+  # Try Docker path first
+  docker_path <- file.path("/usr/local/bin", dir_path)
+  log_message(paste("Checking Docker directory path:", docker_path))
+  if (dir.exists(docker_path)) {
+    log_message(paste("Sourcing files from Docker directory:", docker_path))
+    r_files <- list.files(docker_path, pattern = "\\.R$", full.names = TRUE, recursive = recursive)
+    
+    # Sort files to ensure consistent loading order
+    r_files <- sort(r_files)
+    
+    for (file in r_files) {
+      log_message(paste("Sourcing file:", file))
+      source(file)
+      files_sourced <- TRUE
+    }
+    return(files_sourced)
+  }
+  
+  # Check for Docker function path if not explicitly included
+  if (!grepl("^functions/", dir_path)) {
+    docker_function_path <- file.path("/usr/local/bin/functions", dir_path)
+    log_message(paste("Checking Docker function directory path:", docker_function_path))
+    if (dir.exists(docker_function_path)) {
+      log_message(paste("Sourcing files from Docker function directory:", docker_function_path))
+      r_files <- list.files(docker_function_path, pattern = "\\.R$", full.names = TRUE, recursive = recursive)
+      
+      # Sort files to ensure consistent loading order
+      r_files <- sort(r_files)
+      
+      for (file in r_files) {
+        log_message(paste("Sourcing file:", file))
+        source(file)
+        files_sourced <- TRUE
+      }
+      return(files_sourced)
+    }
+  }
+  
   # Try sourcing files from the relative directory path
   if (dir.exists(dir_path)) {
     log_message(paste("Sourcing files from directory:", dir_path))
@@ -624,23 +717,6 @@ source_directory_with_fallback <- function(dir_path, absolute_dir_path = NULL, r
   if (!is.null(absolute_dir_path) && dir.exists(absolute_dir_path)) {
     log_message(paste("Sourcing files from absolute directory:", absolute_dir_path))
     r_files <- list.files(absolute_dir_path, pattern = "\\.R$", full.names = TRUE, recursive = recursive)
-    
-    # Sort files to ensure consistent loading order
-    r_files <- sort(r_files)
-    
-    for (file in r_files) {
-      log_message(paste("Sourcing file:", file))
-      source(file)
-      files_sourced <- TRUE
-    }
-    return(files_sourced)
-  }
-  
-  # Try sourcing from Docker path
-  docker_path <- file.path("/usr/local/bin", dir_path)
-  if (dir.exists(docker_path)) {
-    log_message(paste("Sourcing files from Docker directory:", docker_path))
-    r_files <- list.files(docker_path, pattern = "\\.R$", full.names = TRUE, recursive = recursive)
     
     # Sort files to ensure consistent loading order
     r_files <- sort(r_files)
