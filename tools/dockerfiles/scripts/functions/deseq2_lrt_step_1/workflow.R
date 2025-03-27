@@ -486,13 +486,25 @@ main <- function(args = NULL) {
 main_with_memory_management <- function() {
   # Start timing
   start_time <- Sys.time()
+  
+  # Make sure we have the log_message function available
+  if (!exists("log_message", mode="function")) {
+    # Define a basic version if not available
+    log_message <- function(message, level="INFO") {
+      cat(format(Sys.time(), "[%Y-%m-%d %H:%M:%S]"), level, ":", message, "\n")
+    }
+  }
+  
+  # Report start time in a safe way
   log_message(paste("DESeq2 LRT Step 1 analysis started at", format(start_time, "%Y-%m-%d %H:%M:%S")))
   
-  # Initialize environment
-  initialize_environment()
-  
-  # Run main function
-  main()
+  # Run main function in a safe way
+  tryCatch({
+    main()
+  }, error = function(e) {
+    message("Error in main function: ", e$message)
+    quit(status = 1)
+  })
   
   # Report end time and duration
   end_time <- Sys.time()
@@ -503,6 +515,18 @@ main_with_memory_management <- function() {
   # Clean up large objects to free memory
   gc(verbose = FALSE)
   
+  # Define safe memory report function if it doesn't exist
+  if (!exists("report_memory_usage", mode="function")) {
+    report_memory_usage <- function(label) {
+      mem_used <- round(pryr::mem_used() / 1024^2, 1)
+      log_message(paste(label, "memory usage:", mem_used, "MB"))
+    }
+  }
+  
   # Final memory report
-  report_memory_usage("Final")
+  tryCatch({
+    report_memory_usage("Final")
+  }, error = function(e) {
+    log_message("Could not report memory usage")
+  })
 } 

@@ -9,6 +9,10 @@
 #' @param timestamp Whether to include a timestamp
 #' @export
 log_message <- function(message, timestamp = TRUE) {
+  # Ensure timestamp is logical
+  timestamp <- as.logical(timestamp)
+  if (is.na(timestamp)) timestamp <- TRUE
+  
   if (timestamp) {
     timestamp_str <- format(Sys.time(), "[%Y-%m-%d %H:%M:%S]")
     cat(timestamp_str, "INFO:", message, "\n")
@@ -23,6 +27,10 @@ log_message <- function(message, timestamp = TRUE) {
 #' @param timestamp Whether to include a timestamp
 #' @export
 log_warning <- function(message, timestamp = TRUE) {
+  # Ensure timestamp is logical
+  timestamp <- as.logical(timestamp)
+  if (is.na(timestamp)) timestamp <- TRUE
+  
   if (timestamp) {
     timestamp_str <- format(Sys.time(), "[%Y-%m-%d %H:%M:%S]")
     cat(timestamp_str, "WARNING:", message, "\n")
@@ -39,6 +47,10 @@ log_warning <- function(message, timestamp = TRUE) {
 #' @param exit_code The exit code to use if exiting
 #' @export
 log_error <- function(message, timestamp = TRUE, exit = FALSE, exit_code = 1) {
+  # Ensure timestamp is logical
+  timestamp <- as.logical(timestamp)
+  if (is.na(timestamp)) timestamp <- TRUE
+  
   if (timestamp) {
     timestamp_str <- format(Sys.time(), "[%Y-%m-%d %H:%M:%S]")
     cat(timestamp_str, "ERROR:", message, "\n", file = stderr())
