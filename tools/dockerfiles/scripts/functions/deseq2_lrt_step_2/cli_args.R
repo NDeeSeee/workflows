@@ -151,13 +151,93 @@ get_args <- function() {
     default = FALSE
   )
   
-  # Parse arguments
-  args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+  # Parse arguments with better error handling
+  tryCatch({
+    args <- parser$parse_args(commandArgs(trailingOnly = TRUE))
+  }, error = function(e) {
+    message("Warning: Argument parsing error. Attempting to handle arguments manually.")
+    
+    # Get all command line arguments
+    all_args <- commandArgs(trailingOnly = TRUE)
+    
+    # Initialize an empty list for our parsed arguments
+    args <- list()
+    
+    # Make sure to explicitly extract required arguments first
+    required_args <- c("dsq_obj_data", "contrast_df", "contrast_indices")
+    for (req_arg in required_args) {
+      req_flag <- paste0("--", req_arg)
+      arg_idx <- which(all_args == req_flag)
+      if (length(arg_idx) > 0 && arg_idx[1] < length(all_args)) {
+        args[[req_arg]] <- all_args[arg_idx[1] + 1]
+        message(paste("Directly extracted required argument:", req_arg, "=", args[[req_arg]]))
+      }
+    }
+    
+    # First pass: process all flags with values
+    i <- 1
+    while (i <= length(all_args)) {
+      current_arg <- all_args[i]
+      
+      # Check if this is a flag argument (starts with --)
+      if (grepl("^--", current_arg)) {
+        arg_name <- sub("^--", "", current_arg)
+        
+        # Check if the next item exists and is not a flag
+        if (i < length(all_args) && !grepl("^--", all_args[i + 1])) {
+          arg_value <- all_args[i + 1]
+          
+          # Set the value
+          args[[arg_name]] <- arg_value
+          
+          i <- i + 2  # Skip the value
+        } else {
+          # This is a boolean flag
+          args[[arg_name]] <- TRUE
+          i <- i + 1
+        }
+      } else {
+        # This is a positional argument, move on
+        i <- i + 1
+      }
+    }
+    
+    # Show what we parsed
+    message("Manually parsed arguments:")
+    for (arg_name in names(args)) {
+      message(paste0("  ", arg_name, ": ", args[[arg_name]]))
+    }
+    
+    return(args)
+  })
+  
+  # Validate required arguments
+  required_args <- c("dsq_obj_data", "contrast_df", "contrast_indices")
+  missing_args <- required_args[!required_args %in% names(args)]
+  if (length(missing_args) > 0) {
+    stop(paste("Missing required arguments:", paste(missing_args, collapse=", ")))
+  }
+  
+  # Process contrast indices
+  if (!is.null(args$contrast_indices)) {
+    args$contrast_indices <- as.numeric(unlist(strsplit(args$contrast_indices, ",")))
+  }
   
   # Convert boolean string values if needed
   for (arg_name in c("use_lfc_thresh", "test_mode")) {
     if (!is.null(args[[arg_name]])) {
-      args[[arg_name]] <- convert_to_boolean(args[[arg_name]], FALSE)
+      if (is.character(args[[arg_name]])) {
+        args[[arg_name]] <- toupper(args[[arg_name]]) %in% c("TRUE", "T", "YES", "Y", "1")
+      }
+    }
+  }
+  
+  # Convert numeric values
+  for (arg_name in c("fdr", "lfcthreshold", "k", "kmax", "threads")) {
+    if (!is.null(args[[arg_name]]) && is.character(args[[arg_name]])) {
+      if (grepl("^[0-9.]+$", args[[arg_name]])) {
+        args[[arg_name]] <- as.numeric(args[[arg_name]])
+      }
     }
   }
   

@@ -49,118 +49,157 @@ filter_rpkm <- function(expression_df, n) {
 
 #' Load expression data from isoform files and merge them
 #'
-#' @param filenames Vector of file paths
-#' @param prefixes Vector of sample prefixes
-#' @param read_colname Column name for read counts
-#' @param rpkm_colname Column name for RPKM values
-#' @param rpkm_colname_alias Alias for combined RPKM values
-#' @param conditions Condition name (e.g., "treated" or "untreated")
+#' @param input_files Vector of file paths
+#' @param sample_aliases Vector of sample aliases
+#' @param read_column Column name for read counts
+#' @param rpkm_column Column name for RPKM values
+#' @param rpkm_alias Alias for combined RPKM values
+#' @param condition_name Condition name (e.g., "treated" or "untreated")
 #' @param intersect_by Vector of column names to use for merging
 #' @param digits Number of digits for rounding
-#' @param batch_metadata Batch metadata for multi-factor analysis
-#' @param collected_data Previously collected data (optional)
+#' @param batch_data Batch metadata for multi-factor analysis
+#' @param prev_data Previously collected data (optional)
 #' @return List containing merged expression data and metadata
-load_isoform_set <- function(filenames,
-                             prefixes,
-                             read_colname,
-                             rpkm_colname,
-                             rpkm_colname_alias,
-                             conditions,
-                             intersect_by,
-                             digits,
-                             batch_metadata,
-                             collected_data = NULL) {
+load_isoform_set <- function(input_files, sample_aliases, read_column, rpkm_column, rpkm_alias, condition_name, intersect_by, digits = NULL, batch_data = NULL, prev_data = NULL) {
+  log_message(paste("Loading isoform set for condition:", condition_name))
   
-  # Initialize rpkm_colnames if needed
-  if (is.null(collected_data)) {
-    rpkm_colnames <- character(0)
-  } else {
-    rpkm_colnames <- collected_data$rpkm_colnames
+  # Check and validate inputs
+  if (is.null(input_files) || length(input_files) == 0) {
+    stop("No input files provided")
   }
   
-  # Process each input file
-  for (i in 1:length(filenames)) {
-    # Load data
-    isoforms <- with_error_handling({
+  # Validate sample aliases
+  if (is.null(sample_aliases) || length(sample_aliases) == 0) {
+    log_warning("No sample aliases provided. Using input file basenames")
+    sample_aliases <- basename(input_files)
+    # Remove extensions from filenames
+    sample_aliases <- gsub("\\.(csv|tsv)$", "", sample_aliases, ignore.case = TRUE)
+  }
+  
+  # Check for mismatched file and alias counts
+  if (length(input_files) != length(sample_aliases)) {
+    log_warning(paste("Mismatch between input files count (", length(input_files), ") and sample aliases count (", length(sample_aliases), ")"))
+    
+    # Handle two specific cases:
+    # 1. More files than aliases: generate aliases from file basenames
+    # 2. More aliases than files: truncate aliases to match files
+    
+    if (length(input_files) > length(sample_aliases)) {
+      log_message("More input files than sample aliases. Using file basenames for missing aliases.")
+      
+      # Generate aliases from file paths for the missing slots
+      missing_aliases_count <- length(input_files) - length(sample_aliases)
+      file_basenames <- basename(input_files[(length(sample_aliases)+1):length(input_files)])
+      file_basenames <- gsub("\\.(csv|tsv)$", "", file_basenames, ignore.case = TRUE)
+      
+      # Append the generated aliases
+      sample_aliases <- c(sample_aliases, file_basenames)
+      log_message(sprintf("Added %d aliases from file basenames. Now have %d aliases.", 
+                      missing_aliases_count, length(sample_aliases)))
+    } else if (length(sample_aliases) > length(input_files)) {
+      log_message("More sample aliases than input files. Truncating aliases list.")
+      sample_aliases <- sample_aliases[1:length(input_files)]
+    }
+  }
+  
+  # Clean sample aliases - replace spaces, quotes, etc. with underscores
+  sample_aliases <- gsub("'|\"| ", "_", sample_aliases)
+  
+  # Initialize the result container
+  result <- list()
+  result$collected_isoforms <- NULL
+  
+  for (i in 1:length(input_files)) {
+    # Log processing
+    log_message(paste("Loading file", i, "of", length(input_files), ":", input_files[i]))
+    
+    # Get file type based on extension
+    file_type <- get_file_type(input_files[i])
+    
+    # Read file with appropriate delimiter
+    current_data <- tryCatch({
       read.table(
-        filenames[i],
-        sep = get_file_type(filenames[i]),
+        input_files[i],
+        sep = file_type,
         header = TRUE,
+        check.names = FALSE,
         stringsAsFactors = FALSE
       )
+    }, error = function(e) {
+      log_error(paste("Error reading file:", input_files[i], "-", e$message))
+      return(NULL)
     })
     
-    if (is.null(isoforms)) {
-      log_error(paste("Failed to load file:", filenames[i]))
+    # Skip if file couldn't be read
+    if (is.null(current_data)) {
+      log_warning(paste("Skipping file due to read error:", input_files[i]))
       next
     }
     
     # Rename columns
-    new_read_colname <- paste(prefixes[i], conditions, sep = "_")
-    colnames(isoforms)[colnames(isoforms) == read_colname] <- new_read_colname
-    colnames(isoforms)[colnames(isoforms) == rpkm_colname] <- paste(conditions, i, rpkm_colname, sep = " ")
+    new_read_colname <- paste(sample_aliases[i], condition_name, sep = "_")
+    colnames(current_data)[colnames(current_data) == read_column] <- new_read_colname
+    colnames(current_data)[colnames(current_data) == rpkm_column] <- paste(condition_name, i, rpkm_column, sep = " ")
     
     # Create column data
-    if (!is.null(batch_metadata)) {
-      batch <- batch_metadata[prefixes[i], "batch"]
+    if (!is.null(batch_data)) {
+      batch <- batch_data[sample_aliases[i], "batch"]
       log_message(
         paste0(
-          "Loaded ", nrow(isoforms),
-          " rows from '", filenames[i],
+          "Loaded ", nrow(current_data),
+          " rows from '", input_files[i],
           "' as '", new_read_colname,
           "', batch '", batch, "'"
         )
       )
-      column_data_frame <- data.frame(conditions, batch, row.names = c(new_read_colname))
+      column_data_frame <- data.frame(condition_name, batch, row.names = c(new_read_colname))
     } else {
       log_message(
         paste0(
-          "Loaded ", nrow(isoforms),
-          " rows from '", filenames[i],
+          "Loaded ", nrow(current_data),
+          " rows from '", input_files[i],
           "' as '", new_read_colname, "'"
         )
       )
-      column_data_frame <- data.frame(conditions, row.names = c(new_read_colname))
+      column_data_frame <- data.frame(condition_name, row.names = c(new_read_colname))
     }
     
     # Initialize or update collected data
-    if (is.null(collected_data)) {
-      collected_data <- list(
-        collected_isoforms = isoforms,
-        read_colnames = c(new_read_colname),
-        column_data = column_data_frame,
-        rpkm_colnames = character(0)
-      )
+    if (is.null(prev_data)) {
+      result$collected_isoforms <- current_data
+      result$read_colnames <- c(new_read_colname)
+      result$column_data <- column_data_frame
+      result$rpkm_colnames <- character(0)
     } else {
-      collected_data$collected_isoforms <- merge(
-        collected_data$collected_isoforms,
-        isoforms,
+      result$collected_isoforms <- merge(
+        prev_data$collected_isoforms,
+        current_data,
         by = intersect_by,
         sort = FALSE
       )
-      collected_data$read_colnames <- c(collected_data$read_colnames, new_read_colname)
-      collected_data$column_data <- rbind(collected_data$column_data, column_data_frame)
+      result$read_colnames <- c(prev_data$read_colnames, new_read_colname)
+      result$column_data <- rbind(prev_data$column_data, column_data_frame)
     }
   }
   
   # Calculate average RPKM for the condition
   rpkm_columns <- grep(
-    paste("^", conditions, " [0-9]+ ", rpkm_colname, sep = ""),
-    colnames(collected_data$collected_isoforms),
+    paste("^", condition_name, " [0-9]+ ", rpkm_column, sep = ""),
+    colnames(result$collected_isoforms),
     value = TRUE,
     ignore.case = TRUE
   )
   
-  collected_data$collected_isoforms[rpkm_colname_alias] <- format(
-    rowSums(collected_data$collected_isoforms[, rpkm_columns, drop = FALSE]) / length(filenames),
+  result$collected_isoforms[rpkm_alias] <- format(
+    rowSums(result$collected_isoforms[, rpkm_columns, drop = FALSE]) / length(input_files),
     digits = digits
   )
   
   # Update RPKM column names and remove individual RPKM columns
-  collected_data$rpkm_colnames <- c(collected_data$rpkm_colnames, rpkm_colname_alias)
-  collected_data$collected_isoforms <- collected_data$collected_isoforms[, !colnames(collected_data$collected_isoforms) %in% rpkm_columns]
+  result$rpkm_colnames <- c(result$rpkm_colnames, rpkm_alias)
+  result$collected_isoforms <- result$collected_isoforms[, !colnames(result$collected_isoforms) %in% rpkm_columns]
   
-  return(collected_data)
+  return(result)
 }
 
 #' Generate an analysis summary markdown file

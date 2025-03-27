@@ -274,14 +274,49 @@ get_args <- function() {
         
         # Only add names that match the sample naming pattern
         if (length(name_args) > 0) {
-          # Filter only actual sample names (assume they start with ABC)
-          sample_pattern <- "^ABSK\\d+"
-          valid_names <- name_args[grepl(sample_pattern, name_args)]
+          # Instead of filtering based on a specific pattern, accept all potential sample names
+          # since they come from CWL and should be trusted
+          args$name <- c(args$name, name_args)
+          message(paste("Adding", length(name_args), "sample names from positional args"))
+        }
+      }
+      
+      # Additional check for name-input mismatch
+      if (is.character(args$name) && length(args$name) == 1 && length(args$input) > 1) {
+        # Special handling: if we have multiple input files but only one name value,
+        # check if the name value could actually be a comma-separated list of names
+        potential_names <- unlist(strsplit(args$name, ","))
+        if (length(potential_names) > 1) {
+          message("Detected comma-separated list of names, expanding to array")
+          args$name <- potential_names
+        } else {
+          # If there's just one name and many inputs, but the single name isn't a comma-separated list,
+          # check if there are any other arguments that could be sample names
+          message("WARNING: Only one sample name found for multiple input files")
+          message("Looking for additional sample names in remaining arguments...")
           
-          if (length(valid_names) > 0) {
-            args$name <- c(args$name, valid_names)
-            message(paste("Adding", length(valid_names), "sample names from positional args"))
+          # Try to detect sample names from the remaining arguments
+          # This is more permissive than before
+          remaining_args <- setdiff(all_args, c(flag_indices, flag_values, args$input))
+          if (length(remaining_args) > 0) {
+            potential_names <- remaining_args[!grepl("^--", remaining_args)]
+            if (length(potential_names) > 0) {
+              message(paste("Found", length(potential_names), "potential additional sample names"))
+              args$name <- c(args$name, potential_names)
+            }
           }
+        }
+      }
+      
+      # Final verification: ensure we have the same number of names as inputs
+      if (length(args$input) > 0 && length(args$name) > 0) {
+        if (length(args$name) == 1 && length(args$input) > 1) {
+          # If we still have a mismatch, try to generate names from the input file paths
+          message("WARNING: Input/name count mismatch. Generating sample names from input files.")
+          args$name <- basename(args$input)
+          args$name <- gsub("\\.(tsv|csv)$", "", args$name)
+        } else if (length(args$name) < length(args$input)) {
+          message("WARNING: Fewer sample names than input files. Some names may be missing.")
         }
       }
       

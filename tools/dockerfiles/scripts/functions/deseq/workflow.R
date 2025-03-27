@@ -238,6 +238,11 @@ generate_visualizations <- function(deseq_results, args) {
   DESeq2::plotMA(res, main = "MA Plot", ylim = c(-5, 5))
   dev.off()
   
+  # Also create PNG version
+  png(paste0(args$output, "_ma_plot.png"), width = 8, height = 6, units = "in", res = 300)
+  DESeq2::plotMA(res, main = "MA Plot", ylim = c(-5, 5))
+  dev.off()
+  
   # Create dispersion plot
   pdf(paste0(args$output, "_dispersion_plot.pdf"), width = 8, height = 6)
   DESeq2::plotDispEsts(dds, main = "Dispersion Estimates")
@@ -252,9 +257,118 @@ generate_visualizations <- function(deseq_results, args) {
       ggtitle("PCA Plot") +
       theme(plot.title = element_text(hjust = 0.5))
     dev.off()
+    
+    # Also create PNG version
+    png(paste0(args$output, "_pca_plot.png"), width = 10, height = 8, units = "in", res = 300)
+    DESeq2::plotPCA(vst_data, intgroup = "conditions") +
+      ggtitle("PCA Plot") +
+      theme(plot.title = element_text(hjust = 0.5))
+    dev.off()
   }
   
   log_message("Visualizations saved successfully")
+}
+
+#' Create standard summary plots for DESeq2 analysis
+#'
+#' @param dds DESeq2 dds object
+#' @param res DESeq2 results object
+#' @param output_prefix Output file prefix
+#' @param vst_transform Whether to use VST transformation
+#' @param pval_threshold P-value threshold for significance
+#' @param lfc_threshold Log2 fold change threshold
+#' @return List of created file paths
+create_summary_plots <- function(dds, res, output_prefix, vst_transform = TRUE, 
+                                pval_threshold = 0.1, lfc_threshold = 1) {
+  log_message("Creating summary plots for DESeq2 analysis")
+  output_files <- list()
+  
+  # Create MA plot (log fold change vs mean expression)
+  log_message("Creating MA plot")
+  ma_plot <- function() {
+    DESeq2::plotMA(res, main = "MA Plot", ylim = c(-5, 5), alpha = pval_threshold)
+  }
+  
+  # Save both PNG and PDF versions
+  ma_files <- save_plot_png_pdf(ma_plot, output_prefix, "ma_plot", width = 8, height = 6)
+  output_files$ma_plot <- ma_files
+  
+  # Create PCA plot if data is available
+  if (!is.null(dds)) {
+    log_message("Creating PCA plot")
+    
+    # Transform data
+    if (vst_transform) {
+      transformed_data <- DESeq2::vst(dds, blind = FALSE)
+    } else {
+      transformed_data <- DESeq2::rlog(dds, blind = FALSE)
+    }
+    
+    # Create PCA plot
+    pca_plot <- DESeq2::plotPCA(transformed_data, intgroup = "conditions") +
+      ggtitle("PCA Plot") +
+      theme(plot.title = element_text(hjust = 0.5))
+    
+    # Save both PNG and PDF versions
+    pca_files <- save_plot_png_pdf(pca_plot, output_prefix, "pca_plot", width = 10, height = 8)
+    output_files$pca_plot <- pca_files
+    
+    # Create expression heatmap of top differentially expressed genes
+    log_message("Creating expression heatmap")
+    
+    # Get normalized counts
+    norm_counts <- DESeq2::counts(dds, normalized = TRUE)
+    
+    # Select top genes by adjusted p-value
+    sig_genes <- res[which(res$padj < pval_threshold & abs(res$log2FoldChange) > lfc_threshold), ]
+    top_genes <- head(order(sig_genes$padj), 50)
+    
+    if (length(top_genes) > 1) {
+      # Extract count data for heatmap
+      heatmap_data <- norm_counts[top_genes, ]
+      
+      # Scale data for better visualization
+      heatmap_data_scaled <- t(scale(t(log2(heatmap_data + 1))))
+      
+      # Create heatmap
+      heatmap_plot <- function() {
+        pheatmap::pheatmap(
+          heatmap_data_scaled,
+          main = "Top Differentially Expressed Genes",
+          cluster_rows = TRUE,
+          cluster_cols = TRUE,
+          show_rownames = TRUE,
+          show_colnames = TRUE,
+          fontsize_row = 8,
+          fontsize_col = 10
+        )
+      }
+      
+      # Save both PNG and PDF versions
+      heatmap_files <- save_plot_png_pdf(heatmap_plot, output_prefix, "expression_heatmap", 
+                                       width = 10, height = 12)
+      output_files$heatmap <- heatmap_files
+    } else {
+      log_message("Not enough significant genes for heatmap", "WARNING")
+    }
+  }
+  
+  # Ensure all expected output files exist
+  expected_files <- c(
+    paste0(output_prefix, "_ma_plot.png"),
+    paste0(output_prefix, "_ma_plot.pdf"),
+    paste0(output_prefix, "_pca_plot.png"),
+    paste0(output_prefix, "_pca_plot.pdf"),
+    paste0(output_prefix, "_expression_heatmap.png"),
+    paste0(output_prefix, "_expression_heatmap.pdf")
+  )
+  
+  # Check outputs (don't stop on missing as some might not be generated
+  # if there aren't enough significant genes)
+  check_outputs(expected_files, stop_on_missing = FALSE)
+  
+  log_message("Summary plots created successfully")
+  return(output_files)
 }
 
 #' Wrapper function with memory management

@@ -20,7 +20,25 @@ if (file.exists(workflow_file)) {
   initialize_environment()
   
   # Run the workflow with memory management
-  main_with_memory_management()
+  results <- main_with_memory_management()
+  
+  # Verify outputs
+  verify_file <- "/usr/local/bin/verify_outputs.R"
+  if (file.exists(verify_file)) {
+    message("Verifying outputs with:", verify_file)
+    source(verify_file)
+    
+    # Get the output prefix from command-line arguments
+    args <- get_args()
+    output_prefix <- if (!is.null(args$output_prefix)) args$output_prefix else 
+                     if (!is.null(args$output)) args$output else "deseq"
+    
+    # Verify all required outputs were created
+    message("Verifying all required outputs were created...")
+    verify_workflow_outputs("deseq_advanced", output_prefix, fail_on_missing = FALSE)
+  } else {
+    message("Warning: Verification file not found, skipping output verification")
+  }
 } else {
   message("ERROR: Workflow file not found at", workflow_file)
   message("Checking alternative locations...")
@@ -31,7 +49,22 @@ if (file.exists(workflow_file)) {
     message("Found workflow file at relative path:", relative_path)
     source(relative_path)
     initialize_environment()
-    main_with_memory_management()
+    results <- main_with_memory_management()
+    
+    # Verify outputs
+    verify_path <- "verify_outputs.R"
+    if (file.exists(verify_path)) {
+      source(verify_path)
+      
+      # Get the output prefix from command-line arguments
+      args <- get_args()
+      output_prefix <- if (!is.null(args$output_prefix)) args$output_prefix else 
+                       if (!is.null(args$output)) args$output else "deseq"
+      
+      # Verify all required outputs were created
+      message("Verifying all required outputs were created...")
+      verify_workflow_outputs("deseq_advanced", output_prefix, fail_on_missing = FALSE)
+    }
   } else {
     # Last resort - try to find it
     message("Attempting to locate workflow.R file...")
@@ -39,3 +72,5 @@ if (file.exists(workflow_file)) {
     stop("Could not find workflow.R file. Please verify your installation.")
   }
 }
+
+message("DESeq analysis completed.")

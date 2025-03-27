@@ -290,40 +290,188 @@ get_args <- function() {
     default = 1
   )
   
-  # Parse and clean arguments
-  parsed_args <- parser$parse_args(gsub("'|\"| ", "_", commandArgs(trailingOnly = TRUE)))
+  # Parse arguments with better error handling
+  tryCatch({
+    args <- parser$parse_args()
+  }, error = function(e) {
+    message("Warning: Argument parsing error. Attempting to handle arguments manually.")
+    
+    # Get all command line arguments
+    all_args <- commandArgs(trailingOnly = TRUE)
+    
+    # Initialize an empty list for our parsed arguments
+    args <- list()
+    
+    # Initialize arrays for multi-value arguments
+    array_args <- c("untreated_files", "treated_files", "untreated_sample_names", "treated_sample_names")
+    for (arg in array_args) {
+      args[[arg]] <- character(0)
+    }
+    
+    # Make sure to explicitly extract required arguments first
+    required_args <- c("untreated_files", "treated_files")
+    for (req_arg in required_args) {
+      req_flag <- paste0("--", req_arg)
+      short_flag <- if(req_arg == "untreated_files") "-u" else if(req_arg == "treated_files") "-t" else NULL
+      
+      # Try long form first
+      arg_indices <- which(all_args == req_flag)
+      if (length(arg_indices) > 0) {
+        for (idx in arg_indices) {
+          if (idx < length(all_args) && !grepl("^-", all_args[idx + 1])) {
+            args[[req_arg]] <- c(args[[req_arg]], all_args[idx + 1])
+            # Check if more values follow
+            i <- idx + 2
+            while(i <= length(all_args) && !grepl("^-", all_args[i])) {
+              args[[req_arg]] <- c(args[[req_arg]], all_args[i])
+              i <- i + 1
+            }
+          }
+        }
+      }
+      
+      # Try short form if available
+      if (!is.null(short_flag)) {
+        arg_indices <- which(all_args == short_flag)
+        if (length(arg_indices) > 0) {
+          for (idx in arg_indices) {
+            if (idx < length(all_args) && !grepl("^-", all_args[idx + 1])) {
+              args[[req_arg]] <- c(args[[req_arg]], all_args[idx + 1])
+              # Check if more values follow
+              i <- idx + 2
+              while(i <= length(all_args) && !grepl("^-", all_args[i])) {
+                args[[req_arg]] <- c(args[[req_arg]], all_args[i])
+                i <- i + 1
+              }
+            }
+          }
+        }
+      }
+      
+      if (length(args[[req_arg]]) > 0) {
+        message(paste("Directly extracted required argument:", req_arg, "=", paste(args[[req_arg]], collapse=", ")))
+      }
+    }
+    
+    # Process sample names similarly
+    optional_array_args <- c(
+      "untreated_sample_names" = "--untreated_sample_names", 
+      "treated_sample_names" = "--treated_sample_names"
+    )
+    optional_short_args <- c(
+      "untreated_sample_names" = "-ua", 
+      "treated_sample_names" = "-ta"
+    )
+    
+    for (arg_name in names(optional_array_args)) {
+      long_flag <- optional_array_args[arg_name]
+      short_flag <- optional_short_args[arg_name]
+      
+      # Try long form
+      arg_indices <- which(all_args == long_flag)
+      if (length(arg_indices) > 0) {
+        for (idx in arg_indices) {
+          if (idx < length(all_args) && !grepl("^-", all_args[idx + 1])) {
+            args[[arg_name]] <- c(args[[arg_name]], all_args[idx + 1])
+            # Check if more values follow
+            i <- idx + 2
+            while(i <= length(all_args) && !grepl("^-", all_args[i])) {
+              args[[arg_name]] <- c(args[[arg_name]], all_args[i])
+              i <- i + 1
+            }
+          }
+        }
+      }
+      
+      # Try short form
+      arg_indices <- which(all_args == short_flag)
+      if (length(arg_indices) > 0) {
+        for (idx in arg_indices) {
+          if (idx < length(all_args) && !grepl("^-", all_args[idx + 1])) {
+            args[[arg_name]] <- c(args[[arg_name]], all_args[idx + 1])
+            # Check if more values follow
+            i <- idx + 2
+            while(i <= length(all_args) && !grepl("^-", all_args[i])) {
+              args[[arg_name]] <- c(args[[arg_name]], all_args[i])
+              i <- i + 1
+            }
+          }
+        }
+      }
+      
+      if (length(args[[arg_name]]) > 0) {
+        message(paste("Extracted optional array argument:", arg_name, "=", paste(args[[arg_name]], collapse=", ")))
+      }
+    }
+    
+    # Process remaining scalar arguments
+    i <- 1
+    while (i <= length(all_args)) {
+      current_arg <- all_args[i]
+      
+      # Skip arguments we've already processed
+      if (current_arg %in% c("-u", "--untreated_files", "-t", "--treated_files", "-ua", "--untreated_sample_names", "-ta", "--treated_sample_names")) {
+        # Skip this flag and its values
+        i <- i + 1
+        while(i <= length(all_args) && !grepl("^-", all_args[i])) {
+          i <- i + 1
+        }
+        next
+      }
+      
+      # Check if this is a flag argument (starts with -)
+      if (grepl("^--", current_arg) || grepl("^-[a-zA-Z]", current_arg)) {
+        arg_name <- sub("^--", "", current_arg)
+        if (grepl("^-[a-zA-Z]", current_arg)) {
+          short_name <- sub("^-", "", current_arg)
+          # Map short names to long names
+          if (short_name == "tn") arg_name <- "treated_name"
+          else if (short_name == "un") arg_name <- "untreated_name"
+          else if (short_name == "bf") arg_name <- "batch_file"
+          else arg_name <- short_name
+        }
+        
+        # Check if the next item exists and is not a flag
+        if (i < length(all_args) && !grepl("^-", all_args[i + 1])) {
+          arg_value <- all_args[i + 1]
+          args[[arg_name]] <- arg_value
+          i <- i + 2  # Skip the value
+        } else {
+          # This is a boolean flag
+          args[[arg_name]] <- TRUE
+          i <- i + 1
+        }
+      } else {
+        # This is a positional argument, move on
+        i <- i + 1
+      }
+    }
+    
+    # Show what we parsed
+    message("Manually parsed arguments:")
+    for (arg_name in names(args)) {
+      if (length(args[[arg_name]]) > 1) {
+        message(paste0("  ", arg_name, ": [", paste(head(args[[arg_name]], 3), collapse=", "), 
+                       if(length(args[[arg_name]]) > 3) "..." else "", "] (", length(args[[arg_name]]), " items)"))
+      } else {
+        message(paste0("  ", arg_name, ": ", args[[arg_name]]))
+      }
+    }
+    
+    return(args)
+  })
   
-  # Handle legacy parameter aliases
-  if (is.null(parsed_args$untreated_sample_names) && !is.null(parsed_args$ualias)) {
-    parsed_args$untreated_sample_names <- parsed_args$ualias
-  }
-  if (is.null(parsed_args$treated_sample_names) && !is.null(parsed_args$talias)) {
-    parsed_args$treated_sample_names <- parsed_args$talias
-  }
-  if (is.null(parsed_args$untreated_files) && !is.null(parsed_args$untreated)) {
-    parsed_args$untreated_files <- parsed_args$untreated
-  }
-  if (is.null(parsed_args$treated_files) && !is.null(parsed_args$treated)) {
-    parsed_args$treated_files <- parsed_args$treated
-  }
-  if (is.null(parsed_args$batch_file) && !is.null(parsed_args$batchfile)) {
-    parsed_args$batch_file <- parsed_args$batchfile
-  }
-  if (is.null(parsed_args$cluster_method) && !is.null(parsed_args$cluster)) {
-    parsed_args$cluster_method <- parsed_args$cluster
-  }
-  if (is.null(parsed_args$row_distance) && !is.null(parsed_args$rowdist)) {
-    parsed_args$row_distance <- parsed_args$rowdist
-  }
-  if (is.null(parsed_args$column_distance) && !is.null(parsed_args$columndist)) {
-    parsed_args$column_distance <- parsed_args$columndist
-  }
-  if (is.null(parsed_args$output_prefix) && !is.null(parsed_args$output)) {
-    parsed_args$output_prefix <- parsed_args$output
+  # Validate arguments and set defaults
+  args <- assert_args(args)
+  
+  # Convert numeric values
+  for (arg_name in c("fdr", "lfcthreshold", "threads")) {
+    if (!is.null(args[[arg_name]]) && is.character(args[[arg_name]])) {
+      if (grepl("^[0-9.]+$", args[[arg_name]])) {
+        args[[arg_name]] <- as.numeric(args[[arg_name]])
+      }
+    }
   }
   
-  # Validate and process arguments
-  validated_args <- assert_args(parsed_args)
-  
-  return(validated_args)
+  return(args)
 } 

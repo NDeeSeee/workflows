@@ -106,7 +106,41 @@ load_and_validate_expression_data <- function(args, metadata_df) {
   # Trim any trailing whitespace which can cause issues
   clean_names <- trimws(clean_names)
   
+  # Check if we have the correct number of sample names
+  if (length(clean_names) == 0) {
+    stop("No sample names provided. Please provide sample names with --name parameter.")
+  }
+  
+  # Validate we have the right number of files and names
+  if (length(args$input) != length(clean_names)) {
+    warning(sprintf("Mismatch between number of input files (%d) and sample names (%d).",
+                    length(args$input), length(clean_names)))
+    
+    # Handle two specific cases:
+    # 1. More files than names: use file basename as names
+    # 2. More names than files: truncate names to match files
+    
+    if (length(args$input) > length(clean_names)) {
+      message("More input files than sample names. Using file basenames for missing names.")
+      
+      # Generate names from file paths for the missing slots
+      missing_names_count <- length(args$input) - length(clean_names)
+      file_basenames <- basename(args$input[(length(clean_names)+1):length(args$input)])
+      file_basenames <- gsub("\\.(tsv|csv)$", "", file_basenames)
+      
+      # Append the generated names
+      clean_names <- c(clean_names, file_basenames)
+      message(sprintf("Added %d names from file basenames. Now have %d names.", 
+                      missing_names_count, length(clean_names)))
+    } else if (length(clean_names) > length(args$input)) {
+      message("More sample names than input files. Truncating sample names list.")
+      clean_names <- clean_names[1:length(args$input)]
+    }
+  }
+  
   # Load expression data
+  message(sprintf("Loading expression data for %d files with %d sample names", 
+                  length(args$input), length(clean_names)))
   expression_data_df <- load_expression_data(args$input, clean_names, READ_COL, RPKM_COL, INTERSECT_BY)
   message(glue::glue("Loaded expression data for {nrow(expression_data_df)} genes from {length(args$input)} files"))
   
