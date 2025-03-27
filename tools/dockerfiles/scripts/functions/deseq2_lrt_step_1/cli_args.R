@@ -213,34 +213,6 @@ get_args <- function() {
       }
       
       # At this point we have extracted all named parameters
-      # Now collect all the --input and --name values specifically
-      input_flags <- which(all_args == "--input")
-      name_flags <- which(all_args == "--name")
-      
-      # Clear any incorrectly assigned values that might have been added to args$name
-      if ("name" %in% names(args)) {
-        args$name <- character(0)
-      }
-      
-      # Extract input values correctly
-      if (length(input_flags) > 0) {
-        args$input <- character(0)
-        for (idx in input_flags) {
-          if (idx < length(all_args) && !grepl("^--", all_args[idx + 1])) {
-            args$input <- c(args$input, all_args[idx + 1])
-          }
-        }
-      }
-      
-      # Extract name values correctly
-      if (length(name_flags) > 0) {
-        args$name <- character(0)
-        for (idx in name_flags) {
-          if (idx < length(all_args) && !grepl("^--", all_args[idx + 1])) {
-            args$name <- c(args$name, all_args[idx + 1])
-          }
-        }
-      }
       
       # Second pass: Find any positional arguments
       positional_args <- all_args[!grepl("^--", all_args) & !grepl("^-[a-zA-Z]", all_args)]
@@ -329,12 +301,6 @@ get_args <- function() {
         }
       }
       
-      # Convert boolean string values
-      for (arg_name in c("use_lfc_thresh", "lrt_only_mode", "test_mode")) {
-        if (!is.null(args[[arg_name]]) && is.character(args[[arg_name]])) {
-          args[[arg_name]] <- convert_to_boolean(args[[arg_name]], FALSE)
-        }
-      }
       
       # Show what we parsed
       message("Manually parsed arguments:")
@@ -354,8 +320,20 @@ get_args <- function() {
     }
   })
   
+  }
+  
+  # Coerce args to a list if necessary (after tryCatch)
+  if (!is.list(args)) {
+    args <- as.list(args)
+  }
+  
   # Validate arguments
   args <- assert_args(args)
+  
+  # Coerce args to a list if necessary (after assert_args)
+  if (!is.list(args)) {
+    args <- as.list(args)
+  }
   
   # Trim whitespace from name values
   if (!is.null(args$name) && length(args$name) > 0) {
@@ -370,22 +348,6 @@ get_args <- function() {
     }
   }
   
-  # Final check for required arguments before returning
-  required_args <- c("meta", "design", "reduced")
-  for (req_arg in required_args) {
-    if (is.null(args[[req_arg]]) || !req_arg %in% names(args)) {
-      # One last attempt to recover from raw command line arguments
-      raw_args <- commandArgs(trailingOnly = TRUE)
-      arg_flag <- paste0("--", req_arg)
-      arg_idx <- which(raw_args == arg_flag)
-      if (length(arg_idx) > 0 && arg_idx[1] < length(raw_args)) {
-        args[[req_arg]] <- raw_args[arg_idx[1] + 1]
-        message(paste("Final recovery of required argument:", req_arg, "=", args[[req_arg]]))
-      } else {
-        message(paste("Error: Could not recover required argument:", req_arg))
-      }
-    }
-  }
   
   return(args)
 }
@@ -543,57 +505,7 @@ params$get_cli_args <- function() {
   return(get_args())
 }
 
-#' Assert that required arguments are present and valid
-#' @param args List of arguments to validate
-#' @export
-params$assert_args <- function(args) {
-  # Check required arguments are present
-  required_args <- c("meta", "design", "reduced", "input")
-  missing_args <- required_args[!required_args %in% names(args)]
-  
-  if (length(missing_args) > 0) {
-    # Before failing, try to recover missing arguments from command line
-    all_args <- commandArgs(trailingOnly = TRUE)
-    
-    for (missing_arg in missing_args) {
-      arg_flag <- paste0("--", missing_arg)
-      arg_idx <- which(all_args == arg_flag)
-      if (length(arg_idx) > 0 && arg_idx[1] < length(all_args)) {
-        args[[missing_arg]] <- all_args[arg_idx[1] + 1]
-        message(paste("Recovered missing required argument:", missing_arg, "=", args[[missing_arg]]))
-        # Remove from missing list
-        missing_args <- setdiff(missing_args, missing_arg)
-      }
-    }
-    
-    # If we still have missing arguments, stop
-    if (length(missing_args) > 0) {
-      stop(paste("Missing required arguments:", paste(missing_args, collapse=", ")))
-    }
-  }
-  
-  # Check that input files exist
-  for (input_file in args$input) {
-    if (!file.exists(input_file)) {
-      stop(paste("Input file does not exist:", input_file))
-    }
-  }
-  
-  # Check that metadata file exists
-  if (!file.exists(args$meta)) {
-    stop(paste("Metadata file does not exist:", args$meta))
-  }
-  
-  # Validate design formulas
-  tryCatch({
-    as.formula(args$design)
-    as.formula(args$reduced)
-  }, error = function(e) {
-    stop(paste("Invalid formula:", e$message))
-  })
-  
-  return(invisible(TRUE))
-}
+params$assert_args <- assert_args
 
 # Export the params namespace
 assign("params", params, envir = .GlobalEnv) 
