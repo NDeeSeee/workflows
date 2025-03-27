@@ -157,11 +157,66 @@ export_processed_plots <- function(seurat_data, de_results, args){
     }
 
     genes_to_highlight <- get_genes_to_highlight(de_results, args)  # may return empty vector
+    volcano_plot_data <- de_results$de_genes %>%
+                         dplyr::mutate(
+                             size_by=dplyr::if_else(
+                                 .$padj <= args$padj & abs(.$log2FoldChange) >= args$logfc,
+                                 dplyr::if_else(
+                                     .$log2FoldChange > 0,
+                                     .[[base::paste("pct", args$second, sep="_")]],
+                                     .[[base::paste("pct", args$first, sep="_")]]
+                                 ),
+                                 0
+                             ),
+                             overlay_by=dplyr::if_else(
+                                 .$padj <= args$padj & abs(.$log2FoldChange) >= args$logfc,
+                                 dplyr::if_else(
+                                     .$log2FoldChange > 0,
+                                     .[[base::paste("pct", args$first, sep="_")]],
+                                     .[[base::paste("pct", args$second, sep="_")]]
+                                 ),
+                                 0
+                             ),
+                             alpha_by=dplyr::if_else(
+                                 .$padj <= args$padj & abs(.$log2FoldChange) >= args$logfc,
+                                 1,
+                                 0.5
+                             )
+                         ) %>%
+                         dplyr::mutate(
+                             color_by=dplyr::if_else(
+                                 .$padj <= args$padj & abs(.$log2FoldChange) >= args$logfc,
+                                 dplyr::if_else(
+                                    .$overlay_by <= .$size_by,
+                                    dplyr::if_else(
+                                        .$log2FoldChange > 0,
+                                        "firebrick2",
+                                        "dodgerblue"
+                                    ),
+                                    "#865E96"
+                                 ),
+                                 graphics$NA_COLOR
+                             ),
+                             overlay_color_by=dplyr::if_else(
+                                 .$padj <= args$padj & abs(.$log2FoldChange) >= args$logfc,
+                                 dplyr::if_else(
+                                    .$overlay_by > .$size_by,
+                                    dplyr::if_else(
+                                        .$log2FoldChange > 0,
+                                        "dodgerblue",
+                                        "firebrick2"
+                                    ),
+                                    "#865E96"
+                                 ),
+                                 graphics$NA_COLOR
+                             )
+                         )
+
     graphics$volcano_plot(
-        data=de_results$de_genes,                                   # this is not filtered differentially expressed features
+        data=volcano_plot_data,                                   # this is not filtered differentially expressed features
         x_axis="log2FoldChange",
         y_axis="padj",
-        x_cutoff=0,
+        x_cutoff=args$logfc,
         y_cutoff=args$padj,
         x_label="log2 FC",
         y_label="-log10 Padj",
@@ -183,14 +238,22 @@ export_processed_plots <- function(seurat_data, de_results, args){
                 ""
             ),
             "adjusted P-value threshold ", args$padj, "; ",
+            "log2FC threshold ", args$logfc, "; ",
             ifelse(
                 (!is.null(args$genes) && length(args$genes) > 0),
                 "label user provided genes",
                 paste("label top", length(genes_to_highlight), "genes")
             )
         ),
-        caption=paste(nrow(de_results$de_genes), "genes"),
+        caption=paste(nrow(volcano_plot_data), "genes"),
         features=genes_to_highlight,
+        size_by="size_by",
+        size_from=c(0, 1),
+        color_by="color_by",
+        alpha_by="alpha_by",
+        overlay_by="overlay_by",
+        overlay_from=c(0, 1),
+        overlay_color_by="overlay_color_by",
         theme=args$theme,
         rootname=paste(args$output, "dxpr_vlcn", sep="_"),
         pdf=args$pdf
@@ -293,7 +356,9 @@ export_processed_plots <- function(seurat_data, de_results, args){
         order_by=NULL,                                             # we don't want to reorder cells by columns defined in the group_by
         palette_colors=graphics$D40_COLORS,
         plot_title=paste(
-            "Gene expression heatmap",
+            "Gene expression heatmap filtered",
+            "by P adjusted <=", args$padj, "and",
+            "|log2FC| >=", args$logfc,
             switch(
                 ifelse(is.null(args$cluster), "none", args$cluster),
                 "row" = "(clustered by gene)",
@@ -321,14 +386,26 @@ get_genes_to_highlight <- function(de_results, args){
     } else {
         print(
             paste(
-                "Identifying top 10 the most DE genes with P adjusted <= ", args$padj
+                "Identifying up to 20 the most",
+                "differentially expressed genes",
+                "with P adjusted <=", args$padj,
+                "and |log2FC| >=", args$logfc
             )
         )
-        top_de_genes <- de_results$de_genes %>%
-                        filter(.$padj<=args$padj) %>%
+        top_up_genes <- de_results$de_genes %>%
+                        filter(.$padj <= args$padj) %>%
+                        filter(.$log2FoldChange >= args$logfc) %>%
                         arrange(desc(log2FoldChange)) %>%
-                        filter(row_number() > max(row_number()) - 10 | row_number() <= 10)
-        genes_to_highlight <- as.vector(as.character(top_de_genes[, "gene"]))
+                        slice_head(n=10)
+        top_down_genes <- de_results$de_genes %>%
+                          filter(.$padj <= args$padj) %>%
+                          filter(.$log2FoldChange <= -args$logfc) %>%
+                          arrange(log2FoldChange) %>%
+                          slice_head(n=10)
+        genes_to_highlight <- c(
+            as.vector(as.character(top_up_genes$gene)),
+            as.vector(as.character(top_down_genes$gene))
+        )
     }
     print(paste("Genes to highlight", paste(genes_to_highlight, collapse=", ")))
     return (genes_to_highlight)
@@ -486,6 +563,15 @@ get_args <- function(){
             "Default: 0.1"
         ),
         type="double", default=0.1
+    )
+    parser$add_argument(
+        "--logfc",
+        help=paste(
+            "In the exploratory visualization part of the analysis output only",
+            "differentially expressed genes with log2 Fold Change not smaller than",
+            "this value. Default: 0.585 (1.5 folds)"
+        ),
+        type="double", default=0.585
     )
     parser$add_argument(
         "--genes",

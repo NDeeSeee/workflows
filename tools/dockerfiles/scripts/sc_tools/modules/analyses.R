@@ -2255,6 +2255,7 @@ rna_de_analyze <- function(seurat_data, args, excluded_genes=NULL){
                         tibble::remove_rownames() %>%
                         tibble::column_to_rownames("gene") %>%
                         dplyr::filter(.$padj<=args$padj) %>%
+                        dplyr::filter(abs(.$log2FoldChange) >= args$logfc) %>%
                         dplyr::arrange(
                             dplyr::desc(log2FoldChange * (log2FoldChange >= 0)),
                             log2FoldChange * (log2FoldChange < 0)
@@ -2323,7 +2324,11 @@ rna_de_analyze <- function(seurat_data, args, excluded_genes=NULL){
                         ident.1=args$second,
                         ident.2=args$first,                        # this is the reference as logFC = ident.1 / ident.2
                         features=selected_genes,
-                        logfc.threshold=0.25,                      # using default value
+                        logfc.threshold=base::ifelse(
+                            is.null(args$logfc),
+                            0.25,                                  # default for FindMarkers
+                            min(0.25, args$logfc)                  # in case we want to see smaller than 0.25 values
+                        ),
                         min.pct=args$minpct,
                         min.diff.pct=-Inf,                         # using default value
                         only.pos=FALSE,                            # we want to have both up and dowregulated genes
@@ -2358,6 +2363,7 @@ rna_de_analyze <- function(seurat_data, args, excluded_genes=NULL){
                         tibble::remove_rownames() %>%
                         tibble::column_to_rownames("gene") %>%
                         dplyr::filter(.$padj<=args$padj) %>%
+                        dplyr::filter(abs(.$log2FoldChange) >= args$logfc) %>%
                         dplyr::arrange(
                             dplyr::desc(log2FoldChange * (log2FoldChange >= 0)),
                             log2FoldChange * (log2FoldChange < 0)
