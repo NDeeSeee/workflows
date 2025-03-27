@@ -7,9 +7,6 @@
 #
 # Version: 0.1.0
 
-# Load required libraries
-suppressMessages(library(argparse))
-
 #' Assert and validate command line arguments
 #'
 #' @param args The parsed arguments from ArgumentParser

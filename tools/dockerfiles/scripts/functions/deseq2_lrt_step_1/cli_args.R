@@ -526,22 +526,7 @@ assert_args <- function(args) {
     message("Warning: --fdr must be between 0 and 1, using default value 0.1")
     args$fdr <- 0.1
   }
-  
-  # Set default values for any missing parameters
-  if (is.null(args$batchcorrection)) args$batchcorrection <- "none"
-  if (is.null(args$fdr)) args$fdr <- 0.1
-  if (is.null(args$lfcthreshold)) args$lfcthreshold <- 0.59
-  if (is.null(args$use_lfc_thresh)) args$use_lfc_thresh <- FALSE
-  if (is.null(args$cluster_method)) args$cluster_method <- "none"
-  if (is.null(args$row_distance)) args$row_distance <- "cosangle"
-  if (is.null(args$column_distance)) args$column_distance <- "euclid"
-  if (is.null(args$k_hopach)) args$k_hopach <- 3
-  if (is.null(args$kmax_hopach)) args$kmax_hopach <- 5
-  if (is.null(args$output_prefix)) args$output_prefix <- "./deseq_lrt_step_1"
-  if (is.null(args$threads)) args$threads <- 1
-  if (is.null(args$lrt_only_mode)) args$lrt_only_mode <- FALSE
-  if (is.null(args$test_mode)) args$test_mode <- FALSE
-  
+
   return(args)
 }
 
