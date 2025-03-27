@@ -92,7 +92,7 @@ export_results <- function(deseq_results, expression_data, metadata, args) {
   results_df$GeneId <- row.names(results_df)
   
   # Reorder columns to put GeneId first
-  results_df <- results_df[, c("GeneId", setdiff(colnames(results_df), "GeneId"))]
+  results_df <- results_df[, c("GeneId", base::setdiff(colnames(results_df), "GeneId"))]
   
   # Write results to TSV file
   write.table(
@@ -106,7 +106,7 @@ export_results <- function(deseq_results, expression_data, metadata, args) {
   # Export normalized counts
   norm_counts_df <- as.data.frame(normalized_counts)
   norm_counts_df$GeneId <- row.names(norm_counts_df)
-  norm_counts_df <- norm_counts_df[, c("GeneId", setdiff(colnames(norm_counts_df), "GeneId"))]
+  norm_counts_df <- norm_counts_df[, c("GeneId", base::setdiff(colnames(norm_counts_df), "GeneId"))]
   
   write.table(
     norm_counts_df,
@@ -120,7 +120,7 @@ export_results <- function(deseq_results, expression_data, metadata, args) {
   if (!is.null(vst_data)) {
     vst_df <- as.data.frame(assay(vst_data))
     vst_df$GeneId <- row.names(vst_df)
-    vst_df <- vst_df[, c("GeneId", setdiff(colnames(vst_df), "GeneId"))]
+    vst_df <- vst_df[, c("GeneId", base::setdiff(colnames(vst_df), "GeneId"))]
     
     write.table(
       vst_df,
