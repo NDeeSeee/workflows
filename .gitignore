@@ -88,3 +88,8 @@ npm-debug.log
 # vscode files
 .vscode
 
+# Custom ignored directories
+./tools/dockerfiles/volcano_plot/
+./.github/workflows/
+../../test_deseq_lrt/
+
