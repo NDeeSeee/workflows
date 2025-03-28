@@ -12,10 +12,12 @@ get_args <- function() {
   parser$add_argument(
     "--dsq_obj_data",
     help = "RDS file containing contrasts and expression data from step 1",
+    required = TRUE,
     type = "character"
   )
   parser$add_argument(
     "--contrast_df",
+    required = TRUE,
     help = "TSV file containing contrasts data",
     type = "character"
   )

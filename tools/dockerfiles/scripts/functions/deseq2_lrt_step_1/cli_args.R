@@ -29,6 +29,7 @@ get_args <- function() {
   )
   parser$add_argument(
     "--meta",
+    type = "character",
     required = TRUE,
     help = "Metadata file in CSV or TSV format"
   )
@@ -36,11 +37,13 @@ get_args <- function() {
   # Analysis parameters
   parser$add_argument(
     "--design",
+    type = "character",
     required = TRUE,
     help = "Design formula for DESeq2 (e.g., '~condition+batch')"
   )
   parser$add_argument(
     "--reduced",
+    type = "character",
     required = TRUE,
     help = "Reduced design formula for LRT (e.g., '~batch')"
   )
@@ -48,6 +51,7 @@ get_args <- function() {
   # CWL-aligned parameters
   parser$add_argument(
     "--batchcorrection",
+    type = "character",
     default = "none",
     choices = c("none", "combatseq", "model"),
     help = "Batch correction method: 'none', 'combatseq', or 'model'"
@@ -55,6 +59,7 @@ get_args <- function() {
   
   parser$add_argument(
     "--scaling_type",
+    type = "character",
     default = "zscore",
     choices = c("minmax", "zscore"),
     help = "Scaling type for expression data: 'minmax' or 'zscore'"
@@ -91,6 +96,7 @@ get_args <- function() {
   # Using the names directly as in CWL
   parser$add_argument(
     "--cluster",
+    type = "character",
     default = "none",
     choices = c("row", "column", "both", "none"),
     help = "Hopach clustering method to be run on normalized read counts"
@@ -98,6 +104,7 @@ get_args <- function() {
   
   parser$add_argument(
     "--rowdist",
+    type = "character",
     default = "cosangle",
     choices = c("cosangle", "abscosangle", "euclid", "cor", "abscor"),
     help = "Distance metric for HOPACH row clustering"
@@ -105,6 +112,7 @@ get_args <- function() {
   
   parser$add_argument(
     "--columndist",
+    type = "character",
     default = "euclid",
     choices = c("cosangle", "abscosangle", "euclid", "cor", "abscor"),
     help = "Distance metric for HOPACH column clustering"
@@ -127,6 +135,7 @@ get_args <- function() {
   # Output arguments
   parser$add_argument(
     "--output",
+    type = "character",
     default = "./deseq_lrt_step_1",
     help = "Output prefix for generated files"
   )
