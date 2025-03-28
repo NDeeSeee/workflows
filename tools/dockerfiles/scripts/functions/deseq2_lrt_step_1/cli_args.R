@@ -15,12 +15,16 @@ get_args <- function() {
   # Input data arguments
   parser$add_argument(
     "--input",
-    action = "append",
+    type = "character",
+    required = TRUE,
+    nargs = "+",
     help = "List of input files with expression data (CSV or TSV format)"
   )
   parser$add_argument(
     "--name",
-    action = "append",
+    type = "character",
+    required = TRUE,
+    nargs = "+",
     help = "Names for input files (in the same order as input files)"
   )
   parser$add_argument(
