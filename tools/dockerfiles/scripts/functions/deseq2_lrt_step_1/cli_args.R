@@ -320,8 +320,6 @@ get_args <- function() {
     }
   })
   
-  }
-  
   # Coerce args to a list if necessary (after tryCatch)
   if (!is.list(args)) {
     args <- as.list(args)
@@ -348,9 +346,8 @@ get_args <- function() {
     }
   }
   
-  
   return(args)
-}
+} 
 
 # Function to validate command line arguments
 assert_args <- function(args) {
