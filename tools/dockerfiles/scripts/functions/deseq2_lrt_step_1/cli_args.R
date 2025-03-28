@@ -320,8 +320,6 @@ get_args <- function() {
     }
   })
   
-  }
-  
   # Coerce args to a list if necessary (after tryCatch)
   if (!is.list(args)) {
     args <- as.list(args)
