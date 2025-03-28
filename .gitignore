@@ -90,6 +90,6 @@ npm-debug.log
 
 # Custom ignored directories
 ./tools/dockerfiles/volcano_plot/
-./.github/workflows/
+# ./.github/workflows/
 ../../test_deseq_lrt/
 
