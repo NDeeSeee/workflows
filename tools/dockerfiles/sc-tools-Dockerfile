@@ -79,6 +79,12 @@
 #   threshold for diff. expressed genes reported
 #   on the plots. Fixed a bug with top 10 genes
 #   shown for the opposite log2FC values.
+# - Added another 80 colors to avoid failing when
+#   there are too many groups to plot. Also, use
+#   Sxx prefix instead of just letters if there
+#   are more than 26 datasets.
+# - Fixed samples ordering issue in the
+#   sc_rna_load_rhapsody.R script.
 # - Tools added:
 #   pip3 install deeptools==${DEEPTOOLS_VERSION}
 #   R -e 'devtools::install_github("michael-kotliar/morpheus.R")'
