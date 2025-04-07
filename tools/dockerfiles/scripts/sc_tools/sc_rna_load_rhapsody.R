@@ -95,7 +95,7 @@ prod$parallel(args)
 
 ## ----
 seurat_data <- NULL                                              # to keep all merged seurat objects
-args$rds <- sort(args$rds)                                       # we want to have them sorted to make orig.ident values reproducible and not dependent on rds order
+args$rds <- args$rds[order(basename(args$rds))]                  # we want to have them sorted by basename to make orig.ident values reproducible and not dependent on rds order
 for (i in 1:length(args$rds)){
     current_rds <- args$rds[i]
     print(paste("Loading Seurat data from the", current_rds))

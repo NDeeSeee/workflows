@@ -27,6 +27,7 @@ import("htmlwidgets", attach=FALSE)
 import("scRepertoire", attach=FALSE)
 import("RColorBrewer", attach=FALSE)
 import("magrittr", `%>%`, attach=TRUE)
+import("ComplexHeatmap", attach=FALSE)
 import("EnhancedVolcano", attach=FALSE)
 import("SummarizedExperiment", attach=FALSE)
 
@@ -97,7 +98,17 @@ D40_COLORS <- c(
   "#34A1EB", "#FFA07A", "#FFD700", "#8A2BE2", "#7FFF00", "#D2691E", "#FF7F50", "#6495ED",
   "#DC143C", "#00FFFF", "#00008B", "#008B8B", "#B8860B", "#A9A9A9", "#006400", "#BDB76B",
   "#8B008B", "#556B2F", "#FF8C00", "#9932CC", "#8B0000", "#E9967A", "#8FBC8F", "#483D8B",
-  "#2F4F4F", "#00CED1", "#9400D3", "#FF1493", "#00BFFF", "#696969", "#1E90FF", "#B22222"
+  "#2F4F4F", "#00CED1", "#9400D3", "#FF1493", "#00BFFF", "#696969", "#1E90FF", "#B22222",
+  "#F4A261", "#264653", "#E76F51", "#2A9D8F", "#E9C46A", "#A47E1B", "#D38AA2", "#5E6472",
+  "#8F5F9C", "#6B4226", "#79A7D3", "#FF6F61", "#FFD166", "#06D6A0", "#118AB2", "#073B4C",
+  "#A26769", "#D4A5A5", "#264653", "#457B9D", "#1D3557", "#2A9D8F", "#E63946", "#F1FAEE",
+  "#A8DADC", "#F4A261", "#D8A47F", "#CA7E8D", "#8B8C89", "#EAE0D5", "#0A9396", "#EE9B00",
+  "#BB3E03", "#AE2012", "#A7C957", "#52796F", "#DDA15E", "#BC6C25", "#E5989B", "#B5838D",
+  "#B56576", "#6D597A", "#4F4A45", "#CDB4DB", "#FFC8DD", "#FFAFCC", "#BDE0FE", "#A2D2FF",
+  "#FFB703", "#FB8500", "#219EBC", "#023047", "#8ECAE6", "#005F73", "#0A9396", "#94D2BD",
+  "#E9D8A6", "#EE9B00", "#CA6702", "#BB3E03", "#AE2012", "#9B2226", "#B1A7A6", "#735751",
+  "#6D6875", "#4A4E69", "#22223B", "#9A8C98", "#C9ADA7", "#E4C1F9", "#F7A072", "#F9C74F",
+  "#A7C957", "#B7B7A4", "#6A0572", "#AB83A1", "#BF4E30", "#8D99AE", "#EF476F", "#2B2D42"
 )
 # D40_COLORS <- c("#00D8B6", "#71E869", "#6574FF", "#F3A6B5", "#FF5AD6", "#6DDCFE", "#FFBB70", "#43A14E", "#D71C7C", "#E1E333", "#8139A8", "#FF6E6A", "#B55C00", "#7FA4B6", "#FFA4E3", "#B300FF", "#9BC4FD", "#FF7E6A", "#9DE98D", "#BFA178", "#E7C2FD", "#8B437D", "#ADCDC0", "#FE9FA4", "#FF53D1", "#D993F9", "#FF47A1", "#FFC171", "#625C51", "#4288C9", "#9767D4", "#F2D61D", "#8EE6FD", "#B940B1", "#B2D5F8", "#9AB317", "#C70000", "#AC8BAC", "#D7D1E4", "#9D8D87")
 D24_COLORS <- c(
@@ -2582,7 +2593,7 @@ mds_html_plot <- function(norm_counts_data, rootname){
     )
 }
 
-dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, cluster_idents=FALSE, min_pct=0.01, col_min=-2.5, col_max=2.5, plot_subtitle=NULL, theme="classic", pdf=FALSE, width=1200, height=NULL, resolution=100){
+dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, group_by=NULL, scale=TRUE, cluster_idents=FALSE, min_pct=0.01, col_min=-2.5, col_max=2.5, plot_subtitle=NULL, theme="classic", pdf=FALSE, width=1200, height=NULL, resolution=100){
     base::tryCatch(
         expr = {
             plot <- Seurat::DotPlot(
@@ -2592,8 +2603,10 @@ dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, clu
                         dot.min=min_pct,
                         col.min=col_min,
                         col.max=col_max,
-                        scale=TRUE,
+                        group.by=group_by,
+                        scale=scale,
                         scale.by="size"  # for optimal perception
+
                     ) +
                     ggplot2::xlab(x_label) +
                     ggplot2::ylab(y_label) +
@@ -2602,7 +2615,15 @@ dot_plot <- function(data, features, rootname, plot_title, x_label, y_label, clu
                     Seurat::RotatedAxis()
 
             if (is.null(height)){
-                height <- round((length(base::unique(base::as.vector(as.character(SeuratObject::Idents(data))))) + 2) * 0.4 * resolution)
+                height <- round((length(base::unique(base::as.vector(
+                              as.character(
+                                  base::ifelse(
+                                      !is.null(group_by),
+                                      data@meta.data[[group_by]],
+                                      SeuratObject::Idents(data)
+                                  )
+                              )))) + 2) * 0.4 * resolution
+                          )
                 height <- base::ifelse(height < 400, 400, height)
             }
 
@@ -3026,7 +3047,22 @@ coverage_plot <- function(data, assay, region, group_by, plot_title, rootname, p
     )
 }
 
-volcano_plot <- function(data, rootname, x_axis, y_axis, x_cutoff, y_cutoff, x_label, y_label, plot_title, plot_subtitle, caption, features=NULL, label_column="gene", theme="classic", pdf=FALSE, width=1200, height=800, resolution=100){
+volcano_plot <- function(
+    data, rootname,
+    x_axis, y_axis,
+    x_cutoff, y_cutoff,
+    x_label, y_label,
+    plot_title, plot_subtitle,
+    caption,
+    features=NULL,
+    size_by=NULL, size_from=NULL, color_by=NULL, alpha_by=NULL,
+    overlay_by=NULL, overlay_from=NULL, overlay_color_by=NULL, overlay_alpha=1,   # works only if size_by provided
+    label_column="gene",
+    x_padding=0.25, y_padding=0.25,
+    theme="classic",
+    pdf=FALSE,
+    width=1200, height=800, resolution=100
+){
     base::tryCatch(
         expr = {
             plot <- EnhancedVolcano::EnhancedVolcano(
@@ -3038,21 +3074,101 @@ volcano_plot <- function(data, rootname, x_axis, y_axis, x_cutoff, y_cutoff, x_l
                         pCutoff=y_cutoff,
                         xlab=x_label,
                         ylab=y_label,
+                        xlim=c(
+                            min(data[[x_axis]], na.rm=TRUE) - x_padding,
+                            max(data[[x_axis]], na.rm=TRUE) + x_padding
+                        ),
+                        ylim=c(0, max(-log10(data[[y_axis]]), na.rm=TRUE) + y_padding),
                         selectLab=features,
                         title=plot_title,
                         subtitle=plot_subtitle,
                         caption=caption,
                         labSize=4,
                         labFace="bold",
-                        labCol="red4",
-                        colAlpha=0.6,
-                        col=c("grey30", "forestgreen", "royalblue", "red"),
+                        labCol="black",
+                        colAlpha = if (!is.null(alpha_by))
+                                       data[[alpha_by]]
+                                   else 0.5,
+                        shape=16,
+                        col=c("grey30", "forestgreen", "royalblue", "red"),                                # will be ignored if colCustom was provided
+                        colCustom = if (!is.null(color_by))
+                                        stats::setNames(data[[color_by]], data[[color_by]]) 
+                                    else
+                                        NULL,
+                        pointSize = if (!is.null(size_by))
+                                        scales::rescale(
+                                            data[[size_by]],
+                                            from = if (!is.null(size_from) && length(size_from) == 2)
+                                                       size_from
+                                                   else
+                                                       range(data[[size_by]], na.rm=TRUE, finite=TRUE),    # this is default value in the rescale function
+                                            to=c(1, 5)
+                                        )
+                                    else 2,
                         drawConnectors=TRUE,
-                        widthConnectors=0.75
+                        arrowheads=FALSE,
+                        widthConnectors=0.25
                     ) +
-                    ggplot2::scale_y_log10() + ggplot2::annotation_logticks(sides="l", alpha=0.3) +
                     get_theme(theme) +
-                    ggplot2::theme(legend.position="none", plot.subtitle=ggplot2::element_text(size=8, face="italic", color="gray30"))
+                    ggplot2::theme(
+                        legend.position="none",
+                        plot.subtitle=ggplot2::element_text(size=8, face="italic", color="gray30")
+                    )
+
+            if (max(-log10(data[[y_axis]]), na.rm=TRUE) >= 50){
+                plot <- plot + ggplot2::scale_y_log10() +
+                        ggplot2::annotation_logticks(sides="l", alpha=0.3)
+            }
+
+            if(!is.null(overlay_by) && !is.null(size_by)){                                                 # bigger dots will be always behind the smaller ones
+                plot <- plot +
+                        ggplot2::geom_point(                                                               # layer with the smaller than size_by dots
+                            shape=16,
+                            colour = if (!is.null(overlay_color_by))
+                                        data[[overlay_color_by]]
+                                    else
+                                        "black",
+                            alpha=base::ifelse(                                                            # dots with 0 size or bigger than original dots are not shown
+                                      data[[overlay_by]] != 0 & data[[overlay_by]] <= data[[size_by]],
+                                      overlay_alpha,
+                                      0
+                            ),
+                            size=scales::rescale(
+                                data[[overlay_by]],
+                                from = if (!is.null(overlay_from) && length(overlay_from) == 2)
+                                        overlay_from
+                                    else
+                                        range(data[[overlay_by]], na.rm=TRUE, finite=TRUE),
+                                to=c(1, 5)
+                            )
+                        ) +
+                        ggplot2::geom_point(                                                               # layer with the bigger than size_by dots
+                            shape=16,
+                            colour = if (!is.null(overlay_color_by))
+                                        data[[overlay_color_by]]
+                                    else
+                                        "black",
+                            alpha=base::ifelse(
+                                      data[[overlay_by]] != 0 & data[[overlay_by]] > data[[size_by]],
+                                      overlay_alpha,
+                                      0
+                            ),
+                            size=scales::rescale(
+                                data[[overlay_by]],
+                                from = if (!is.null(overlay_from) && length(overlay_from) == 2)
+                                        overlay_from
+                                    else
+                                        range(data[[overlay_by]], na.rm=TRUE, finite=TRUE),
+                                to=c(1, 5)
+                            )
+                        )
+                plot$layers <- c(                                                                          # need to put the big dots behind the small ones
+                    plot$layers[length(plot$layers)],
+                    plot$layers[1],
+                    plot$layers[length(plot$layers) - 1],
+                    plot$layers[2:(length(plot$layers)-2)]
+                )
+            }
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
             base::suppressMessages(base::print(plot))
@@ -3082,7 +3198,7 @@ volcano_plot <- function(data, rootname, x_axis, y_axis, x_cutoff, y_cutoff, x_l
     )
 }
 
-feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", slot="data", cells=NULL, scale_to_max=TRUE, scale="none", color_breaks=NA, highlight_features=NULL, cluster_rows=FALSE, split_rows=NULL, legend_title="Expression", heatmap_colors=c("blue", "black", "yellow"), group_by="new.ident", show_rownames=FALSE, palette_colors=D40_COLORS, pdf=FALSE, width=1200, height=900, resolution=100){
+feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", slot="data", cells=NULL, scale_to_max=TRUE, scale="none", color_breaks=NA, highlight_features=NULL, cluster_rows=FALSE, split_rows=NULL, legend_title="Expression", heatmap_colors=c("blue", "black", "yellow"), group_by="new.ident", order_by="new.ident", show_rownames=FALSE, palette_colors=D40_COLORS, pdf=FALSE, width=1200, height=1200, resolution=100){
     base::tryCatch(
         expr = {
 
@@ -3118,8 +3234,8 @@ feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", s
                 heatmap.colors.max.scaled=grDevices::colorRampPalette(heatmap_colors[1:2])(25),  # only two colors needed
                 breaks=color_breaks,
                 scale=scale,                        # can be "row"/"column"/"none" but will be forced to "none" if scaled.to.max is TRUE
-                annot.by=group_by,
-                order.by=group_by,                  # the order of items in group_by will define the levels of ordering
+                annot.by=group_by,                  # defines the groups to be shown as annotations
+                order.by=order_by,                  # defines the order of items
                 annot.colors=palette_colors,        # defines colors for the first item set in annot.by
                 drop_levels=TRUE,                   # to drop factor levels that are not present in factor values
                 use_raster=TRUE,
@@ -3132,12 +3248,12 @@ feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", s
             )
 
             grDevices::png(filename=base::paste(rootname, ".png", sep=""), width=width, height=height, res=resolution)
-            base::suppressMessages(base::print(plot))
+            base::suppressMessages(ComplexHeatmap::draw(plot, merge_legend=TRUE))    # we use draw instead of print to merge legends in one column
             grDevices::dev.off()
 
             if (!is.null(pdf) && pdf) {
                 grDevices::pdf(file=base::paste(rootname, ".pdf", sep=""), width=round(width/resolution), height=round(height/resolution))
-                base::suppressMessages(base::print(plot))
+                base::suppressMessages(ComplexHeatmap::draw(plot, merge_legend=TRUE))
                 grDevices::dev.off()
             }
 
@@ -3166,6 +3282,7 @@ feature_heatmap <- function(data, features, rootname, plot_title, assay="RNA", s
 morpheus_html_heatmap <- function(gct_location, rootname, color_scheme=NULL){
     base::tryCatch(
         expr = {
+            location <- base::paste0(rootname, ".html")                             # need to define it before anything possibly fails
             is_all_numeric <- function(x) {
                 !any(
                     is.na(base::suppressWarnings(as.numeric(stats::na.omit(x))))
@@ -3187,7 +3304,6 @@ morpheus_html_heatmap <- function(gct_location, rootname, color_scheme=NULL){
                                       gct_data$columnAnnotations,
                 colorScheme=color_scheme
             )
-            location <- base::paste0(rootname, ".html")
             htmlwidgets::saveWidget(
                 html_data,
                 file=location

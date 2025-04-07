@@ -51,8 +51,10 @@
 #   The gene_name column (the nearest gene) is also
 #   removed from the output file. The nearest gene
 #   should be asigned by iaintersect tool. When --test
-#   is set to manorm2, reads will be aggregated to
-#   pseudo bulk form per dataset.
+#   is set to manorm2-full, reads will be aggregated to
+#   pseudo bulk form per dataset. If --test is set to
+#   manorm2-half, reads will be aggregated per condition
+#   but MAnorm2 will be still run by datasets.
 # - Installed deeptools to build tag density heatmaps
 #   from the sc_atac_dbinding.R script.
 # - Moved P value labels on the composition_box_plot
@@ -65,6 +67,24 @@
 #   specified in --removegenes parameter from the
 #   list of the most variable genes so they don't
 #   impact neither integration nor PCA
+# - Updated sc_rna_de_pseudobulk.R script to
+#   export morpheus heatmap of diff. expr. genes.
+#   Updated heatmap to order cells in a more
+#   uniform way. Added --reduction parameter to
+#   visualize UMAP only for selected reduction.
+#   Added self explanatory error logs.
+#   Updated volcano plot to scale dot sizes based
+#   on the percentage of cells where the gene is
+#   expressed. Added --logfc input to set the
+#   threshold for diff. expressed genes reported
+#   on the plots. Fixed a bug with top 10 genes
+#   shown for the opposite log2FC values.
+# - Added another 80 colors to avoid failing when
+#   there are too many groups to plot. Also, use
+#   Sxx prefix instead of just letters if there
+#   are more than 26 datasets.
+# - Fixed samples ordering issue in the
+#   sc_rna_load_rhapsody.R script.
 # - Tools added:
 #   pip3 install deeptools==${DEEPTOOLS_VERSION}
 #   R -e 'devtools::install_github("michael-kotliar/morpheus.R")'

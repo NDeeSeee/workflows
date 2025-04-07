@@ -864,6 +864,7 @@ export_heatmaps <- function(seurat_data, args){
             scale="row",                                                                       # will calculate z-score
             heatmap_colors=c("darkblue", "black", "yellow"),
             group_by=column_annotations,
+            order_by=column_annotations,
             palette_colors=graphics$D40_COLORS,
             plot_title="Gene expression heatmap",
             rootname=paste(args$output, "xpr_htmp", sep="_"),
@@ -882,8 +883,9 @@ export_heatmaps <- function(seurat_data, args){
                                   slot="data"
                               )
                           ))))
-        expression_limits <- stats::quantile(abs(expression_mat), 0.99, na.rm=TRUE)            # to exclude outliers
-        expression_ranges <- base::pretty(c(-expression_limits, expression_limits), n=2)
+        expression_limits <- stats::quantile(                                                  # to exclude outliers
+            abs(expression_mat), 0.99, na.rm=TRUE, names=FALSE
+        )
 
         io$export_gct(
             counts_mat=expression_mat,
@@ -902,7 +904,7 @@ export_heatmaps <- function(seurat_data, args){
             color_scheme=list(
                 scalingMode="fixed",
                 stepped=FALSE,
-                values=as.list(expression_ranges),
+                values=as.list(c(-expression_limits, 0, expression_limits)),
                 colors=c("darkblue", "black", "yellow")
             )
         )
