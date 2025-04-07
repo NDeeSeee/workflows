@@ -49,6 +49,8 @@ export(
 )
 
 
+S_NUMBERS <- sprintf("S%02d", 1:99)                                            # for cases when we have more than 26 datasets and LETTERS are not enough
+
 get_file_type <- function (filename){
     ext = tools::file_ext(filename)
     separator = "\t"
@@ -470,9 +472,13 @@ load_cell_identity_data <- function(location) {
             cell_identity_data <- cell_identity_data %>%
                                   dplyr::rename("library_id"="sample_id")     # we use "library_id" in our code
         }
-        # prepend with LETTERS, otherwise the order on the plot will be arbitrary sorted
+        prefix <- LETTERS                                                     # by default prepend with LETTERS, otherwise the order on the plot will be arbitrary sorted
+        if (base::nrow(cell_identity_data) > 26){
+            base::print("Adding prefixes as s-numbers")                       # in case we have more than 26 values
+            prefix <- S_NUMBERS
+        }
         cell_identity_data <- cell_identity_data %>%
-                              dplyr::mutate("library_id"=base::paste(LETTERS[1:base::nrow(cell_identity_data)], .$library_id))
+                              dplyr::mutate("library_id"=base::paste(prefix[1:base::nrow(cell_identity_data)], .$library_id))
         base::print(base::paste("Datasets identities were successfully loaded from ", location))
         return (cell_identity_data)
     }
@@ -696,9 +702,13 @@ load_grouping_data <- function(location, cell_identity_data) {
             check.names=FALSE,
             stringsAsFactors=FALSE
         )
-        # prepend with LETTERS to correspond to the library_id from the cell_identity_data
+        prefix <- LETTERS                                               # by default prepend with LETTERS to correspond to the library_id from the cell_identity_data
+        if (base::nrow(grouping_data) > 26){
+            base::print("Adding prefixes as s-numbers")                 # in case we have more than 26 values
+            prefix <- S_NUMBERS
+        }
         grouping_data <- grouping_data %>%
-                          dplyr::mutate("library_id"=base::paste(LETTERS[1:base::nrow(grouping_data)], .$library_id))
+                         dplyr::mutate("library_id"=base::paste(prefix[1:base::nrow(grouping_data)], .$library_id))
         if ( (base::nrow(grouping_data) == base::nrow(cell_identity_data)) && all(base::is.element(cell_identity_data$library_id, grouping_data$library_id)) ){
             base::print(base::paste("Grouping data is successfully loaded from ", location))
             return (grouping_data)

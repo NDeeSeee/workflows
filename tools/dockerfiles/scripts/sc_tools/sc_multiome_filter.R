@@ -991,9 +991,9 @@ prod$parallel(args)
 
 ## ----
 print(paste("Loading datasets identities from", args$identity))
-cell_identity_data <- io$load_cell_identity_data(args$identity)                          # identities are always prepended with letters to keep the order
+cell_identity_data <- io$load_cell_identity_data(args$identity)                          # identities are always prepended with letters or s-numbers to keep the order
 io$export_data(
-    cell_identity_data[, "library_id", drop=FALSE],                                      # we need only the first column with the prepended letters
+    cell_identity_data[, "library_id", drop=FALSE],                                      # we need only the first column with the prepended letters or s-numbers
     paste(args$output, "_meta.tsv", sep="")
 )
 
